@@ -100,6 +100,16 @@ function generate_initializesystem_timevarying(
 
     guesses = as_atomic_dict_with_defaults(Dict{SymbolicT, SymbolicT}(guesses), COMMON_NOTHING)
     left_merge!(guesses, ModelingToolkitBase.guesses(sys))
+    for (k, v) in collect(guesses)
+        isdifferential(k) || continue
+        delete!(guesses, k)
+        ttk = default_toterm(k)
+        if Symbolics.isarraysymbolic(ttk) && !SU.is_array_shape(SU.shape(v))
+            write_dd_guess!(guesses, ttk, v)
+        else
+            write_possibly_indexed_array!(guesses, ttk, v, COMMON_NOTHING)
+        end
+    end
 
     # Anything with a binding of `missing` is solvable.
     binds = bindings(sys)
@@ -122,6 +132,7 @@ function generate_initializesystem_timevarying(
     # properly handling singular systems. Without this, singular systems will always
     # error as incomplete, since the system symbolically won't contain some unknowns.
     derivative_rules = DerivativeDict()
+    residual_eq_indices = Int[]
     dd_guess_sym = BSImpl.Const{VartypeT}(default_dd_guess)
     banned_derivatives = Set{SymbolicT}()
     if has_schedule(_sys) && (schedule = get_schedule(_sys); schedule isa Schedule)
@@ -160,7 +171,47 @@ function generate_initializesystem_timevarying(
                 ttk
             end
         else
+            residual_derivatives = collect_applied_operators(eq, Differential)
+            for d in residual_derivatives
+                arr, isarr = split_indexed_var(only(arguments(d)))
+                if isarr
+                    array_d = operation(d)(arr)
+                    array_ttk = default_toterm(array_d)
+                    if !haskey(derivative_rules, array_d)
+                        derivative_rules[array_d] = array_ttk
+                        if !has_possibly_indexed_key(guesses, array_d) && !has_possibly_indexed_key(guesses, array_ttk)
+                            write_dd_guess!(guesses, array_ttk, dd_guess_sym)
+                        end
+                        push_as_atomic_array!(init_vars_set, array_ttk)
+                    end
+                end
+                if SU.is_array_shape(SU.shape(d))
+                    arr = only(arguments(d))
+                    derivative_rules[d] = array_derivative_expansion(d)
+                    for i in SU.stable_eachindex(arr)
+                        scalar_d = operation(d)(arr[i])
+                        ttk = default_toterm(scalar_d)
+                        if !has_possibly_indexed_key(guesses, scalar_d) && !has_possibly_indexed_key(guesses, ttk)
+                            write_dd_guess!(guesses, ttk, dd_guess_sym)
+                        end
+                        push_as_atomic_array!(init_vars_set, ttk)
+                        derivative_rules[scalar_d] = ttk
+                    end
+                else
+                    get!(derivative_rules, d) do
+                        ttk = default_toterm(d)
+                        if !has_possibly_indexed_key(guesses, d) && !has_possibly_indexed_key(guesses, ttk)
+                            write_dd_guess!(guesses, ttk, dd_guess_sym)
+                        end
+                        push_as_atomic_array!(init_vars_set, ttk)
+                        ttk
+                    end
+                end
+            end
             push!(eqs_ics, eq)
+            if !isempty(residual_derivatives)
+                push!(residual_eq_indices, length(eqs_ics))
+            end
         end
     end
     D = Differential(get_iv(sys))
@@ -175,12 +226,15 @@ function generate_initializesystem_timevarying(
         end
     end
 
-    # Always substitute `der_subber` and `subber` on any equations added to `eqs_ics`
     der_subber = Symbolics.FixpointSubstituter(
         SU.IRSubstituter{false}(
             get_irstructure(sys), derivative_rules
         ); maxiters = get_maxiters(derivative_rules)
     )
+    # Apply rules collected from the full equation set to residual-form derivatives.
+    for i in residual_eq_indices
+        eqs_ics[i] = subber(der_subber(eqs_ics[i]))
+    end
     timevaring_initsys_process_op!(subber, init_vars_set, init_ps, eqs_ics, op, der_subber, guesses)
 
     # process explicitly provided initialization equations

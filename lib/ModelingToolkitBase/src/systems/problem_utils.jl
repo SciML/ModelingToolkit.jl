@@ -1285,13 +1285,45 @@ function ReconstructInitializeprob(
         eval_expression = false, eval_module = @__MODULE__, is_steadystateprob = false, kwargs...
     )
     @assert is_initializesystem(dstsys)
-    ugetter = u0_constructor ∘
-        concrete_getu(
-        srcsys, unknowns(dstsys);
+    dstvars = unknowns(dstsys)
+    # Derivatives of explicit-diffeq LHS variables resolve to their RHS via the
+    # source system's observed equations. Residual-form `xˍt` variables are not
+    # resolvable through `srcsys`, so they are excluded here; the destination
+    # initialization problem treats them as ordinary unknowns.
+    srcdervars = Set{SymbolicT}()
+    for eq in equations(srcsys)
+        isdiffeq(eq) || continue
+        x = only(arguments(eq.lhs))
+        if SU.is_array_shape(SU.shape(x))
+            dop = operation(eq.lhs)
+            for idx in SU.stable_eachindex(x)
+                push!(srcdervars, default_toterm(dop(x[idx])))
+            end
+        else
+            push!(srcdervars, default_toterm(eq.lhs))
+        end
+    end
+    srcindices = findall(
+        v -> is_variable(srcsys, v) || has_observed_with_lhs(srcsys, v) || v in srcdervars,
+        dstvars
+    )
+    srcvars = dstvars[srcindices]
+    srcugetter = concrete_getu(
+        srcsys, srcvars;
         eval_expression, eval_module, force_time_independent = is_steadystateprob,
         iip_config = (true, false),
         kwargs...
     )
+    ugetter = let srcugetter = srcugetter, srcindices = srcindices,
+            u0_constructor = u0_constructor
+        function _ugetter(srcvalp, dstvalp)
+            dstu0 = state_values(dstvalp)
+            srcu0 = srcugetter(srcvalp)
+            u0 = Vector{promote_type(eltype(dstu0), eltype(srcu0))}(dstu0)
+            u0[srcindices] .= srcu0
+            return u0_constructor(u0)
+        end
+    end
     if is_split(dstsys)
         pgetter = MTKParametersReconstructor(
             srcsys, dstsys; p_constructor, eval_expression, eval_module,
@@ -1337,7 +1369,7 @@ function (rip::ReconstructInitializeprob)(srcvalp, dstvalp)
     elseif !isempty(newp)
         T = promote_type(eltype(newp), T)
     end
-    u0 = rip.ugetter(srcvalp)
+    u0 = rip.ugetter(srcvalp, dstvalp)
     # and the eltype of the destination u0
     if T != eltype(u0) && T != Union{} && T !== Any
         u0 = T.(u0)
@@ -1395,6 +1427,76 @@ function construct_initializeprobpmap(
                 end
                 return p
             end
+        end
+    end
+end
+
+"""
+    $(TYPEDEF)
+
+Callable `(valp, nlsol) -> nothing` which copies derivative values solved by the
+initialization nonlinear problem into `valp.du`, when `valp` exposes a mutable
+`du` (e.g. a DAE integrator). `getter` resolves `solved_ddvs` from `nlsol` and
+`idxs` holds each variable's position in `du`. Derivative values supplied
+through the operating point are excluded at construction, so only values the
+initialization problem was free to solve are written. Nothing is written when
+the nonlinear solve did not succeed, or when `nlsol` is the unsolved
+initialization problem of a trivial initialization.
+"""
+struct SolvedDerivativeWriter{G, I <: AbstractVector{<:Integer}}
+    getter::G
+    idxs::I
+end
+
+function (sdw::SolvedDerivativeWriter)(valp, nlsol)
+    hasproperty(valp, :du) || return nothing
+    nlsol isa SciMLBase.AbstractNonlinearSolution &&
+        SciMLBase.successful_retcode(nlsol) || return nothing
+    return _write_solved_derivatives!(valp, sdw.getter(nlsol), sdw.idxs)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Write `vals[j]` into `valp.du[idxs[j]]` for each `j`. Used by both the callable
+`initializeprobpmap` wrappers and the generated `FullSpecialize` maps, where it
+is invoked as a plain function call inside the generated body.
+"""
+function _write_solved_derivatives!(valp, vals, idxs)
+    du = valp.du
+    du isa AbstractVector || return nothing
+    if ArrayInterface.ismutable(du)
+        for (j, i) in enumerate(idxs)
+            du[i] = vals[j]
+        end
+    else
+        newdu = collect(du)
+        for (j, i) in enumerate(idxs)
+            newdu[i] = vals[j]
+        end
+        valp.du = similar_type(du, eltype(newdu))(newdu)
+    end
+    return nothing
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Wrap an `initializeprobpmap` so that, in addition to reconstructing `p`, solved
+derivative values are written to `valp.du` via `sdw`. When `inner` is `nothing`
+the wrapped function returns `parameter_values(valp)` unchanged, so the pmap
+contract is preserved even when the system has no parameters to reconstruct.
+"""
+function wrap_initializeprobpmap_du(inner, sdw::SolvedDerivativeWriter)
+    return if inner === nothing
+        function initializeprobpmap_du_only(valp, nlsol)
+            sdw(valp, nlsol)
+            return parameter_values(valp)
+        end
+    else
+        function initializeprobpmap_with_du(valp, nlsol)
+            sdw(valp, nlsol)
+            return inner(valp, nlsol)
         end
     end
 end
@@ -1756,10 +1858,62 @@ function _parameter_buffer_expr(prototype, raw::Symbol, idxs, p_constructor)
     return Expr(:call, QuoteNode(p_constructor), buffer)
 end
 
+const INITMAP_DDVALS = :__mtk_initialization_ddv_values
+
+"""
+    $(TYPEDSIGNATURES)
+
+Guarded call writing the solved derivative values in `raw` into `prob.du`
+through [`_write_solved_derivatives!`](@ref). Nothing is written unless `prob`
+exposes `du` and `sol` is a successful nonlinear solution.
+"""
+function _solved_derivative_write_call(prob, sol, raw, idxs)
+    return Expr(
+        :&&,
+        Expr(:call, :hasproperty, prob, QuoteNode(:du)),
+        Expr(:call, :isa, sol, SciMLBase.AbstractNonlinearSolution),
+        Expr(:call, GlobalRef(SciMLBase, :successful_retcode), sol),
+        Expr(
+            :call, GlobalRef(@__MODULE__, :_write_solved_derivatives!),
+            prob, raw, idxs
+        ),
+    )
+end
+
 function _construct_fullspecialize_initializeprobpmap(
         sys::AbstractSystem, initsys::AbstractSystem, gen_opts::GeneratedFunctionOptions;
-        p_constructor
+        p_constructor, needs_pmap::Bool = true, solved_ddvs = SymbolicT[],
+        solved_ddv_idxs = Int[]
     )
+    prob = INITMAP_PROBLEM
+    sol = INITMAP_SOLUTION
+    sources = _generated_map_sources(sol, is_time_dependent(initsys))
+    if !needs_pmap
+        # No parameter reconstruction is required; the map only writes solved
+        # derivative values and returns the existing `p`.
+        ddexpr = build_explicit_observed_function(
+            initsys, Tuple(solved_ddvs), gen_opts
+        )
+        map_expr = _generated_map_expr(ddexpr, [prob, sol], sources) do raw
+            return Expr(
+                :block,
+                _solved_derivative_write_call(prob, sol, raw, solved_ddv_idxs),
+                Expr(
+                    :return, Expr(
+                        :call, GlobalRef(
+                            SymbolicIndexingInterface, :parameter_values
+                        ), prob
+                    )
+                ),
+            )
+        end
+        return eval_or_rgf(
+            map_expr; gen_opts.eval_expression, gen_opts.eval_module,
+            gen_opts.compiler_options
+        )
+    end
+    ddexpr = isempty(solved_ddvs) ? nothing :
+        build_explicit_observed_function(initsys, Tuple(solved_ddvs), gen_opts)
     ps = parameters(sys; initial_parameters = true)
     # One entry per `MTKParameters` portion, each holding that portion's buffers. Kept a
     # concretely typed `Vector` rather than a tuple of tuples: the portions are iterated,
@@ -1782,15 +1936,25 @@ function _construct_fullspecialize_initializeprobpmap(
         append!(flat_syms, buffer)
     end
     expr = build_explicit_observed_function(initsys, Tuple(flat_syms), gen_opts)
-    prob = INITMAP_PROBLEM
-    sol = INITMAP_SOLUTION
-    sources = _generated_map_sources(sol, is_time_dependent(initsys))
     map_expr = _generated_map_expr(expr, [prob, sol], sources) do raw
         outer_p = INITMAP_OUTER_PARAMETERS
         p = Expr(:call, GlobalRef(SymbolicIndexingInterface, :parameter_values), prob)
+        finish = function (result)
+            blk = Expr(:block)
+            if ddexpr !== nothing
+                push!(blk.args, :(local $INITMAP_DDVALS = $(ddexpr.args[2])))
+                push!(
+                    blk.args, _solved_derivative_write_call(
+                        prob, sol, INITMAP_DDVALS, solved_ddv_idxs
+                    )
+                )
+            end
+            push!(blk.args, :(local $outer_p = $p), result)
+            return blk
+        end
         if !is_split(sys)
             result = _parameter_buffer_expr(outer_p, raw, eachindex(flat_syms), p_constructor)
-            return Expr(:block, :(local $outer_p = $p), result)
+            return finish(result)
         end
 
         offset = 0
@@ -1829,7 +1993,7 @@ function _construct_fullspecialize_initializeprobpmap(
         result = Expr(:call, MTKParameters)
         append!(result.args, portions)
         push!(result.args, :($map($copy, $outer_p.caches)))
-        return Expr(:block, :(local $outer_p = $p), result)
+        return finish(result)
     end
     return eval_or_rgf(
         map_expr; gen_opts.eval_expression, gen_opts.eval_module, gen_opts.compiler_options
@@ -2245,16 +2409,59 @@ function maybe_build_initialization_problem(
             for p in all_variable_symbols(initializeprob)
             if is_parameter(sys, p)
     ]
-    if initializeprobmap === nothing && isempty(punknowns)
+
+    # Derivative variables the initialization problem is free to solve: present
+    # among its unknowns or observed equations, and not fixed by an operating
+    # point entry. Their solved values are written back to `valp.du` so the
+    # integrator's `du` matches the consistent initialization.
+    solved_ddvs = SymbolicT[]
+    solved_ddv_idxs = Int[]
+    if time_dependent_init
+        _D = Differential(get_iv(sys))
+        for (i, dv) in enumerate(flat_unknowns(sys))
+            ddv = default_toterm(_D(dv))
+            (is_variable(initsys, ddv) || has_observed_with_lhs(initsys, ddv)) ||
+                continue
+            get_possibly_indexed(orig_op, _D(dv), COMMON_NOTHING) === COMMON_NOTHING &&
+                get_possibly_indexed(orig_op, ddv, COMMON_NOTHING) === COMMON_NOTHING ||
+                continue
+            push!(solved_ddvs, ddv)
+            push!(solved_ddv_idxs, i)
+        end
+    end
+
+    needs_pmap = !(initializeprobmap === nothing && isempty(punknowns))
+    if !needs_pmap && isempty(solved_ddvs)
         initializeprobpmap = nothing
     elseif map_specialize === SciMLBase.FullSpecialize
+        # `initializeprobpmap` must stay a `RuntimeGeneratedFunction` under
+        # `FullSpecialize`, so the derivative write is generated into the map
+        # body rather than wrapped around it.
         initializeprobpmap = _construct_fullspecialize_initializeprobpmap(
-            sys, initsys, _fullspecialize_map_options(opts); p_constructor
+            sys, initsys, _fullspecialize_map_options(opts);
+            p_constructor, needs_pmap, solved_ddvs, solved_ddv_idxs
         )
     else
-        initializeprobpmap = construct_initializeprobpmap(
-            sys, initsys; p_constructor, eval_expression, eval_module, kwargs...
-        )
+        inner_pmap = if !needs_pmap
+            nothing
+        else
+            construct_initializeprobpmap(
+                sys, initsys; p_constructor, eval_expression, eval_module, kwargs...
+            )
+        end
+        initializeprobpmap = if isempty(solved_ddvs)
+            inner_pmap
+        else
+            wrap_initializeprobpmap_du(
+                inner_pmap,
+                SolvedDerivativeWriter(
+                    concrete_getu(
+                        initsys, solved_ddvs; eval_expression, eval_module, kwargs...
+                    ),
+                    solved_ddv_idxs
+                )
+            )
+        end
     end
 
     # we still want the `initialization_data` because it helps with `remake`
@@ -2536,15 +2743,29 @@ function __process_SciMLProblem(
     end
 
     ir = get_irstructure(sys)
+    u0_op = op
+    if implicit_dae
+        u0_op = copy(op)
+        for (k, v) in guesses
+            is_variable(sys, k) || continue
+            has_possibly_indexed_key(u0_op, k) && continue
+            sv = v isa SymbolicT ? v : SConst(v)
+            if Symbolics.isarraysymbolic(k) && !SU.is_array_shape(SU.shape(sv))
+                write_dd_guess!(u0_op, k, sv)
+            else
+                write_possibly_indexed_array!(u0_op, k, sv, COMMON_NOTHING)
+            end
+        end
+    end
     if is_initializeprob
         u0 = varmap_to_vars(
-            op, dvs; ir, buffer_eltype = u0_eltype, container_type = u0Type,
+            u0_op, dvs; ir, buffer_eltype = u0_eltype, container_type = u0Type,
             allow_symbolic = symbolic_u0, is_initializeprob, substitution_limit,
             missing_values = missing_guess_value
         )
     else
         u0 = varmap_to_vars(
-            op, dvs; ir, buffer_eltype = u0_eltype, container_type = u0Type,
+            u0_op, dvs; ir, buffer_eltype = u0_eltype, container_type = u0Type,
             allow_symbolic = symbolic_u0, is_initializeprob, substitution_limit
         )
     end
@@ -2577,9 +2798,33 @@ function __process_SciMLProblem(
 
     if implicit_dae
         ddvs = map(default_toterm ∘ Differential(iv), dvs)
+        du0_op = copy(op)
+        add_toterms!(du0_op)
+        for (k, v) in guesses
+            isdifferential(k) || continue
+            ttk = default_toterm(k)
+            has_possibly_indexed_key(du0_op, ttk) && continue
+            sv = v isa SymbolicT ? v : SConst(v)
+            if Symbolics.isarraysymbolic(ttk) && !SU.is_array_shape(SU.shape(sv))
+                write_dd_guess!(du0_op, ttk, sv)
+            else
+                write_possibly_indexed_array!(du0_op, ttk, sv, COMMON_NOTHING)
+            end
+        end
+        # When the initialization problem is built, omitted derivative values are
+        # solved for rather than erroring; zero is a neutral starting guess. Without
+        # an initialization problem nothing resolves them, so keep the error. An
+        # explicit `missing_guess_value` choice is honored either way.
+        du0_missing = if !build_initializeprob
+            MissingGuessValue.Error()
+        elseif Moshi.Data.isa_variant(missing_guess_value, MissingGuessValue.HashedRandom)
+            MissingGuessValue.Constant(0.0)
+        else
+            missing_guess_value
+        end
         du0 = varmap_to_vars(
-            op, ddvs; toterm = default_toterm,
-            tofloat
+            du0_op, ddvs; toterm = default_toterm,
+            tofloat, missing_values = du0_missing
         )
         kwargs = merge(kwargs, (; ddvs))
     else

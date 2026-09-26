@@ -16,7 +16,8 @@ const EVAL_EXPR_MOD_KWARGS = """
 
 const INITIALIZEPROB_KWARGS = """
 - `guesses`: The guesses for variables in the system, used as initial values for the
-  initialization problem.
+  initialization problem. For DAE problems, `D(x) => v` entries are guesses for the
+  derivative `du0`, whereas `D(x)` entries in `op` are fixed initial conditions.
 - `warn_initialize_determined`: Warn if the initialization system is under/over-determined.
 - `initialization_eqs`: Extra equations to use in the initialization problem.
 - `fully_determined`: Override whether the initialization system is fully determined.

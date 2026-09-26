@@ -118,6 +118,64 @@ sol = solve(prob, Rodas5P())
     fully_determined = true
 )
 
+@testset "residual-form DAE initialization with array slices" begin
+    @independent_variables t_residual
+    @variables sx(t_residual) sy(t_residual)[1:3]
+    D = Differential(t_residual)
+
+    function check_residual_initialization(eqs, unks, op, expected_du; guesses = [])
+        sys = complete(System(eqs, t_residual, unks, []; name = :residual))
+        prob = DAEProblem(
+            sys, op, (0.0, 1.0); build_initializeprob = true, guesses
+        )
+        @test SciMLBase.successful_retcode(solve(prob.f.initializeprob))
+
+        integ = init(prob, DFBDF())
+        @test integ.du ≈ expected_du
+        residual = similar(integ.u)
+        prob.f(residual, integ.du, integ.u, integ.p, 0.0)
+        @test residual ≈ zeros(length(residual))
+    end
+
+    cases = [
+        (
+            "scalar", [0 ~ D(sx) + sx], [sx],
+            [sx => 1.0, D(sx) => -1.0], [-1.0],
+        ),
+        (
+            "array scalar equations", [0 ~ D(sy[i]) + sy[i] for i in 1:3],
+            [sy], [sy => [1.0, 2.0, 3.0], D(sy) => -[1.0, 2.0, 3.0]],
+            -[1.0, 2.0, 3.0],
+        ),
+        (
+            "scalarized slice equations", [zeros(3) ~ D(sy[1:3]) + sy[1:3]],
+            collect(sy),
+            [el => v for (el, v) in zip(vcat(collect(sy), D.(collect(sy))), [1.0, 2.0, 3.0, -1.0, -2.0, -3.0])],
+            -[1.0, 2.0, 3.0],
+        ),
+        (
+            "array slice equations", [zeros(3) ~ D(sy[1:3]) + sy[1:3]],
+            [sy], [sy => [1.0, 2.0, 3.0], D(sy) => -[1.0, 2.0, 3.0]],
+            -[1.0, 2.0, 3.0],
+        ),
+    ]
+    for (label, eqs, unks, op, expected_du) in cases
+        @testset "$label" begin
+            check_residual_initialization(eqs, unks, op, expected_du)
+        end
+    end
+
+    @testset "inconsistent fixed derivative operating point fails" begin
+        sys = complete(System([0 ~ D(sx) + sx], t_residual, [sx], []; name = :residual))
+        prob = DAEProblem(
+            sys, [sx => 1.0, D(sx) => 0.0], (0.0, 1.0);
+            build_initializeprob = true
+        )
+        @test !SciMLBase.successful_retcode(solve(prob.f.initializeprob))
+        @test !SciMLBase.successful_retcode(solve(prob, DFBDF()))
+    end
+end
+
 @testset "Unbalanced initialization error names the initialization system" begin
     err = try
         ODEProblem(

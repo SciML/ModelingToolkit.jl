@@ -1,5 +1,5 @@
 using ModelingToolkitBase, Test
-using ModelingToolkitBase: unwrap, complete, unknowns
+using ModelingToolkitBase: unwrap, complete, unknowns, default_toterm
 using ModelingToolkitBase: has_array_equations, accepts_array_equations
 using Symbolics
 using SciMLBase
@@ -48,6 +48,81 @@ end
     @test all(isfinite, out)
     # with du = 0 the interior residual is minus the Laplacian, which is nonzero here
     @test any(!iszero, out)
+end
+
+@testset "DAE initialization accepts derivative guesses" begin
+    @independent_variables t
+    @variables y(t)[1:3] z(t)
+    D = Differential(t)
+    @named sys = System(
+        [zeros(3) ~ D(y[1:3]) .+ z .* y[1:3], 0 ~ z - sum(y)],
+        t, [collect(y); z], []
+    )
+    sys = complete(sys)
+    y0 = [1.0, 2.0, 3.0]
+    op = [y[i] => y0[i] for i in 1:3]
+
+    expected_du = -sum(y0) .* y0
+    for derivative_guesses in (
+            [D(y[i]) => 0.5 for i in 1:3],
+            [D(y) => fill(0.5, 3)],
+            [D(y) => 0.5],
+            [],
+        )
+        guesses = [z => 0.0; derivative_guesses]
+        prob = DAEProblem(sys, op, (0.0, 0.1); guesses)
+        @test prob.u0[4] == 0.0
+        @test prob.du0[1:3] == fill(isempty(derivative_guesses) ? 0.0 : 0.5, 3)
+        initprob = prob.f.initialization_data.initializeprob
+        init_sol = solve(initprob)
+
+        @test SciMLBase.successful_retcode(init_sol)
+        init_unknowns = unknowns(initprob.f.sys)
+        z_index = findfirst(isequal(z), init_unknowns)
+        for i in 1:3
+            idx = findfirst(isequal(default_toterm(unwrap(D(y[i])))), init_unknowns)
+            @test idx !== nothing
+            idx === nothing || @test init_sol.u[idx] ≈ expected_du[i]
+        end
+        @test init_sol.u[z_index] ≈ sum(y0)
+
+        residual = zeros(4)
+        for initializealg in (nothing, SciMLBase.OverrideInit(), BrownFullBasicInit())
+            integ = initializealg === nothing ?
+                init(prob, DFBDF()) :
+                init(prob, DFBDF(); initializealg)
+            @test integ.du[1:3] ≈ expected_du
+            prob.f(residual, integ.du, integ.u, integ.p, 0.0)
+            @test maximum(abs, residual) < 1.0e-8
+        end
+    end
+
+    # a scalar guess for an array derivative broadcasts to the array shape; storing a
+    # scalar under the array-shaped key breaks `get_possibly_indexed` readback
+    prob = DAEProblem(
+        sys, op, (0.0, 0.1); guesses = [z => 0.0, D(y) => 0.5, D(z) => 0.0],
+        build_initializeprob = false
+    )
+    @test prob.du0[1:3] == fill(0.5, 3)
+
+    # omitted derivative values with no initialization problem still error, matching
+    # the pre-change contract
+    @test_throws ModelingToolkitBase.MissingVariablesError DAEProblem(
+        sys, op, (0.0, 0.1); guesses = [z => 0.0], build_initializeprob = false
+    )
+    # an explicit `missing_guess_value = Error()` opts out of the zero starting
+    # guess even when an initialization problem would solve for them
+    @test_throws ModelingToolkitBase.MissingVariablesError DAEProblem(
+        sys, op, (0.0, 0.1); guesses = [z => 0.0],
+        missing_guess_value = MissingGuessValue.Error()
+    )
+
+    fixed_du0 = [D(y[i]) => 0.25 for i in 1:3]
+    prob = DAEProblem(
+        sys, [op; [z => 0.0, D(z) => 0.0]; fixed_du0], (0.0, 0.1);
+        build_initializeprob = false
+    )
+    @test prob.du0[1:3] == fill(0.25, 3)
 end
 
 @testset "array unknowns flatten under an array equation" begin
