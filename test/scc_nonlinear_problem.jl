@@ -712,3 +712,5 @@ end
     @test sol[u3]^2 + sol[u3] ≈ sol[u2] atol = 1.0e-8
     @test sol[u4] ≈ sin(sol[u3]) + sol[u1] atol = 1.0e-8
 end
+
+include("scc_array_cache_regression.jl")
