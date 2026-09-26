@@ -771,6 +771,9 @@ function _remake_initialization_data_impl(
         use_scc, initialization_eqs, time_dependent_init, allow_incomplete = true,
         check_initialization_units = false, missing_guess_value = meta.missing_guess_value,
         circular_dependency_max_cycle_length = length(all_symbols(sys)),
+        implicit_dae = odefn isa Union{
+            SciMLBase.DAEFunction, SciMLBase.ImplicitDiscreteFunction,
+        },
     )
     kws = maybe_build_initialization_problem(
         sys, SciMLBase.isinplace(odefn), op, t0, guesses, opts;

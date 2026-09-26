@@ -76,6 +76,49 @@ end
 """
     $(TYPEDSIGNATURES)
 
+Merge differential keys of `varmap` (e.g. `D(x) => v`) into their `toterm` forms
+(`xˍt => v`) element-wise. Unlike `add_toterms!`, which skips a `toterm` target
+whenever the key exists, this fills only elements of `xˍt` that are not already
+set, so a partially-specified array derivative like `D(y[1]) => v` is not dropped
+when other elements of `yˍt` are already populated (e.g. by guess propagation).
+Existing `xˍt` elements keep precedence, matching `add_toterms!`.
+
+When inventing a new `xˍt` key, only partially-specified array differentials (values
+with unset holes) are copied. Fully-specified `D(x) => v` already reaches the
+initialization system through existing `Initial` parameter paths; copying those
+to `xˍt` as well doubles equations and can leave unbound names in generated code.
+"""
+function merge_differential_toterm_entries!(varmap::AbstractDict)
+    for k in collect(keys(varmap))
+        isdifferential(k) || continue
+        ttk = default_toterm(unwrap(k))
+        isequal(k, ttk) && continue
+        if haskey(varmap, ttk)
+            Symbolics.isarraysymbolic(ttk) &&
+                fill_unset_array_entries!(varmap, ttk, varmap[k], COMMON_NOTHING)
+        elseif Symbolics.isarraysymbolic(ttk) &&
+                differential_value_has_holes(varmap[k], COMMON_NOTHING)
+            varmap[ttk] = varmap[k]
+        end
+    end
+    return varmap
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Return whether unwrapping `val` yields an array that still contains unset
+sentinel holes (`default` or bare `nothing`).
+"""
+function differential_value_has_holes(val, default)
+    uc = unwrap_const(val)
+    uc isa AbstractArray || return false
+    return any(el -> is_aad_unset(el, default), uc)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
 Turn any `Symbol` keys in `varmap` to the appropriate symbolic variables in `sys`. Any
 symbols that cannot be converted are ignored.
 """
@@ -1371,7 +1414,14 @@ function (rip::ReconstructInitializeprob)(srcvalp, dstvalp)
         T = promote_type(eltype(newp), T)
     end
     u0 = rip.ugetter(srcvalp, dstvalp)
-    # and the eltype of the destination u0
+    # and the eltype of the destination u0, which `_ugetter` already promotes
+    # with the source eltype — so `T` can only widen here, never narrow
+    # (e.g. a destination `u0` with a `Dual` eltype cannot be converted to
+    # `Float64`)
+    promotedT = promote_type(T, eltype(u0))
+    if promotedT != Union{} && promotedT !== Any
+        T = promotedT
+    end
     if T != eltype(u0) && T != Union{} && T !== Any
         u0 = T.(u0)
     end
@@ -2310,6 +2360,10 @@ function maybe_build_initialization_problem(
     end
 
     orig_op = copy(op)
+    # `D(x)` operating-point entries are equivalent to their `xˍt` toterm forms;
+    # merge them so that `xˍt` lookups resolve elements fixed for only part of an
+    # array (e.g. guess propagation writing the remaining `xˍt` slots).
+    merge_differential_toterm_entries!(op)
     initializeprob = ModelingToolkitBase.InitializationProblem{iip, specialize}(
         sys, t, op, opts; guesses, fast_path = true, kwargs...
     )
@@ -2413,11 +2467,14 @@ function maybe_build_initialization_problem(
 
     # Derivative variables the initialization problem is free to solve: present
     # among its unknowns or observed equations, and not fixed by an operating
-    # point entry. Their solved values are written back to `valp.du` so the
-    # integrator's `du` matches the consistent initialization.
+    # point entry (checked per flat unknown so a partially-fixed array still
+    # writes back the free elements). Fixed elements reach `integ.du` via
+    # `du0` after `merge_differential_toterm_entries!`. Their solved values
+    # are written back to `valp.du` so the integrator's `du` matches the
+    # consistent initialization.
     solved_ddvs = SymbolicT[]
     solved_ddv_idxs = Int[]
-    if time_dependent_init
+    if implicit_dae && time_dependent_init
         _D = Differential(get_iv(sys))
         for (i, dv) in enumerate(flat_unknowns(sys))
             ddv = default_toterm(_D(dv))
@@ -2749,11 +2806,10 @@ function __process_SciMLProblem(
         u0_op = copy(op)
         for (k, v) in guesses
             is_variable(sys, k) || continue
-            has_possibly_indexed_key(u0_op, k) && continue
             sv = v isa SymbolicT ? v : SConst(v)
-            if Symbolics.isarraysymbolic(k) && !SU.is_array_shape(SU.shape(sv))
-                write_dd_guess!(u0_op, k, sv)
-            else
+            if Symbolics.isarraysymbolic(k)
+                fill_unset_array_entries!(u0_op, k, sv, COMMON_NOTHING)
+            elseif get_possibly_indexed(u0_op, k, COMMON_NOTHING) === COMMON_NOTHING
                 write_possibly_indexed_array!(u0_op, k, sv, COMMON_NOTHING)
             end
         end
@@ -2800,15 +2856,14 @@ function __process_SciMLProblem(
     if implicit_dae
         ddvs = map(default_toterm ∘ Differential(iv), dvs)
         du0_op = copy(op)
-        add_toterms!(du0_op)
+        merge_differential_toterm_entries!(du0_op)
         for (k, v) in guesses
             isdifferential(k) || continue
             ttk = default_toterm(k)
-            has_possibly_indexed_key(du0_op, ttk) && continue
             sv = v isa SymbolicT ? v : SConst(v)
-            if Symbolics.isarraysymbolic(ttk) && !SU.is_array_shape(SU.shape(sv))
-                write_dd_guess!(du0_op, ttk, sv)
-            else
+            if Symbolics.isarraysymbolic(ttk)
+                fill_unset_array_entries!(du0_op, ttk, sv, COMMON_NOTHING)
+            elseif get_possibly_indexed(du0_op, ttk, COMMON_NOTHING) === COMMON_NOTHING
                 write_possibly_indexed_array!(du0_op, ttk, sv, COMMON_NOTHING)
             end
         end

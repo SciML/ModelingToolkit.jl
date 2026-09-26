@@ -18,6 +18,12 @@ const INITIALIZEPROB_KWARGS = """
 - `guesses`: The guesses for variables in the system, used as initial values for the
   initialization problem. For DAE problems, `D(x) => v` entries are guesses for the
   derivative `du0`, whereas `D(x)` entries in `op` are fixed initial conditions.
+  `D(x)` entries may fix only part of an array derivative; the remaining elements
+  are solved for by the initialization problem. For DAE problems, `guesses` for
+  unknowns are also used as `u0` entries where `op` does not provide a value. When
+  `missing_guess_value = MissingGuessValue.Error()`, derivatives of algebraic
+  unknowns (e.g. `D(z)` for a `z` that is not differentiated by the equations) are
+  not determined by the initialization problem and must still be supplied.
 - `warn_initialize_determined`: Warn if the initialization system is under/over-determined.
 - `initialization_eqs`: Extra equations to use in the initialization problem.
 - `fully_determined`: Override whether the initialization system is fully determined.

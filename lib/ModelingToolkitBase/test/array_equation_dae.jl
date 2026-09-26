@@ -97,6 +97,46 @@ end
         end
     end
 
+    # a derivative fixed in `op` for only part of an array keeps its value in
+    # `du0` and in the integrator's `du`; the remaining elements are solved for
+    op_partial = [op; D(y[1]) => expected_du[1]]
+    for derivative_guesses in (
+            [D(y) => 0.5],
+            [D(y) => fill(0.5, 3)],
+            [D(y[2]) => 0.5, D(y[3]) => 0.5],
+            [],
+        )
+        guesses = [z => 0.0; derivative_guesses]
+        prob = DAEProblem(sys, op_partial, (0.0, 0.1); guesses)
+        @test prob.du0[1] == expected_du[1]
+        residual = zeros(4)
+        for initializealg in (nothing, SciMLBase.OverrideInit(), BrownFullBasicInit())
+            integ = initializealg === nothing ?
+                init(prob, DFBDF()) :
+                init(prob, DFBDF(); initializealg)
+            @test integ.du ≈ [expected_du; 0.0]
+            prob.f(residual, integ.du, integ.u, integ.p, 0.0)
+            @test maximum(abs, residual) < 1.0e-8
+        end
+    end
+
+    @variables yk(t)[1:3] zk(t)
+    @parameters k
+    sysk = complete(System(
+        [zeros(3) ~ D(yk[1:3]) .+ k * zk .* yk[1:3], 0 ~ zk - sum(yk)],
+        t, [collect(yk); zk], [k]; name = :partial_fixed_derivative
+    ))
+    opk = [[yk[i] => Float64(i) for i in 1:3]; k => 1.0; D(yk[1]) => -6.0]
+    probk = DAEProblem(
+        sysk, opk, (0.0, 0.1); guesses = [zk => 0.0, D(yk[2]) => 0.5, D(yk[3]) => 0.5]
+    )
+    @test probk.du0[1] == -6.0
+    integk = init(probk, DFBDF())
+    @test integk.du ≈ [-6.0, -12.0, -18.0, 0.0]
+    residualk = zeros(4)
+    probk.f(residualk, integk.du, integk.u, integk.p, 0.0)
+    @test maximum(abs, residualk) < 1.0e-8
+
     # a scalar guess for an array derivative broadcasts to the array shape; storing a
     # scalar under the array-shaped key breaks `get_possibly_indexed` readback
     prob = DAEProblem(
@@ -104,6 +144,21 @@ end
         build_initializeprob = false
     )
     @test prob.du0[1:3] == fill(0.5, 3)
+
+    # the same broadcast fills only the elements an operating-point entry did not
+    prob = DAEProblem(
+        sys, op_partial, (0.0, 0.1); guesses = [z => 0.0, D(y) => 0.5, D(z) => 0.0],
+        build_initializeprob = false
+    )
+    @test prob.du0[1:3] == [expected_du[1], 0.5, 0.5]
+
+    # under `FullSpecialize` the solved derivatives are written back through the
+    # generated `initializeprobpmap` rather than a wrapper closure
+    prob = DAEProblem{true, SciMLBase.FullSpecialize}(
+        sys, op, (0.0, 0.1); guesses = [z => 0.0]
+    )
+    integ = init(prob, DFBDF())
+    @test integ.du ≈ [expected_du; 0.0]
 
     # omitted derivative values with no initialization problem still error, matching
     # the pre-change contract
