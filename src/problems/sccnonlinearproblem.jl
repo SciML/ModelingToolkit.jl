@@ -529,7 +529,8 @@ end
 function SciMLBase.SCCNonlinearProblem{iip, specialize}(
         sys::System, op; eval_expression = false,
         eval_module = @__MODULE__, u0_constructor = identity,
-        missing_guess_value = default_missing_guess_value(), combine_sccs = true, kwargs...
+        missing_guess_value = default_missing_guess_value(), combine_sccs = true,
+        check_compatibility = true, kwargs...
     ) where {iip, specialize}
     if !iscomplete(sys) || get_tearing_state(sys) === nothing
         error("A simplified `System` is required. Call `mtkcompile` on the system before creating an `SCCNonlinearProblem`.")
@@ -539,9 +540,7 @@ function SciMLBase.SCCNonlinearProblem{iip, specialize}(
         error("The system has been simplified with `split = false`. `SCCNonlinearProblem` is not compatible with this system. Pass `split = true` to `mtkcompile` to use `SCCNonlinearProblem`.")
     end
 
-    if is_time_dependent(sys)
-        sys = mtkcompile(NonlinearSystem(sys))
-    end
+    check_compatibility && check_compatible_system(SCCNonlinearProblem, sys)
 
     ts = get_tearing_state(sys)
     sched = get_schedule(sys)
@@ -800,6 +799,22 @@ function SciMLBase.SCCNonlinearProblem{iip, specialize}(
     else
         return SCCNonlinearProblem(subprobs, SciMLBase.Void{Any}.(explicitfuns), p, true; sys)
     end
+end
+
+function MTKBase.check_compatible_system(::Type{<:SCCNonlinearProblem}, sys::System)
+    # Unlike `NonlinearProblem`, do not silently rewrite a time-dependent system: that
+    # path re-runs `mtkcompile` and changes the lowered structure under the user.
+    if is_time_dependent(sys)
+        throw(
+            MTKBase.SystemCompatibilityError(
+                """
+                `SCCNonlinearProblem` requires a time-independent system. Convert with \
+                `mtkcompile(NonlinearSystem(sys))` before constructing the problem.
+                """
+            )
+        )
+    end
+    return nothing
 end
 
 function calculate_op_from_u0_p(sys::System, u0::Union{Nothing, AbstractVector}, p::MTKParameters)
