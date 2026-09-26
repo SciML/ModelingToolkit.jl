@@ -22,7 +22,7 @@ end
         grad = Symbolics.gradient(Num(term), vars)
         gradfun = Symbolics.build_function(grad, vars; expression = Val(false))[1]
         runtime(x) = ModelingToolkitBase.instream_rt(Val(ni), Val(no), x...)
-        for flow in [-1.0, -5.0e-5, -1.0e-4 / n, 0.0, 1.0]
+        for flow in [-1.0, -5.0e-5, -1.0e-4 / n, -1.0e-5, 0.0, 1.0]
             x = zeros(2 * n)
             x[flows] .= flow
             x[flows[(ni + 1):end]] .*= -1
