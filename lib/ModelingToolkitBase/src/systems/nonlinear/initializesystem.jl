@@ -38,6 +38,27 @@ function generate_initializesystem(
 end
 
 """
+    $(TYPEDSIGNATURES)
+
+Register the dummy derivative variable `ttk = default_toterm(d)` as an initialization
+unknown: give it a `dd_guess_sym` guess unless `d` or `ttk` is already guessed, add it to
+`init_vars_set`, and record `d => ttk` in `derivative_rules`. Returns `ttk`.
+"""
+function register_dd_var!(
+        derivative_rules::AbstractDict{SymbolicT, SymbolicT},
+        init_vars_set::AtomicArraySet{OrderedDict{SymbolicT, Nothing}},
+        guesses::AtomicArrayDict{SymbolicT}, d::SymbolicT, dd_guess_sym::SymbolicT
+    )
+    ttk = default_toterm(d)
+    if !has_possibly_indexed_key(guesses, d) && !has_possibly_indexed_key(guesses, ttk)
+        write_possibly_indexed_array!(guesses, ttk, dd_guess_sym, COMMON_NOTHING)
+    end
+    push_as_atomic_array!(init_vars_set, ttk)
+    derivative_rules[d] = ttk
+    return ttk
+end
+
+"""
 $(TYPEDSIGNATURES)
 
 Generate `System` of nonlinear equations which initializes a problem from specified initial conditions of a time-dependent `AbstractSystem`.
@@ -122,6 +143,7 @@ function generate_initializesystem_timevarying(
     # properly handling singular systems. Without this, singular systems will always
     # error as incomplete, since the system symbolically won't contain some unknowns.
     derivative_rules = DerivativeDict()
+    residual_eq_indices = Int[]
     dd_guess_sym = BSImpl.Const{VartypeT}(default_dd_guess)
     banned_derivatives = Set{SymbolicT}()
     if has_schedule(_sys) && (schedule = get_schedule(_sys); schedule isa Schedule)
@@ -150,17 +172,45 @@ function generate_initializesystem_timevarying(
         end
         if isdiffeq(eq)
             get!(derivative_rules, eq.lhs) do
-                k = eq.lhs
-                ttk = default_toterm(eq.lhs)
-                if !has_possibly_indexed_key(guesses, k) && !has_possibly_indexed_key(guesses, ttk)
-                    write_possibly_indexed_array!(guesses, ttk, dd_guess_sym, COMMON_NOTHING)
-                end
-                push_as_atomic_array!(init_vars_set, ttk)
+                ttk = register_dd_var!(
+                    derivative_rules, init_vars_set, guesses, eq.lhs, dd_guess_sym
+                )
                 isequal(ttk, eq.rhs) || push!(eqs_ics, ttk ~ subber(eq.rhs))
                 ttk
             end
         else
+            residual_derivatives = collect_applied_operators(eq, Differential)
+            for d in residual_derivatives
+                arr, isarr = split_indexed_var(only(arguments(d)))
+                if isarr
+                    array_d = operation(d)(arr)
+                    if !haskey(derivative_rules, array_d)
+                        register_dd_var!(
+                            derivative_rules, init_vars_set, guesses, array_d, dd_guess_sym
+                        )
+                    end
+                end
+                if SU.is_array_shape(SU.shape(d))
+                    arr = only(arguments(d))
+                    derivative_rules[d] = array_derivative_expansion(d)
+                    for i in SU.stable_eachindex(arr)
+                        scalar_d = operation(d)(arr[i])
+                        register_dd_var!(
+                            derivative_rules, init_vars_set, guesses, scalar_d, dd_guess_sym
+                        )
+                    end
+                else
+                    get!(derivative_rules, d) do
+                        register_dd_var!(
+                            derivative_rules, init_vars_set, guesses, d, dd_guess_sym
+                        )
+                    end
+                end
+            end
             push!(eqs_ics, eq)
+            if !isempty(residual_derivatives)
+                push!(residual_eq_indices, length(eqs_ics))
+            end
         end
     end
     D = Differential(get_iv(sys))
@@ -181,6 +231,10 @@ function generate_initializesystem_timevarying(
             get_irstructure(sys), derivative_rules
         ); maxiters = get_maxiters(derivative_rules)
     )
+    # Apply rules collected from the full equation set to residual-form derivatives.
+    for i in residual_eq_indices
+        eqs_ics[i] = subber(der_subber(eqs_ics[i]))
+    end
     timevaring_initsys_process_op!(subber, init_vars_set, init_ps, eqs_ics, op, der_subber, guesses)
 
     # process explicitly provided initialization equations
