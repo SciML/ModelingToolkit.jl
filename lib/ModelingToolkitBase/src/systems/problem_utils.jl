@@ -524,6 +524,96 @@ function check_substitution_cycles(
     end
 end
 
+function _linear_array_index(values::AbstractArray, k)
+    return LinearIndices(values)[get_stable_index(k)]
+end
+
+function _requested_all_array_elements(keys, values::AbstractArray)
+    length(keys) == length(values) || return false
+    indices = Set{Int}()
+    for k in keys
+        push!(indices, _linear_array_index(values, k))
+    end
+    length(indices) == length(values) || return false
+    return all(i -> i in indices, 1:length(values))
+end
+
+function _evaluate_varmap_array!(
+        subber, varmap::AtomicArrayDictSubstitutionWrapper, arr::SymbolicT, keys
+    )
+    raw = get(varmap.dict, arr, COMMON_NOTHING)
+    raw === COMMON_NOTHING && return
+    if !SU.is_array_shape(SU.shape(raw))
+        SU.isconst(raw) && return
+        varmap[arr] = subber(raw)
+        return
+    end
+    # Fully numeric arrays: once-per-parent early return (linear fast path).
+    SU.isconst(raw) && return
+
+    values = collect(raw)
+    has_holes = any(v -> v === varmap.default, values)
+
+    # Symbolic entries use incremental per-element substitution with immediate
+    # write-back so acyclic cross-element dependencies (e.g. x[i] => x[i-1]+1)
+    # resolve. Whole-array substitution is reserved for the numeric early-return
+    # above; a single fixpoint over the parent loses that incremental semantics.
+    requested = if isempty(keys) || (!has_holes && _requested_all_array_elements(keys, values))
+        SymbolicT[arr[i] for i in SU.stable_eachindex(arr)]
+    else
+        keys
+    end
+    for k in requested
+        value = get(varmap, k, varmap.default)
+        value === varmap.default && continue
+        SU.isconst(value) && continue
+        varmap[k] = subber(value)
+    end
+    return
+end
+
+function _evaluate_varmap_entries!(
+        subber, varmap::AtomicArrayDictSubstitutionWrapper, vars;
+        all_elements::Bool = false
+    )
+    vars isa AbstractVector || (vars = collect(vars))
+    array_keys = Dict{SymbolicT, Vector{SymbolicT}}()
+    whole_arrays = Set{SymbolicT}()
+    if !all_elements
+        for k in vars
+            key = unwrap(k)
+            arr, is_indexed = split_indexed_var(key)
+            if is_indexed
+                push!(get!(() -> SymbolicT[], array_keys, arr), key)
+            elseif Symbolics.isarraysymbolic(key)
+                push!(whole_arrays, arr)
+            end
+        end
+    end
+
+    evaluated_arrays = Set{SymbolicT}()
+    for k in vars
+        key = unwrap(k)
+        arr, is_indexed = split_indexed_var(key)
+        if is_indexed || Symbolics.isarraysymbolic(key)
+            arr in evaluated_arrays && continue
+            push!(evaluated_arrays, arr)
+            keys = if all_elements || arr in whole_arrays
+                SymbolicT[]
+            else
+                get(array_keys, arr, SymbolicT[])
+            end
+            _evaluate_varmap_array!(subber, varmap, arr, keys)
+        else
+            value = get(varmap, key, COMMON_NOTHING)
+            value === COMMON_NOTHING && continue
+            SU.isconst(value) && continue
+            varmap[key] = subber(value)
+        end
+    end
+    return
+end
+
 """
     $(TYPEDSIGNATURES)
 
@@ -532,14 +622,31 @@ Performs symbolic substitution on the values in `varmap` for the keys in `vars`,
 in `varmap`, it is ignored.
 """
 function evaluate_varmap!(varmap::AbstractDict{SymbolicT, SymbolicT}, vars; limit = 100, allow_symbolic = false)
+    evaluated = Set{SymbolicT}()
     for k in vars
-        arr, _ = split_indexed_var(unwrap(k))
-        v = get(varmap, arr, COMMON_NOTHING)
-        v === COMMON_NOTHING && continue
-        SU.isconst(v) && continue
-        varmap[arr] = fixpoint_sub(v, varmap; maxiters = limit, fold = Val(true), warn_maxiters = !allow_symbolic)
+        arr, is_indexed = split_indexed_var(unwrap(k))
+        if is_indexed
+            arr in evaluated && continue
+            push!(evaluated, arr)
+        end
+        value = get(varmap, arr, COMMON_NOTHING)
+        value === COMMON_NOTHING && continue
+        SU.isconst(value) && continue
+        varmap[arr] = fixpoint_sub(
+            value, varmap; maxiters = limit, fold = Val(true), warn_maxiters = !allow_symbolic
+        )
     end
     return
+end
+
+function evaluate_varmap!(
+        varmap::AtomicArrayDictSubstitutionWrapper, vars;
+        limit = 100, allow_symbolic = false
+    )
+    subber = v -> fixpoint_sub(
+        v, varmap; maxiters = limit, fold = Val(true), warn_maxiters = !allow_symbolic
+    )
+    return _evaluate_varmap_entries!(subber, varmap, vars; all_elements = true)
 end
 
 function evaluate_varmap!(
@@ -550,13 +657,7 @@ function evaluate_varmap!(
         SU.IRSubstituter{true}(ir, varmap; filterer = Symbolics.FPSubFilterer{Nothing}());
         maxiters = limit, warn_maxiters = !allow_symbolic
     )
-    for k in vars
-        v = get(varmap, k, COMMON_NOTHING)
-        v === COMMON_NOTHING && continue
-        SU.isconst(v) && continue
-        varmap[k] = subber(v)
-    end
-    return
+    return _evaluate_varmap_entries!(subber, varmap, vars)
 end
 
 """
