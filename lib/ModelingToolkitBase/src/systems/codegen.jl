@@ -403,10 +403,8 @@ function calculate_jacobian(
             # Add nonzeros of W as non-structural zeros of the Jacobian
             # (to ensure equal results for oop and iip Jacobian)
             JIs, JJs, JVs = findnz(jac)
-            # The in-place Jacobian writes one value per stored entry into a matrix with
-            # the pattern of `W_sparsity`, so this pattern must not exceed it. Drop the
-            # identically zero entries that a conservative `Symbolics.jacobian_sparsity`
-            # stores (e.g. Symbolics 7.40.1 marks every element of `x(t)` for `x(t)[i]`).
+            # The iip Jacobian writes into `jac_prototype.nzval` (the pattern of `W_sparsity`),
+            # so drop stored zeros that could push this pattern past it.
             keep = findall(v -> !_iszero(unwrap(v)), JVs)
             JIs, JJs, JVs = JIs[keep], JJs[keep], JVs[keep]
             WIs, WJs, _ = findnz(W_sparsity(sys))
