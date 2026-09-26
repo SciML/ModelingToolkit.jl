@@ -214,30 +214,7 @@ end
         u = [rand()]
         @test f[1](x, u, p, 1) ≈ -x + u
 
-        ## With added d argument
-        @variables x(t) = 0 u(t) = 0 [input = true] d(t) = 0
-        eqs = [
-            D(x) ~ -x + u + d^2,
-        ]
-
-        @named sys = System(eqs, t)
-        f, dvs,
-            ps,
-            io_sys = ModelingToolkitBase.generate_control_function(
-            sys, [u], [d];
-            simplify, split, disturbance_argument = true
-        )
-
-        @test isequal(dvs[], x)
-        @test isempty(ps)
-
-        p = [rand()]
-        x = [rand()]
-        u = [rand()]
-        d = [rand()]
-        @test f[1](x, u, p, t, d) ≈ -x + u + [d[]^2]
-
-        ## Test new known_disturbance_inputs parameter (equivalent to disturbance_argument=true)
+        ## With added known disturbance argument (known_disturbance_inputs)
         @variables x(t) = 0 u(t) = 0 [input = true] d(t) = 0
         eqs = [
             D(x) ~ -x + u + d^2,
