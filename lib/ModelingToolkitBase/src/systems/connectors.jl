@@ -837,6 +837,19 @@ function _generate_connection_set!(
 end
 
 function _flow_equations_from_idxs!(sys::AbstractSystem, eqs::Vector{Equation}, cset::Vector{ConnectionVertex}, len::Int)
+    representative = variable_from_vertex(sys, first(cset))::SymbolicT
+    if SU.is_array_shape(SU.shape(representative)) && all(cset) do cvert
+            v = variable_from_vertex(sys, cvert)::SymbolicT
+            isequal(SU.shape(v), SU.shape(representative))
+        end
+        terms = map(cset) do cvert
+            v = Symbolics.wrap(variable_from_vertex(sys, cvert)::SymbolicT)
+            cvert.isouter ? .-v : v
+        end
+        rhs = reduce((a, b) -> a .+ b, terms)
+        push!(eqs, 0 .* Symbolics.wrap(representative) ~ rhs)
+        return
+    end
     add_buffer = SymbolicT[]
     # each variable can have different axes, but they all have the same size
     for sz_i in 1:len
@@ -933,9 +946,6 @@ function generate_connection_equations_and_stream_connections(
         elseif vtype === Stream
             push!(stream_connections, cset)
         elseif vtype === Flow
-            # arrays have to be broadcasted to be added/subtracted/negated which leads
-            # to bad-looking equations. Just generate scalar equations instead since
-            # mtkcompile will scalarize anyway.
             representative = variable_from_vertex(sys, cset[1])::SymbolicT
             _flow_equations_from_idxs!(sys, eqs, cset, length(representative)::Int)
         else # Equality
