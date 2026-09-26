@@ -1731,7 +1731,9 @@ end
 
 @testset "`ODESystem` is a type" begin
     @variables x(t)
-    @test_deprecated @named sys = ODESystem(D(x) ~ x, t)
+    # Capture the return value: `@test_deprecated` does not bind `sys` from
+    # `@named sys = ...` into the surrounding `@testset` soft scope.
+    sys = @test_deprecated ODESystem(D(x) ~ x, t; name = :sys)
     @test sys isa ODESystem
     @test sys isa System
     arr = ODESystem[]
@@ -1744,7 +1746,10 @@ module MtkbuildTestModule
     import ModelingToolkitBase: @variables, System, t_nounits as t, D_nounits as D, @mtkbuild
     import Test: @test, @test_deprecated
     @variables x(t)
-    @test_deprecated @mtkbuild sys = System(D(x) ~ t, t)
+    sys = @test_deprecated begin
+        @mtkbuild sys = System(D(x) ~ t, t)
+        sys
+    end
     @test sys isa System
 end
 
