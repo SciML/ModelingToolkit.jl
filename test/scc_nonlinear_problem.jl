@@ -613,6 +613,40 @@ end
     @test SciMLBase.successful_retcode(sol)
     @test sol[x3] ≈ 1.3 atol = 1.0e-8
     @test sol[y3] ≈ 2.2 atol = 1.0e-8
+
+    # https://github.com/SciML/ModelingToolkit.jl/issues/5177
+    # The residual of a reaction network with conservation laws is structurally
+    # singular (`s1s2` appears in none of the right-hand sides), so it has no SCC
+    # lowering: the builder falls back to the unlowered residual instead of
+    # throwing from `mtkcompile`, and `DynamicSS` integrates the ODE, keeping the
+    # conserved quantities of the initial condition.
+    @parameters k1 = 1.0 c1 = 2.0
+    @variables s1(t) = 2.0 s1s2(t) = 2.0 s2(t) = 2.0
+    eqs = [
+        D(s1) ~ -0.25 * c1 * k1 * s1 * s2,
+        D(s1s2) ~ 0.25 * c1 * k1 * s1 * s2,
+        D(s2) ~ -0.25 * c1 * k1 * s1 * s2,
+    ]
+    for sys in (
+            complete(System(eqs, t; name = :reactionsystem)),
+            mtkcompile(System(eqs, t; name = :reactionsystem)),
+        )
+        prob = SteadyStateProblem(sys, [c1 => 3.0])
+        @test prob.lowered_problem !== nothing
+        for _ in 1:2 # the fallback is memoized
+            lowered = SCCNonlinearProblem(prob)
+            @test lowered isa NonlinearProblem
+            @test lowered.u0 == prob.u0
+            @test lowered.p === prob.p
+        end
+        sol = solve(prob, DynamicSS(Tsit5()))
+        @test SciMLBase.successful_retcode(sol)
+        @test sol.prob isa SteadyStateProblem
+        @test sol[s1] + sol[s1s2] ≈ 4 atol = 1.0e-6
+        @test sol[s2] + sol[s1s2] ≈ 4 atol = 1.0e-6
+        @test sol[s1] < 1.0e-2
+        @test SciMLBase.successful_retcode(solve(prob, NewtonRaphson()))
+    end
 end
 
 @testset "SteadyStateProblem SCC lowering: connectors, array unknowns and `Initial` values" begin
