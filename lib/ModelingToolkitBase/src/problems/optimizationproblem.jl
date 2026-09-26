@@ -190,13 +190,49 @@ function SciMLBase.MultiObjectiveOptimizationFunction{iip}(
 end
 
 """
+    LazyConstraintExprs(sys::System, len::Int)
+
+The `cons_expr` of an `OptimizationFunction` built from `sys`: an `AbstractVector{Expr}`
+with one expression per row of the constraint function, the `Code.toexpr` of the expanded
+rows of [`canonical_constraints`](@ref). Scalarizing and expanding large array-valued
+constraints is expensive and only expression-graph consumers need it, so the expressions
+are built on the first access to an element and cached; solvers that only call the
+generated functions never pay for them.
+"""
+mutable struct LazyConstraintExprs <: AbstractVector{Expr}
+    const sys::System
+    const len::Int
+    exprs::Union{Nothing, Vector{Expr}}
+    const lock::ReentrantLock
+end
+
+function LazyConstraintExprs(sys::System, len::Int)
+    return LazyConstraintExprs(sys, len, nothing, ReentrantLock())
+end
+
+Base.size(c::LazyConstraintExprs) = (c.len,)
+Base.IndexStyle(::Type{LazyConstraintExprs}) = IndexLinear()
+Base.getindex(c::LazyConstraintExprs, i::Int) = materialize_constraint_exprs(c)[i]
+
+function materialize_constraint_exprs(c::LazyConstraintExprs)
+    return @lock c.lock begin
+        exprs = c.exprs
+        if exprs === nothing
+            exprs = Expr[Code.toexpr(expand(row)) for row in canonical_constraints(c.sys)]
+            c.exprs = exprs
+        end
+        exprs
+    end::Vector{Expr}
+end
+
+"""
     $(TYPEDSIGNATURES)
 
 The constraint-related fields of an `OptimizationFunction` or
 `MultiObjectiveOptimizationFunction` built from `sys`: the constraint function `cons`,
-its symbolic form `cons_expr`, and, when requested, the constraint jacobian `cons_j` and
-hessian `cons_h` with their sparsity prototypes. Every field is `nothing` when `sys` has
-no constraints.
+its symbolic form `cons_expr` (a `LazyConstraintExprs`), and, when requested, the
+constraint jacobian `cons_j` and hessian `cons_h` with their sparsity prototypes. Every
+field is `nothing` when `sys` has no constraints.
 """
 function generate_constraint_fields(
         sys::System, codegen_opts::GeneratedFunctionOptions;
@@ -224,7 +260,7 @@ function generate_constraint_fields(
             sys, codegen_opts; simplify, sparse = cons_sparse, return_sparsity = true
         )
     end
-    cons_expr = Code.toexpr.(expand.([eq.lhs for eq in Symbolics.canonical_form.(cstr)]))
+    cons_expr = LazyConstraintExprs(sys, sum(constraint_length, cstr))
     return (;
         cons, cons_j = _cons_j, cons_jac_prototype, cons_h = _cons_h,
         cons_hess_prototype, cons_expr,
@@ -286,9 +322,11 @@ function SciMLBase.OptimizationProblem{iip}(
     if isempty(cstr)
         lcons = ucons = nothing
     else
-        lcons = fill(-Inf, length(cstr))
-        ucons = zeros(length(cstr))
-        lcons[findall(Base.Fix2(isa, Equation), cstr)] .= 0.0
+        lcons = Float64[]
+        for c in cstr
+            append!(lcons, Iterators.repeated(c isa Equation ? 0.0 : -Inf, constraint_length(c)))
+        end
+        ucons = zeros(length(lcons))
     end
 
     kwargs = process_kwargs(sys; kwargs...)

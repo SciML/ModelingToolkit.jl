@@ -40,25 +40,6 @@ end
 """
     $(TYPEDSIGNATURES)
 
-Guess `guess` for the dummy-derivative variable `ttk`.
-
-Workaround, to be removed: `write_possibly_indexed_array!` stores a scalar under an
-array-shaped key when `ttk` is an array symbolic rather than an indexed expression, which
-`get_possibly_indexed` cannot read back. It should broadcast the scalar to the key's shape
-itself; until it does (https://github.com/SciML/ModelingToolkit.jl/issues/5147), this helper stores the filled array.
-"""
-function write_dd_guess!(guesses::AtomicArrayDict{SymbolicT}, ttk::SymbolicT, guess::SymbolicT)
-    if Symbolics.isarraysymbolic(ttk)
-        guesses[ttk] = BSImpl.Const{VartypeT}(fill(unwrap_const(guess), size(ttk)))
-    else
-        write_possibly_indexed_array!(guesses, ttk, guess, COMMON_NOTHING)
-    end
-    return guesses
-end
-
-"""
-    $(TYPEDSIGNATURES)
-
 Register the dummy derivative variable `ttk = default_toterm(d)` as an initialization
 unknown: give it a `dd_guess_sym` guess unless `d` or `ttk` is already guessed, add it to
 `init_vars_set`, and record `d => ttk` in `derivative_rules`. Returns `ttk`.
@@ -70,7 +51,7 @@ function register_dd_var!(
     )
     ttk = default_toterm(d)
     if !has_possibly_indexed_key(guesses, d) && !has_possibly_indexed_key(guesses, ttk)
-        write_dd_guess!(guesses, ttk, dd_guess_sym)
+        write_possibly_indexed_array!(guesses, ttk, dd_guess_sym, COMMON_NOTHING)
     end
     push_as_atomic_array!(init_vars_set, ttk)
     derivative_rules[d] = ttk
@@ -169,7 +150,7 @@ function generate_initializesystem_timevarying(
         for (k, v) in schedule.dummy_sub
             ttk = default_toterm(k)
             if !has_possibly_indexed_key(guesses, k) && !has_possibly_indexed_key(guesses, ttk)
-                write_dd_guess!(guesses, ttk, dd_guess_sym)
+                write_possibly_indexed_array!(guesses, ttk, dd_guess_sym, COMMON_NOTHING)
             end
             # For DDEs, the derivatives can have delayed terms
             if _has_delays(sys, v, banned_derivatives)

@@ -113,7 +113,8 @@ end
 
 Modify an atomic array mapping `dd` to map `k` to `v`. If `k` is an indexed array symbolic,
 update the array to have value `v` at the corresponding index. If the array is not a key,
-create the key and set all other entries to `default`.
+create the key and set all other entries to `default`. If `k` is an array symbolic and `v`
+is scalar-shaped, `v` is broadcast to `size(k)`.
 """
 function write_possibly_indexed_array!(dd::AtomicArrayDict{SymbolicT}, k::SymbolicT, v::SymbolicT, default::SymbolicT)
     arr, isarr = split_indexed_var(k)
@@ -132,7 +133,17 @@ function write_possibly_indexed_array!(dd::AtomicArrayDict{SymbolicT}, k::Symbol
             dd[arr] = BSImpl.Const{VartypeT}(buffer)
         end
     else
-        dd[k] = v
+        shk = SU.shape(k)
+        dd[k] = if SU.is_array_shape(shk) && !(shk isa SU.Unknown) &&
+                !SU.is_array_shape(SU.shape(v))
+            if SU.isconst(v)
+                BSImpl.Const{VartypeT}(fill(unwrap_const(v), size(k)))
+            else
+                BSImpl.Const{VartypeT}(fill(v, size(k)))
+            end
+        else
+            v
+        end
     end
     return dd
 end

@@ -384,11 +384,7 @@ function varmap_to_vars(
             MissingGuessValue.Constant(val) => begin
                 cval = BSImpl.Const{VartypeT}(val)
                 for var in missing_vars
-                    if Symbolics.isarraysymbolic(var)
-                        varmap[var] = BSImpl.Const{VartypeT}(fill(val, size(var)))
-                    else
-                        write_possibly_indexed_array!(varmap, var, cval, COMMON_NOTHING)
-                    end
+                    write_possibly_indexed_array!(varmap, var, cval, COMMON_NOTHING)
                 end
             end
             MissingGuessValue.Random(rng) => begin
@@ -660,13 +656,7 @@ function add_initials!(sys::AbstractSystem, op::SymmapT)
         haskey(op, p) && continue
         Moshi.Match.@match p begin
             BSImpl.Term(; f, args) && if f isa Initial end => begin
-                write_possibly_indexed_array!(
-                    op, p, if Symbolics.isarraysymbolic(p)
-                        BSImpl.Const{VartypeT}(fill(false, size(p)))
-                    else
-                        COMMON_FALSE
-                    end, COMMON_FALSE
-                )
+                write_possibly_indexed_array!(op, p, COMMON_FALSE, COMMON_FALSE)
             end
             _ => nothing
         end
@@ -874,14 +864,23 @@ end
     end
 end
 
+# `mapreduce(f, vcat, (t,))` returns `f(t)` itself, so a root template with a single entry
+# that indexes one element of a buffer yields a scalar rather than a vector.
+__as_root_vector(x::AbstractArray) = x
+__as_root_vector(x) = [x]
+
 function (cp::CopyParamsByTemplate{IsRoot})(src) where {IsRoot}
     return if IsRoot
         if cp.fallback_getter === nothing
-            reshape(mapreduce(Base.Fix1(__apply_copy_template, src), vcat, cp.template), cp.size)
+            reshape(
+                __as_root_vector(mapreduce(Base.Fix1(__apply_copy_template, src), vcat, cp.template)),
+                cp.size
+            )
         else
             fb = cp.fallback_getter(src)
             reshape(
-                mapreduce(t -> __apply_root_template(src, t, fb), vcat, cp.template), cp.size
+                __as_root_vector(mapreduce(t -> __apply_root_template(src, t, fb), vcat, cp.template)),
+                cp.size
             )
         end
     else
