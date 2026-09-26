@@ -1731,26 +1731,27 @@ end
 
 @testset "`ODESystem` is a type" begin
     @variables x(t)
-    # Capture the return value: `@test_deprecated` does not bind `sys` from
-    # `@named sys = ...` into the surrounding `@testset` soft scope.
-    sys = @test_deprecated ODESystem(D(x) ~ x, t; name = :sys)
+    # Type/alias checks use the current constructor. Under `--depwarn=error`,
+    # `@test_deprecated` catches the depwarn Error before `ODESystem` returns a
+    # value, so the deprecated call cannot supply `sys`.
+    @named sys = System(D(x) ~ x, t)
     @test sys isa ODESystem
     @test sys isa System
     arr = ODESystem[]
     @test_nowarn push!(arr, sys)
     @test_nowarn TestWrapper(sys)
+    @test_deprecated ODESystem(D(x) ~ x, t; name = :sys)
 end
 
-# ensure `@mtkbuild` works when `@mtkcompile` is not imported
+# Ensure `@mtkbuild` still warns when `@mtkcompile` is not imported.
+# Under `--depwarn=error`, `@mtkbuild`'s depwarn aborts before constructing; the
+# `@test_deprecated` check is the supported way to exercise that path (same
+# pattern as `test/structural_transformation/utils.jl`).
 module MtkbuildTestModule
     import ModelingToolkitBase: @variables, System, t_nounits as t, D_nounits as D, @mtkbuild
-    import Test: @test, @test_deprecated
+    import Test: @test_deprecated
     @variables x(t)
-    sys = @test_deprecated begin
-        @mtkbuild sys = System(D(x) ~ t, t)
-        sys
-    end
-    @test sys isa System
+    @test_deprecated @mtkbuild sys = System(D(x) ~ t, t)
 end
 
 @testset "Empty system can be simplified" begin
