@@ -92,7 +92,9 @@ function generate_initializesystem_timevarying(
                     error("Unexpected input $v.")
                 end
             end
-            # Intentionally no fallback case. All inputs are originally variables.
+            # An input represented by a time-independent parameter.
+            BSImpl.Sym() => push!(init_ps, v)
+            # Intentionally no fallback case. All other inputs are originally variables.
         end
     end
     push!(init_ps, get_iv(sys)::SymbolicT)

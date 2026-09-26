@@ -174,16 +174,56 @@ function linearization_function(
     inputs isa AbstractVector || (inputs = [inputs])
     outputs isa AbstractVector || (outputs = [outputs])
     ssys = mtkcompile(sys; inputs, outputs, simplify, kwargs...)
+    zero_dummy_der_vars = zero_dummy_der ? setdiff(unknowns(ssys), unknowns(sys)) : SymbolicT[]
+    return _linearization_function_compiled(
+        ssys, inputs, outputs; initialize, initializealg, initialization_abstol,
+        initialization_reltol, op, p, initialization_solver_alg, autodiff, eval_expression,
+        eval_module, warn_initialize_determined, guesses, missing_guess_value, t,
+        ignore_system_initial_conditions, loop_opening_params, zero_dummy_der_vars
+    )
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+The part of [`linearization_function`](@ref) that operates on a system `ssys` that has
+already been compiled with `inputs` and `outputs`. `zero_dummy_der_vars` are the unknowns
+whose operating-point value is set to zero. Keyword arguments are documented in
+[`linearization_function`](@ref).
+"""
+function _linearization_function_compiled(
+        ssys::AbstractSystem, inputs, outputs;
+        initialize = true,
+        initializealg = nothing,
+        initialization_abstol = 1.0e-5,
+        initialization_reltol = 1.0e-3,
+        op = Dict{SymbolicT, SymbolicT}(),
+        p = SciMLBase.NullParameters(),
+        initialization_solver_alg = nothing,
+        autodiff = AutoForwardDiff(),
+        eval_expression = false, eval_module = @__MODULE__,
+        warn_initialize_determined = true,
+        guesses = Dict{SymbolicT, SymbolicT}(),
+        missing_guess_value = MTKBase.default_missing_guess_value(),
+        t = 0.0,
+        ignore_system_initial_conditions = false,
+        loop_opening_params = SymbolicT[],
+        zero_dummy_der_vars = SymbolicT[],
+        initialization_eqs = Equation[],
+        algebraic_only = isempty(initialization_eqs)
+    )
+    op = Dict(op)
+    inputs isa AbstractVector || (inputs = [inputs])
+    outputs isa AbstractVector || (outputs = [outputs])
     if ignore_system_initial_conditions
         ics = copy(initial_conditions(ssys))
         filter!(Base.Fix2(SU.hasmetadata, MTKBase.AnalysisVariable) ∘ first, ics)
         @set! ssys.initial_conditions = ics
     end
     diff_idxs, alge_idxs = eq_idxs(ssys)
-    if zero_dummy_der
-        dummyder = setdiff(unknowns(ssys), unknowns(sys))
+    if !isempty(zero_dummy_der_vars)
         ics = initial_conditions(ssys)
-        for x in dummyder
+        for x in zero_dummy_der_vars
             ics[x] = Symbolics.COMMON_ZERO
         end
     end
@@ -214,7 +254,7 @@ function linearization_function(
 
     prob = ODEProblem{true}(
         sys, merge(op, anydict(p)), (t, t); allow_incomplete = true,
-        algebraic_only = true, guesses, missing_guess_value
+        algebraic_only, initialization_eqs, guesses, missing_guess_value
     )
     initial_idxs_for_unknowns = ParameterIndex{SciMLStructures.Initials, Int}[]
     for v in unknowns(sys)
@@ -236,13 +276,15 @@ function linearization_function(
 
     p = parameter_values(prob)
     t0 = current_time(prob)
-    inputvals = [prob.ps[i] for i in inputs]
 
     if u0 === nothing
         T = typeof(t0)
     else
         T = promote_type(eltype(u0), typeof(t0))
     end
+    # Preparing the jacobians with respect to the inputs requires a vector of a concrete
+    # element type, also when there are no inputs.
+    inputvals = isempty(inputs) ? T[] : [prob.ps[i] for i in inputs]
     prob = _linearization_wrap_odeproblem_f(prob, T)
     ct0 = DI.Constant(T(t0))
     u0T = if u0 === nothing
@@ -295,7 +337,8 @@ function linearization_function(
     input_getter = getsym(prob, inputs)
 
     lin_fun = LinearizationFunction(
-        diff_idxs, alge_idxs, input_getter, length(inputs), length(unknowns(sys)),
+        diff_idxs, alge_idxs, input_getter, length(inputs), collect(SymbolicT, inputs),
+        length(unknowns(sys)),
         prob, h, u0 === nothing ? nothing : similar(u0, T), uf_jac, h_jac, pf_jac,
         hp_jac, initializealg, initialization_kwargs, initial_idxs_for_unknowns,
         collect(SymbolicT, loop_opening_params)
@@ -425,6 +468,11 @@ mutable struct LinearizationFunction{
     """
     const num_inputs::Int
     """
+    The input variables, or the parameters that represent them, in the order of the columns
+    of the input jacobians.
+    """
+    const inputs::Vector{SymbolicT}
+    """
     The number of unknowns in the linearized system.
     """
     const num_states::Int
@@ -537,20 +585,24 @@ function (linfun::LinearizationFunction)(u, p, t)
         end
         fg_xz = linfun.uf_jac(u, DI.Constant(p), DI.Constant(t))
         h_xz = linfun.h_jac(u, DI.Constant(p), DI.Constant(t))
-        fg_u = linfun.pf_jac(
-            input_vals,
-            DI.Constant(u), DI.Constant(p), DI.Constant(t)
-        )
+        # The jacobian with respect to an empty input vector is not defined.
+        fg_u = if linfun.num_inputs == 0
+            zeros(eltype(fg_xz), size(fg_xz, 1), 0)
+        else
+            linfun.pf_jac(input_vals, DI.Constant(u), DI.Constant(p), DI.Constant(t))
+        end
     else
         linfun.num_states == 0 ||
             error("Number of unknown variables (0) does not match the expected number of unknowns ($(linfun.num_states))")
         fg_xz = zeros(0, 0)
-        h_xz = fg_u = zeros(0, length(linfun.num_inputs))
+        fg_u = zeros(0, linfun.num_inputs)
+        h_xz = zeros(size(linfun.hp_jac.buf, 1), 0)
     end
-    h_u = linfun.hp_jac(
-        input_vals,
-        DI.Constant(u), DI.Constant(p), DI.Constant(t)
-    )
+    h_u = if linfun.num_inputs == 0
+        zeros(eltype(h_xz), size(h_xz, 1), 0)
+    else
+        linfun.hp_jac(input_vals, DI.Constant(u), DI.Constant(p), DI.Constant(t))
+    end
     return (
         f_x = fg_xz[linfun.diff_idxs, linfun.diff_idxs],
         f_z = fg_xz[linfun.diff_idxs, linfun.alge_idxs],
@@ -794,7 +846,7 @@ function CommonSolve.solve(prob::LinearizationProblem; allow_input_derivatives =
         if !iszero(Bs)
             if !allow_input_derivatives
                 der_inds = findall(vec(any(!=(0), Bs, dims = 1)))
-                error("Input derivatives appeared in expressions (-g_z\\g_u != 0), the following inputs appeared differentiated: $(inputs(prob.f.prob.f.sys)[der_inds]). Call `linearize` with keyword argument `allow_input_derivatives = true` to allow this and have the returned `B` matrix be of double width ($(2nu)), where the last $nu inputs are the derivatives of the first $nu inputs.")
+                error("Input derivatives appeared in expressions (-g_z\\g_u != 0), the following inputs appeared differentiated: $(prob.f.inputs[der_inds]). Call `linearize` with keyword argument `allow_input_derivatives = true` to allow this and have the returned `B` matrix be of double width ($(2nu)), where the last $nu inputs are the derivatives of the first $nu inputs.")
             end
             B = [B [zeros(nx, nu); Bs]]
             D = [D zeros(ny, nu)]
