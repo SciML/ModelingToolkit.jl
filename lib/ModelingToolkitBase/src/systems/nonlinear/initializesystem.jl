@@ -121,9 +121,9 @@ function generate_initializesystem_timevarying(
 
     guesses = as_atomic_dict_with_defaults(Dict{SymbolicT, SymbolicT}(guesses), COMMON_NOTHING)
     left_merge!(guesses, ModelingToolkitBase.guesses(sys))
+    # Dummy-variable guesses can reference the original derivative expression.
     for (k, v) in collect(guesses)
         isdifferential(k) || continue
-        delete!(guesses, k)
         ttk = default_toterm(k)
         # Fill unset entries so a whole-array guess does not overwrite elements
         # already present under `ttk`.

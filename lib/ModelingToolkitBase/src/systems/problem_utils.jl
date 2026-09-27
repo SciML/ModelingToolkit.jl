@@ -1498,9 +1498,9 @@ initialization nonlinear problem into `valp.du`, when `valp` exposes a mutable
 `du` (e.g. a DAE integrator). `getter` resolves `solved_ddvs` from `nlsol` and
 `idxs` holds each variable's position in `du`. Derivative values supplied
 through the operating point are excluded at construction, so only values the
-initialization problem was free to solve are written. Nothing is written when
-the nonlinear solve did not succeed, or when `nlsol` is the unsolved
-initialization problem of a trivial initialization.
+initialization problem was free to solve are written. A trivial initialization
+reads derivatives from the reduced problem's observed equations. Nothing is
+written when the nonlinear solve did not succeed.
 """
 struct SolvedDerivativeWriter{G, I <: AbstractVector{<:Integer}}
     getter::G
@@ -1509,10 +1509,14 @@ end
 
 function (sdw::SolvedDerivativeWriter)(valp, nlsol)
     hasproperty(valp, :du) || return nothing
-    nlsol isa SciMLBase.AbstractNonlinearSolution &&
-        SciMLBase.successful_retcode(nlsol) || return nothing
+    solved_derivatives_available(nlsol) || return nothing
     return _write_solved_derivatives!(valp, sdw.getter(nlsol), sdw.idxs)
 end
+
+solved_derivatives_available(sol::SciMLBase.AbstractNonlinearSolution) =
+    SciMLBase.successful_retcode(sol)
+solved_derivatives_available(prob::SciMLBase.AbstractNonlinearProblem) =
+    state_values(prob) === nothing
 
 """
     $(TYPEDSIGNATURES)
@@ -1924,14 +1928,14 @@ const INITMAP_DDVALS = :__mtk_initialization_ddv_values
 
 Guarded call writing the solved derivative values in `raw` into `prob.du`
 through [`_write_solved_derivatives!`](@ref). Nothing is written unless `prob`
-exposes `du` and `sol` is a successful nonlinear solution.
+exposes `du` and `sol` is a successful nonlinear solution or a trivial
+initialization problem.
 """
 function _solved_derivative_write_call(prob, sol, raw, idxs)
     return Expr(
         :&&,
         Expr(:call, :hasproperty, prob, QuoteNode(:du)),
-        Expr(:call, :isa, sol, SciMLBase.AbstractNonlinearSolution),
-        Expr(:call, GlobalRef(SciMLBase, :successful_retcode), sol),
+        Expr(:call, GlobalRef(@__MODULE__, :solved_derivatives_available), sol),
         Expr(
             :call, GlobalRef(@__MODULE__, :_write_solved_derivatives!),
             prob, raw, idxs
