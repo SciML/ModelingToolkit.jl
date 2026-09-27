@@ -1487,9 +1487,11 @@ end
 @testset "symbolic guesses for partial array unknowns reach initialization" begin
     @variables review_z(t)[1:3]
     @parameters review_a
+    # `review_z[1]` appears nonlinearly in every equation, so tearing keeps it an
+    # iteration variable of the initialization problem and its guess picks the root.
     @named review_sys = System(
-        [D(review_z) ~ -review_z], t, [review_z], [review_a];
-        initialization_eqs = [review_z[1]^2 ~ review_a, review_z[2]^2 ~ review_a + review_z[1]^2]
+        [D(review_z) ~ -review_z .^ 3], t, [review_z], [review_a];
+        initialization_eqs = [review_z[1]^2 ~ review_a, review_z[2] ~ review_a + review_z[1]^2]
     )
     review_sys = mtkcompile(review_sys)
     prob = ODEProblem(
@@ -1497,14 +1499,12 @@ end
         guesses = [review_z[1] => -2review_a]
     )
     initprob = prob.f.initialization_data.initializeprob
-    init_unknowns = ModelingToolkitBase.unwrap.(unknowns(initprob.f.sys))
-    z1_index = findfirst(isequal(ModelingToolkitBase.unwrap(review_z[1])), init_unknowns)
-    @test z1_index !== nothing
-    @test SciMLBase.state_values(initprob)[z1_index] == -8.0
+    @test initprob[review_z[1]] == -8.0
 
     init_sol = solve(initprob)
     @test SciMLBase.successful_retcode(init_sol)
     @test init_sol[review_z[1]] ≈ -2.0
+    @test init_sol[review_z[2]] ≈ 8.0
 end
 
 @testset "Guesses provided to `ODEProblem` are used in `remake`" begin
