@@ -125,9 +125,8 @@ function generate_initializesystem_timevarying(
         isdifferential(k) || continue
         delete!(guesses, k)
         ttk = default_toterm(k)
-        # `write_possibly_indexed_array!` broadcasts scalars onto array keys
-        # (#5186). Prefer fill-unset so a later whole-array guess does not
-        # clobber elements already present under `ttk`.
+        # Fill unset entries so a whole-array guess does not overwrite elements
+        # already present under `ttk`.
         if Symbolics.isarraysymbolic(ttk)
             fill_unset_array_entries!(guesses, ttk, v, COMMON_NOTHING)
         elseif get_possibly_indexed(guesses, ttk, COMMON_NOTHING) === COMMON_NOTHING

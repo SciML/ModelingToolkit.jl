@@ -83,17 +83,26 @@ set, so a partially-specified array derivative like `D(y[1]) => v` is not droppe
 when other elements of `yˍt` are already populated (e.g. by guess propagation).
 Existing `xˍt` elements keep precedence, matching `add_toterms!`.
 
-When inventing a new `xˍt` key, only partially-specified array differentials (values
-with unset holes) are copied. Fully-specified `D(x) => v` already reaches the
-initialization system through existing `Initial` parameter paths; copying those
-to `xˍt` as well doubles equations and can leave unbound names in generated code.
+With `all_entries = false` (the default), a new `xˍt` key is invented only for
+partially-specified array differentials (values with unset holes). Fully-specified
+`D(x) => v` already reaches the initialization system through existing `Initial`
+parameter paths; copying those to `xˍt` as well doubles equations and can leave
+unbound names in generated code. With `all_entries = true`, every differential
+key is merged into `xˍt`, creating the key when absent; this is for maps consumed
+by `toterm`-lookup paths (such as `du0`) rather than by the initialization system.
 """
-function merge_differential_toterm_entries!(varmap::AbstractDict)
+function merge_differential_toterm_entries!(varmap::AbstractDict; all_entries::Bool = false)
     for k in collect(keys(varmap))
         isdifferential(k) || continue
         ttk = default_toterm(unwrap(k))
         isequal(k, ttk) && continue
-        if haskey(varmap, ttk)
+        if all_entries
+            if Symbolics.isarraysymbolic(ttk)
+                fill_unset_array_entries!(varmap, ttk, varmap[k], COMMON_NOTHING)
+            elseif get_possibly_indexed(varmap, ttk, COMMON_NOTHING) === COMMON_NOTHING
+                write_possibly_indexed_array!(varmap, ttk, varmap[k], COMMON_NOTHING)
+            end
+        elseif haskey(varmap, ttk)
             Symbolics.isarraysymbolic(ttk) &&
                 fill_unset_array_entries!(varmap, ttk, varmap[k], COMMON_NOTHING)
         elseif Symbolics.isarraysymbolic(ttk) &&
@@ -2464,13 +2473,8 @@ function maybe_build_initialization_problem(
             if is_parameter(sys, p)
     ]
 
-    # Derivative variables the initialization problem is free to solve: present
-    # among its unknowns or observed equations, and not fixed by an operating
-    # point entry (checked per flat unknown so a partially-fixed array still
-    # writes back the free elements). Fixed elements reach `integ.du` via
-    # `du0` after `merge_differential_toterm_entries!`. Their solved values
-    # are written back to `valp.du` so the integrator's `du` matches the
-    # consistent initialization.
+    # Derivatives the initialization problem solves and `op` does not fix; their
+    # solved values are written to `valp.du`. `op`-fixed derivatives reach `du` through `du0`.
     solved_ddvs = SymbolicT[]
     solved_ddv_idxs = Int[]
     if implicit_dae && time_dependent_init
@@ -2754,6 +2758,11 @@ function __process_SciMLProblem(
         add_observed_equations!(op, obs, bindings(sys))
     end
 
+    # `maybe_build_initialization_problem` fills unset `xˍt` entries of `op` with
+    # initialization guesses. `du0` is built from the user's operating point, so
+    # propagated guesses cannot take precedence over user-supplied guesses.
+    du0_op = implicit_dae && build_initializeprob ? copy(op) : nothing
+
     if build_initializeprob
         problem_specialize = SciMLBase.specialization(constructor)
         kws = maybe_build_initialization_problem(
@@ -2854,16 +2863,30 @@ function __process_SciMLProblem(
 
     if implicit_dae
         ddvs = map(default_toterm ∘ Differential(iv), dvs)
-        du0_op = copy(op)
-        merge_differential_toterm_entries!(du0_op)
-        for (k, v) in guesses
-            isdifferential(k) || continue
-            ttk = default_toterm(k)
-            sv = v isa SymbolicT ? v : SConst(v)
-            if Symbolics.isarraysymbolic(ttk)
-                fill_unset_array_entries!(du0_op, ttk, sv, COMMON_NOTHING)
-            elseif get_possibly_indexed(du0_op, ttk, COMMON_NOTHING) === COMMON_NOTHING
-                write_possibly_indexed_array!(du0_op, ttk, sv, COMMON_NOTHING)
+        if du0_op === nothing
+            du0_op = copy(op)
+        else
+            # Apply the mutations made to `op` after the snapshot so symbolic
+            # `du0` entries resolve identically.
+            if t !== nothing && !(constructor <: Union{DDEFunction, SDDEFunction})
+                du0_op[iv] = t
+            end
+            no_override_merge_except_missing!(du0_op, binds)
+            add_observed_equations!(du0_op, obs)
+        end
+        merge_differential_toterm_entries!(du0_op; all_entries = true)
+        # Problem-level guesses take precedence over system-level ones, matching
+        # `merge(guesses(sys), todict(guesses))` in `maybe_build_initialization_problem`.
+        for guesses′ in (guesses, ModelingToolkitBase.guesses(sys))
+            for (k, v) in guesses′
+                isdifferential(k) || continue
+                ttk = default_toterm(k)
+                sv = v isa SymbolicT ? v : SConst(v)
+                if Symbolics.isarraysymbolic(ttk)
+                    fill_unset_array_entries!(du0_op, ttk, sv, COMMON_NOTHING)
+                elseif get_possibly_indexed(du0_op, ttk, COMMON_NOTHING) === COMMON_NOTHING
+                    write_possibly_indexed_array!(du0_op, ttk, sv, COMMON_NOTHING)
+                end
             end
         end
         # When the initialization problem is built, omitted derivative values are
