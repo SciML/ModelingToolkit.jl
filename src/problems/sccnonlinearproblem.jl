@@ -600,8 +600,6 @@ function SciMLBase.SCCNonlinearProblem{iip, specialize}(
             # nodes this must be a `HomotopyProblem` so the block is solved by continuation
             # (the multi-block path below already builds `HomotopyProblem` blocks); a plain
             # `NonlinearProblem` would drop the λ-sweep and Newton-solve the target directly.
-            # Time-dependent systems are allowed here: `NonlinearProblem` converts via
-            # `NonlinearSystem` the same way as on master.
             TProb = MTKBase.get_nonlinear_problem_type(sys)
             return TProb{iip, specialize}(
                 sys, op; eval_expression, eval_module, u0_constructor, missing_guess_value,
@@ -825,10 +823,8 @@ function MTKBase.check_compatible_system(::Type{<:SCCNonlinearProblem}, sys::Sys
     return check_time_independent(
         sys, SCCNonlinearProblem;
         suggest_disable = false,
-        msg = """
-        `SCCNonlinearProblem` with multiple SCCs requires a time-independent system. \
-        Convert with `mtkcompile(NonlinearSystem(sys))` before constructing the problem.
-        """,
+        msg = "`SCCNonlinearProblem` with multiple SCCs requires a time-independent system. " *
+            "Convert with `mtkcompile(NonlinearSystem(sys))` before constructing the problem.",
     )
 end
 
