@@ -7,33 +7,43 @@ function check_compatible_system end
 
 struct SystemCompatibilityError <: Exception
     msg::String
+    "Whether to append the `check_compatibility = false` disable hint."
+    suggest_disable::Bool
 end
+
+SystemCompatibilityError(msg::String) = SystemCompatibilityError(msg, true)
 
 function Base.showerror(io::IO, err::SystemCompatibilityError)
     println(io, err.msg)
-    println(io)
-    return print(io, "To disable this check, pass `check_compatibility = false`.")
+    if err.suggest_disable
+        println(io)
+        print(io, "To disable this check, pass `check_compatibility = false`.")
+    end
+    return nothing
 end
 
-function check_time_dependent(sys::System, T)
+function check_time_dependent(sys::System, T; suggest_disable::Bool = true)
     return if !is_time_dependent(sys)
         throw(
             SystemCompatibilityError(
                 """
                 `$T` requires a time-dependent system.
-                """
+                """,
+                suggest_disable,
             )
         )
     end
 end
 
-function check_time_independent(sys::System, T)
+function check_time_independent(sys::System, T; suggest_disable::Bool = true, msg = nothing)
     return if is_time_dependent(sys)
         throw(
             SystemCompatibilityError(
-                """
-                `$T` requires a time-independent system.
-                """
+                msg === nothing ?
+                    """
+                    `$T` requires a time-independent system.
+                    """ : msg,
+                suggest_disable,
             )
         )
     end

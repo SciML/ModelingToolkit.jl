@@ -529,7 +529,8 @@ end
 function SciMLBase.SCCNonlinearProblem{iip, specialize}(
         sys::System, op; eval_expression = false,
         eval_module = @__MODULE__, u0_constructor = identity,
-        missing_guess_value = default_missing_guess_value(), combine_sccs = true, kwargs...
+        missing_guess_value = default_missing_guess_value(), combine_sccs = true,
+        check_compatibility = true, kwargs...
     ) where {iip, specialize}
     if !iscomplete(sys) || get_tearing_state(sys) === nothing
         error("A simplified `System` is required. Call `mtkcompile` on the system before creating an `SCCNonlinearProblem`.")
@@ -571,7 +572,8 @@ function SciMLBase.SCCNonlinearProblem{iip, specialize}(
         # for a stateless system, which solvers reject.
         TProb = MTKBase.get_nonlinear_problem_type(sys)
         prob = TProb{iip, specialize}(
-            sys, op; eval_expression, eval_module, u0_constructor, missing_guess_value, kwargs...
+            sys, op; eval_expression, eval_module, u0_constructor, missing_guess_value,
+            check_compatibility, kwargs...
         )
         state_values(prob) === nothing && return remake(prob; u0 = Float64[])
         return prob
@@ -581,7 +583,7 @@ function SciMLBase.SCCNonlinearProblem{iip, specialize}(
         if calculate_A_b(sys; throw = false) !== nothing
             linprob = LinearProblem{iip}(
                 sys, op; eval_expression, eval_module,
-                u0_constructor, kwargs...
+                u0_constructor, check_compatibility, kwargs...
             )
             # Required for filling missing parameter values when this is an initialization
             # problem
@@ -600,7 +602,23 @@ function SciMLBase.SCCNonlinearProblem{iip, specialize}(
             # `NonlinearProblem` would drop the λ-sweep and Newton-solve the target directly.
             TProb = MTKBase.get_nonlinear_problem_type(sys)
             return TProb{iip, specialize}(
-                sys, op; eval_expression, eval_module, u0_constructor, missing_guess_value, kwargs...
+                sys, op; eval_expression, eval_module, u0_constructor, missing_guess_value,
+                check_compatibility, kwargs...
+            )
+        end
+    end
+
+    # Multi-block SCC lowering is not defined for time-dependent systems (generated
+    # parameter buffers are wrong). Require an explicit conversion; if the user disables
+    # the check, convert safely rather than proceeding to a BoundsError.
+    if is_time_dependent(sys)
+        if check_compatibility
+            check_compatible_system(SCCNonlinearProblem, sys)
+        else
+            return SCCNonlinearProblem{iip, specialize}(
+                mtkcompile(NonlinearSystem(sys)), op;
+                eval_expression, eval_module, u0_constructor, missing_guess_value,
+                combine_sccs, check_compatibility = false, kwargs...
             )
         end
     end
@@ -796,6 +814,18 @@ function SciMLBase.SCCNonlinearProblem{iip, specialize}(
     else
         return SCCNonlinearProblem(subprobs, SciMLBase.Void{Any}.(explicitfuns), p, true; sys)
     end
+end
+
+function MTKBase.check_compatible_system(::Type{<:SCCNonlinearProblem}, sys::System)
+    # Multi-block only: single-block/empty paths fall through to NonlinearProblem, which
+    # already converts. Do not suggest `check_compatibility = false` — that opt-out is
+    # handled above by converting rather than skipping into a BoundsError.
+    return check_time_independent(
+        sys, SCCNonlinearProblem;
+        suggest_disable = false,
+        msg = "`SCCNonlinearProblem` with multiple SCCs requires a time-independent system. " *
+            "Convert with `mtkcompile(NonlinearSystem(sys))` before constructing the problem.",
+    )
 end
 
 function calculate_op_from_u0_p(sys::System, u0::Union{Nothing, AbstractVector}, p::MTKParameters)
