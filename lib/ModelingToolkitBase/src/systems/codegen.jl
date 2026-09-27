@@ -199,7 +199,10 @@ function generate_rhs(
     wrap_gfw = wrap_gfw_val(opts)
     dvs = flat_unknowns(sys)
     eqs = equations(sys)
-    if !is_time_dependent(sys) && isempty(dvs) && isempty(eqs) && isempty(extra_args)
+    # Empty-SCC / fully-eliminated nonlinear residual: skip when scalar,
+    # implicit_dae, or cachesyms would need a different signature/body.
+    if !is_time_dependent(sys) && isempty(dvs) && isempty(eqs) && isempty(extra_args) &&
+            !scalar && !implicit_dae && cachesyms === nothing
         return generate_empty_nonlinear_function(sys, opts, (0,))
     end
     obs = observed(sys)
@@ -451,6 +454,7 @@ function generate_jacobian(
     expression = expression_val(opts)
     wrap_gfw = wrap_gfw_val(opts)
     dvs = flat_unknowns(sys)
+    # Empty-SCC / fully-eliminated dense Jacobian; sparse needs the normal path.
     if !is_time_dependent(sys) && isempty(dvs) && isempty(equations(sys)) && !sparse
         return generate_empty_nonlinear_function(sys, opts, (0, 0))
     end
