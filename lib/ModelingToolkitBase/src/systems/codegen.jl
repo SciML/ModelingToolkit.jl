@@ -153,6 +153,16 @@ function wrap_oop_similar_for_residual(fn)
     )
 end
 
+function generate_empty_nonlinear_function(sys::System, opts::GeneratedFunctionOptions, dims)
+    (; eval_expression, eval_module, compiler_options) = opts
+    oop = :((u, p) -> u === nothing ? zeros($dims) : similar(u, $dims))
+    iip = :((out, u, p) -> nothing)
+    return maybe_compile_function(
+        expression_val(opts), wrap_gfw_val(opts), (2, 2, is_split(sys)), (oop, iip);
+        compiler_options, eval_expression, eval_module
+    )
+end
+
 """
     $(TYPEDSIGNATURES)
 
@@ -189,6 +199,12 @@ function generate_rhs(
     wrap_gfw = wrap_gfw_val(opts)
     dvs = flat_unknowns(sys)
     eqs = equations(sys)
+    # Empty-SCC / fully-eliminated nonlinear residual: skip when scalar,
+    # implicit_dae, or cachesyms would need a different signature/body.
+    if !is_time_dependent(sys) && isempty(dvs) && isempty(eqs) && isempty(extra_args) &&
+            !scalar && !implicit_dae && cachesyms === nothing
+        return generate_empty_nonlinear_function(sys, opts, (0,))
+    end
     obs = observed(sys)
     u = dvs
     p = reorder_parameters(sys) # 1 arg to use the cached version
@@ -438,6 +454,10 @@ function generate_jacobian(
     expression = expression_val(opts)
     wrap_gfw = wrap_gfw_val(opts)
     dvs = flat_unknowns(sys)
+    # Empty-SCC / fully-eliminated dense Jacobian; sparse needs the normal path.
+    if !is_time_dependent(sys) && isempty(dvs) && isempty(equations(sys)) && !sparse
+        return generate_empty_nonlinear_function(sys, opts, (0, 0))
+    end
     jac = calculate_jacobian(sys; simplify, sparse, dvs)
     p = reorder_parameters(sys)
     t = get_iv(sys)

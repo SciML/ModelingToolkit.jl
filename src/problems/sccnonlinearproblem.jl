@@ -571,7 +571,8 @@ function SciMLBase.SCCNonlinearProblem{iip, specialize}(
         # for a stateless system, which solvers reject.
         TProb = MTKBase.get_nonlinear_problem_type(sys)
         prob = TProb{iip, specialize}(
-            sys, op; eval_expression, eval_module, u0_constructor, missing_guess_value, kwargs...
+            sys, op; eval_expression, eval_module, u0_constructor, missing_guess_value,
+            jac = true, kwargs...
         )
         state_values(prob) === nothing && return remake(prob; u0 = Float64[])
         return prob
