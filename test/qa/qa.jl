@@ -313,7 +313,7 @@ const NONPUBLIC_QUALIFIED_ACCESSES = (
     :ParameterArrayAssignments, :problem_docstring, :ReorderedDefaultParameters,
     :reverse_all_default_reversible_transformations, :simplify_sde_system, :simplify_shifts,
     :singular_check, :steady_state_sccprob, :topsort_equations,
-    :torn_system_jacobian_sparsity, :Type,
+    :torn_system_jacobian_sparsity, :Type, :UNBALANCED_SYSTEM_EXCEPTIONS,
     :wrap_symbolic_linear_interface,
     # ModelingToolkitTearing
     :backshift_expr, :ClockInference, :DefaultReassembleAlgorithm, :get_time_domain,
