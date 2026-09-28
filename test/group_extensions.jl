@@ -6,5 +6,5 @@ include("shared/mtktestset.jl")
 # Parent `@mtktestset("Auto Differentiation Test", "extensions/ad.jl")` stays
 # disabled: that file is re-enabled in ModelingToolkitBase's Extensions group,
 # and `@mtktestset` would re-run the same include (duplicate). The Initials
-# testset that needed full MTK `mtkcompile` was not moved here — it still fails
-# under ModelingToolkit (see job REPORT); leaving it out of this change.
+# testset below needs full ModelingToolkit `mtkcompile` and is not part of ad.jl.
+@mtktestset("AD Initials cotangent", "extensions/ad_initials.jl")
