@@ -2056,3 +2056,32 @@ end
         @test isequal(newaff.parameters, [unwrap(q)])
     end
 end
+
+@testset "Issue#5220: array-valued continuous event conditions saving discretes" begin
+    @variables x(t)[1:3]
+    @discretes s(t)[1:3]
+    flip = ModelingToolkitBase.ImperativeAffect(; modified = (; s)) do m, o, c, integ
+        (; s = -m.s)
+    end
+    up = SymbolicContinuousCallback(
+        [x .- [1.0, 2.0, 3.0] ~ zeros(3)], flip; affect_neg = nothing
+    )
+    down = SymbolicContinuousCallback(
+        [x .+ [1.0, 2.0, 3.0] ~ zeros(3)], nothing; affect_neg = flip
+    )
+    @mtkcompile sys = System(
+        [D(x) ~ [1.0, 1.0, -1.0]], t, [x], [s]; continuous_events = [up, down],
+        initial_conditions = [x => zeros(3), s => ones(3)]
+    )
+    prob = ODEProblem(sys, [], (0.0, 4.0))
+    vcb = get_callback(prob)
+    @test vcb.len == 6
+    @test length(vcb.saved_clock_partitions) == vcb.len
+    sol = solve(prob, Tsit5())
+    @test SciMLBase.successful_retcode(sol)
+    @test sol(0.5; idxs = s) ≈ ones(3)
+    @test sol(1.5; idxs = s) ≈ -ones(3)
+    @test sol(2.5; idxs = s) ≈ ones(3)
+    @test sol(3.5; idxs = s) ≈ -ones(3)
+    @test sol[s] ≈ [ones(3), -ones(3), ones(3), -ones(3)]
+end

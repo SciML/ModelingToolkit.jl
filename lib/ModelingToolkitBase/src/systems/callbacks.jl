@@ -1266,7 +1266,7 @@ function compile_vector_callback_affects(cbs, sys, ic; kwargs...)
         push!(finals, compile_affect(cb.finalize, cb, sys; default = nothing, kwargs...))
         if ic !== nothing
             save_idxs = get(ic.callback_to_clocks, cb, Int[])
-            for _ in conditions(cb)
+            for _ in flatten_equations(equations(cb))
                 push!(saved_clock_partitions, save_idxs)
             end
         end
