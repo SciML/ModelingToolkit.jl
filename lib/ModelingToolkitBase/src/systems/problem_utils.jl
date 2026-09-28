@@ -718,7 +718,7 @@ Note that the getter ONLY works for problem-like objects, since it generates an 
 function. It does NOT work for solutions.
 """
 Base.@nospecializeinfer function concrete_getu(
-        indp, syms; wrap_as_any = false,
+        indp, syms; despecialize = false, wrap_as_any = despecialize,
         eval_expression, eval_module, force_time_independent = false, kwargs...
     )
     @nospecialize
@@ -916,8 +916,10 @@ end
 
 @inline _static_buffer(bufs::Tuple, ::StaticBufferIndex{P, I}) where {P, I} = bufs[I]
 
-Base.@nospecializeinfer function __specialize_templates(template::Vector{Any}, elem_types::Set{DataType})
-    if length(template) <= 4
+Base.@nospecializeinfer function __specialize_templates(
+        template::Vector{Any}, elem_types::Set{DataType}, despecialize::Bool = false
+    )
+    if !despecialize && length(template) <= 4
         return Tuple(template)
     elseif length(elem_types) <= 4
         return Vector{Union{collect(elem_types)...}}(template)
@@ -950,7 +952,7 @@ function cached_template_getu(srcsys::AbstractSystem, batch::Vector{SymbolicT}; 
     end
 end
 
-function CopyParamsByTemplate(srcsys::AbstractSystem, syms::AbstractArray{SymbolicT}; kws...)
+function CopyParamsByTemplate(srcsys::AbstractSystem, syms::AbstractArray{SymbolicT}; despecialize = false, kws...)
     template = []
     elem_types = Set{DataType}()
     iv = get_iv(srcsys)
@@ -1015,6 +1017,7 @@ function CopyParamsByTemplate(srcsys::AbstractSystem, syms::AbstractArray{Symbol
             _bufidx[2]:_bufidx[2]
         elseif _bufidx isa Tuple{Vararg{Int}} # indexing into a non-tunable array parameter
             push!(template, symidx)
+            push!(elem_types, typeof(symidx))
             continue
         else
             # Will error due to the typeassert on `bufidx`
@@ -1091,18 +1094,18 @@ function CopyParamsByTemplate(srcsys::AbstractSystem, syms::AbstractArray{Symbol
     end
 
     return CopyParamsByTemplate{true}(
-        __specialize_templates(template, elem_types), size(syms), fallback_getter
+        __specialize_templates(template, elem_types, despecialize), size(syms), fallback_getter
     )
 end
 
-function CopyParamsByTemplate(srcsys::AbstractSystem, syms::AbstractArray; kws...)
+function CopyParamsByTemplate(srcsys::AbstractSystem, syms::AbstractArray; despecialize = false, kws...)
     template = []
     elem_types = Set{DataType}()
     for sym in syms
-        push!(template, CopyParamsByTemplate(srcsys, sym; kws...))
+        push!(template, CopyParamsByTemplate(srcsys, sym; despecialize, kws...))
         push!(elem_types, typeof(template[end]))
     end
-    return CopyParamsByTemplate{false}(__specialize_templates(template, elem_types), size(syms))
+    return CopyParamsByTemplate{false}(__specialize_templates(template, elem_types, despecialize), size(syms))
 end
 
 struct MTKParametersReconstructor{T, I, D, C, N}
@@ -1362,6 +1365,14 @@ function (rip::ReconstructInitializeprob)(srcvalp, dstvalp)
     return u0, newp
 end
 
+struct InitializeprobParameterMap{G}
+    getter::G
+end
+
+function (pm::InitializeprobParameterMap)(prob, initsol)
+    return pm.getter(initsol, prob)
+end
+
 """
     $(TYPEDSIGNATURES)
 
@@ -1374,14 +1385,12 @@ function construct_initializeprobpmap(
     )
     @assert is_initializesystem(initsys)
     if is_split(sys)
-        return let getter = MTKParametersReconstructor(
+        return InitializeprobParameterMap(
+            MTKParametersReconstructor(
                 initsys, sys; initials = true, unwrap_initials = true, p_constructor,
                 eval_expression, eval_module, kwargs...
             )
-            function initprobpmap_split(prob, initsol)
-                return getter(initsol, prob)
-            end
-        end
+        )
     else
         return let getter = concrete_getu(
                 initsys, parameters(sys; initial_parameters = true);
@@ -2198,7 +2207,10 @@ function maybe_build_initialization_problem(
     end
 
     get_initial_unknowns = if time_dependent_init
-        GetUpdatedU0(sys, initsys, op; eval_expression, eval_module, kwargs...)
+        GetUpdatedU0(
+            sys, initsys, op; eval_expression, eval_module,
+            despecialize = specialize === SciMLBase.AutoDespecialize, kwargs...
+        )
     else
         nothing
     end
@@ -2209,7 +2221,8 @@ function maybe_build_initialization_problem(
         use_scc, time_dependent_init,
         ReconstructInitializeprob(
             sys, initsys; u0_constructor,
-            p_constructor, eval_expression, eval_module, is_steadystateprob, kwargs...
+            p_constructor, eval_expression, eval_module, is_steadystateprob,
+            despecialize = specialize === SciMLBase.AutoDespecialize, kwargs...
         ),
         get_initial_unknowns, SetInitialUnknowns(sys), missing_guess_value
     )
@@ -2230,7 +2243,8 @@ function maybe_build_initialization_problem(
                 PromoteToTunableEltype(
                     CopyParamsByTemplate(
                         initializeprob.f.sys, solved_unknowns;
-                        eval_expression, eval_module, kwargs...
+                        eval_expression, eval_module,
+                        despecialize = map_specialize === SciMLBase.AutoDespecialize, kwargs...
                     ),
                     floatT
                 )
@@ -2253,7 +2267,8 @@ function maybe_build_initialization_problem(
         )
     else
         initializeprobpmap = construct_initializeprobpmap(
-            sys, initsys; p_constructor, eval_expression, eval_module, kwargs...
+            sys, initsys; p_constructor, eval_expression, eval_module,
+            despecialize = map_specialize === SciMLBase.AutoDespecialize, kwargs...
         )
     end
 

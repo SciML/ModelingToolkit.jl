@@ -792,7 +792,12 @@ function SciMLBase.SCCNonlinearProblem{iip, specialize}(
         sys; unknowns = new_dvs, eqs = new_eqs, index_cache = new_ic
     )
 
-    if length(subprobs) <= 5
+    # Homotopy blocks require the tuple solver path.
+    if length(subprobs) <= 5 &&
+            (
+            specialize !== SciMLBase.AutoDespecialize ||
+                any(prob -> prob isa SciMLBase.HomotopyProblem, subprobs)
+        )
         return SCCNonlinearProblem(Tuple(subprobs), Tuple(explicitfuns), p, true; sys)
     else
         return SCCNonlinearProblem(subprobs, SciMLBase.Void{Any}.(explicitfuns), p, true; sys)
