@@ -318,5 +318,11 @@ function SciMLBase.Clocks.EventClock(cb::SymbolicContinuousCallback)
     return SciMLBase.Clocks.EventClock(cb.zero_crossing_id)
 end
 
+# An operator term such as `Sample(x)`, `Hold(x)` or a clock change defined by another
+# package denotes the value at the current tick and is a symbol of its own, so shifts are
+# not distributed into operators. `Shift` and `Differential` are the exceptions.
+distribute_shift_into_operator(::Operator) = false
+distribute_shift_into_operator(::Shift) = true
+distribute_shift_into_operator(::Differential) = true
 distribute_shift_into_operator(::Sample) = false
 distribute_shift_into_operator(::Hold) = false
