@@ -37,15 +37,37 @@ string otherwise.
 description(sys::AbstractSystem) = has_description(sys) ? get_description(sys) : ""
 
 """
-$(TYPEDSIGNATURES)
+    independent_variables(sys::AbstractSystem) -> Vector{SymbolicT}
 
-Get the independent variable(s) of the system `sys`.
+Return the independent variables of `sys` as a vector. This is the user-facing accessor,
+including for systems with one independent variable.
 
-See also [`@independent_variables`](@ref) and [`ModelingToolkitBase.get_iv`](@ref).
+External packages defining custom `AbstractSystem` subtypes should extend the scalar
+[`independent_variable`](@ref) interface rather than adding methods to this accessor. For
+systems with a scalar independent variable, this generic accessor wraps that value in a vector.
+
+# Arguments
+
+- `sys::AbstractSystem`: System whose independent variables are requested.
+
+# Returns
+
+- `Vector{SymbolicT}`: The independent variables, or an empty vector for a
+  time-independent system.
+
+# Examples
+
+```julia
+using ModelingToolkitBase
+
+@independent_variables t
+@named sys = System(Equation[], t)
+independent_variables(sys)
+```
 """
 function independent_variables(sys::AbstractSystem)
-    if isdefined(sys, :iv) && getfield(sys, :iv) !== nothing
-        return SymbolicT[getfield(sys, :iv)]
+    if (iv = independent_variable(sys)) !== nothing
+        return SymbolicT[iv]
     elseif isdefined(sys, :ivs)
         return unwrap.(getfield(sys, :ivs))::Vector{SymbolicT}
     else
@@ -230,13 +252,17 @@ end
 
 function SymbolicIndexingInterface.is_timeseries_parameter(sys::AbstractSystem, sym)
     is_time_dependent(sys) || return false
-    has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing || return false
+    has_index_cache(sys) || return false
+    ic = get_index_cache(sys)
+    ic === nothing && return false
     return is_timeseries_parameter(ic, sym)
 end
 
 function SymbolicIndexingInterface.timeseries_parameter_index(sys::AbstractSystem, sym)
     is_time_dependent(sys) || return nothing
-    has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing || return nothing
+    has_index_cache(sys) || return nothing
+    ic = get_index_cache(sys)
+    ic === nothing && return nothing
     return timeseries_parameter_index(ic, sym)
 end
 
@@ -274,7 +300,7 @@ for traitT in [
     ]
     @eval function _all_ts_idxs!(ts_idxs, ::$traitT, sys, sym)
         allsyms = Set{SymbolicT}()
-        SU.search_variables!(allsyms, sym; is_atomic = OperatorIsAtomic{Symbolics.Operator}())
+        SU.search_variables!(allsyms, sym; is_atomic = OperatorIsAtomic{SU.Operator}())
         for s in allsyms
             s = unwrap(s)
             if is_variable(sys, s) || is_independent_variable(sys, s)
@@ -311,7 +337,7 @@ function _all_ts_idxs!(ts_idxs, ::ScalarSymbolic, sys, sym::Symbol)
             any(isequal(sym), getname.(observables(sys)))
         push!(ts_idxs, ContinuousTimeseries())
     elseif is_timeseries_parameter(sys, sym)
-        push!(ts_idxs, timeseries_parameter_index(sys, s).timeseries_idx)
+        push!(ts_idxs, timeseries_parameter_index(sys, sym).timeseries_idx)
     end
 end
 function _all_ts_idxs!(ts_idxs, ::NotSymbolic, sys, sym::AbstractArray)
@@ -464,7 +490,7 @@ end
 The `Initial` operator. Used by initialization to store constant constraints on variables
 of a system. See the documentation section on initialization for more information.
 """
-struct Initial <: Symbolics.Operator end
+struct Initial <: SU.Operator end
 Initial(x) = Initial()(x)
 SymbolicUtils.promote_symtype(::Initial, ::Type{T}) where {T} = T
 SymbolicUtils.promote_shape(::Initial, @nospecialize(x::SU.ShapeT)) = x
@@ -1036,6 +1062,7 @@ function Base.propertynames(sys::AbstractSystem; private = false)
             push!(names, getname(s))
         end
         has_unknowns(sys) && for s in get_unknowns(sys)
+            hasname(s) || continue
             push!(names, getname(s))
         end
         has_ps(sys) && for s in get_ps(sys)
@@ -1043,6 +1070,7 @@ function Base.propertynames(sys::AbstractSystem; private = false)
             push!(names, getname(s))
         end
         has_observed(sys) && for s in get_observed(sys)
+            hasname(s.lhs) || continue
             push!(names, getname(s.lhs))
         end
         has_iv(sys) && push!(names, getname(get_iv(sys)))
@@ -1082,14 +1110,14 @@ function getvar(sys::AbstractSystem, name::Symbol; namespace = does_namespacing(
     end
 
     sts = get_unknowns(sys)
-    i = findfirst(x -> getname(x) == name, sts)
+    i = findfirst(x -> hasname(x) && getname(x) == name, sts)
     if i !== nothing
         return namespace ? renamespace(sys, sts[i]) : sts[i]
     end
 
     if has_ps(sys)
         ps = get_ps(sys)
-        i = findfirst(x -> getname(x) == name, ps)
+        i = findfirst(x -> hasname(x) && getname(x) == name, ps)
         if i !== nothing
             return namespace ? renamespace(sys, ps[i]) : ps[i]
         end
@@ -1097,7 +1125,7 @@ function getvar(sys::AbstractSystem, name::Symbol; namespace = does_namespacing(
 
     if has_observed(sys)
         obs = get_observed(sys)
-        i = findfirst(x -> getname(x.lhs) == name, obs)
+        i = findfirst(x -> hasname(x.lhs) && getname(x.lhs) == name, obs)
         if i !== nothing
             return namespace ? renamespace(sys, obs[i].lhs) : obs[i].lhs
         end
@@ -1165,8 +1193,23 @@ function _apply_to_variables(f::F, ex) where {F}
 end
 
 """
-Variable metadata key which contains information about scoping/namespacing of the
-variable in a hierarchical system.
+    SymScope
+
+Abstract metadata key for variable scoping and namespacing in a hierarchical system.
+
+# Developer Interface
+
+`SymScope` is a closed ModelingToolkit interface. External packages must not subtype it;
+use the documented `LocalScope`, `ParentScope`, and `GlobalScope` constructors instead.
+
+# Examples
+
+```julia
+using ModelingToolkitBase
+
+@variables x
+LocalScope(x)
+```
 """
 abstract type SymScope end
 
@@ -1893,9 +1936,32 @@ function state_priorities(sys::AbstractSystem)
 end
 
 """
-    $TYPEDSIGNATURES
+    irreducibles(sys::AbstractSystem)
 
-Get the irreducible variables of a system `sys` and its subsystems.
+Return the variables in `sys` and its subsystems that are marked as irreducible.
+
+Irreducible variables are preserved as unknowns during simplification instead of being
+eliminated as observed variables when possible.
+
+# Arguments
+
+- `sys`: system to inspect recursively.
+
+# Returns
+
+An atomic set of symbolic variables, with subsystem variables namespaced into `sys`.
+
+# Examples
+
+```julia
+using ModelingToolkitBase
+using ModelingToolkitBase: t_nounits as t, D_nounits as D
+
+@variables x(t) [irreducible = true]
+@named sys = System([D(x) ~ -x], t)
+
+irreducibles(sys)
+```
 """
 function irreducibles(sys::AbstractSystem)
     ircs = get_irreducibles(sys)
@@ -1909,9 +1975,20 @@ function irreducibles(sys::AbstractSystem)
 end
 
 """
-    $TYPEDSIGNATURES
+    maybe_zeros(sys::AbstractSystem)
 
-Get the variables that should be treated as possible zeros in `sys` and its subsystems.
+Return variables in `sys` and its subsystems that simplification may constrain to zero.
+
+This is primarily used by structural simplification to track variables introduced or
+retained while handling alias equations.
+
+# Arguments
+
+- `sys`: system to inspect recursively.
+
+# Returns
+
+An atomic set of symbolic variables, with subsystem variables namespaced into `sys`.
 """
 function maybe_zeros(sys::AbstractSystem)
     dds = get_maybe_zeros(sys)
@@ -2117,7 +2194,9 @@ end
 $(TYPEDSIGNATURES)
 
 Like `equations(sys)`, but also substitutes the observed equations eliminated from the
-equations during `mtkcompile`. These equations matches generated numerical code.
+equations during `mtkcompile`. These equations matches generated numerical code: an array
+equation such as `D(u[2:4]) ~ f` is expanded into one scalar equation per element, the
+rows it occupies in the generated code and in the mass matrix.
 
 See also [`equations`](@ref) and [`ModelingToolkitBase.get_eqs`](@ref).
 """
@@ -2134,9 +2213,9 @@ function full_equations(sys::AbstractSystem; simplify = false)
         for (eq, rhs_idx) in zip(eqs, info.eqs_idxs)
             push!(new_eqs, eq.lhs ~ ir[rhs_idx])
         end
-        return new_eqs
+        return scalarize_array_equations(new_eqs)
     end
-    empty_substitutions(sys) && return equations(sys)
+    empty_substitutions(sys) && return scalarize_array_equations(equations(sys))
     subs = get_substitutions(sys)
     neweqs = map(equations(sys)) do eq
         if iscall(eq.lhs) && operation(eq.lhs) isa Union{Shift, Differential}
@@ -2154,7 +2233,7 @@ function full_equations(sys::AbstractSystem; simplify = false)
         end
         eq
     end
-    return neweqs
+    return scalarize_array_equations(neweqs)
 end
 
 """
@@ -2230,6 +2309,22 @@ function cost(sys::AbstractSystem)
         push!(subcosts, namespace_expr(cost(subsys), subsys))
     end
     return consolidate(cs, subcosts)::SymbolicT
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+The unconsolidated objective vector of `sys`: its own costs followed by the consolidated
+cost of each subsystem, namespaced. `cost(sys)` folds this vector through the system's
+`consolidate` function into a scalar; [`SciMLBase.MultiObjectiveOptimizationFunction`](@ref)
+generates an objective that evaluates it elementwise instead.
+"""
+function costs(sys::AbstractSystem)
+    cs = collect(SymbolicT, get_costs(sys))
+    for subsys in get_systems(sys)
+        push!(cs, namespace_expr(cost(subsys), subsys))
+    end
+    return cs
 end
 
 namespace_constraint(eq::Equation, sys) = namespace_equation(eq, sys)
@@ -3206,26 +3301,53 @@ function Base.eltype(::Type{<:TreeIterator{ModelingToolkitBase.AbstractSystem}})
     return ModelingToolkitBase.AbstractSystem
 end
 
-function check_array_equations_unknowns(eqs, dvs)
-    if any(eq -> eq isa Equation && Symbolics.isarraysymbolic(eq.lhs), eqs)
-        throw(ArgumentError("The system has array equations. Call `mtkcompile` to handle such equations or scalarize them manually."))
+"""
+    $(TYPEDSIGNATURES)
+
+Whether `eqs` contains array equations: equations whose sides are array-valued. Such an
+equation stands for one scalar residual row per element rather than a single equation.
+"""
+function has_array_equations(eqs)
+    return any(eq -> eq isa Equation && is_array_equation(eq), eqs)
+end
+
+function check_array_equations(eqs)
+    if has_array_equations(eqs)
+        throw(
+            ArgumentError(
+                "The system has array equations. Call `mtkcompile` to handle such equations or scalarize them manually."
+            )
+        )
     end
-    return if any(x -> Symbolics.isarraysymbolic(x), dvs)
-        throw(ArgumentError("The system has array unknowns. Call `mtkcompile` to handle this or scalarize them manually."))
-    end
+    return nothing
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Number of scalar residual rows the equations stand for. An array equation contributes one
+row per element, so it cannot be counted as a single equation.
+"""
+count_equation_rows(eqs) = sum(equation_row_count, eqs; init = 0)
+
+equation_row_count(eq) = 1
+
+function equation_row_count(eq::Equation)
+    return prod(length, SU.shape(eq.lhs)::SU.ShapeVecT; init = 1)
 end
 
 function check_eqs_u0(eqs, dvs, u0; check_length = true, kwargs...)
+    neqs = count_equation_rows(eqs)
     if u0 !== nothing
         if check_length
-            if !(length(eqs) == length(dvs) == length(u0))
-                throw(ArgumentError("Equations ($(length(eqs))), unknowns ($(length(dvs))), and initial conditions ($(length(u0))) are of different lengths."))
+            if !(neqs == length(dvs) == length(u0))
+                throw(ArgumentError("Equations ($(neqs)), unknowns ($(length(dvs))), and initial conditions ($(length(u0))) are of different lengths."))
             end
         elseif length(dvs) != length(u0)
             throw(ArgumentError("Unknowns ($(length(dvs))) and initial conditions ($(length(u0))) are of different lengths."))
         end
-    elseif check_length && (length(eqs) != length(dvs))
-        throw(ArgumentError("Equations ($(length(eqs))) and Unknowns ($(length(dvs))) are of different lengths."))
+    elseif check_length && (neqs != length(dvs))
+        throw(ArgumentError("Equations ($(neqs)) and Unknowns ($(length(dvs))) are of different lengths."))
     end
     return nothing
 end
@@ -3254,13 +3376,11 @@ function extend(
     T = SciMLBase.parameterless_type(basesys)
     ivs = independent_variables(basesys)
     if !(sys isa T)
-        if length(ivs) == 0
-            sys = convert_system(T, sys)
-        elseif length(ivs) == 1
-            sys = convert_system(T, sys, ivs[1])
-        else
-            throw("Extending multivariate systems is not supported")
-        end
+        throw(
+            ArgumentError(
+                "Cannot extend a `$(typeof(basesys))` with a `$(typeof(sys))`; both systems must have the same type."
+            )
+        )
     end
 
     # collect fields common to all system types
@@ -3304,6 +3424,11 @@ function extend(
     if has_assertions(basesys)
         kwargs = merge(
             kwargs, (; assertions = merge(get_assertions(basesys), get_assertions(sys)))
+        )
+    end
+    if has_constraints(basesys)
+        kwargs = merge(
+            kwargs, (; constraints = union(get_constraints(basesys), get_constraints(sys)))
         )
     end
 

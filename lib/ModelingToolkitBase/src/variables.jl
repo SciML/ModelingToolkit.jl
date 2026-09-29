@@ -300,7 +300,7 @@ function shift2term(var::SymbolicT)
                     if metadata === nothing
                         metadata = Base.ImmutableDict{DataType, Any}(VariableUnshifted, unshifted)
                     elseif metadata isa Base.ImmutableDict{DataType, Any}
-                        metadata = Base.ImmutableDict(metadata, VariableUnshifted, unshifted)
+                        metadata = Base.ImmutableDict{DataType, Any}(metadata, VariableUnshifted, unshifted)
                     end
                     return BSImpl.Term{VartypeT}(getindex, newargs; type, shape, metadata)
                 end
@@ -450,8 +450,11 @@ function getbounds(x::SymbolicT)
     bounds = getmetadata(arrx, VariableBounds, nothing)::NTuple{2, Any}
     idxs = @views unwrap_const.(arguments(x)[2:end])
     return map(bounds) do b
-        @assert !symbolic_has_known_size(arrx) || SU.shape(arrx) == SU.shape(b)
-        return b[idxs...]
+        if SU.is_array_shape(SU.shape(b))
+            @assert !symbolic_has_known_size(arrx) || SU.shape(arrx) == SU.shape(b)
+            return b[idxs...]
+        end
+        return b
     end
 end
 
@@ -504,7 +507,28 @@ end
 """
     setnominal(x, val)
 
-Attach nominal value `val` to symbolic variable `x`.
+Return `x` with nominal-value metadata set to `val`.
+
+# Arguments
+
+- `x`: symbolic variable to annotate.
+- `val`: nominal value used for scaling and numerical conditioning.
+
+# Returns
+
+A symbolic variable equivalent to `x` with updated `VariableNominal` metadata.
+
+# Examples
+
+```julia
+using ModelingToolkitBase
+
+@variables x
+x = setnominal(x, 10.0)
+getnominal(x)
+```
+
+See also [`getnominal`](@ref) and [`hasnominal`](@ref).
 """
 function setnominal(x::Num, val)
     return setmetadata(x, VariableNominal, val)
@@ -704,9 +728,9 @@ end
 
 ## Brownian
 """
-    tobrownian(s::Sym)
+    tobrownian(s)
 
-Maps the brownianiable to an unknown.
+Maps the variable to a Brownian variable.
 """
 tobrownian(s::SymbolicT) = setmetadata(s, MTKVariableTypeCtx, BROWNIAN)
 tobrownian(s::Num) = Num(tobrownian(value(s)))
@@ -716,6 +740,14 @@ isbrownian(s) = getvariabletype(s) === BROWNIAN
 $(SIGNATURES)
 
 Define one or more Brownian variables.
+
+# Examples
+
+```julia
+using ModelingToolkitBase
+
+@brownians B
+```
 """
 macro brownians(xs...)
     all(
@@ -943,9 +975,9 @@ EvalAt(1.0)(D(x))  # Returns D(x) evaluated at t=1.0
 # Errors
 - Throws an error when applied to variables with more than one argument (e.g., `z(u, t)`)
 
-See also: [`Differential`](@ref)
+See also: [`Differential`](https://docs.sciml.ai/Symbolics/stable/manual/derivatives/)
 """
-struct EvalAt <: Symbolics.Operator
+struct EvalAt <: SU.Operator
     t::Union{SymbolicT, Number}
 end
 

@@ -6,6 +6,9 @@ function (cw::CacheWriter)(p::MTKParameters, sols)
     return cw.fn(p.caches, sols, p)
 end
 
+(cw::CacheWriter)(p::SciMLBase.DespecializedParameters, sols) =
+    cw(SciMLBase.unwrap_parameters(p), sols)
+
 const SCCCacheVarsExprsElT = Dict{TypeT, Vector{SymbolicT}}
 
 const SCC_EXPLICITFUN_CACHE_OUT = unwrap(only(@parameters __outₘₜₖ::Vector{Vector{Any}}))
@@ -17,11 +20,17 @@ function CacheWriter(
     )
     (; eval_expression, eval_module) = opts
     rps = reorder_parameters(sys)  # 1 arg to use the cached version
+    # The SCC cache buffers sit after the persistent `DiffCache` buffers in `p.caches`.
+    cache_offset = if has_index_cache(sys) && get_index_cache(sys) !== nothing
+        length(get_index_cache(sys).caches_buffer_sizes)
+    else
+        0
+    end
     cache_writes = SymbolicT[]
     for (i, T) in enumerate(buffer_types)
         regions = SU.RegionsT()
         values = Symbolics.SArgsT()
-        output = SCC_EXPLICITFUN_CACHE_OUT[i]
+        output = SCC_EXPLICITFUN_CACHE_OUT[i + cache_offset]
         cacheexprs = get(exprs, T, SymbolicT[])
         isempty(cacheexprs) && continue
         N = length(cacheexprs)
@@ -464,7 +473,8 @@ end
 struct SCCNonlinearFunction{iip} end
 
 function SCCNonlinearFunction{iip}(
-        decomposition::SCCDecomposition, i::Int, cachesyms, op; eval_expression = false,
+        decomposition::SCCDecomposition, i::Int, cachesyms, op;
+        specialize = SciMLBase.AutoSpecialize, eval_expression = false,
         eval_module = @__MODULE__, kwargs...
     ) where {iip}
     subsys = decomposition.subsystems[i]
@@ -489,7 +499,7 @@ function SCCNonlinearFunction{iip}(
             shadow, λ; expression = Val{false}, wrap_gfw = Val{true},
             eval_expression, eval_module, cachesyms
         )
-        return NonlinearFunction{iip}(hf; sys = subsys)
+        return NonlinearFunction{iip, specialize}(hf; sys = subsys)
     end
 
     f = generate_rhs(
@@ -500,18 +510,27 @@ function SCCNonlinearFunction{iip}(
         cachesyms
     )
 
-    return NonlinearFunction{iip}(f; sys = subsys)
+    return NonlinearFunction{iip, specialize}(f; sys = subsys)
 end
 
+"""$(MTKBase.problem_docstring(SciMLBase.SCCNonlinearProblem, NonlinearFunction, false; init = false))"""
 function SciMLBase.SCCNonlinearProblem(sys::System, op; kwargs...)
     return SCCNonlinearProblem{true}(sys, op; kwargs...)
 end
 
-function SciMLBase.SCCNonlinearProblem{iip}(
+function SciMLBase.SCCNonlinearProblem{iip}(sys::System, op; kwargs...) where {iip}
+    specialize = get(kwargs, :specialize, SciMLBase.AutoSpecialize)
+    forwarded_kwargs = (;
+        (key => value for (key, value) in kwargs if key !== :specialize)...,
+    )
+    return SCCNonlinearProblem{iip, specialize}(sys, op; forwarded_kwargs...)
+end
+
+function SciMLBase.SCCNonlinearProblem{iip, specialize}(
         sys::System, op; eval_expression = false,
         eval_module = @__MODULE__, u0_constructor = identity,
         missing_guess_value = default_missing_guess_value(), combine_sccs = true, kwargs...
-    ) where {iip}
+    ) where {iip, specialize}
     if !iscomplete(sys) || get_tearing_state(sys) === nothing
         error("A simplified `System` is required. Call `mtkcompile` on the system before creating an `SCCNonlinearProblem`.")
     end
@@ -545,6 +564,20 @@ function SciMLBase.SCCNonlinearProblem{iip}(
         end
     end
 
+    if isempty(var_sccs)
+        # `mtkcompile` may reduce every residual equation to an `observed`
+        # assignment, leaving no unknowns. The lowering is then an empty
+        # nonlinear problem; `process_SciMLProblem` reports `u0 === nothing`
+        # for a stateless system, which solvers reject.
+        TProb = MTKBase.get_nonlinear_problem_type(sys)
+        prob = TProb{iip, specialize}(
+            sys, op; eval_expression, eval_module, u0_constructor, missing_guess_value,
+            jac = true, kwargs...
+        )
+        state_values(prob) === nothing && return remake(prob; u0 = Float64[])
+        return prob
+    end
+
     if length(var_sccs) == 1
         if calculate_A_b(sys; throw = false) !== nothing
             linprob = LinearProblem{iip}(
@@ -567,7 +600,7 @@ function SciMLBase.SCCNonlinearProblem{iip}(
             # (the multi-block path below already builds `HomotopyProblem` blocks); a plain
             # `NonlinearProblem` would drop the λ-sweep and Newton-solve the target directly.
             TProb = MTKBase.get_nonlinear_problem_type(sys)
-            return TProb{iip}(
+            return TProb{iip, specialize}(
                 sys, op; eval_expression, eval_module, u0_constructor, missing_guess_value, kwargs...
             )
         end
@@ -644,7 +677,7 @@ function SciMLBase.SCCNonlinearProblem{iip}(
         end
         f = SCCNonlinearFunction{iip}(
             decomposition, i, cachebufsyms, op;
-            eval_expression, eval_module, kwargs...
+            specialize, eval_expression, eval_module, kwargs...
         )
         push!(nlfuns, f)
     end
@@ -670,7 +703,7 @@ function SciMLBase.SCCNonlinearProblem{iip}(
             end
             BufferTemplate(T, n)
         end
-        p = rebuild_with_caches(p, templates...)
+        p = rebuild_with_caches(get_index_cache(sys), p, templates...)
     end
 
     # yes, `get_p_constructor` since this is only used for `LinearProblem` and
@@ -788,6 +821,88 @@ function calculate_op_from_u0_p(sys::System, u0::Union{Nothing, AbstractVector},
     for eq in observed(_ss)
         write_possibly_indexed_array!(op, eq.lhs, eq.rhs, COMMON_NOTHING)
     end
-    merge!(op, bindings(sys))
+    # Bound parameters are excluded: their values come from the lowered system's own
+    # `bindings`, and having them in `op` trips the "Cannot merge without overriding"
+    # check when the subproblems are built.
+    bound_ps = iscomplete(sys) && get_parameter_bindings_graph(sys) !== nothing ?
+        bound_parameters(sys) : ()
+    for (k, v) in bindings(sys)
+        k in bound_ps && continue
+        op[k] = v
+    end
     return op
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Whether `err`, thrown by `mtkcompile`, reports a structurally unbalanced or singular
+system. See `ModelingToolkitBase.UNBALANCED_SYSTEM_EXCEPTIONS`.
+"""
+function is_structurally_unbalanced_error(err)
+    T = typeof(err)
+    kind = nameof(T)
+    kind in MTKBase.UNBALANCED_SYSTEM_EXCEPTIONS || return false
+    kind === :InvalidSystemException || return true
+    # `InvalidSystemException` also reports problems unrelated to the structure.
+    return fieldcount(T) == 1 && fieldtype(T, 1) <: AbstractString &&
+        occursin("singular", getfield(err, 1))
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Return a `prob -> problem` callable producing the `SCCNonlinearProblem` that a
+`SteadyStateProblem` built on `sys` lowers to: the `NonlinearSystem`
+steady-state residual of the original (uncompiled) model is `mtkcompile`d and
+decomposed into SCCs. The compiled residual system is memoized, while the
+operating point is rebuilt from the queried problem's `u0`/`p` on every call so
+that a `remake`d `SteadyStateProblem` yields a matching lowering. The lowering
+is deferred because building it requires a full `mtkcompile` of the residual
+system, which most `SteadyStateProblem` consumers never need.
+
+The steady-state residual can be structurally unbalanced or singular even when
+the ODE is not, e.g. for a reaction network with a conservation law, where the
+residual determines the steady state only up to the conserved quantities that
+the initial condition fixes. Such a residual has no SCC lowering, so the
+callable then returns the steady-state residual wrapped as a plain
+`NonlinearProblem`, i.e. what `SciMLBase.NonlinearProblem(prob)` builds for a
+`SteadyStateProblem` without a lowering. Pseudo-transient solvers such as
+`DynamicSS` then integrate the ODE as usual.
+"""
+function MTKBase.steady_state_sccprob(sys::System, op; kwargs...)
+    # `nothing`: not compiled yet, `missing`: the residual has no SCC lowering.
+    ref = Ref{Any}(nothing)
+    return function _sccprob(prob)
+        if ref[] === nothing
+            ssys = sys
+            while MTKBase.has_parent(ssys)
+                parent = MTKBase.get_parent(ssys)
+                (parent === nothing || parent === ssys) && break
+                ssys = parent
+            end
+            ref[] = try
+                mtkcompile(NonlinearSystem(ssys))
+            catch err
+                is_structurally_unbalanced_error(err) || rethrow()
+                @debug "The steady-state residual of $(nameof(sys)) cannot be lowered \
+                    to an `SCCNonlinearProblem`; solving the unlowered residual." err
+                missing
+            end
+        end
+        if ref[] === missing
+            return NonlinearProblem{SciMLBase.isinplace(prob)}(
+                prob.f, state_values(prob), parameter_values(prob)
+            )
+        end
+        op = calculate_op_from_u0_p(
+            prob.f.sys, state_values(prob), parameter_values(prob)
+        )
+        # `Initial` parameters are generated per system: `prob.f.sys` also has `Initial(D(x))`
+        # for its derivatives, which the time-independent residual system does not. Transfer
+        # only the `Initial` values it has; its initialization system would treat the others
+        # as solvable and add identities `Initial(x) ~ Initial(x)`.
+        filter!(kv -> !MTKBase.isinitial(first(kv)) || is_parameter(ref[], first(kv)), op)
+        return SCCNonlinearProblem(ref[], op)
+    end
 end

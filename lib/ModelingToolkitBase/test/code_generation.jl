@@ -1,6 +1,8 @@
 using ModelingToolkitBase, OrdinaryDiffEq, SymbolicIndexingInterface
 using SciMLBase
-using SymbolicUtils: unwrap
+using SciMLStructures
+using SparseArrays
+using SymbolicUtils: unwrap, iscall, operation
 using ModelingToolkitBase: t_nounits as t, D_nounits as D
 using Test
 
@@ -168,4 +170,233 @@ end
     # this populates the observed graph cache, which requires the above type to match
     @test ModelingToolkitBase.observed_equations_used_by(sys, [equations(sys)[1].rhs]) ==
         [1, 2]
+end
+
+@testset "`BandedAMatrixWrapper` on an `Expr`" begin
+    ex = ModelingToolkitBase.BandedAMatrixWrapper(:(f()), 3, (1, 1))
+    @test ex == Expr(:call, ModelingToolkitBase.BandedAMatrixWrapper, :(f()), 3, (1, 1))
+end
+
+@testset "`calculate_paramjac`/`generate_paramjac`" begin
+    @variables x(t) y(t)
+    @parameters a b c[1:3] dd::Int e [tunable = false]
+    @mtkcompile sys = System(
+        [
+            D(x) ~ a * x - b * x * y + c[1] * x + c[3] + dd + e,
+            D(y) ~ -c[2] * y + x * y,
+        ], t
+    )
+    opmap = [
+        x => 1.0, y => 2.0, a => 10.0, b => 20.0, c => [31.0, 32.0, 33.0],
+        dd => 2, e => 5.0,
+    ]
+    prob = ODEProblem(sys, opmap, (0.0, 1.0))
+    p = prob.p
+    tunable, repack, _ = SciMLStructures.canonicalize(SciMLStructures.Tunable(), p)
+
+    cols = ModelingToolkitBase.paramjac_parameters(sys)
+    # the columns index the tunable buffer, so non-tunable, integer-valued and
+    # `Initial(...)` parameters must not appear
+    @test getp(sys, cols)(p) == tunable
+    @test !any(isequal(unwrap(dd)), cols)
+    @test !any(isequal(unwrap(e)), cols)
+    @test !any(x -> iscall(x) && operation(x) isa Initial, cols)
+
+    pjac = calculate_paramjac(sys)
+    @test size(pjac) == (length(unknowns(sys)), length(tunable))
+
+    fn = generate_paramjac(sys; expression = Val{false}, wrap_gfw = Val{true})
+    u0 = prob.u0
+    oop = fn(u0, p, 0.0)
+    @test size(oop) == size(pjac)
+
+    iip = zeros(size(pjac))
+    fn(iip, u0, p, 0.0)
+    @test iip == oop
+
+    # central difference of the RHS over the tunable buffer, i.e. what a consumer
+    # perturbing `canonicalize(Tunable(), p)[1]` would measure
+    rhs = generate_rhs(sys; expression = Val{false}, wrap_gfw = Val{true})
+    fd = zeros(size(pjac))
+    for j in eachindex(tunable)
+        h = sqrt(eps(Float64)) * max(abs(tunable[j]), 1.0)
+        up = copy(tunable)
+        dn = copy(tunable)
+        up[j] += h
+        dn[j] -= h
+        fd[:, j] = (rhs(u0, repack(up), 0.0) - rhs(u0, repack(dn), 0.0)) ./ (2h)
+    end
+    @test oop ≈ fd atol = 1.0e-6
+
+    sparse_fn = generate_paramjac(
+        sys; expression = Val{false}, wrap_gfw = Val{true}, sparse = true
+    )
+    @test Array(sparse_fn(u0, p, 0.0)) == oop
+    sparse_buf = similar(calculate_paramjac(sys; sparse = true), Float64)
+    sparse_fn(sparse_buf, u0, p, 0.0)
+    @test Array(sparse_buf) == oop
+
+    # the wrapper must advertise both arities so `SciMLBase.isinplace` accepts it
+    @test SciMLBase.numargs(fn) == (3, 4)
+end
+
+@testset "`paramjac` columns of an array parameter are column-major" begin
+    # A problem cannot be built for a system with a matrix parameter yet, so pin the
+    # column layout symbolically against the index cache instead. Every entry of `MM` has
+    # to appear in the equations: an array parameter with an unused entry is missing from
+    # the index cache entirely, which breaks `generate_rhs`/`generate_jacobian` too.
+    @variables x(t) y(t)
+    @parameters a MM[1:2, 1:2]
+    @mtkcompile sys = System(
+        [
+            D(x) ~ a * x + MM[1, 1] * x + MM[1, 2] * y,
+            D(y) ~ MM[2, 1] * x - MM[2, 2] * y,
+        ], t
+    )
+    cols = ModelingToolkitBase.paramjac_parameters(sys)
+    idx = parameter_index(sys, MM).idx
+    # column `idx[i, j]` of `pJ` must be the derivative w.r.t. `MM[i, j]`
+    @test all(cols[idx[i, j]] === unwrap(MM[i, j]) for i in 1:2, j in 1:2)
+    # which for the index cache's column-major layout means consecutive columns
+    @test all(
+        isequal.(cols[vec(idx)], unwrap.([MM[1, 1], MM[2, 1], MM[1, 2], MM[2, 2]]))
+    )
+    @test size(calculate_paramjac(sys)) == (length(unknowns(sys)), length(cols))
+end
+
+@testset "`generate_paramjac` on a time-independent system" begin
+    @variables xx yy
+    @parameters aa bb
+    @mtkcompile sys = System([0 ~ xx^2 - aa, 0 ~ yy - bb * xx])
+    fn = generate_paramjac(sys; expression = Val{false}, wrap_gfw = Val{true})
+    prob = NonlinearProblem(sys, [xx => 6.0, yy => 2.0, aa => 4.0, bb => 3.0])
+    oop = fn(prob.u0, prob.p)
+    iip = zeros(size(oop))
+    fn(iip, prob.u0, prob.p)
+    @test oop == iip
+    # how far `mtkcompile` tears this system depends on whether the tearing
+    # implementation is loaded, so derive the expected shape instead of fixing it
+    @test size(oop) ==
+        (length(unknowns(sys)), length(ModelingToolkitBase.paramjac_parameters(sys)))
+end
+
+@testset "`generate_paramjac` with no tunable parameters" begin
+    @variables z(t)
+    @parameters q [tunable = false]
+    @mtkcompile sys = System([D(z) ~ -q * z], t)
+    @test size(calculate_paramjac(sys)) == (length(unknowns(sys)), 0)
+    @test_throws ArgumentError generate_paramjac(
+        sys; expression = Val{false}, wrap_gfw = Val{true}
+    )
+
+    # a system with no parameters at all must reach the same error, not a `BoundsError`
+    # from indexing the empty result of `reorder_parameters`
+    @variables w(t)
+    @mtkcompile nops = System([D(w) ~ -w], t)
+    @test isempty(ModelingToolkitBase.paramjac_parameters(nops))
+    @test_throws ArgumentError generate_paramjac(
+        nops; expression = Val{false}, wrap_gfw = Val{true}
+    )
+end
+
+@testset "`calculate_paramjac` on a non-split system" begin
+    @variables x(t) y(t)
+    @parameters a b
+    sys = mtkcompile(
+        System([D(x) ~ a * x - b * x * y, D(y) ~ -a * y + b * x * y], t; name = :sys);
+        split = false
+    )
+    prob = ODEProblem(sys, [x => 1.0, y => 2.0, a => 1.5, b => 0.5], (0.0, 1.0))
+    tunable, repack, _ = SciMLStructures.canonicalize(SciMLStructures.Tunable(), prob.p)
+    # without an index cache `p` is a flat vector of every parameter, so every one of
+    # them gets a column
+    @test size(calculate_paramjac(sys), 2) ==
+        length(parameters(sys; initial_parameters = true)) == length(tunable)
+
+    fn = generate_paramjac(sys; expression = Val{false}, wrap_gfw = Val{true})
+    rhs = generate_rhs(sys; expression = Val{false}, wrap_gfw = Val{true})
+    u0 = prob.u0
+    oop = fn(u0, prob.p, 0.0)
+    iip = zeros(size(oop))
+    fn(iip, u0, prob.p, 0.0)
+    @test iip == oop
+
+    fd = zeros(size(oop))
+    for j in eachindex(tunable)
+        h = sqrt(eps(Float64)) * max(abs(tunable[j]), 1.0)
+        up = copy(tunable)
+        dn = copy(tunable)
+        up[j] += h
+        dn[j] -= h
+        fd[:, j] = (rhs(u0, repack(up), 0.0) - rhs(u0, repack(dn), 0.0)) ./ (2h)
+    end
+    @test oop ≈ fd atol = 1.0e-6
+end
+
+@testset "`ODEFunction` `paramjac`" begin
+    @variables x(t) y(t)
+    @parameters a b
+    @mtkcompile sys = System([D(x) ~ a * x - b * x * y, D(y) ~ -a * y + b * x * y], t)
+    opmap = [x => 1.0, y => 2.0, a => 1.5, b => 0.5]
+
+    @test ODEFunction(sys).paramjac === nothing
+    for T in (true, false)
+        fn = ODEFunction{T}(sys; paramjac = true)
+        @test fn.paramjac !== nothing
+    end
+
+    ref = ODEProblem(sys, opmap, (0.0, 1.0))
+    u0, p = ref.u0, ref.p
+    expected = generate_paramjac(sys; expression = Val{false}, wrap_gfw = Val{true})(
+        u0, p, 0.0
+    )
+    @test ODEFunction(sys; paramjac = true).paramjac(u0, p, 0.0) == expected
+
+    prob = ODEProblem(sys, opmap, (0.0, 1.0); paramjac = true)
+    @test prob.f.paramjac !== nothing
+    @test !haskey(prob.kwargs, :paramjac)
+end
+
+@testset "`calculate_paramjac` rejects systems with delays" begin
+    # `Symbolics.jacobian` treats `xv(t - tau)` as opaque, so the `tau` column would come
+    # out zero rather than `∂f/∂tau`
+    @variables xv(..)
+    @parameters aa tau
+    @mtkcompile sys = System([D(xv(t)) ~ -aa * xv(t - tau)], t)
+    @test ModelingToolkitBase.is_dde(sys)
+    @test_throws ArgumentError calculate_paramjac(sys)
+    @test_throws ArgumentError generate_paramjac(
+        sys; expression = Val{false}, wrap_gfw = Val{true}
+    )
+end
+
+@testset "sparse in-place `paramjac` checks the buffer pattern" begin
+    @variables x(t) y(t)
+    @parameters a b c
+    @mtkcompile sys = System([D(x) ~ b * y + c * x, D(y) ~ a * x], t)
+    prob = ODEProblem(sys, [x => 1.0, y => 2.0, a => 1.0, b => 1.0, c => 2.0], (0.0, 1.0))
+    pattern = calculate_paramjac(sys; sparse = true)
+    fn = generate_paramjac(
+        sys; sparse = true, expression = Val{false}, wrap_gfw = Val{true},
+        checkbounds = true
+    )
+    buffer = similar(pattern, Float64)
+    fn(buffer, prob.u0, prob.p, 0.0)
+    @test Array(buffer) == generate_paramjac(
+        sys; expression = Val{false}, wrap_gfw = Val{true}
+    )(prob.u0, prob.p, 0.0)
+    # a buffer with a different pattern would otherwise be filled in the wrong cells
+    @test_throws AssertionError fn(
+        SparseArrays.sparse(ones(size(pattern))), prob.u0, prob.p, 0.0
+    )
+end
+
+@testset "`calculate_paramjac` respects `SymbolicADDisallowed`" begin
+    @variables x(t)
+    @parameters a
+    @mtkcompile sys = System([D(x) ~ a * x], t)
+    sys = SymbolicUtils.setmetadata(
+        sys, ModelingToolkitBase.SymbolicADDisallowed, "test reason"
+    )
+    @test_throws ArgumentError calculate_paramjac(sys)
 end

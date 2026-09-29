@@ -4,10 +4,6 @@
 
 MTK represents components and connectors with `Model`.
 
-```@docs
-ModelingToolkit.Model
-```
-
 ## Components
 
 Components are models from various domains. These models contain unknowns and their
@@ -332,7 +328,7 @@ MTK provides 3 distinct connectors:
 
   - `DomainConnector`: A connector which has only one unknown which is of `Flow` type,
     specified by `[connect = Flow]`.
-  - `StreamConnector`: A connector which has atleast one stream variable, specified by
+  - `StreamConnector`: A connector which has at least one stream variable, specified by
     `[connect = Stream]`. A `StreamConnector` must have exactly one flow variable.
   - `RegularConnector`: Connectors that don't fall under above categories.
 

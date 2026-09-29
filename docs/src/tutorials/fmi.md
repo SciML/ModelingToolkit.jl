@@ -35,7 +35,7 @@ Following are the variables in the FMU (both states and parameters):
 fmu.modelDescription.modelVariables
 ```
 
-Next, [`FMIComponent`](@ref) is used to import the FMU as an MTK component. We provide the FMI
+Next, [`FMIComponent`](@ref ModelingToolkit.FMIComponent) is used to import the FMU as an MTK component. We provide the FMI
 major version as a `Val` to the constructor, along with the loaded FMU and the type as keyword
 arguments.
 

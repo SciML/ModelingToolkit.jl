@@ -1,4 +1,5 @@
-using Symbolics: Operator, Num, Term, value, recursive_hasoperator
+using Symbolics: Num, value, recursive_hasoperator
+using SymbolicUtils: Operator, Term
 
 # Shift
 
@@ -13,10 +14,10 @@ $(FIELDS)
 # Examples
 
 ```jldoctest
-julia> using Symbolics
+julia> using ModelingToolkitBase
 
-julia> Δ = Shift(t)
-(::Shift) (generic function with 2 methods)
+julia> Δ = Shift(ModelingToolkitBase.t_nounits)
+Shift(t, 1)
 ```
 """
 struct Shift <: Operator
@@ -25,7 +26,7 @@ struct Shift <: Operator
     steps::Int
     Shift(t, steps = 1) = new(unwrap(t), steps)
 end
-Shift(steps::Int) = new(nothing, steps)
+Shift(steps::Int) = Shift(nothing, steps)
 normalize_to_differential(s::Shift) = Differential(s.t)^s.steps
 Base.nameof(::Shift) = :Shift
 SymbolicUtils.isbinop(::Shift) = false
@@ -58,7 +59,7 @@ SymbolicUtils.promote_shape(::Shift, @nospecialize(x::SU.ShapeT)) = x
 Base.show(io::IO, D::Shift) = print(io, "Shift(", D.t, ", ", D.steps, ")")
 
 Base.:(==)(D1::Shift, D2::Shift) = isequal(D1.t, D2.t) && isequal(D1.steps, D2.steps)
-Base.hash(D::Shift, u::UInt) = hash(D.steps, hash(D.t, xor(u, 0x055640d6d952f101)))
+Base.hash(D::Shift, u::UInt) = hash(D.steps, hash(D.t, xor(u, 0x055640d6d952f101 % UInt)))
 
 Base.:^(D::Shift, n::Integer) = Shift(D.t, D.steps * n)
 Base.literal_pow(f::typeof(^), D::Shift, ::Val{n}) where {n} = Shift(D.t, D.steps * n)
@@ -189,10 +190,11 @@ $(TYPEDEF)
 at the inferred clock for that equation.
 """
 struct SampleTime <: Operator
+    k::ShiftIndex
     init::Union{Nothing, Real}
 end
 
-SampleTime(; init::Union{Nothing, Real} = nothing) = SampleTime(init)()
+SampleTime(k::ShiftIndex = ShiftIndex(); init::Union{Nothing, Real} = nothing) = SampleTime(k, init)()
 (D::SampleTime)() = STerm(D, SArgsT(()); type = Real, shape = SU.ShapeVecT())
 SymbolicUtils.promote_symtype(::SampleTime) = Real
 SymbolicUtils.promote_shape(::SampleTime) = SU.ShapeVecT()
@@ -220,12 +222,10 @@ $(FIELDS)
 # Examples
 
 ```jldoctest
-julia> using Symbolics
-
-julia> t = ModelingToolkit.t_nounits
+julia> using ModelingToolkitBase
 
 julia> Δ = Sample(0.01)
-(::Sample) (generic function with 2 methods)
+Sample(SciMLBase.PeriodicClock(0.01, 0.0))
 ```
 """
 struct Sample <: Operator
@@ -246,7 +246,7 @@ SymbolicUtils.isbinop(::Sample) = false
 Base.show(io::IO, D::Sample) = print(io, "Sample(", D.clock, ")")
 
 Base.:(==)(D1::Sample, D2::Sample) = isequal(D1.clock, D2.clock)
-Base.hash(D::Sample, u::UInt) = hash(D.clock, xor(u, 0x055640d6d952f101))
+Base.hash(D::Sample, u::UInt) = hash(D.clock, xor(u, 0x055640d6d952f101 % UInt))
 
 function validate_operator(op::Sample, args, iv; context = nothing)
     arg = unwrap(only(args))

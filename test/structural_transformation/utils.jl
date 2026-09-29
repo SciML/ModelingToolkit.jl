@@ -8,6 +8,8 @@ using Symbolics: unwrap
 using DataInterpolations
 using OrdinaryDiffEq, NonlinearSolve, StochasticDiffEq
 import DiffEqNoiseProcess
+import BipartiteGraphs
+import ModelingToolkitBase
 import SymbolicUtils as SU
 import StateSelection
 import ModelingToolkitTearing as MTKTearing
@@ -41,7 +43,7 @@ end
 
 se = collect(StructuralTransformations.edges(graph))
 @test se == mapreduce(vcat, enumerate(graph.fadjlist)) do (s, d)
-    StructuralTransformations.BipartiteEdge.(s, d)
+    BipartiteGraphs.BipartiteEdge.(s, d)
 end
 
 @testset "observed2graph handles unknowns inside callable parameters" begin
@@ -124,25 +126,34 @@ end
 
     # Expand shifts
     @test isequal(
-        ST.distribute_shift(Shift(t, -1)(x + y)), Shift(t, -1)(x) + Shift(t, -1)(y)
+        ModelingToolkitBase.distribute_shift(Shift(t, -1)(x + y)),
+        Shift(t, -1)(x) + Shift(t, -1)(y)
     )
 
     expr = a * Shift(t, -2)(x) + Shift(t, 2)(y) + b
     @test isequal(
-        ST.simplify_shifts(ST.distribute_shift(Shift(t, 2)(expr))),
+        ModelingToolkitBase.simplify_shifts(
+            ModelingToolkitBase.distribute_shift(Shift(t, 2)(expr))
+        ),
         a * x + Shift(t, 4)(y) + b
     )
-    @test isequal(ST.distribute_shift(Shift(t, 2)(exp(z))), exp(Shift(t, 2)(z)))
-    @test isequal(ST.distribute_shift(Shift(t, 2)(exp(a) + b)), exp(a) + b)
+    @test isequal(
+        ModelingToolkitBase.distribute_shift(Shift(t, 2)(exp(z))), exp(Shift(t, 2)(z))
+    )
+    @test isequal(
+        ModelingToolkitBase.distribute_shift(Shift(t, 2)(exp(a) + b)), exp(a) + b
+    )
 
     expr = a^x - log(b * y) + z * x
     @test isequal(
-        ST.distribute_shift(Shift(t, -3)(expr)),
+        ModelingToolkitBase.distribute_shift(Shift(t, -3)(expr)),
         a^(Shift(t, -3)(x)) - log(b * Shift(t, -3)(y)) + Shift(t, -3)(z) * Shift(t, -3)(x)
     )
 
     expr = x(k + 1) ~ x + x(k - 1)
-    @test isequal(ST.distribute_shift(Shift(t, -1)(expr)), x ~ x(k - 1) + x(k - 2))
+    @test isequal(
+        ModelingToolkitBase.distribute_shift(Shift(t, -1)(expr)), x ~ x(k - 1) + x(k - 2)
+    )
 end
 
 @testset "`map_variables_to_equations`" begin

@@ -82,6 +82,10 @@ function get_ir_info(sys::System)
     elseif is_time_dependent(sys)
         for (i, eq) in enumerate(eqs)
             isdiffeq(eq) || continue
+            # A derivative of an array slice, as in `D(u[2:4]) ~ rhs`, has no scalar
+            # `toterm` name to key a substitution on. Implicit-DAE codegen expands such
+            # derivatives into their scalar elements before building the residual.
+            SU.is_array_shape(SU.shape(eq.lhs)) && continue
             ttk = default_toterm(eq.lhs)
             isequal(ttk, eq.rhs) && continue
 

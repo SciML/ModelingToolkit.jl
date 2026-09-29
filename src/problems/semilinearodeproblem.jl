@@ -1,3 +1,4 @@
+"""$(MTKBase.function_docstring(SemilinearODEFunction, true, [:jac]; extra_body = SEMILINEAR_EXTRA_BODY, extra_kwargs = SEMILINEAR_A_B_C_KWARGS, extra_kwargs_desc = SEMILINEAR_A_B_C_CONSTRAINT))"""
 @fallback_iip_specialize function SemilinearODEFunction{iip, specialize}(
         sys::System; u0 = nothing, p = nothing, t = nothing,
         semiquadratic_form = nothing,
@@ -22,7 +23,7 @@ end
     SemilinearODEFunction{iip, specialize}(sys::System, opts::SciMLFunctionOptions; kwargs...)
 
 Public entry point that builds a `SemilinearODEFunction` directly from a pre-assembled
-[`SciMLFunctionOptions`](@ref), bypassing the `kwargs...` wrapper above.
+`SciMLFunctionOptions`, bypassing the `kwargs...` wrapper above.
 """
 function SemilinearODEFunction{iip, specialize}(
         sys::System, opts::SciMLFunctionOptions{E};
@@ -88,6 +89,7 @@ function SemilinearODEFunction{iip, specialize}(
     )
 end
 
+"""$(MTKBase.problem_docstring(SemilinearODEProblem, SemilinearODEFunction, true; extra_body = SEMILINEAR_EXTRA_BODY, extra_kwargs = SEMILINEAR_A_B_C_KWARGS, extra_kwargs_desc = SEMILINEAR_A_B_C_CONSTRAINT))"""
 @fallback_iip_specialize function SemilinearODEProblem{iip, spec}(
         sys::System, op, tspan; check_compatibility = true, u0_eltype = nothing,
         expression = Val{false}, callback = nothing, sparse = false,
@@ -142,7 +144,7 @@ end
             defs[par] = mat
         end
         cachelen = jac ? length(dvs) * length(eqs) : length(dvs)
-        defs[diffcache_par] = DiffCache(zeros(DiffEqBase.value(_u0_eltype), cachelen))
+        defs[diffcache_par] = DiffCache(zeros(SciMLBase.value(_u0_eltype), cachelen))
     end
     @set! sys.guesses = guess
     @set! sys.initial_conditions = defs
@@ -165,7 +167,7 @@ end
     $(TYPEDSIGNATURES)
 
 Add the necessary parameters for [`SemilinearODEProblem`](@ref) given the matrices
-`A`, `B`, `C` returned from [`calculate_semiquadratic_form`](@ref).
+`A`, `B`, `C` returned from `calculate_semiquadratic_form`.
 """
 function add_semiquadratic_parameters(sys::System, A, B, C)
     eqs = equations(sys)

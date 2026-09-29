@@ -23,7 +23,7 @@ function test_all_roots(sol; atol = 1.0e-10)
 end
 
 function solve_allroots_closest(prob)
-    sol = solve(prob, allrootsalg)
+    sol = solve(prob, allrootsalg; seed = 0x00012345)
     return argmin(sol.u) do nlsol
         return norm(nlsol.u - prob.u0)
     end

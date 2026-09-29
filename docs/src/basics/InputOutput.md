@@ -45,21 +45,23 @@ eqs = [D(x) ~ -k * (x + u)
        y ~ x]
 
 @named sys = System(eqs, t)
-f, x_sym, ps = ModelingToolkit.generate_control_function(sys, [u], simplify = true);
+(; f, dvs, ps, io_sys) = ModelingToolkit.generate_control_function(
+    sys, [u]; simplify = true
+)
 nothing # hide
 ```
 
 We can inspect the state realization chosen by MTK
 
 ```@example inputoutput
-x_sym
+dvs
 ```
 
 as expected, `x` is chosen as the state variable.
 
 ```@example inputoutput
 using Test # hide
-@test isequal(x_sym[], x) # hide
+@test isequal(dvs[], x) # hide
 @test isequal(ps, [k]) # hide
 nothing  # hide
 ```
@@ -68,9 +70,9 @@ Now we can test the generated function `f` with random input and state values
 
 ```@example inputoutput
 p = [1]
-x = [rand()]
-u = [rand()]
-@test f[1](x, u, p, 1) ≈ -p[] * (x + u) # Test that the function computes what we expect D(x) = -k*(x + u)
+x_val = [rand()]
+u_val = [rand()]
+@test f[1](x_val, u_val, p, 1) ≈ -p[] * (x_val + u_val)
 ```
 
 ## Generating an output function, ``g``
@@ -78,6 +80,11 @@ u = [rand()]
 ModelingToolkit can also generate a function that computes a specified output of a system, the function ``y = g(x, u, p, t)`` above. This is done using the function [`ModelingToolkit.build_explicit_observed_function`](@ref). When generating an output function, the user must specify the output variable(s) of interest, as well as any inputs if inputs are relevant to compute the output.
 
 The order of the user-specified output variables determines the order of the output vector ``y``.
+
+```@example inputoutput
+g = ModelingToolkit.build_explicit_observed_function(io_sys, [x + u * t]; inputs = [u])
+@test g([1.0], [2.0], p, 3.0) ≈ [7.0]
+```
 
 ## Input-output variable metadata
 

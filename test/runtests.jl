@@ -7,6 +7,7 @@ const RepoRoot = dirname(@__DIR__)
 const EnvParents = [MTKBasePath, RepoRoot]
 
 run_tests(;
+    lib_dir = joinpath(RepoRoot, "lib"),
     groups = Dict(
         "InterfaceI" => joinpath(@__DIR__, "group_interfacei.jl"),
         "Initialization" => joinpath(@__DIR__, "group_initialization.jl"),

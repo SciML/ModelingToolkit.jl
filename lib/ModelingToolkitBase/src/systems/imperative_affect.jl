@@ -299,7 +299,7 @@ function compile_functional_affect(
                 push!(exprs_dedup, exp)
                 push!(seen, sym)
             elseif !affect.skip_checks
-                @warn "Expression $(expr) is aliased as $sym, which has already been used. The first definition will be used."
+                @warn "Expression $(exp) is aliased as $sym, which has already been used. The first definition will be used."
             end
         end
         return (syms_dedup, exprs_dedup)
@@ -376,7 +376,7 @@ scalarize_affects(affects::ImperativeAffect) = affects
 function SU.search_variables!(vars, aff::ImperativeAffect; kwargs...)
     for var in Iterators.flatten((observed(aff), modified(aff)))
         if symbolic_type(var) == NotSymbolic()
-            SU.search_variables!(vars, v; kwargs...)
+            SU.search_variables!(vars, var; kwargs...)
         end
     end
     return

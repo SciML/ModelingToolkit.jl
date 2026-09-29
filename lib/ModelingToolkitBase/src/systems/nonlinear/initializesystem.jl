@@ -38,6 +38,27 @@ function generate_initializesystem(
 end
 
 """
+    $(TYPEDSIGNATURES)
+
+Register the dummy derivative variable `ttk = default_toterm(d)` as an initialization
+unknown: give it a `dd_guess_sym` guess unless `d` or `ttk` is already guessed, add it to
+`init_vars_set`, and record `d => ttk` in `derivative_rules`. Returns `ttk`.
+"""
+function register_dd_var!(
+        derivative_rules::AbstractDict{SymbolicT, SymbolicT},
+        init_vars_set::AtomicArraySet{OrderedDict{SymbolicT, Nothing}},
+        guesses::AtomicArrayDict{SymbolicT}, d::SymbolicT, dd_guess_sym::SymbolicT
+    )
+    ttk = default_toterm(d)
+    if !has_possibly_indexed_key(guesses, d) && !has_possibly_indexed_key(guesses, ttk)
+        write_possibly_indexed_array!(guesses, ttk, dd_guess_sym, COMMON_NOTHING)
+    end
+    push_as_atomic_array!(init_vars_set, ttk)
+    derivative_rules[d] = ttk
+    return ttk
+end
+
+"""
 $(TYPEDSIGNATURES)
 
 Generate `System` of nonlinear equations which initializes a problem from specified initial conditions of a time-dependent `AbstractSystem`.
@@ -122,6 +143,7 @@ function generate_initializesystem_timevarying(
     # properly handling singular systems. Without this, singular systems will always
     # error as incomplete, since the system symbolically won't contain some unknowns.
     derivative_rules = DerivativeDict()
+    residual_eq_indices = Int[]
     dd_guess_sym = BSImpl.Const{VartypeT}(default_dd_guess)
     banned_derivatives = Set{SymbolicT}()
     if has_schedule(_sys) && (schedule = get_schedule(_sys); schedule isa Schedule)
@@ -150,17 +172,45 @@ function generate_initializesystem_timevarying(
         end
         if isdiffeq(eq)
             get!(derivative_rules, eq.lhs) do
-                k = eq.lhs
-                ttk = default_toterm(eq.lhs)
-                if !has_possibly_indexed_key(guesses, k) && !has_possibly_indexed_key(guesses, ttk)
-                    write_possibly_indexed_array!(guesses, ttk, dd_guess_sym, COMMON_NOTHING)
-                end
-                push_as_atomic_array!(init_vars_set, ttk)
+                ttk = register_dd_var!(
+                    derivative_rules, init_vars_set, guesses, eq.lhs, dd_guess_sym
+                )
                 isequal(ttk, eq.rhs) || push!(eqs_ics, ttk ~ subber(eq.rhs))
                 ttk
             end
         else
+            residual_derivatives = collect_applied_operators(eq, Differential)
+            for d in residual_derivatives
+                arr, isarr = split_indexed_var(only(arguments(d)))
+                if isarr
+                    array_d = operation(d)(arr)
+                    if !haskey(derivative_rules, array_d)
+                        register_dd_var!(
+                            derivative_rules, init_vars_set, guesses, array_d, dd_guess_sym
+                        )
+                    end
+                end
+                if SU.is_array_shape(SU.shape(d))
+                    arr = only(arguments(d))
+                    derivative_rules[d] = array_derivative_expansion(d)
+                    for i in SU.stable_eachindex(arr)
+                        scalar_d = operation(d)(arr[i])
+                        register_dd_var!(
+                            derivative_rules, init_vars_set, guesses, scalar_d, dd_guess_sym
+                        )
+                    end
+                else
+                    get!(derivative_rules, d) do
+                        register_dd_var!(
+                            derivative_rules, init_vars_set, guesses, d, dd_guess_sym
+                        )
+                    end
+                end
+            end
             push!(eqs_ics, eq)
+            if !isempty(residual_derivatives)
+                push!(residual_eq_indices, length(eqs_ics))
+            end
         end
     end
     D = Differential(get_iv(sys))
@@ -181,6 +231,10 @@ function generate_initializesystem_timevarying(
             get_irstructure(sys), derivative_rules
         ); maxiters = get_maxiters(derivative_rules)
     )
+    # Apply rules collected from the full equation set to residual-form derivatives.
+    for i in residual_eq_indices
+        eqs_ics[i] = subber(der_subber(eqs_ics[i]))
+    end
     timevaring_initsys_process_op!(subber, init_vars_set, init_ps, eqs_ics, op, der_subber, guesses)
 
     # process explicitly provided initialization equations
@@ -498,6 +552,7 @@ function timevaring_initsys_process_op!(
             for i in SU.stable_eachindex(k)
                 v[i] === COMMON_NOTHING && continue
                 push!(eqs_ics, subk[i] ~ ik[i])
+                write_possibly_indexed_array!(op, ik[i], v[i], COMMON_FALSE)
             end
             continue
         end
@@ -644,7 +699,7 @@ function _remake_initialization_data_impl(
         return @set oldinitdata.initializeprob = initprob
     end
 
-    dvs = unknowns(sys)
+    dvs = flat_unknowns(sys)
     ps = parameters(sys)
     if eltype(u0) <: Pair
         if u0 isa Union{AbstractArray, Tuple}
@@ -691,11 +746,16 @@ function _remake_initialization_data_impl(
     floatT = float_type_from_varmap(op)
     u0_constructor = get_u0_constructor(identity, typeof(newu0), floatT, false)
     p_constructor = get_p_constructor(identity, typeof(newu0), floatT)
+    opts = SciMLProblemOptions(
+        sys;
+        fn_opts = SciMLFunctionOptions(), floatT, u0_constructor, p_constructor,
+        use_scc, initialization_eqs, time_dependent_init, allow_incomplete = true,
+        check_initialization_units = false, missing_guess_value = meta.missing_guess_value,
+        circular_dependency_max_cycle_length = length(all_symbols(sys)),
+    )
     kws = maybe_build_initialization_problem(
-        sys, SciMLBase.isinplace(odefn), op, t0, guesses;
-        time_dependent_init, use_scc, initialization_eqs, floatT, fast_path = true,
-        u0_constructor, p_constructor, allow_incomplete = true, check_units = false,
-        missing_guess_value = meta.missing_guess_value
+        sys, SciMLBase.isinplace(odefn), op, t0, guesses, opts;
+        specialize = initialization_specialization(SciMLBase.specialization(typeof(odefn)))
     )
 
     odefn = remake(odefn; kws...)
@@ -709,6 +769,11 @@ function promote_type_with_nothing(::Type{T}, ::AbstractArray{T2}) where {T, T2}
 end
 function promote_type_with_nothing(::Type{T}, p::MTKParameters) where {T}
     return promote_type_with_nothing(promote_type_with_nothing(T, p.tunable), p.initials)
+end
+function promote_type_with_nothing(
+        ::Type{T}, p::SciMLBase.DespecializedParameters
+    ) where {T}
+    return promote_type_with_nothing(T, SciMLBase.unwrap_parameters(p))
 end
 
 promote_with_nothing(::Type, ::Nothing) = nothing
@@ -735,6 +800,11 @@ function promote_with_nothing(::Type{T}, p::MTKParameters) where {T}
         end
     end
     return p
+end
+function promote_with_nothing(::Type{T}, p::SciMLBase.DespecializedParameters) where {T}
+    return SciMLBase.DespecializedParameters(
+        promote_with_nothing(T, SciMLBase.unwrap_parameters(p))
+    )
 end
 
 function promote_u0_p(u0, p, t0)
@@ -808,7 +878,20 @@ function _late_binding_update_u0_p_impl(
     else
         allsyms = nothing
         # if `p` is not provided or is symbolic
-        p === missing || eltype(p) <: Pair || return newu0, newp
+        if p !== missing && !(eltype(p) <: Pair)
+            _unwrap_mtk_parameters(p) isa MTKParameters && return newu0, newp
+            oldp = parameter_values(prob)
+            unwrapped_oldp = _unwrap_mtk_parameters(oldp)
+            if unwrapped_oldp isa MTKParameters
+                newp = SciMLStructures.replace(
+                    SciMLStructures.Tunable(), copy(unwrapped_oldp), newp
+                )
+                if oldp isa SciMLBase.DespecializedParameters
+                    newp = SciMLBase.DespecializedParameters(newp)
+                end
+            end
+            return newu0, newp
+        end
         (newu0 === nothing || isempty(newu0)) && return newu0, newp
         initdata === nothing && return newu0, newp
         meta = initdata.metadata
@@ -846,7 +929,7 @@ function _late_binding_update_u0_p_impl(
     return newu0, newp
 end
 
-function DiffEqBase.get_updated_symbolic_problem(
+function SciMLBase.get_updated_symbolic_problem(
         sys::AbstractSystem, prob; u0 = state_values(prob),
         p = parameter_values(prob), kw...
     )
@@ -861,13 +944,14 @@ function DiffEqBase.get_updated_symbolic_problem(
 
     t0 = is_time_dependent(prob) ? current_time(prob) : nothing
 
-    if p isa MTKParameters
-        buffer = p.initials
+    unwrapped_p = _unwrap_mtk_parameters(p)
+    if unwrapped_p isa MTKParameters
+        buffer = unwrapped_p.initials
     else
         buffer = p
     end
 
-    u0 = DiffEqBase.promote_u0(u0, buffer, t0)
+    u0 = SciMLBase.promote_u0(u0, buffer, t0)
     u0 = ArrayInterface.restructure(u0, meta.get_updated_u0(prob, initdata.initializeprob))
 
     return remake(prob; u0, p)

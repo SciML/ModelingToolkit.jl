@@ -2,7 +2,9 @@ using ModelingToolkit
 using NonlinearSolve, SCCNonlinearSolve
 using OrdinaryDiffEq
 using OrdinaryDiffEqBDF
+using SteadyStateDiffEq
 using SciMLBase, Symbolics
+using SymbolicIndexingInterface: getu, getp
 using StaticArrays
 using LinearAlgebra, Test
 using SymbolicUtils
@@ -403,6 +405,61 @@ end
     @test issetequal(keys(state), [x[1], 2x[2], x[2]^2, f(x[2] + 1)])
 end
 
+@testset "`specialize` is threaded through to the SCC blocks" begin
+    @variables x y z
+    @mtkcompile sys = System([0 ~ x^3 + x - 1, 0 ~ y^3 + y - x, 0 ~ z^3 + z - y])
+    op = [x => 1.0, y => 1.0, z => 1.0]
+    constructor, constructor_kwargs = ModelingToolkitBase._initialization_problem_constructor(
+        SCCNonlinearProblem, true, SciMLBase.AutoDespecialize
+    )
+    @test constructor === SCCNonlinearProblem{true}
+    @test constructor_kwargs === (; specialize = SciMLBase.AutoDespecialize)
+    keyword_prob = SCCNonlinearProblem{true}(
+        sys, op; specialize = SciMLBase.AutoDespecialize
+    )
+    @test all(
+        sp -> SciMLBase.specialization(sp.f) === SciMLBase.AutoDespecialize,
+        keyword_prob.probs
+    )
+    for (ctor, spec) in (
+            (SCCNonlinearProblem, SciMLBase.AutoSpecialize),
+            (SCCNonlinearProblem{true, SciMLBase.AutoDespecialize}, SciMLBase.AutoDespecialize),
+        )
+        prob = ctor(sys, op)
+        @test prob isa SCCNonlinearProblem
+        @test all(sp -> SciMLBase.specialization(sp.f) === spec, prob.probs)
+        sol = solve(prob, NewtonRaphson())
+        @test SciMLBase.successful_retcode(sol)
+        @test sol[x]^3 + sol[x] ≈ 1 atol = 1.0e-8
+    end
+end
+
+@testset "Initialization `SCCNonlinearProblem` blocks are despecialized and wrapped once" begin
+    @variables a(t) b(t) c(t) d(t)
+    @mtkcompile sys1 = System(
+        [D(a) ~ b, 0 ~ b^3 + b + a - 2, 0 ~ c^3 + c - b, 0 ~ d - c * b], t
+    )
+    @mtkcompile sys2 = System(
+        [D(a) ~ b, 0 ~ b^3 + 2b + a - 3, 0 ~ c^3 + 2c - b, 0 ~ d - 2c * b], t
+    )
+    probs = [ODEProblem(sys, [a => 0.5], (0.0, 1.0)) for sys in (sys1, sys2)]
+    initprobs = [prob.f.initialization_data.initializeprob for prob in probs]
+    @test initprobs[1] isa SCCNonlinearProblem
+    @test typeof(initprobs[1]) === typeof(initprobs[2])
+    @test typeof(initprobs[1].probs) === typeof(initprobs[2].probs)
+    @test typeof(initprobs[1].explicitfuns!) === typeof(initprobs[2].explicitfuns!)
+    blocks = filter(sp -> sp isa NonlinearProblem, collect(initprobs[1].probs))
+    @test !isempty(blocks)
+    @test all(sp -> SciMLBase.specialization(sp.f) === SciMLBase.AutoDespecialize, blocks)
+    @test all(sp -> sp.p isa SciMLBase.DespecializedParameters, blocks)
+    @test allequal(typeof.(blocks))
+    for (prob, k) in zip(probs, (1, 2))
+        integ = init(prob, Rodas5P(); abstol = 1.0e-10, reltol = 1.0e-10)
+        @test integ[c]^3 + k * integ[c] ≈ integ[b] atol = 1.0e-8
+        @test SciMLBase.successful_retcode(solve(prob, Rodas5P()))
+    end
+end
+
 @testset "HashedRandom missing guesses in init `SCCNonlinearProblem` (#4603)" begin
     # Initialization decomposes into multiple SCCs and no guesses are provided,
     # so the default `HashedRandom` missing-guess strategy is used for the SCC
@@ -413,7 +470,282 @@ end
         [D(a) ~ b, 0 ~ b^3 + b + a - 2, 0 ~ c^3 + c - b, 0 ~ d - c * b], t
     )
     prob = ODEProblem(sys, [a => 0.5], (0.0, 1.0))
+    @test SciMLBase.specialization(prob.f) === SciMLBase.AutoDespecialize
     @test prob.f.initialization_data.initializeprob isa SCCNonlinearProblem
     sol = solve(prob, Rodas5P())
     @test SciMLBase.successful_retcode(sol)
 end
+
+@testset "SteadyStateProblem stores its SCC lowering" begin
+    # `irreducible` keeps all three states in the residual system, so the
+    # steady-state residual decomposes into a linear `{a, b}` SCC and a
+    # nonlinear scalar `{x}` SCC. The steady state is a = 1, b = 2, x = ∛3.
+    @variables a(t) = 1.0 b(t) = 1.0 x(t) = 1.0 [irreducible = true]
+    @mtkcompile sys = System(
+        [D(a) ~ 5 - 3a - b, D(b) ~ 5 - a - 2b, D(x) ~ a + b - x^3], t
+    )
+    prob = SteadyStateProblem(sys, Dict())
+
+    # The lowering is stored deferred in the `lowered_problem` field...
+    builder = prob.lowered_problem
+    @test builder !== nothing
+    @test builder isa Base.Callable
+
+    # ...and materializes through `SCCNonlinearProblem(prob)` against the
+    # problem's current operating point.
+    sccprob = SCCNonlinearProblem(prob)
+    @test sccprob isa SCCNonlinearProblem
+    @test length(sccprob.probs) == 2
+    @test sccprob.probs[1] isa LinearProblem
+    @test sccprob.probs[2] isa NonlinearProblem
+    @test getu(sccprob, a)(sccprob) == 1.0
+    @test getu(sccprob, x)(sccprob) == 1.0
+
+    # Non-dynamic solves prefer the stored lowering.
+    @test NonlinearProblem(prob) isa SCCNonlinearProblem
+
+    sol = solve(sccprob, NewtonRaphson())
+    @test SciMLBase.successful_retcode(sol)
+    @test sol[[a, b, x]] ≈ [1, 2, cbrt(3)] atol = 1.0e-10
+
+    # `remake` carries the builder, which rebuilds the operating point from the
+    # remade `u0`/`p` rather than the construction-time `op`. `prob.u0` is in
+    # `unknowns(sys)` order, `[x, b, a]` here, so `u0 = [4, 5, 6]` means
+    # `x => 4`, `b => 5`, `a => 6`.
+    prob2 = remake(prob; u0 = [4.0, 5.0, 6.0])
+    sccprob2 = SCCNonlinearProblem(prob2)
+    @test sccprob2 isa SCCNonlinearProblem
+    @test getu(sccprob2, a)(sccprob2) == 6.0
+    @test getu(sccprob2, x)(sccprob2) == 4.0
+    sol2 = solve(sccprob2, NewtonRaphson())
+    @test sol2[[a, b, x]] ≈ [1, 2, cbrt(3)] atol = 1.0e-10
+
+    # Still stored when initialization data is not built.
+    prob3 = SteadyStateProblem(sys, Dict(); build_initializeprob = false)
+    @test prob3.f.initialization_data === nothing
+    @test SCCNonlinearProblem(prob3) isa SCCNonlinearProblem
+
+    # Not stored on non-steady-state problems.
+    odeprob = ODEProblem(sys, Dict(), (0.0, 1.0))
+    @test SCCNonlinearProblem(odeprob) === nothing
+end
+
+@testset "SteadyStateProblem SCC lowering regressions" begin
+    # https://github.com/SciML/ModelingToolkit.jl/issues/5162
+    @parameters α = 1.3 β = 0.9 γ = 0.8 δ = 1.8
+    @variables x(t) = 3.1 y(t) = 1.5
+    eqs = [D(x) ~ α * x - β * x * y, D(y) ~ -δ * y + γ * x * y]
+
+    # `complete` before `mtkcompile` records a parent snapshot whose
+    # `parameter_bindings_graph` is invalidated; the lowering walks to it.
+    sys = mtkcompile(complete(System(eqs, t; name = :lotka)))
+    sol = solve(SteadyStateProblem(sys, []))
+    @test SciMLBase.successful_retcode(sol)
+    @test sol[x] ≈ 2.25 atol = 1.0e-8
+    @test sol[y] ≈ 13 / 9 atol = 1.0e-8
+
+    # `initialization_eqs` referring to unknowns translate to `Initial`
+    # constraints on the time-independent residual system.
+    model = System(eqs, t; initialization_eqs = [x ~ 3.1], name = :lotka)
+    sys = mtkcompile(model)
+    sol = solve(SteadyStateProblem(sys, []))
+    @test SciMLBase.successful_retcode(sol)
+    @test sol[x] ≈ 2.25 atol = 1.0e-8
+    @test sol[y] ≈ 13 / 9 atol = 1.0e-8
+
+    # Bound parameters belong to the lowered system's `bindings`, not the
+    # operating point.
+    @parameters p2
+    model = System(
+        eqs, t, [x, y], [α, β, γ, δ, p2];
+        bindings = [p2 => 2α], name = :lotka
+    )
+    sys = mtkcompile(model)
+    sol = solve(SteadyStateProblem(sys, []))
+    @test SciMLBase.successful_retcode(sol)
+    @test sol[x] ≈ 2.25 atol = 1.0e-8
+    @test sol[y] ≈ 13 / 9 atol = 1.0e-8
+
+    # The `iv => Inf` binding is only added at the top level of a hierarchical
+    # conversion; subsystems receive it through domain bindings.
+    @variables u(t) [guess = 1.0] v(t) [guess = 1.0]
+    @parameters subβ = 1.0
+    @named inner = System(
+        [D(u) ~ subβ - u], t, [u], [subβ];
+        initialization_eqs = [u ~ 3.0]
+    )
+    model = System(
+        [D(v) ~ α * inner.u - v], t, [v], [α];
+        name = :outer, systems = [inner], initialization_eqs = [v ~ 2.0]
+    )
+    sys = mtkcompile(model)
+    sol = solve(SteadyStateProblem(sys, []))
+    @test SciMLBase.successful_retcode(sol)
+    @test sol[inner.u] ≈ 1.0 atol = 1.0e-8
+    @test sol[v] ≈ 1.3 atol = 1.0e-8
+
+    # A residual splitting into multiple SCCs lowers to an `SCCNonlinearProblem`;
+    # `solve` must route it to `SCCAlg` rather than the generic conversion that
+    # reads `prob.u0` (which `SCCNonlinearProblem` does not have).
+    @variables x2(t) y2(t) z2(t)
+    @mtkcompile sys = System(
+        [D(x2) ~ α - x2^3, D(y2) ~ x2^3 - y2^3, D(z2) ~ y2 - z2^3],
+        t, [x2, y2, z2], [α, β]
+    )
+    prob = SteadyStateProblem(sys, [])
+    @test SciMLBase.NonlinearProblem(prob) isa SciMLBase.SCCNonlinearProblem
+    for sol in (solve(prob), solve(prob, NewtonRaphson()))
+        @test SciMLBase.successful_retcode(sol)
+        @test sol[x2] ≈ cbrt(1.3) atol = 1.0e-8
+        @test sol[y2] ≈ cbrt(1.3) atol = 1.0e-8
+        @test sol[z2] ≈ cbrt(cbrt(1.3)) atol = 1.0e-8
+    end
+
+    # A residual reduced entirely to `observed` assignments leaves an empty
+    # schedule; the lowering is a stateless `NonlinearProblem`.
+    @variables x3(t) y3(t)
+    @mtkcompile sys = System(
+        [D(x3) ~ α - x3, D(y3) ~ β + x3 - y3], t, [x3, y3], [α, β]
+    )
+    prob = SteadyStateProblem(sys, [])
+    @test SciMLBase.NonlinearProblem(prob) isa SciMLBase.NonlinearProblem
+    sol = solve(prob)
+    @test SciMLBase.successful_retcode(sol)
+    @test sol[x3] ≈ 1.3 atol = 1.0e-8
+    @test sol[y3] ≈ 2.2 atol = 1.0e-8
+
+    # https://github.com/SciML/ModelingToolkit.jl/issues/5177
+    # The residual of a reaction network with conservation laws is structurally
+    # singular (`s1s2` appears in none of the right-hand sides), so it has no SCC
+    # lowering: the builder falls back to the unlowered residual instead of
+    # throwing from `mtkcompile`, and `DynamicSS` integrates the ODE, keeping the
+    # conserved quantities of the initial condition.
+    @parameters k1 = 1.0 c1 = 2.0
+    @variables s1(t) = 2.0 s1s2(t) = 2.0 s2(t) = 2.0
+    eqs = [
+        D(s1) ~ -0.25 * c1 * k1 * s1 * s2,
+        D(s1s2) ~ 0.25 * c1 * k1 * s1 * s2,
+        D(s2) ~ -0.25 * c1 * k1 * s1 * s2,
+    ]
+    for sys in (
+            complete(System(eqs, t; name = :reactionsystem)),
+            mtkcompile(System(eqs, t; name = :reactionsystem)),
+        )
+        prob = SteadyStateProblem(sys, [c1 => 3.0])
+        @test prob.lowered_problem !== nothing
+        for _ in 1:2 # the fallback is memoized
+            lowered = SCCNonlinearProblem(prob)
+            @test lowered isa NonlinearProblem
+            @test lowered.u0 == prob.u0
+            @test lowered.p === prob.p
+        end
+        sol = solve(prob, DynamicSS(Tsit5()))
+        @test SciMLBase.successful_retcode(sol)
+        @test sol.prob isa SteadyStateProblem
+        @test sol[s1] + sol[s1s2] ≈ 4 atol = 1.0e-6
+        @test sol[s2] + sol[s1s2] ≈ 4 atol = 1.0e-6
+        @test sol[s1] < 1.0e-2
+        @test SciMLBase.successful_retcode(solve(prob, NewtonRaphson()))
+    end
+end
+
+@testset "SteadyStateProblem SCC lowering: connectors, array unknowns and `Initial` values" begin
+    # The lowering compiles `NonlinearSystem` of the unexpanded model, so the outer stream
+    # connectors of `Wrapper` must keep their connector type.
+    @connector function FluidPort(; name)
+        vars = @variables p(t) [guess = 1.0] m_flow(t) [connect = Flow, guess = 1.0] h_outflow(t) [connect = Stream, guess = 1.0]
+        System(Equation[], t, vars, []; name)
+    end
+    function Boundary(; name, p0, h0)
+        @named port = FluidPort()
+        @parameters p0 = p0 h0 = h0
+        System([port.p ~ p0, port.h_outflow ~ h0], t, [], [p0, h0]; systems = [port], name)
+    end
+    function MixingPipe(; name)
+        @named a = FluidPort()
+        @named b = FluidPort()
+        @variables h(t) = 0.0
+        @parameters k = 1.0 tau = 1.0
+        eqs = [
+            a.m_flow ~ k * (a.p - b.p),
+            a.m_flow + b.m_flow ~ 0,
+            tau * D(h) ~ a.m_flow * (instream(a.h_outflow) - h),
+            a.h_outflow ~ h,
+            b.h_outflow ~ h,
+        ]
+        System(eqs, t, [h], [k, tau]; systems = [a, b], name)
+    end
+    function Wrapper(; name)
+        @named pa = FluidPort()
+        @named pb = FluidPort()
+        @named inner = MixingPipe()
+        System([connect(pa, inner.a), connect(inner.b, pb)], t, [], []; systems = [pa, pb, inner], name)
+    end
+    @named src = Boundary(p0 = 2.0, h0 = 10.0)
+    @named wrap = Wrapper()
+    @named snk = Boundary(p0 = 1.0, h0 = 5.0)
+    @named fluid = System(
+        [connect(src.port, wrap.pa), connect(wrap.pb, snk.port)], t; systems = [src, wrap, snk]
+    )
+    sol = solve(SteadyStateProblem(mtkcompile(fluid), []), SSRootfind())
+    @test SciMLBase.successful_retcode(sol)
+    @test sol[wrap.inner.h] ≈ 10.0 atol = 1.0e-8
+    @test sol[wrap.inner.a.m_flow] ≈ 1.0 atol = 1.0e-8
+
+    # The dynamic system has `Initial(D(x))` parameters, here the array-valued `Initial(xˍt)`,
+    # which the time-independent residual system does not. They must not reach its
+    # initialization system.
+    @variables x(t)[1:2] = [1.0, 1.0] y(t) [guess = 0.5]
+    @parameters k = 2.0
+    @mtkcompile sys = System([D(x[1]) ~ 1 - k * x[1], D(x[2]) ~ x[1] - x[2], 0 ~ y^3 + y - x[2]], t)
+    prob = SteadyStateProblem(sys, [])
+    sol = solve(prob, SSRootfind())
+    @test SciMLBase.successful_retcode(sol)
+    @test sol[x] ≈ [0.5, 0.5] atol = 1.0e-8
+    @test sol[y]^3 + sol[y] ≈ 0.5 atol = 1.0e-8
+
+    # `Initial` values that the residual system does have are transferred: the conserved
+    # total is 3 from the initial values, so the steady state is X1 = 2, X2 = 1.
+    @variables X1(t) = 1.0 X2(t) = 2.0
+    @parameters k1 = 1.0 k2 = 2.0 Γ = Initial(X1) + Initial(X2)
+    @mtkcompile sys = System([D(X1) ~ -k1 * X1 + k2 * X2, 0 ~ X1 + X2 - Γ], t)
+    prob = SteadyStateProblem(sys, [])
+    sccprob = SciMLBase.NonlinearProblem(prob)
+    @test getp(sccprob, Γ)(sccprob) ≈ 3.0
+    sol = solve(prob, SSRootfind())
+    @test SciMLBase.successful_retcode(sol)
+    @test sol[X1] ≈ 2.0 atol = 1.0e-8
+    @test sol[X2] ≈ 1.0 atol = 1.0e-8
+    sol = solve(remake(prob; p = [k2 => 4.0]), SSRootfind())
+    @test SciMLBase.successful_retcode(sol)
+    @test sol[X1] ≈ 2.4 atol = 1.0e-8
+end
+
+@testset "Persistent `DiffCache` buffers coexist with SCC cache buffers in `p.caches`" begin
+    @variables u1 u2 u3 u4
+    @parameters a = 1.0
+    eqs = [
+        0 ~ u1^3 - 2u1 - a
+        0 ~ u2 - exp(u1)
+        0 ~ u3^2 + u3 - u2
+        0 ~ u4 - sin(u3) - u1
+    ]
+    @named sys = System(eqs, [u1, u2, u3, u4], [a])
+    sys, dcp = ModelingToolkitBase.add_diffcache(sys, 5)
+    sys = mtkcompile(sys)
+    prob = SCCNonlinearProblem(sys, [u1 => 1.0, u2 => 1.0, u3 => 1.0, u4 => 1.0])
+    ic = ModelingToolkit.get_index_cache(sys)
+    # the `DiffCache` buffer is the persistent prefix, SCC caches are appended after it
+    @test length(ic.caches_buffer_sizes) == 1
+    @test prob.p.caches[1] isa Vector{<:ModelingToolkitBase.DiffCacheAllocatorAPIWrapper}
+    @test length(prob.p.caches) > 1
+    @test prob.ps[dcp] isa ModelingToolkitBase.DiffCacheAllocatorAPIWrapper
+    sol = solve(prob, NewtonRaphson())
+    @test SciMLBase.successful_retcode(sol)
+    @test sol[u2] ≈ exp(sol[u1]) atol = 1.0e-8
+    @test sol[u3]^2 + sol[u3] ≈ sol[u2] atol = 1.0e-8
+    @test sol[u4] ≈ sin(sol[u3]) + sol[u1] atol = 1.0e-8
+end
+
+include("scc_zero_state_regression.jl")
+include("scc_array_cache_regression.jl")

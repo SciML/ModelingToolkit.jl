@@ -27,5 +27,5 @@ ModelingToolkitBase = {path = "../.."}
 
 [compat]
 SafeTestsets = "0.1, 1"
-SciMLTesting = "1, 2.1"
+SciMLTesting = "2.8"
 TaylorDiff = "0.3.5"

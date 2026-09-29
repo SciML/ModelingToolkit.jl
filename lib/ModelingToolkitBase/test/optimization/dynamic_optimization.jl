@@ -10,7 +10,7 @@ using Ipopt
 using DataInterpolations
 using DataInterpolations: ConstantInterpolation
 using CasADi
-# using Pyomo
+using Pyomo
 using Test
 
 import DiffEqBase: solve
@@ -851,4 +851,318 @@ end
     jprob_tf = JuMPDynamicOptProblem(sys_tf, [u0map; pmap_tf], (0.0, tf); steps = 101)
     jsol_tf = solve(jprob_tf, JuMPCollocation(Ipopt.Optimizer, ExplicitTableaus.RK4()))
     @test 2 * jsol_tf.sol[x][end] ≤ 0.8
+end
+
+struct UnsupportedTrajectoryBackend end
+
+@testset "Expression-valued initial trajectories" begin
+    @variables x(..) v(..)
+    @variables u(..) [bounds = (-1.0, 1.0), input = true]
+    constr = [v(1.0) ~ 0.0]
+    cost = [-x(1.0)]
+
+    @named block = System(
+        [D(x(t)) ~ v(t), D(v(t)) ~ u(t)], t; costs = cost, constraints = constr
+    )
+    block = mtkcompile(block; inputs = [u(t)])
+
+    u0map = [x(t) => 0.0, v(t) => 0.0]
+    tspan = (0.0, 1.0)
+    parammap = [u(t) => 0.0]
+
+    # Trajectories are symbolic expressions in the independent variable
+    traj = Dict(x(t) => 0.125 * t^2, v(t) => 0.25 * t)
+
+    iprob = InfiniteOptDynamicOptProblem(
+        block, [u0map; parammap], tspan; dt = 0.01,
+        initial_trajectory = traj
+    )
+    isol = solve(iprob, InfiniteOptCollocation(Ipopt.Optimizer))
+    @test ≈(isol.sol[x(t)][end], 0.25, rtol = 1.0e-3)
+
+    # Without trajectory should also work
+    iprob2 = InfiniteOptDynamicOptProblem(block, [u0map; parammap], tspan; dt = 0.01)
+    isol2 = solve(iprob2, InfiniteOptCollocation(Ipopt.Optimizer))
+    @test ≈(isol2.sol[x(t)][end], 0.25, rtol = 1.0e-3)
+
+    if ENABLE_CASADI
+        cprob = CasADiDynamicOptProblem(
+            block, [u0map; parammap], tspan; dt = 0.01,
+            initial_trajectory = traj
+        )
+        csol = solve(cprob, CasADiCollocation("ipopt"))
+        @test ≈(csol.sol[x(t)][end], 0.25, rtol = 1.0e-3)
+    end
+
+    # Backends without a `set_initial_trajectory!` method report it clearly
+    @test_throws ArgumentError M.set_initial_trajectory!(
+        UnsupportedTrajectoryBackend(), nothing, 1, identity
+    )
+
+    # Expressions are compiled to callables of the independent variable
+    p_test = iprob.p
+    fx = M.build_trajectory_function(block, x(t), 0.125 * t^2, p_test)
+    @test fx isa Function
+    @test fx(2.0) ≈ 0.5
+
+    # A constant expression is still a valid trajectory
+    fc = M.build_trajectory_function(block, x(t), 3.0, p_test)
+    @test fc isa Function
+    @test fc(2.0) == 3.0
+
+    # Callables are rejected: trajectories are symbolic-only for now
+    g = τ -> 7.0
+    @test_throws ArgumentError M.build_trajectory_function(block, x(t), g, p_test)
+
+    # Parameters stay symbolic and are read from the parameter object when the
+    # trajectory is evaluated
+    @parameters a
+    @named psys = System([D(x(t)) ~ a * v(t), D(v(t)) ~ 0.0], t)
+    psys = mtkcompile(psys)
+    oprob = ODEProblem(psys, [x(t) => 0.0, v(t) => 0.0, a => 4.0], tspan)
+    fp = M.build_trajectory_function(psys, x(t), a * t, oprob.p)
+    @test fp(2.0) ≈ 8.0
+
+    # Anything that does not reduce to time and parameters is reported
+    @parameters b
+    @test_throws ArgumentError M.build_trajectory_function(block, x(t), b * t, p_test)
+end
+
+@testset "Callable parameter registration" begin
+    # A parameter that is called in the equations (here an interpolator) must be
+    # registered as a solver nonlinear operator; without it the collocation
+    # backends cannot trace the RHS symbolically.
+    @parameters (forcing::LinearInterpolation)(..)
+    @variables x(t)
+
+    eqs = [D(x) ~ -x + forcing(t)]
+    @named sys = System(eqs, t)
+    sys = mtkcompile(sys)
+
+    # Constant extrapolation is required for the InfiniteOpt backend: MOI builds the
+    # Lagrangian Hessian by running ForwardDiff over the operator's gradient, which
+    # perturbs `t` past the last knot at the boundary collocation point.
+    interp = LinearInterpolation(
+        [1.0, 2.0, 1.5], [0.0, 0.5, 1.0];
+        extrapolation = ExtrapolationType.Constant
+    )
+
+    u0map = [x => 0.5]
+    pmap = [forcing => interp]
+    tspan = (0.0, 1.0)
+
+    # JuMP backend: direct collocation evaluates the callable at numeric time points.
+    jprob = JuMPDynamicOptProblem(sys, [u0map; pmap], tspan; dt = 0.05)
+    jsol = solve(jprob, JuMPCollocation(Ipopt.Optimizer, ImplicitTableaus.ImplicitEuler()))
+    @test all(isfinite, jsol.sol[x])
+    @test length(jsol.sol[x]) > 1
+
+    # InfiniteOpt backend: the callable is registered as a JuMP nonlinear operator and
+    # the equational constraints substitute it in symbolically (see register_operator!).
+    iprob = InfiniteOptDynamicOptProblem(sys, [u0map; pmap], tspan; dt = 0.05)
+    isol = solve(iprob, InfiniteOptCollocation(Ipopt.Optimizer))
+    @test isol.sol[x][end] > isol.sol[x][begin]
+end
+
+@testset "Residual scaling of dynamics constraints" begin
+    # Double integrator with nominal_values - should converge to same answer
+    @variables x(..) v(..)
+    @variables u(..) [bounds = (-1.0, 1.0), input = true]
+    constr = [v(1.0) ~ 0.0]
+    cost = [-x(1.0)]
+
+    @named block = System(
+        [D(x(t)) ~ v(t), D(v(t)) ~ u(t)], t; costs = cost, constraints = constr
+    )
+    block = mtkcompile(block; inputs = [u(t)])
+
+    u0map = [x(t) => 0.0, v(t) => 0.0]
+    tspan = (0.0, 1.0)
+    parammap = [u(t) => 0.0]
+
+    # With scaling
+    nominal_values = Dict(x(t) => 10.0, v(t) => 1.0)
+    iprob = InfiniteOptDynamicOptProblem(
+        block, [u0map; parammap], tspan; dt = 0.01,
+        nominal_values = nominal_values
+    )
+    isol = solve(iprob, InfiniteOptCollocation(Ipopt.Optimizer))
+    @test ≈(isol.sol[x(t)][end], 0.25, rtol = 1.0e-3)
+
+    # Without scaling - should also work
+    iprob2 = InfiniteOptDynamicOptProblem(block, [u0map; parammap], tspan; dt = 0.01)
+    isol2 = solve(iprob2, InfiniteOptCollocation(Ipopt.Optimizer))
+    @test ≈(isol2.sol[x(t)][end], 0.25, rtol = 1.0e-3)
+
+    # Nominal values kwarg passes through JuMP without error
+    jprob = JuMPDynamicOptProblem(
+        block, [u0map; parammap], tspan; dt = 0.01,
+        nominal_values = nominal_values
+    )
+    jsol = solve(jprob, JuMPCollocation(Ipopt.Optimizer, ExplicitTableaus.Verner8()))
+    @test ≈(jsol.sol[x(t)][end], 0.25, rtol = 1.0e-3)
+
+    if ENABLE_CASADI
+        cprob = CasADiDynamicOptProblem(
+            block, [u0map; parammap], tspan; dt = 0.01,
+            nominal_values = nominal_values
+        )
+        csol = solve(cprob, CasADiCollocation("ipopt", ExplicitTableaus.Verner8()))
+        @test ≈(csol.sol[x(t)][end], 0.25, rtol = 1.0e-3)
+    end
+
+    # Scaling a residual does not move the optimum, so the solves above pass with or
+    # without `nominal_values` and cannot tell whether the scale was applied at all. Assert
+    # directly that it reaches the dynamics constraint.
+    function dynamics_constraint_strings(nominal_values)
+        prob = InfiniteOptDynamicOptProblem(
+            block, [u0map; parammap], tspan; dt = 0.5, nominal_values = nominal_values
+        )
+        m = prob.wrapped_model.model
+        strs = String[]
+        for (F, S) in InfiniteOpt.list_of_constraint_types(m)
+            for c in InfiniteOpt.all_constraints(m, F, S)
+                push!(strs, string(InfiniteOpt.constraint_object(c).func))
+            end
+        end
+        return strs
+    end
+
+    unscaled = dynamics_constraint_strings(Dict())
+    rescaled = dynamics_constraint_strings(Dict(x(t) => 10.0))
+    @test length(unscaled) == length(rescaled)
+    # Only the constraint for `x` changes, and it picks up the 1/10 factor.
+    changed = [(a, b) for (a, b) in zip(unscaled, rescaled) if a != b]
+    @test length(changed) == 1
+    @test occursin("0.1", last(only(changed)))
+end
+
+@testset "Verbose flag propagation" begin
+    @variables x(..)
+    @variables u(..) [bounds = (-1.0, 1.0), input = true]
+    @named vsys = System([D(x(t)) ~ u(t)], t; costs = [EvalAt(1.0)(x(t))^2])
+    vsys = mtkcompile(vsys; inputs = [u(t)])
+    op = [x(t) => 1.0, u(t) => 0.0]
+
+    # The silent flag used to be applied before `set_optimizer`, which resets it:
+    # `verbose = false` solves still printed the full solver log. Assert the flag
+    # survives on the model that `optimize!` actually saw.
+    silent_flag(m) = InfiniteOpt.get_attribute(m, InfiniteOpt.MOI.Silent())
+    for (verbose, silent) in ((false, true), (true, false))
+        jprob = JuMPDynamicOptProblem(vsys, op, (0.0, 1.0); dt = 0.25)
+        solve(jprob, JuMPCollocation(Ipopt.Optimizer, ExplicitTableaus.Verner8()); verbose)
+        @test silent_flag(jprob.wrapped_model.model) == silent
+
+        iprob = InfiniteOptDynamicOptProblem(vsys, op, (0.0, 1.0); dt = 0.25)
+        solve(iprob, InfiniteOptCollocation(Ipopt.Optimizer); verbose)
+        @test silent_flag(iprob.wrapped_model.model) == silent
+    end
+end
+
+@testset "Observed variable bounds" begin
+    # Test that bounds on observed variables are enforced via auxiliary variables
+    @variables x(t) = 1.0
+    @variables obs_val(t) [bounds = (0.0, 2.0)]  # observed variable with bounds
+    @variables u(t) [input = true, bounds = (-10.0, 10.0)]
+
+    te = 1.0
+    costs = [EvalAt(te)(x)^2]
+
+    eqs = [
+        D(x) ~ -x + u,
+        obs_val ~ 2x,  # observed: obs_val = 2x, so x should stay in [0, 1]
+    ]
+
+    @named sys = System(eqs, t; costs)
+    sys = mtkcompile(sys; inputs = [u])
+
+    u0map = [x => 1.0]
+    pmap = [u => 0.0]
+    tspan = (0.0, te)
+
+    # InfiniteOpt should lift the observed bounds into auxiliary variables
+    iprob = InfiniteOptDynamicOptProblem(sys, [u0map; pmap], tspan; dt = 0.05)
+    isol = solve(iprob, InfiniteOptCollocation(Ipopt.Optimizer))
+
+    # obs_val = 2x should respect bounds [0, 2], so x ∈ [0, 1]
+    obs_values = 2 .* isol.sol[x]
+    @test all(v -> v ≥ -0.01, obs_values)  # allow small numerical tolerance
+    @test all(v -> v ≤ 2.01, obs_values)
+
+    # Test with user-provided bounds dict for observed variables
+    @variables x2(t) = 1.0
+    @variables obs2(t)
+    @variables u2(t) [input = true, bounds = (-10.0, 10.0)]
+
+    eqs2 = [
+        D(x2) ~ -x2 + u2,
+        obs2 ~ 3x2,
+    ]
+
+    costs2 = [EvalAt(te)(x2)^2]
+    @named sys2 = System(eqs2, t; costs = costs2)
+    sys2 = mtkcompile(sys2; inputs = [u2])
+
+    u0map2 = [x2 => 1.0]
+    pmap2 = [u2 => 0.0]
+
+    # Provide bounds for observed variable via user dict
+    user_bounds = Dict(obs2 => (0.0, 3.0))
+    iprob2 = InfiniteOptDynamicOptProblem(
+        sys2, [u0map2; pmap2], tspan; dt = 0.05,
+        bounds = user_bounds
+    )
+    isol2 = solve(iprob2, InfiniteOptCollocation(Ipopt.Optimizer))
+
+    obs2_values = 3 .* isol2.sol[x2]
+    @test all(v -> v ≥ -0.01, obs2_values)
+    @test all(v -> v ≤ 3.01, obs2_values)
+
+    # The cases above stay inside their bounds on their own, so they cannot tell an
+    # enforced bound from a silently dropped one. Here the bound binds: maximizing
+    # x(1) subject to ẋ = u, u ∈ [-1, 1], x(0) = 0 gives x(1) = 1 unconstrained, but
+    # obs = 2x ≤ 1 forces x(1) = 0.5.
+    @variables xb(t) = 0.0
+    @variables obb(t) [bounds = (0.0, 1.0)]
+    @variables ub(t) [input = true, bounds = (-1.0, 1.0)]
+    @named bsys = System([D(xb) ~ ub, obb ~ 2xb], t; costs = [-EvalAt(1.0)(xb)])
+    bsys = mtkcompile(bsys; inputs = [ub])
+    bop = [[xb => 0.0]; [ub => 0.0]]
+    btspan = (0.0, 1.0)
+
+    # Reference without the bound, to confirm it is what moves the answer.
+    @variables xf(t) = 0.0
+    @variables obf(t)
+    @variables uf(t) [input = true, bounds = (-1.0, 1.0)]
+    @named fsys = System([D(xf) ~ uf, obf ~ 2xf], t; costs = [-EvalAt(1.0)(xf)])
+    fsys = mtkcompile(fsys; inputs = [uf])
+    fprob = InfiniteOptDynamicOptProblem(
+        fsys, [[xf => 0.0]; [uf => 0.0]], btspan; dt = 0.01
+    )
+    fsol = solve(fprob, InfiniteOptCollocation(Ipopt.Optimizer))
+    @test ≈(fsol.sol[xf][end], 1.0, rtol = 1.0e-4)
+
+    for meth in (:auto, :lift, :constraint)
+        prob = InfiniteOptDynamicOptProblem(
+            bsys, bop, btspan; dt = 0.01, observed_bounds_method = meth
+        )
+        sol = solve(prob, InfiniteOptCollocation(Ipopt.Optimizer))
+        @test ≈(sol.sol[xb][end], 0.5, rtol = 1.0e-4)
+    end
+
+    if ENABLE_CASADI
+        # `:auto` falls back to `:constraint`, which every backend can do. Before this
+        # was wired up, observed bounds were silently dropped outside InfiniteOpt.
+        cprob = CasADiDynamicOptProblem(bsys, bop, btspan; dt = 0.01)
+        csol = solve(cprob, CasADiCollocation("ipopt"))
+        @test ≈(csol.sol[xb][end], 0.5, rtol = 1.0e-4)
+
+        @test_throws ArgumentError CasADiDynamicOptProblem(
+            bsys, bop, btspan; dt = 0.01, observed_bounds_method = :lift
+        )
+    end
+
+    @test_throws ArgumentError InfiniteOptDynamicOptProblem(
+        bsys, bop, btspan; dt = 0.01, observed_bounds_method = :bogus
+    )
 end

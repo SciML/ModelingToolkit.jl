@@ -11,6 +11,7 @@ using UnPack
 using Symbolics: unwrap
 import SymbolicUtils
 import NaNMath
+import FunctionWrappers
 const MTK = ModelingToolkitBase
 
 function __init__()
@@ -101,6 +102,10 @@ function MTK.generate_tunable_params!(m::InfiniteModel, p0, np)
     return @variable(m, P[i = 1:np], start = p0[i])
 end
 
+function MTK.set_initial_trajectory!(m::InfiniteModel, U, idx, traj)
+    return set_start_value(U[idx], traj)
+end
+
 function MTK.generate_timescale!(m::InfiniteModel, guess, is_free_t)
     @variable(m, tₛ ≥ 0, start = guess)
     if !is_free_t
@@ -109,6 +114,43 @@ function MTK.generate_timescale!(m::InfiniteModel, guess, is_free_t)
     end
     return tₛ
 end
+
+# Register a callable parameter as a JuMP nonlinear operator. `val` is the callable used for
+# values; `underlying` is what we look up a symbolic first-derivative rule for — the same object
+# for a bare callable, or the wrapped function for a `FunctionWrapper`. The rule is resolved
+# through Symbolics' registry, so any derivative registered for the callable's type (e.g. by a
+# DataInterpolations→Symbolics extension) is used without MTK depending on that package. When no
+# rule exists we register value-only and JuMP differentiates numerically.
+function _register_callable_operator!(m::InfiniteOptModel, dim, underlying, val, name)
+    # InfiniteOpt wants a ::Function; wrap non-Function callables (interpolators, wrappers).
+    f = val isa Function ? val : (x_args...) -> val(x_args...)
+    syms = ntuple(i -> Symbolics.variable(Symbol(:_arg, i)), dim)
+    d1 = Symbolics._derivative_rule_proxy(underlying, syms, Val(1))
+    isnothing(d1) && return add_nonlinear_operator(m.model, dim, f; name)
+
+    d1_unwrapped = unwrap(d1)
+    op = operation(d1_unwrapped)
+    args = arguments(d1_unwrapped)
+    # Identify which args are our symbolic variables vs constants
+    sym_positions = Dict(unwrap(s) => i for (i, s) in enumerate(syms))
+    arg_specs = map(args) do a
+        a_uw = unwrap(a)
+        idx = get(sym_positions, a_uw, nothing)
+        !isnothing(idx) ? (:var, idx) : (:const, SymbolicUtils.unwrap_const(a_uw))
+    end
+    ∇f = function (x_args...)
+        realized = map(arg_specs) do (kind, v)
+            kind === :var ? x_args[v] : v
+        end
+        return op(realized...)
+    end
+    return add_nonlinear_operator(m.model, dim, f, ∇f; name)
+end
+
+MTK.register_operator!(m::InfiniteOptModel, dim, val, name) =
+    _register_callable_operator!(m, dim, val, val, name)
+MTK.register_operator!(m::InfiniteOptModel, dim, val::FunctionWrappers.FunctionWrapper, name) =
+    _register_callable_operator!(m, dim, val.obj[], val, name)
 
 function MTK.add_constraint!(m::InfiniteOptModel, expr::Union{Equation, Inequality})
     return if expr isa Equation
@@ -121,8 +163,8 @@ function MTK.add_constraint!(m::InfiniteOptModel, expr::Union{Equation, Inequali
 end
 MTK.set_objective!(m::InfiniteOptModel, expr) = @objective(m.model, Min, SymbolicUtils.unwrap_const(expr))
 
-function MTK.set_variable_bounds!(m::InfiniteOptModel, sys, pmap, tf, tunable_params, user_bounds = Dict())
-    (; state_bounds, input_bounds, param_bounds, tf_bounds) = MTK.extract_variable_bounds(sys, pmap, tf, tunable_params, user_bounds)
+function MTK.set_variable_bounds!(m::InfiniteOptModel, sys, pmap, tspan, tunable_params, user_bounds = Dict())
+    (; state_bounds, input_bounds, param_bounds, tf_bounds) = MTK.extract_variable_bounds(sys, pmap, tspan, tunable_params, user_bounds)
     for (i, (lo, hi)) in state_bounds
         set_lower_bound(m.U[i], lo)
         set_upper_bound(m.U[i], hi)
@@ -141,18 +183,34 @@ function MTK.set_variable_bounds!(m::InfiniteOptModel, sys, pmap, tf, tunable_pa
     end
 end
 
+MTK.supports_bounds_lifting(::InfiniteOptModel) = true
+
+# Lift a bounded observed expression into an auxiliary bounded decision variable. Ipopt
+# handles variable bounds far more efficiently than the equivalent nonlinear inequalities.
+function MTK.lift_observed_bound!(m::InfiniteOptModel, expr, lo, hi, scale, start)
+    aux = @variable(m.model, variable_type = Infinite(m.model[:t]))
+    isfinite(lo) && set_lower_bound(aux, lo)
+    isfinite(hi) && set_upper_bound(aux, hi)
+    set_start_value_function(aux, Returns(start))
+    return @constraint(
+        m.model,
+        (SymbolicUtils.unwrap_const(Symbolics.value(expr)) - aux) / scale == 0
+    )
+end
+
 function MTK.JuMPDynamicOptProblem(
         sys::System, op, tspan;
         dt = nothing,
         steps = nothing,
         tune_parameters = false,
-        guesses = Dict(),
+        guesses = Dict(), initial_trajectory = Dict(),
+        nominal_values = Dict(),
         bounds = Dict(), kwargs...
     )
     prob,
-        _ = MTK.process_DynamicOptProblem(
+        _, _ = MTK.process_DynamicOptProblem(
         JuMPDynamicOptProblem, InfiniteOptModel, sys,
-        op, tspan; dt, steps, tune_parameters, guesses, bounds, kwargs...
+        op, tspan; dt, steps, tune_parameters, guesses, initial_trajectory, nominal_values, bounds, kwargs...
     )
     return prob
 end
@@ -162,15 +220,16 @@ function MTK.InfiniteOptDynamicOptProblem(
         dt = nothing,
         steps = nothing,
         tune_parameters = false,
-        guesses = Dict(),
+        guesses = Dict(), initial_trajectory = Dict(),
+        nominal_values = Dict(),
         bounds = Dict(), kwargs...
     )
     prob,
-        pmap = MTK.process_DynamicOptProblem(
+        pmap, nominal_values = MTK.process_DynamicOptProblem(
         InfiniteOptDynamicOptProblem, InfiniteOptModel,
-        sys, op, tspan; dt, steps, tune_parameters, guesses, bounds, kwargs...
+        sys, op, tspan; dt, steps, tune_parameters, guesses, initial_trajectory, nominal_values, bounds, kwargs...
     )
-    MTK.add_equational_constraints!(prob.wrapped_model, sys, pmap, tspan)
+    MTK.add_equational_constraints!(prob.wrapped_model, sys, pmap, tspan, nominal_values)
     return prob
 end
 
@@ -178,6 +237,7 @@ function MTK.lowered_integral(model::InfiniteOptModel, expr, lo, hi)
     return model.tₛ * InfiniteOpt.∫(SymbolicUtils.unwrap_const(expr), model.model[:t], lo, hi)
 end
 MTK.lowered_derivative(model::InfiniteOptModel, i) = ∂(model.U[i], model.model[:t])
+MTK.lowered_time_variable(model::InfiniteOptModel) = model.model[:t]
 
 function MTK.process_integral_bounds(model::InfiniteOptModel, integral_span, tspan)
     return if MTK.is_free_final(model) && isequal(integral_span, tspan)
@@ -191,7 +251,7 @@ end
 
 function MTK.add_initial_constraints!(m::InfiniteOptModel, u0, u0_idxs, ts)
     for i in u0_idxs
-        fix(m.U[i](0), u0[i], force = true)
+        fix(m.U[i](ts), u0[i], force = true)
     end
     return
 end
@@ -277,7 +337,6 @@ function MTK.prepare_and_optimize!(
         prob::JuMPDynamicOptProblem, solver::JuMPCollocation; verbose = false, kwargs...
     )
     model = prob.wrapped_model.model
-    verbose || set_silent(model)
     # Unregister current solver constraints
     for con in all_constraints(model)
         if occursin("solve", JuMP.name(con))
@@ -294,6 +353,11 @@ function MTK.prepare_and_optimize!(
     end
     add_solve_constraints!(prob, solver.tableau)
     set_optimizer(model, solver.solver)
+    # `set_optimizer` resets the backend, so the silent flag must be applied
+    # afterwards or it is discarded. `unset_silent` (rather than an
+    # optimizer-specific option such as Ipopt's `print_level`) keeps this
+    # working with any optimizer.
+    verbose ? unset_silent(model) : set_silent(model)
     optimize!(model)
     return model
 end
@@ -303,9 +367,13 @@ function MTK.prepare_and_optimize!(
         solver::InfiniteOptCollocation; verbose = false, kwargs...
     )
     model = prob.wrapped_model.model
-    verbose || set_silent(model)
     set_derivative_method(model[:t], solver.derivative_method)
     set_optimizer(model, solver.solver)
+    # `set_optimizer` resets the backend, so the silent flag must be applied
+    # afterwards or it is discarded. `unset_silent` (rather than an
+    # optimizer-specific option such as Ipopt's `print_level`) keeps this
+    # working with any optimizer.
+    verbose ? unset_silent(model) : set_silent(model)
     optimize!(model)
     return model
 end

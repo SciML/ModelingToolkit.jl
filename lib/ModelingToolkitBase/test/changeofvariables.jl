@@ -95,7 +95,9 @@ new_sol = solve(new_prob, common_alg)
 # test RHS
 if @isdefined(ModelingToolkit)
     new_rhs = [eq.rhs for eq in equations(new_sys)]
-    new_A = Symbolics.value.(Symbolics.jacobian(new_rhs, z))
+    # `z` is a lazy `ReshapedArray` view of a symbolic `Arr`; `collect` it so
+    # `jacobian` gets concrete scalar variables rather than a symbolic container.
+    new_A = Symbolics.value.(Symbolics.jacobian(new_rhs, collect(z)))
     A = diagm(eigen(A).values)
     A = sortslices(A, dims = 1)
     new_A = sortslices(new_A, dims = 1)

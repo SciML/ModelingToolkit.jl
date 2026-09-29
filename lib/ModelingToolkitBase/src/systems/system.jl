@@ -20,6 +20,11 @@ const MutableCacheT = Dict{DataType, Any}
     $TYPEDEF
 
 Utility metadata key for adding miscellaneous/one-off metadata to systems.
+
+```julia
+sys = setmetadata(sys, MiscSystemData, mydata)
+getmetadata(sys, MiscSystemData, nothing)
+```
 """
 abstract type MiscSystemData end
 
@@ -248,6 +253,13 @@ struct System <: IntermediateDeprecationSystem
     """
     tstops::Vector{Any}
     """
+    The `(t0, t1)` timespan of the system, or `nothing` if it does not have one. Time-dependent
+    problem constructors use it as the `tspan` when the caller does not pass one. Only the
+    timespan of the top-level system is used; those of subsystems are ignored.
+    """
+    tspan::Union{Nothing, Tuple}
+
+    """
     $INTERNAL_FIELD_WARNING
     The list of input variables of the system.
     """
@@ -359,7 +371,7 @@ struct System <: IntermediateDeprecationSystem
             brownians, poissonians, iv, observed, var_to_name, name, description, bindings,
             initial_conditions, guesses, systems, initialization_eqs, continuous_events,
             discrete_events, connector_type, assertions = Dict{SymbolicT, String}(),
-            metadata = MetadataT(), gui_metadata = nothing, is_dde = false, tstops = [],
+            metadata = MetadataT(), gui_metadata = nothing, is_dde = false, tstops = [], tspan = nothing,
             inputs = Set{SymbolicT}(), outputs = Set{SymbolicT}(),
             tearing_state = nothing, namespacing = true,
             complete = false, index_cache = nothing, parameter_bindings_graph = nothing,
@@ -427,7 +439,7 @@ struct System <: IntermediateDeprecationSystem
             observed, var_to_name, name, description, bindings, initial_conditions,
             guesses, systems, initialization_eqs, continuous_events, discrete_events,
             connector_type, assertions, metadata, gui_metadata, is_dde,
-            tstops, inputs, outputs, tearing_state, namespacing,
+            tstops, tspan, inputs, outputs, tearing_state, namespacing,
             complete, index_cache, parameter_bindings_graph, ignored_connections,
             preface, parent, initializesystem, is_initializesystem, is_discrete,
             state_priorities, irreducibles, maybe_zeros, irstructure_tlv,
@@ -495,14 +507,53 @@ Construct a system using the given equations `eqs`, independent variable `iv` (`
 for time-independent systems, unknowns `dvs`, parameters `ps` and brownian variables
 `brownians`.
 
-## Keyword Arguments
+This is the explicit form of the constructor: every unknown and parameter of the system
+must be listed. Use the `System(eqs, iv)` method to discover them from the equations
+instead.
 
+# Arguments
+
+- `eqs`: The equations of the system, as a `Vector{Equation}`. A single `Equation` is also
+  accepted.
+- `iv`: The independent variable of the system, or `nothing` for a time-independent system.
+- `dvs`: The unknowns of the system. When `iv` is given, entries that are delayed or
+  evaluated-at forms of a variable (such as `x(t - 1)` or `x(0)`) rather than functions of
+  `iv` itself are filtered out.
+- `ps`: The parameters of the system.
+- `brownians`: The brownian variables appearing in `eqs`, for systems written in brownian
+  form. Defaults to no brownian variables.
+
+# Keyword Arguments
+
+- `name`: The name of the system, as a `Symbol`. This has no default and must be provided;
+  a `NoNameError` is thrown otherwise. [`@named`](@ref) supplies it automatically.
+- `systems`: The subsystems of this system. Defaults to no subsystems.
 - `discover_from_metadata`: Whether to parse metadata of unknowns and parameters of the
   system to obtain bindings, initial conditions and/or guesses.
-- `checks`: Whether to perform sanity checks on the passed values.
+- `checks`: Whether to perform sanity checks on the passed values. Accepts `true`, `false`
+  or a bitmask combination of `CheckComponents` and `CheckUnits`.
 
 All other keyword arguments are named identically to the corresponding fields in
 [`System`](@ref).
+
+# Returns
+
+A [`System`](@ref) with the given equations, variables and metadata. The returned system is
+not marked complete: call [`mtkcompile`](@ref) or [`complete`](@ref) before building a
+problem from it.
+
+# Examples
+
+```julia
+using ModelingToolkit
+using ModelingToolkit: t_nounits as t, D_nounits as D
+
+@variables x(t) y(t)
+@parameters τ
+
+eqs = [D(x) ~ (y - x) / τ, y ~ 2x]
+sys = System(eqs, t, [x, y], [τ]; name = :explicit_sys)
+```
 """
 function System(
         eqs::Vector{Equation}, iv, dvs, ps, brownians = SymbolicT[];
@@ -510,7 +561,7 @@ function System(
         constraints = Union{Equation, Inequality}[], noise_eqs = nothing, jumps = JumpType[],
         costs = SymbolicT[], consolidate = default_consolidate,
         # `@nospecialize` is only supported on the first 32 arguments. Keep this early.
-        @nospecialize(preface = nothing), @nospecialize(tstops = []),
+        @nospecialize(preface = nothing), @nospecialize(tstops = []), @nospecialize(tspan = nothing),
         observed = Equation[], bindings = SymmapT(), initial_conditions = SymmapT(),
         guesses = SymmapT(), systems = System[], initialization_eqs = Equation[],
         continuous_events = SymbolicContinuousCallback[], discrete_events = SymbolicDiscreteCallback[],
@@ -705,7 +756,7 @@ function System(
         costs, consolidate, dvs, ps, brownians, poissonians, iv, observed,
         var_to_name, name, description, bindings, initial_conditions, guesses, systems, initialization_eqs,
         continuous_events, discrete_events, connector_type, assertions, metadata, gui_metadata, is_dde,
-        tstops, inputs, outputs, tearing_state, true, false,
+        tstops, tspan, inputs, outputs, tearing_state, true, false,
         nothing, nothing, ignored_connections, preface, parent,
         initializesystem, is_initializesystem, is_discrete, state_priorities, irreducibles,
         maybe_zeros, irstructure_tlv; checks
@@ -744,6 +795,35 @@ SymbolicIndexingInterface.getname(x::AbstractSystem) = nameof(x)
 
 Create a time-independent [`System`](@ref) with the given equations `eqs`, unknowns `dvs`
 and parameters `ps`.
+
+Equivalent to calling the explicit constructor with `iv = nothing`. Use this for
+systems that have no independent variable, such as nonlinear or optimization systems.
+
+# Arguments
+
+- `eqs`: The equations of the system, as a `Vector{Equation}`.
+- `dvs`: The unknowns of the system.
+- `ps`: The parameters of the system.
+
+# Keyword Arguments
+
+Identical to the explicit `System(eqs, iv, dvs, ps, brownians)` method. `name` is required.
+
+# Returns
+
+A time-independent [`System`](@ref). The returned system is not marked complete: call
+[`mtkcompile`](@ref) or [`complete`](@ref) before building a problem from it.
+
+# Examples
+
+```julia
+using ModelingToolkit
+
+@variables x y
+@parameters a b
+
+sys = System([0 ~ a * x + y, 0 ~ x - b * y], [x, y], [a, b]; name = :steady_sys)
+```
 """
 function System(eqs::Vector{Equation}, dvs, ps; kwargs...)
     return System(eqs, nothing, dvs, ps; kwargs...)
@@ -755,6 +835,44 @@ end
 Create a time-dependent system with the given equations `eqs` and independent variable `iv`.
 Discover variables, parameters and brownians in the system by parsing the equations and
 other symbolic expressions passed to the system.
+
+This is the constructor most models use: only the equations and the independent variable
+have to be given, and the unknowns and parameters are inferred from them. Pass the
+unknowns and parameters explicitly when the inferred sets are not the intended ones.
+
+Note that only variables reachable from the equations and the other symbolic keyword
+arguments are discovered. A variable that appears nowhere in them is not made an unknown
+of the system.
+
+# Arguments
+
+- `eqs`: The equations of the system, as a `Vector{Equation}`.
+- `iv`: The independent variable of the system. Passing `nothing` forwards to the
+  time-independent method.
+
+# Keyword Arguments
+
+Identical to the explicit `System(eqs, iv, dvs, ps, brownians)` method, except that `dvs`,
+`ps` and `brownians` are discovered rather than passed. `name` is required.
+
+# Returns
+
+A [`System`](@ref) whose unknowns and parameters are those discovered from `eqs`. The
+returned system is not marked complete: call [`mtkcompile`](@ref) or [`complete`](@ref)
+before building a problem from it.
+
+# Examples
+
+```julia
+using ModelingToolkit
+using ModelingToolkit: t_nounits as t, D_nounits as D
+
+@variables x(t) y(t)
+@parameters τ
+
+# `x`, `y` are discovered as unknowns and `τ` as a parameter
+sys = System([D(x) ~ (y - x) / τ, y ~ 2x], t; name = :discovered_sys)
+```
 """
 function System(eqs::Vector{Equation}, iv; kwargs...)
     iv === nothing && return System(eqs; kwargs...)
@@ -1119,7 +1237,7 @@ function flatten(sys::System, noeqs = false)
         guesses = guesses(sys),
         continuous_events = continuous_events(sys),
         discrete_events = discrete_events(sys), assertions = assertions(sys),
-        is_dde = is_dde(sys), tstops = symbolic_tstops(sys),
+        is_dde = is_dde(sys), tstops = symbolic_tstops(sys), tspan = get_tspan(sys),
         initialization_eqs = initialization_equations(sys),
         inputs = inputs(sys), outputs = outputs(sys),
         state_priorities = state_priorities(sys),
@@ -1234,11 +1352,12 @@ end
 
 Given a time-dependent system `sys` of ODEs, convert it to a time-independent system of
 nonlinear equations that solve for the steady-state of the unknowns. This is done by
-replacing every derivative `D(x)` of an unknown `x` with zero. Note that this process
-does not retain noise equations, brownian terms, jumps or costs associated with `sys`.
-All other information such as initial conditions, bindings, guesses, observed and
-initialization equations are retained. The independent variable of `sys` becomes a
-parameter of the returned system.
+replacing every derivative `D(x)` of an unknown `x` with zero. A derivative of a slice,
+`D(u[2:n-1])`, is expanded into the derivatives of its elements, which are unknowns
+themselves. Note that this process does not retain noise equations, brownian terms,
+jumps or costs associated with `sys`. All other information such as initial conditions,
+bindings, guesses, observed and initialization equations are retained. The independent
+variable of `sys` becomes a parameter of the returned system.
 
 If `sys` is hierarchical (it contains subsystems) this transformation will be applied
 recursively to all subsystems. The output system will be marked as `complete` if and only
@@ -1247,35 +1366,134 @@ if the input system is also `complete`. This also retains the `split` flag passe
 
 See also: [`complete`](@ref).
 """
-function NonlinearSystem(sys::System)
+function NonlinearSystem(sys::System; bind_iv::Bool = true)
     if !is_time_dependent(sys)
         throw(ArgumentError("`NonlinearSystem` constructor expects a time-dependent `System`"))
     end
-    eqs = equations(sys)
-    obs = observed(sys)
+    # `get_` accessors rather than the merging `equations`/`unknowns`/...: subsystems
+    # are recursively converted below, so their namespaced entries must not be folded
+    # into the parent's fields a second time. The rule keyspaces still use the merged
+    # accessors since the system's own equations can reference namespaced variables.
+    eqs = copy(get_eqs(sys))
+    obs = get_observed(sys)
     D = Differential(get_iv(sys))
-    subrules = Dict([D(x) => 0.0 for x in unknowns(sys)])
+    subrules = Dict{SymbolicT, SymbolicT}([D(x) => 0.0 for x in unknowns(sys)])
     for var in brownians(sys)
         subrules[var] = 0.0
     end
-    eqs = map(eqs) do eq
-        substitute(eq, subrules)
-    end
-    new_ps = [parameters(sys); get_iv(sys)]
-    if iscomplete(sys)
+    ir = IRStructure{VartypeT}()
+    subber = SU.IRSubstituter{false}(ir, subrules)
+    # Derivatives of the unknowns themselves are replaced as they are; a derivative of a
+    # slice is not one of them, so expand it and replace its elements.
+    map!(subber, eqs, eqs)
+    expand_array_derivatives!(eqs, ir)
+    map!(subber, eqs, eqs)
+    new_ps = collect(get_ps(sys))
+    filter!(__no_initial_params_pred, new_ps)
+    push!(new_ps, get_iv(sys))
+    # A complete system whose `parameter_bindings_graph` was invalidated (e.g. the
+    # `complete(sys; flatten = false)` snapshot `complete` records as the parent)
+    # still carries bound parameters in `ps`, so they are already included above.
+    if iscomplete(sys) && get_parameter_bindings_graph(sys) !== nothing
         append!(new_ps, collect(bound_parameters(sys)))
     end
+    # `iv => Inf` is only added at the top level; it propagates to subsystems as a
+    # domain binding, and a per-subsystem copy would collide when `bindings` merges.
+    sys_bindings = copy(parent(get_bindings(sys)))
+    # A variable binding is an initialization-time constraint, which a
+    # time-independent system cannot enforce; it is an initial-value default here.
+    new_ics = copy(get_initial_conditions(sys))
+    all_dvs = as_atomic_array_set(unknowns(sys))
+    union!(all_dvs, as_atomic_array_set(observables(sys)))
+    move_variable_bindings_to_ics!(all_dvs, new_ics, sys_bindings)
+    if bind_iv
+        sys_bindings = merge(sys_bindings, Dict(get_iv(sys) => Inf))
+    end
     nsys = System(
-        eqs, unknowns(sys), new_ps;
-        bindings = merge(bindings(sys), Dict(get_iv(sys) => Inf)),
-        initial_conditions = initial_conditions(sys), guesses = guesses(sys),
-        initialization_eqs = initialization_equations(sys), name = nameof(sys),
-        observed = obs, systems = map(NonlinearSystem, get_systems(sys))
+        eqs, get_unknowns(sys), new_ps;
+        bindings = sys_bindings,
+        initial_conditions = new_ics, guesses = get_guesses(sys),
+        initialization_eqs = steady_state_initialization_eqs(sys), name = nameof(sys),
+        observed = obs,
+        systems = map(s -> NonlinearSystem(s; bind_iv = false), get_systems(sys)),
+        # Unlike `flatten`, the hierarchy is retained, so connections are expanded after
+        # this conversion; that needs `connector_type` and `ignored_connections`.
+        connector_type = get_connector_type(sys),
+        ignored_connections = _maybe_copy(get_ignored_connections(sys)),
+        assertions = copy(get_assertions(sys)), inputs = copy(get_inputs(sys)),
+        outputs = copy(get_outputs(sys)), state_priorities = copy(get_state_priorities(sys)),
+        irreducibles = copy(get_irreducibles(sys)), maybe_zeros = copy(get_maybe_zeros(sys)),
+        metadata = get_metadata(sys), gui_metadata = get_gui_metadata(sys),
+        description = get_description(sys)
     )
     if iscomplete(sys)
         nsys = complete(nsys; split = is_split(sys))
     end
     return nsys
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Translate `initialization_equations(sys)` of a time-dependent system for the
+time-independent steady-state residual system. Bare unknowns and observables in
+initialization equations refer to values at the initial time, which are the
+`Initial` parameters of a time-independent system, so they are wrapped in
+`Initial`. Derivatives are identically zero at steady state, so `D(x)` - also
+inside `Initial` - is replaced by `0`.
+"""
+function steady_state_initialization_eqs(sys::System)
+    # `get_initialization_eqs` rather than `initialization_equations`: subsystems keep
+    # their own translated equations through the recursive conversion.
+    initeqs = copy(get_initialization_eqs(sys))
+    isempty(initeqs) && return initeqs
+    D = Differential(get_iv(sys))
+    subrules = Dict{SymbolicT, SymbolicT}()
+    for v in Iterators.flatten((unknowns(sys), observables(sys)))
+        subrules[D(v)] = Symbolics.COMMON_ZERO
+    end
+    for var in brownians(sys)
+        subrules[var] = Symbolics.COMMON_ZERO
+    end
+    heads = Set{SymbolicT}()
+    foreach(Base.Fix1(push!, heads) ∘ first ∘ split_indexed_var, unknowns(sys))
+    foreach(Base.Fix1(push!, heads) ∘ first ∘ split_indexed_var, observables(sys))
+    diff_heads = Set{SymbolicT}()
+    foreach(Iterators.flatten((unknowns(sys), observables(sys)))) do v
+        push!(diff_heads, split_indexed_var(D(v))[1])
+        push!(diff_heads, split_indexed_var(default_toterm(D(v)))[1])
+    end
+    ir = get_irstructure(sys)
+    expand_array_derivatives!(initeqs, ir)
+    ss_subber = SU.IRSubstituter{false}(ir, subrules)
+    map!(ss_subber, initeqs, initeqs)
+    vs_buffer = Set{SymbolicT}()
+    vs = SU.IRStructureSearchBuffer(ir, vs_buffer)
+    map!(initeqs, initeqs) do eq
+        empty!(vs)
+        SU.search_variables!(vs, eq; is_atomic = OperatorIsAtomic{Initial}())
+        rules = Dict{SymbolicT, SymbolicT}()
+        for v in vs
+            if isinitial(v)
+                # `Initial(D(x))` is stored as `Initial(xˍt)`; all derivatives are
+                # zero at steady state.
+                arg = split_indexed_var(only(arguments(split_indexed_var(v)[1])))[1]
+                if arg in diff_heads
+                    rules[v] = Symbolics.COMMON_ZERO
+                end
+            else
+                head = split_indexed_var(v)[1]
+                if head in diff_heads
+                    rules[v] = Symbolics.COMMON_ZERO
+                elseif head in heads
+                    rules[v] = Initial(v)
+                end
+            end
+        end
+        isempty(rules) ? eq : SU.IRSubstituter{false}(ir, rules)(eq)
+    end
+    # e.g. `D(x) ~ 0` collapses to a trivially true constant equation
+    return filter!(eq -> !_iszero(eq.lhs - eq.rhs), initeqs)
 end
 
 ########
@@ -1589,6 +1807,7 @@ function Base.isapprox(sysa::System, sysb::System)
         isequal(get_metadata(sysa), get_metadata(sysb)) &&
         isequal(get_is_dde(sysa), get_is_dde(sysb)) &&
         issetequal(get_tstops(sysa), get_tstops(sysb)) &&
+        isequal(get_tspan(sysa), get_tspan(sysb)) &&
         issetequal(get_inputs(sysa), get_inputs(sysb)) &&
         issetequal(get_outputs(sysa), get_outputs(sysb)) &&
         safe_issetequal(get_ignored_connections(sysa), get_ignored_connections(sysb)) &&
@@ -1603,6 +1822,8 @@ end
 _maybe_copy(x) = applicable(copy, x) ? copy(x) : x
 
 function Base.copy(sys::System)
+    ir_tlv = __new_irstructure_tlv()
+    ir_tlv[] = copy(get_irstructure(sys))
     return System(
         __get_new_tag(), copy(get_eqs(sys)), _maybe_copy(get_noise_eqs(sys)), copy(get_jumps(sys)),
         copy(get_constraints(sys)), copy(get_costs(sys)), get_consolidate(sys),
@@ -1613,13 +1834,13 @@ function Base.copy(sys::System)
         map(copy, get_systems(sys)), copy(get_initialization_eqs(sys)),
         copy(get_continuous_events(sys)), copy(get_discrete_events(sys)), get_connector_type(sys),
         copy(get_assertions(sys)), refreshed_metadata(get_metadata(sys)), get_gui_metadata(sys),
-        get_is_dde(sys), copy(get_tstops(sys)), copy(get_inputs(sys)), copy(get_outputs(sys)),
+        get_is_dde(sys), copy(get_tstops(sys)), get_tspan(sys), copy(get_inputs(sys)), copy(get_outputs(sys)),
         get_tearing_state(sys), does_namespacing(sys), false, get_index_cache(sys),
         get_parameter_bindings_graph(sys), _maybe_copy(get_ignored_connections(sys)),
         _maybe_copy(get_preface(sys)), _maybe_copy(get_parent(sys)),
         _maybe_copy(get_initializesystem(sys)), get_is_initializesystem(sys),
         get_is_discrete(sys), copy(get_state_priorities(sys)), copy(get_irreducibles(sys)),
-        copy(get_maybe_zeros(sys)),
+        copy(get_maybe_zeros(sys)), ir_tlv,
         copy(get_isscheduled(sys)), _maybe_copy(get_schedule(sys)); checks = false
     )
 end

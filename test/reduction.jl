@@ -1,6 +1,7 @@
 using ModelingToolkit, OrdinaryDiffEq, Test, NonlinearSolve, LinearAlgebra
 using BipartiteGraphs
 using Symbolics
+import ModelingToolkitBase
 using OrdinaryDiffEqRosenbrock
 using ModelingToolkit: topsort_equations, t_nounits as t, D_nounits as D, unwrap
 
@@ -266,7 +267,7 @@ sys = mtkcompile(sys0)
 eq = equations(tearing_substitution(sys))[1]
 vv = only(unknowns(sys))
 @test isequal(eq.lhs, D(vv))
-dvv = ModelingToolkit.value(ModelingToolkit.derivative(eq.rhs, vv))
+dvv = ModelingToolkit.value(Symbolics.derivative(eq.rhs, vv))
 @test dvv ≈ -60
 
 # Don't reduce inputs
@@ -293,7 +294,7 @@ eqs = [
 ]
 @named model = System(eqs, t)
 sys = mtkcompile(model)
-Js = ModelingToolkit.jacobian_sparsity(sys)
+Js = ModelingToolkitBase.jacobian_sparsity(sys)
 @test size(Js) == (3, 3)
 @test Js == Diagonal([0, 1, 1])
 

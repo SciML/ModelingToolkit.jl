@@ -7,6 +7,8 @@ using ModelingToolkitBase: SymbolicContinuousCallback,
     D_nounits as D,
     affects, affect_negs, system, observed, AffectSystem
 import DiffEqNoiseProcess
+using Symbolics
+using Symbolics: unwrap
 
 using StableRNGs
 import SciMLBase
@@ -24,6 +26,15 @@ end
 eqs = [D(x) ~ 1]
 affect = [x ~ 0]
 affect_neg = [x ~ 1]
+
+@testset "Symbolic event detection" begin
+    @named no_events = System([D(x) ~ 1], t)
+    @test !ModelingToolkitBase._has_symbolic_events(no_events)
+
+    @named child = System([D(x) ~ 1], t; continuous_events = [x ~ 1])
+    @named parent = System(Equation[], t; systems = [child])
+    @test ModelingToolkitBase._has_symbolic_events(parent)
+end
 
 @testset "SymbolicContinuousCallback constructors" begin
     e = SymbolicContinuousCallback(eqs[])
@@ -1519,6 +1530,49 @@ if @isdefined(ModelingToolkit)
         sol = solve(prob, FBDF())
         @test prob.ps[g] == sol.ps[g]
     end
+
+    @testset "Implicit affect solves at the ODE solver's tolerance" begin
+        # Terms of magnitude 1e7 floor the algebraic equation's residual at 1.2e-9 in
+        # Float64: above NonlinearSolve's default `abstol` of 3e-13 and below any
+        # tolerance an ODE solve would be run at. Solving the affect at the nonlinear
+        # default made this perfectly solvable callback throw.
+        @variables x(t) = 1.0 y(t) = 1.0 w(t) = 0.0
+        @discretes g(t) = 0.4785
+        eqs = [D(x) ~ 1.0, D(w) ~ 1.0, 0 ~ 1.0e7 * (y^2 - x) - g]
+        c_evt = SymbolicContinuousCallback(
+            [w ~ 0.5], [g ~ Pre(g) + 0.1, x ~ Pre(x), w ~ Pre(w)];
+            discrete_parameters = [g], iv = t
+        )
+        @mtkcompile sys = System(eqs, t, [x, y, w], [g]; continuous_events = c_evt)
+        prob = ODEProblem(sys, [], (0.0, 1.0); warn_initialize_determined = false)
+
+        sol = solve(prob, FBDF())
+        @test SciMLBase.successful_retcode(sol)
+        @test sol.ps[g] ≈ [0.4785, 0.5785]
+        # The state saved right after the affect is the affect's own solution, so it
+        # satisfies the algebraic equation to the tolerance the ODE is solved at.
+        i = findlast(tᵢ -> abs(tᵢ - 0.5) < 1.0e-9, sol.t)
+        @test abs(1.0e7 * (sol[y][i]^2 - sol[x][i]) - 0.5785) < 1.0e-6
+    end
+
+    @testset "`affect_tolerance` translates the integrator's tolerance values" begin
+        using ModelingToolkitBase: affect_tolerance
+        # `false` is what OrdinaryDiffEqCore stores for a tolerance that was not supplied
+        # under a discrete problem. `Bool <: Number`, so forwarding it would reach the
+        # nonlinear solve as a *zero* tolerance, which nothing can meet.
+        discrete_opts = (; opts = (; abstol = false, reltol = false))
+        @test affect_tolerance(discrete_opts, :abstol) === nothing
+        @test affect_tolerance(discrete_opts, :reltol) === nothing
+        # A scalar is used as given; a per-component array is reduced to its tightest
+        # entry, since the nonlinear solve compares a scalar norm against the tolerance.
+        @test affect_tolerance((; opts = (; abstol = 1.0e-8)), :abstol) == 1.0e-8
+        @test affect_tolerance((; opts = (; abstol = [1.0e-6, 1.0e-9])), :abstol) == 1.0e-9
+        @test affect_tolerance((; opts = (; abstol = Float64[])), :abstol) === nothing
+        # An `SSAIntegrator` has no tolerances at all: its `opts` is `(callback = ...,)`.
+        ssa_opts = (; opts = (; callback = nothing))
+        @test affect_tolerance(ssa_opts, :abstol) === nothing
+        @test affect_tolerance(ssa_opts, :reltol) === nothing
+    end
 end
 
 @testset "Array parameter updates of parent components in ImperativeEffect" begin
@@ -1940,4 +1994,94 @@ if !@isdefined(ModelingToolkit)
             @test sol[d] ≈ 1:10
         end
     end
+
+    vlk(v, i) = v[clamp(round(Int, i), 1, length(v))]
+    @register_symbolic vlk(v::AbstractVector, i::Real)
+
+    @testset "Issue#4870: Negative-edge affects are properly saved" begin
+        # Case 1 of the issue
+        gi = only(@discretes gi(t) = 1.0)
+        ps = @parameters begin
+            (up[1:3] = [1.0, 2.0, 1.0e6])
+            (dn[1:3] = [-1.0e6, 0.5, 1.5])
+        end
+        upv, dnv = ps
+        @variables y(t) = 0.0
+        eqs = [D(y) ~ ifelse(t < 6, 0.5, -0.5)]   # triangle: 0 -> 3 -> 0
+
+        cbu = SymbolicContinuousCallback([y ~ vlk(upv, gi)], [gi => min(gi + 1, 3)]; affect_neg = nothing)
+        cbd = SymbolicContinuousCallback([y ~ vlk(dnv, gi)], nothing; affect_neg = [gi => max(gi - 1, 1)])
+        @named sys = System(eqs, t, [y], [collect(Iterators.flatten(ps)); gi]; continuous_events = [cbu, cbd])
+        s = mtkcompile(sys)
+        sol = solve(ODEProblem(s, [], (0.0, 12.0)), Tsit5())
+        @test sol[gi] ≈ [1, 2, 3, 2, 1]
+    end
+end
+
+@testset "`ImperativeAffect` internals" begin
+    @variables x(t) y(t)
+    @parameters p
+    @named sys = System([D(x) ~ p * x, D(y) ~ x], t)
+    sys = complete(sys)
+
+    @testset "`search_variables!` descends into non-symbolic entries" begin
+        aff = ModelingToolkitBase.ImperativeAffect(
+            (m, o, c, i) -> m; observed = (; xy = [x, y])
+        )
+        vars = Set{ModelingToolkitBase.SymbolicT}()
+        SymbolicUtils.search_variables!(vars, aff)
+        @test isequal(vars, Set(unwrap.([x, y])))
+    end
+
+    @testset "duplicate observed aliases warn" begin
+        aff = ModelingToolkitBase.ImperativeAffect(
+            (m, o, c, i) -> m, [x, y], [:a, :a], [], Symbol[], nothing, false
+        )
+        @test_logs (:warn, r"is aliased as a") match_mode = :any ModelingToolkitBase.compile_functional_affect(
+            aff, sys
+        )
+    end
+
+    @testset "`Substituter` on an `AffectSystem`" begin
+        @parameters q
+        aff = ModelingToolkitBase.AffectSystem(
+            ModelingToolkitBase.SymbolicAffect([x ~ p]); iv = t, parent_sys = sys
+        )
+        subs = SymbolicUtils.Substituter{false}(
+            Dict(unwrap(p) => unwrap(q)), SymbolicUtils.default_substitute_filter
+        )
+        newaff = subs(aff)
+        @test isequal(only(observed(newaff.system)).rhs, unwrap(q))
+        @test isequal(parameters(newaff.system), [unwrap(q)])
+        @test isequal(newaff.parameters, [unwrap(q)])
+    end
+end
+
+@testset "Issue#5220: array-valued continuous event conditions saving discretes" begin
+    @variables x(t)[1:3]
+    @discretes s(t)[1:3]
+    flip = ModelingToolkitBase.ImperativeAffect(; modified = (; s)) do m, o, c, integ
+        (; s = -m.s)
+    end
+    up = SymbolicContinuousCallback(
+        [x .- [1.0, 2.0, 3.0] ~ zeros(3)], flip; affect_neg = nothing
+    )
+    down = SymbolicContinuousCallback(
+        [x .+ [1.0, 2.0, 3.0] ~ zeros(3)], nothing; affect_neg = flip
+    )
+    @mtkcompile sys = System(
+        [D(x) ~ [1.0, 1.0, -1.0]], t, [x], [s]; continuous_events = [up, down],
+        initial_conditions = [x => zeros(3), s => ones(3)]
+    )
+    prob = ODEProblem(sys, [], (0.0, 4.0))
+    vcb = get_callback(prob)
+    @test vcb.len == 6
+    @test length(vcb.saved_clock_partitions) == vcb.len
+    sol = solve(prob, Tsit5())
+    @test SciMLBase.successful_retcode(sol)
+    @test sol(0.5; idxs = s) ≈ ones(3)
+    @test sol(1.5; idxs = s) ≈ -ones(3)
+    @test sol(2.5; idxs = s) ≈ ones(3)
+    @test sol(3.5; idxs = s) ≈ -ones(3)
+    @test sol[s] ≈ [ones(3), -ones(3), ones(3), -ones(3)]
 end

@@ -193,5 +193,4 @@ connections = [r ~ sin(t)          # reference signal
 Sample
 Hold
 ShiftIndex
-Clock
 ```

@@ -151,6 +151,14 @@ Given a hierarchical system `sys` and a rule `lhs => rhs`, replace the subsystem
 obtained via `sys.inner.component`). The `rhs` must be valid as per the following
 conditions:
 
+# Arguments
+
+- `sys`: the system whose nested subsystem should be replaced.
+- `rule`: a pair `lhs => rhs`, where `lhs` is the namespaced subsystem to replace and
+  `rhs` is the unnamespaced replacement system.
+
+# Replacement Rules
+
 1. `rhs` must not be namespaced.
 2. The name of `rhs` must be the same as the unnamespaced name of `lhs`.
 3. Neither one of `lhs` or `rhs` can be marked as complete.
@@ -165,6 +173,29 @@ conditions:
    be a connector of the same type.
 
 `sys` also cannot be marked as complete.
+
+# Returns
+
+A new system with the selected subsystem replaced and connection equations rebuilt.
+
+# Examples
+
+```julia
+using ModelingToolkit
+using ModelingToolkit: t_nounits as t, D_nounits as D
+
+function Block(k; name)
+    @variables x(t) = 0
+    @parameters p = k
+    System([D(x) ~ -p * x], t; name)
+end
+
+@named old_block = Block(1)
+@named new_block = Block(2)
+@named sys = System(Equation[], t; systems = [old_block])
+
+updated = substitute_component(sys, sys.old_block => new_block)
+```
 """
 function substitute_component(sys::T, rule::Pair{T, T}) where {T <: AbstractSystem}
     iscomplete(sys) &&

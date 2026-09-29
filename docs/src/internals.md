@@ -20,3 +20,14 @@ These components work together to enable ModelingToolkit's symbolic manipulation
 - Bindings, initial conditions and guesses are stored as `AtomicArrayDict`. This is a custom wrapper which only
   supports symbolic keys, and disallows keys which are indexed array variables.
 - Keys of parameter bindings cannot be present in `get_ps(sys)`.
+
+## Precompile workloads
+
+The precompile workload in ModelingToolkit and the ones in its OrdinaryDiffEq extensions
+build and solve the same two small models, so that `mtkcompile`, `ODEProblem` construction,
+initialization and the solver paths are all cached for one shape of generated problem.
+
+```@docs
+ModelingToolkit.precompile_ode_problem
+ModelingToolkit.precompile_dae_problem
+```

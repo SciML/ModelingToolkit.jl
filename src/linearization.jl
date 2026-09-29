@@ -1,23 +1,37 @@
 """
-    $(TYPEDEF)
+    LinearizationOpPoint(sol, t; op = Dict()) -> LinearizationOpPoint
 
-Wraps an `ODESolution` and a time point (or vector of time points) `t`. When passed as
-`op` to [`linearize`](@ref), an operating point is constructed from the values of
-differential state variables and parameters of `sol` evaluated at `t`. Algebraic
-variables are not set and will be determined by the initialization algorithm.
+Wrap an `ODESolution` and one or more time points as an operating point for
+[`linearize`](@ref). The operating point contains the values of differential state variables
+and parameters in `sol` at `t`; initialization determines any algebraic variables.
 
 When `t` is an `AbstractVector`, [`linearize`](@ref) calls [`linearization_function`](@ref)
 once and evaluates the linearization at each time point, returning vectors of matrices and
 extras.
 
-The `op` keyword argument provides additional operating-point values that are merged into
-the solution-derived operating point at every time point (taking precedence). This is how
-values for variables that are not present in `sol` are supplied — in particular the
-parameters created by `loop_openings`. Values may be numbers, e.g.
-`LinearizationOpPoint(sol, t; op = Dict(opened_signal => 0))`, or symbolic expressions,
-which are evaluated from the solution at each time point. Mapping an opened signal to the
-expression that drives it, e.g. `op = Dict(opened_signal => driving_signal)`, thus
-linearizes around the value the opened signal has in the loop-closed solution.
+# Arguments
+
+- `sol::SciMLBase.AbstractODESolution`: Solution supplying state and parameter values.
+- `t`: A time point or vector of time points at which to evaluate `sol`.
+
+# Keywords
+
+- `op::AbstractDict = Dict()`: Additional operating-point values that override values from
+  `sol`, such as parameters introduced by `loop_openings`. Values may be numbers or symbolic
+  expressions; the latter are evaluated from `sol` at each time point. Mapping an opened
+  signal to the expression that drives it, e.g. `Dict(opened_signal => driving_signal)`,
+  linearizes around the value the opened signal has in the loop-closed solution.
+
+# Returns
+
+- `LinearizationOpPoint`: An operating-point specification accepted by `linearize`.
+
+# Examples
+
+```julia
+op = LinearizationOpPoint(sol, [0.0, 1.0]; op = Dict(opened_signal => 0.0))
+matrices, simplified_sys, extras = linearize(sys, inputs, outputs; op)
+```
 
 # Fields
 
@@ -56,7 +70,8 @@ end
 # the `LinearizationProblem` inside the per-point loop would read state values that are
 # only refreshed by initialization inside `solve`, i.e. those of the previous time point.
 function _is_symbolic_op_value(v)
-    return !SU.isconst(unwrap(v))
+    v = unwrap(v)
+    return !SU.isconst(v) && (symbolic_type(v) != NotSymbolic() || is_array_of_symbolics(v))
 end
 
 function _build_op_from_solution(op::LinearizationOpPoint)
@@ -93,10 +108,10 @@ function _build_op_from_solution(op::LinearizationOpPoint{S, <:AbstractVector}) 
     # Split the extra op into constant entries and symbolic entries; the latter are
     # evaluated from the solution, once per entry for all time points.
     extra_const = Dict{SymbolicT, SymbolicT}()
-    extra_resolved = Pair{SymbolicT, eltype(eltype(sol.u))}[]
+    extra_resolved = Pair{SymbolicT, Vector{eltype(eltype(op.sol.u))}}[]
     for (k, v) in op.op
         if _is_symbolic_op_value(v)
-            push!(extra_resolved, unwrap(k) => op.sol(op.t; idxs = v))
+            push!(extra_resolved, unwrap(k) => collect(op.sol(op.t; idxs = v)))
         else
             extra_const[unwrap(k)] = v
         end
@@ -142,7 +157,7 @@ y &= h(x, z, u)
 
 where `x` are differential unknown variables, `z` algebraic variables, `u` inputs and `y` outputs. To obtain a linear statespace representation, see [`linearize`](@ref). The input argument `variables` is a vector defining the operating point, corresponding to `unknowns(simplified_sys)` and `p` is a vector corresponding to the parameters of `simplified_sys`. Note: all variables in `inputs` have been converted to parameters in `simplified_sys`.
 
-The `simplified_sys` has undergone [`mtkcompile`](@ref) and had any occurring input or output variables replaced with the variables provided in arguments `inputs` and `outputs`. The unknowns of this system also indicate the order of the unknowns that holds for the linearized matrices.
+The `simplified_sys` has undergone [`ModelingToolkitBase.mtkcompile`](@ref) and had any occurring input or output variables replaced with the variables provided in arguments `inputs` and `outputs`. The unknowns of this system also indicate the order of the unknowns that holds for the linearized matrices.
 
 # Arguments:
 
@@ -166,7 +181,7 @@ function linearization_function(
         initialization_abstol = 1.0e-5,
         initialization_reltol = 1.0e-3,
         op = Dict{SymbolicT, SymbolicT}(),
-        p = DiffEqBase.NullParameters(),
+        p = SciMLBase.NullParameters(),
         zero_dummy_der = false,
         initialization_solver_alg = nothing,
         autodiff = AutoForwardDiff(),
@@ -271,7 +286,13 @@ function linearization_function(
 
     if u0 === nothing
         uf_jac = h_jac = pf_jac = nothing
-        Tp = promote_type(p isa MTKParameters ? eltype(p.tunable) : eltype(p), typeof(t0))
+        parameter_eltype = if p isa Union{MTKParameters, SciMLBase.DespecializedParameters}
+            tunables, _, _ = SciMLStructures.canonicalize(SciMLStructures.Tunable(), p)
+            eltype(tunables)
+        else
+            eltype(p)
+        end
+        Tp = promote_type(parameter_eltype, typeof(t0))
         hp_jac = PreparedJacobian{true}(
             hp_fun, zeros(Tp, size(outputs)), autodiff, inputvals,
             cu0T, cp, DI.Constant(t0)
@@ -625,9 +646,19 @@ SciMLBase.get_tmp_cache(integ::MockIntegrator) = integ.cache
 """
     $(TYPEDEF)
 
-A struct representing a linearization operation to be performed. Can be symbolically
-indexed to efficiently update the operating point for multiple linearizations in a loop.
-The value of the independent variable can be set by mutating the `.t` field of this struct.
+A problem for repeatedly linearizing a ModelingToolkit system at changing operating points.
+
+Use [`LinearizationProblem`](@ref) with a system, inputs, and outputs to construct a
+problem. It supports symbolic indexing, allowing selected state and parameter values to be
+updated efficiently between calls to [`CommonSolve.solve`](@ref). Mutate `t` to evaluate
+the linearization at a different value of the system's independent variable.
+
+# Fields
+
+- `f::F`: The generated linearization function that evaluates the system and stores its
+  symbolic-indexing data.
+- `t::T`: The current value of the system's independent variable. This field may be mutated
+  between calls to [`CommonSolve.solve`](@ref).
 """
 mutable struct LinearizationProblem{F <: LinearizationFunction, T}
     """
@@ -646,14 +677,39 @@ end
 """
     $(TYPEDSIGNATURES)
 
-Construct a `LinearizationProblem` for linearizing the system `sys` with the given
-`inputs` and `outputs`.
+Construct a [`LinearizationProblem`](@ref) for numerically linearizing `sys` between the
+selected inputs and outputs. Reuse the returned problem when evaluating multiple operating
+points by updating values through symbolic indexing and, when needed, its `t` field.
 
-# Keyword arguments
+# Arguments
 
-- `t`: The value of the independent variable
+- `sys::AbstractSystem`: The ModelingToolkit system to linearize.
+- `inputs`: A variable or collection of variables treated as inputs of the linearized
+  input-output model.
+- `outputs`: A variable or collection of variables treated as outputs of the linearized
+  input-output model.
 
-All other keyword arguments are forwarded to `linearization_function`.
+# Keywords
+
+- `t = 0.0`: The initial value of the system's independent variable.
+- `kwargs`: Keyword arguments forwarded to [`linearization_function`](@ref), including
+  `op` for the operating point and options controlling compilation and initialization.
+
+# Returns
+
+A [`LinearizationProblem`](@ref) that can be passed to [`CommonSolve.solve`](@ref).
+
+# Examples
+
+```julia
+using ModelingToolkit
+using ModelingToolkit: t_nounits as t, D_nounits as D
+
+@variables x(t) = 1.0 u(t) = 0.0
+@named sys = System([D(x) ~ -x + u], t)
+
+LinearizationProblem(sys, [u], [x]; op = Dict(x => 1.0, u => 0.0))
+```
 """
 function LinearizationProblem(sys::AbstractSystem, inputs, outputs; t = 0.0, kwargs...)
     linfun, _ = linearization_function(sys, inputs, outputs; kwargs...)
@@ -684,6 +740,49 @@ function Base.getproperty(prob::LinearizationProblem, x::Symbol)
     return getfield(prob, x)
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Numerically linearize `prob` at its current operating point.
+
+# Arguments
+
+- `prob`: A [`LinearizationProblem`](@ref) constructed from a ModelingToolkit system,
+  selected input variables, output variables, and an operating point.
+
+# Keywords
+
+- `allow_input_derivatives`: Whether to allow differentiated inputs in algebraic
+  equations. When `true`, the returned `B` and `D` matrices include additional columns
+  for those differentiated inputs.
+
+# Returns
+
+A pair `(matrices, operating_point)`. `matrices` is a `NamedTuple` containing the
+state-space matrices `A`, `B`, `C`, and `D`. `operating_point` is a `NamedTuple`
+containing the state vector `x`, parameter values `p`, and independent-variable value
+`t` used for the linearization.
+
+# Throws
+
+- `ErrorException`: If the current operating point cannot be initialized, if the algebraic
+  Jacobian `g_z` is singular (indicating an index-greater-than-one DAE), or if input
+  derivatives occur while `allow_input_derivatives` is `false`.
+
+# Examples
+
+```julia
+using CommonSolve, ModelingToolkit
+using ModelingToolkit: t_nounits as t, D_nounits as D
+
+@variables x(t) = 1.0 u(t) = 0.0
+@named sys = System([D(x) ~ -x + u], t)
+prob = LinearizationProblem(sys, [u], [x]; op = Dict(x => 1.0, u => 0.0))
+
+matrices, operating_point = solve(prob)
+matrices.A == [-1.0;;]
+```
+"""
 function CommonSolve.solve(prob::LinearizationProblem; allow_input_derivatives = false)
     u0 = state_values(prob)
     p = parameter_values(prob)
@@ -734,14 +833,42 @@ function CommonSolve.solve(prob::LinearizationProblem; allow_input_derivatives =
 end
 
 """
-    (; A, B, C, D), simplified_sys = linearize_symbolic(sys::AbstractSystem, inputs, outputs; simplify = false, allow_input_derivatives = false, kwargs...)
+    matrices, simplified_sys = linearize_symbolic(sys::AbstractSystem, inputs, outputs;
+        simplify = false,
+        allow_input_derivatives = false,
+        eval_expression = false,
+        eval_module = @__MODULE__,
+        split = true,
+        kwargs...)
 
-Similar to [`linearize`](@ref), but returns symbolic matrices `A,B,C,D` rather than numeric. While `linearize` uses ForwardDiff to perform the linearization, this function uses `Symbolics.jacobian`.
+Symbolically linearize `sys` between `inputs` and `outputs`.
 
-See [`linearize`](@ref) for a description of the arguments.
+Unlike [`linearize`](@ref), this uses `Symbolics.jacobian` and returns symbolic
+matrices instead of numerical matrices evaluated at an operating point.
 
-# Extended help
-The named tuple returned as the first argument additionally contains the jacobians `f_x, f_z, g_x, g_z, f_u, g_u, h_x, h_z, h_u` of
+# Arguments
+
+- `sys`: the system to linearize. This function calls [`ModelingToolkitBase.mtkcompile`](@ref) internally.
+- `inputs`: input variables used as the columns of the `B` and `D` matrices.
+- `outputs`: output variables used as the rows of the `C` and `D` matrices.
+
+# Keyword Arguments
+
+- `simplify`: whether to run additional symbolic simplification during compilation.
+- `allow_input_derivatives`: whether differentiated inputs may appear in the
+  linearized equations. If `true`, `B` and `D` include extra columns for those derivatives.
+- `eval_expression`: whether generated expressions are evaluated directly instead of
+  using runtime-generated functions.
+- `eval_module`: the module used when `eval_expression = true`.
+- `split`: whether generated functions use a tuple of parameters or splatted parameters.
+- `kwargs...`: additional keyword arguments forwarded to [`ModelingToolkitBase.mtkcompile`](@ref).
+
+# Returns
+
+A pair `(matrices, simplified_sys)`. `matrices` is a `NamedTuple` containing `A`,
+`B`, `C`, and `D`, plus the symbolic Jacobian blocks `f_x`, `f_z`, `g_x`, `g_z`,
+`f_u`, `g_u`, `h_x`, `h_z`, and `h_u` of
+
 ```math
 \\begin{aligned}
 ẋ &= f(x, z, u) \\\\
@@ -749,7 +876,27 @@ ẋ &= f(x, z, u) \\\\
 y &= h(x, z, u)
 \\end{aligned}
 ```
-where `x` are differential unknown variables, `z` algebraic variables, `u` inputs and `y` outputs.
+
+Here `x` are differential unknowns, `z` are algebraic unknowns, `u` are inputs,
+and `y` are outputs.
+
+# Examples
+
+```julia
+using ModelingToolkit
+using ModelingToolkit: t_nounits as t, D_nounits as D
+
+@variables x(t) = 1.0 u(t) = 0.0 y(t) = 0.0
+eqs = [D(x) ~ -x + u,
+       y ~ x]
+@named sys = System(eqs, t)
+
+matrices, simplified_sys = ModelingToolkit.linearize_symbolic(sys, [u], [y])
+matrices.A
+```
+
+See also [`linearize`](@ref), [`linearization_function`](@ref), and
+[`reorder_unknowns`](@ref).
 """
 function linearize_symbolic(
         sys::AbstractSystem, inputs,
@@ -984,7 +1131,7 @@ lsys_sym, _ = ModelingToolkit.linearize_symbolic(cl, [f.u], [p.x])
 function linearize(
         sys, lin_fun::LinearizationFunction; t = 0.0,
         op = Dict(), allow_input_derivatives = false,
-        p = DiffEqBase.NullParameters()
+        p = SciMLBase.NullParameters()
     )
     if op isa LinearizationOpPoint && op.t isa AbstractVector
         ops = _build_op_from_solution(op)
@@ -1142,7 +1289,21 @@ end
 """
     (; Ã, B̃, C̃, D̃) = similarity_transform(sys, T; unitary=false)
 
-Perform a similarity transform `T : Tx̃ = x` on linear system represented by matrices in NamedTuple `sys` such that
+Transform the state coordinates of a linear state-space model.
+
+# Arguments
+
+- `sys`: a `NamedTuple` with matrices `A`, `B`, `C`, and `D`, as returned by
+  [`linearize`](@ref) or [`linearize_symbolic`](@ref).
+- `T`: the coordinate transformation matrix where `T * x̃ = x`.
+
+# Keyword Arguments
+
+- `unitary`: if `true`, use the adjoint `T'` instead of factoring and solving with `T`.
+
+# Returns
+
+A `NamedTuple` `(; A, B, C, D)` containing
 
 ```
 Ã = T⁻¹AT
@@ -1151,7 +1312,15 @@ C̃ = CT
 D̃ = D
 ```
 
-If `unitary=true`, `T` is assumed unitary and the matrix adjoint is used instead of the inverse.
+# Examples
+
+```julia
+sys = (; A = [-1.0 0.0; 0.0 -2.0], B = [1.0; 0.0;;],
+       C = [0.0 1.0], D = zeros(1, 1))
+T = [0.0 1.0; 1.0 0.0]
+
+transformed = ModelingToolkit.similarity_transform(sys, T; unitary = true)
+```
 """
 function similarity_transform(sys::NamedTuple, T; unitary = false)
     if unitary
@@ -1170,16 +1339,28 @@ end
 """
     reorder_unknowns(sys::NamedTuple, old, new)
 
-Permute the state representation of `sys` obtained from [`linearize`](@ref) so that the state unknown is changed from `old` to `new`
-Example:
+Permute the state ordering of a linearized system.
 
-```
+# Arguments
+
+- `sys`: a `NamedTuple` with matrices `A`, `B`, `C`, and `D`, as returned by
+  [`linearize`](@ref) or [`linearize_symbolic`](@ref).
+- `old`: the current state order, typically `unknowns(simplified_sys)`.
+- `new`: the desired state order. It must contain the same entries as `old`.
+
+# Returns
+
+A `NamedTuple` `(; A, B, C, D)` whose state-space matrices use the order `new`.
+
+# Examples
+
+```julia
 lsys, ssys = linearize(pid, [reference.u, measurement.u], [ctr_output.u])
 desired_order = [int.x, der.x] # Unknowns that are present in unknowns(ssys)
 lsys = ModelingToolkit.reorder_unknowns(lsys, unknowns(ssys), desired_order)
 ```
 
-See also [`ModelingToolkit.similarity_transform`](@ref)
+See also [`similarity_transform`](@ref).
 """
 function reorder_unknowns(sys::NamedTuple, old, new)
     nx = length(old)

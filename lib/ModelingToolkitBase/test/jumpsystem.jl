@@ -1678,3 +1678,22 @@ end
         k, [X => 3], [X => -3, Y => 1]; scale_rates = true
     )
 end
+
+@testset "Implicit affect on an SSA integrator" begin
+    @parameters d
+    @variables A(t) B(t) Bobs(t)
+
+    # `A ~ Pre(A) / 2` is not mass-action so it stays a callback affect, and it does not
+    # write `B`, leaving the appended observed equation algebraic: hence an `ImplicitAffect`.
+    j = ConstantRateJump(d * A, [A ~ Pre(A) / 2])
+    @named js = JumpSystem([j], t, [A, B], [d], observed = [Bobs ~ 2 * B])
+    js = complete(js)
+    jprob = JumpProblem(
+        js, [A => 100.0, B => 3.0, d => 1.0], (0.0, 10.0); aggregator = Direct(), rng
+    )
+
+    sol = solve(jprob, SSAStepper())
+    @test SciMLBase.successful_retcode(sol)
+    @test sol[A][end] < sol[A][1]
+    @test all(sol[Bobs] .≈ 2 .* sol[B])
+end

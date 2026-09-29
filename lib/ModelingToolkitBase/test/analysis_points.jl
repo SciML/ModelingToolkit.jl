@@ -332,7 +332,7 @@ if @isdefined(ModelingToolkit)
         end
         @named nlP = NonlinPlant()
         @named nlC = NonlinCtrl()
-        nleqs = [connect(nlP.y, :nly, nlC.u), connect(nlC.y, :nlu, nlP.u)]
+        nleqs = [connect(nlP.y, :plant_output, nlC.u), connect(nlC.y, :ctrl_output, nlP.u)]
         @named nlsys = System(nleqs, t; systems = [nlP, nlC])
         ncsys = complete(nlsys)
         nlprob = ODEProblem(mtkcompile(nlsys), [], (0.0, 5.0))
@@ -342,7 +342,7 @@ if @isdefined(ModelingToolkit)
 
         # Trajectory path: per-point values match the loop-closed solution.
         mats_sym, lsys_sym, _ = linearize(
-            nlsys, :nlu, :nly; loop_openings = [:nly],
+            nlsys, :ctrl_output, :plant_output; loop_openings = [:plant_output],
             op = ModelingToolkit.LinearizationOpPoint(nlsol, nlts; op = sym_op)
         )
         iC = findfirst(v -> occursin("nlC₊x", string(v)), unknowns(lsys_sym))
@@ -353,14 +353,14 @@ if @isdefined(ModelingToolkit)
 
         # Scalar path agrees.
         mats_1, _, _ = linearize(
-            nlsys, :nlu, :nly; loop_openings = [:nly],
+            nlsys, :ctrl_output, :plant_output; loop_openings = [:plant_output],
             op = ModelingToolkit.LinearizationOpPoint(nlsol, 2.5; op = sym_op)
         )
         @test mats_1.A[iC, iC] ≈ -(1 + nlsol(2.5, idxs = ncsys.nlP.y)^2) rtol = 1.0e-6
 
         # `missing` passes through the trajectory path without error.
         mats_miss, _, _ = linearize(
-            nlsys, :nlu, :nly; loop_openings = [:nly],
+            nlsys, :ctrl_output, :plant_output; loop_openings = [:plant_output],
             op = ModelingToolkit.LinearizationOpPoint(nlsol, nlts; op = Dict(ncsys.nlC.u => missing))
         )
         @test length(mats_miss) == length(nlts)
@@ -1271,7 +1271,7 @@ if @isdefined(ModelingToolkit)
         import ModelingToolkitTearing as MTKTearing
         @testset "Clock information inferred from removed sections is retained" begin
             # The model is such that the clocks of variables in `Middle` and `End` are
-            # only inferrable from the `Sample`s in `Provider`. Since `Provider` and `End`
+            # only inferable from the `Sample`s in `Provider`. Since `Provider` and `End`
             # are removed by `isolate_subsystem`, ordinarily this would infer `Provider`'s
             # variables as continuous. This is incorrect, and clock information from
             # the full system should be used to ensure correct clock propagation in the
