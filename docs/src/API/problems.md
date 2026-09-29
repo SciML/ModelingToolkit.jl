@@ -147,6 +147,10 @@ LinearizationProblem
 ModelingToolkit.LinearizationOpPoint
 linearize
 ModelingToolkit.linearize_symbolic
+linearize_hybrid
+HybridLinearization
+ClockPartitionLinearization
+clock_boundary
 ```
 
 There are also utilities for manipulating the results of these analyses in a symbolic context.

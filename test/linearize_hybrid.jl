@@ -285,10 +285,14 @@ end
     @testset "Requested values of the state" begin
         @variables xo(t) uo(t) yo(t)
         @named syso = System([D(xo) ~ -xo + uo, yo ~ 2xo], t)
-        # An operating point that also fixes the output consistently retains the state.
-        hl = @test_nowarn linearize_hybrid(syso, [uo], [yo]; op = Dict(xo => 1.0, yo => 2.0, uo => 0.0))
+        # An operating point that also fixes the output makes the initialization
+        # overdetermined, which is reported; a consistent value retains the state.
+        hl = @test_logs (:warn, r"overdetermined") match_mode = :any linearize_hybrid(
+            syso, [uo], [yo]; op = Dict(xo => 1.0, yo => 2.0, uo => 0.0)
+        )
         p = hl.partitions[1]
         @test p.x0 == [1.0]
+        @test_nowarn linearize_hybrid(syso, [uo], [yo]; op = Dict(xo => 1.0, uo => 0.0))
         # When the initialization moves a differential unknown away from its requested
         # value, the warning names the unknown and both values.
         pop = Dict{ModelingToolkit.SymbolicT, Any}(unwrap(xo) => 1.0)
