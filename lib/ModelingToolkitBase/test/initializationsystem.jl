@@ -2615,3 +2615,22 @@ end
         @test SciMLBase.successful_retcode(sol)
     end
 end
+
+@testset "Inputs represented by time-independent parameters" begin
+    @variables x(t) = 1.0
+    @parameters u = 2.0
+    @named sys = System([D(x) ~ -x + u], t; inputs = [u])
+    sys = complete(sys)
+    @test isequal(only(ModelingToolkitBase.inputs(sys)), ModelingToolkitBase.unwrap(u))
+    prob = ODEProblem(sys, [], (0.0, 1.0))
+    @test prob[x] == 1.0
+    @test prob.ps[u] == 2.0
+    sol = solve(prob, Tsit5())
+    @test SciMLBase.successful_retcode(sol)
+    # With an initialization equation that involves the input
+    @variables z(t)
+    @named sys2 = System([D(z) ~ -z + u], t; inputs = [u], initialization_eqs = [z ~ 2u])
+    sys2 = complete(sys2)
+    prob2 = ODEProblem(sys2, [], (0.0, 1.0))
+    @test prob2[z] ≈ 4.0
+end
