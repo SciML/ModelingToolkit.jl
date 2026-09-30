@@ -396,6 +396,13 @@ struct Baz <: AbstractFoo end
 foofn(x) = 4
 @register_symbolic foofn(x::AbstractFoo)
 
+abstract type AbstractMedium end
+struct Medium <: AbstractMedium
+    k::Float64
+end
+medium_gain(m::AbstractMedium, x) = m.k * x
+@register_symbolic medium_gain(m::AbstractMedium, x)
+
 @testset "`respecialize`" begin
     @parameters p::AbstractFoo q[1:2]::AbstractFoo r
     @discretes p2(t)::AbstractFoo
@@ -461,19 +468,13 @@ foofn(x) = 4
 
     # Re-supplying a pre-respecialize parameter symbol in the operating point must
     # remap to the respecialized parameter (equal to the default or a new value).
-    abstract type AbstractMedium end
-    struct Medium <: AbstractMedium
-        k::Float64
-    end
-    gain(m::AbstractMedium, x) = m.k * x
-    @register_symbolic gain(m::AbstractMedium, x)
     MED = Medium(2.0)
     MED2 = Medium(3.0)
     @variables vx vy vz
     @parameters md::AbstractMedium = MED
     nlsys = mtkcompile(
         System(
-            [0 ~ gain(md, vx) - 4.0, 0 ~ vy^2 - vx, 0 ~ vz - gain(md, vy)],
+            [0 ~ medium_gain(md, vx) - 4.0, 0 ~ vy^2 - vx, 0 ~ vz - medium_gain(md, vy)],
             [vx, vy, vz], [md]; name = :respec_op
         )
     )
