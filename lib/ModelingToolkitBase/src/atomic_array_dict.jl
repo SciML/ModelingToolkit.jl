@@ -163,13 +163,15 @@ end
 
 Equivalent to `get(dd, k, default)`. If `k` is an indexed array, then return
 `dd[arr][idxs...]` for the corresponding array `arr` and indices, or `default`
-if `arr` does not exist.
+if `arr` does not exist. If `k` is indexed with non-constant (symbolic) indices,
+return `default` so callers such as substitution leave the term unevaluated.
 """
 function get_possibly_indexed(dd::AtomicArrayDict, k::SymbolicT, default)
     arr, isarr = split_indexed_var(k)
     res = get(dd, arr, default)
     isarr || return res
     res === default && return default
+    has_const_int_indices(k) || return default
     idx = get_stable_index(k)
     return res[idx]
 end
