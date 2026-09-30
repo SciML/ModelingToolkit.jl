@@ -1,5 +1,5 @@
 using ModelingToolkitBase, OrdinaryDiffEq, DataInterpolations, DynamicQuantities, Test
-using LinearAlgebra, Symbolics
+using LinearAlgebra, Symbolics, NonlinearSolve
 using ModelingToolkitStandardLibrary.Blocks: RealInput, RealOutput
 using Symbolics: value
 using SymbolicUtils: symtype, _iszero
@@ -458,6 +458,37 @@ foofn(x) = 4
 
     @parameters foo::AbstractFoo
     @test_throws ["does not exist"] respecialize(sys, [foo => Bar()])
+
+    # Re-supplying a pre-respecialize parameter symbol in the operating point must
+    # remap to the respecialized parameter (equal to the default or a new value).
+    abstract type AbstractMedium end
+    struct Medium <: AbstractMedium
+        k::Float64
+    end
+    gain(m::AbstractMedium, x) = m.k * x
+    @register_symbolic gain(m::AbstractMedium, x)
+    MED = Medium(2.0)
+    MED2 = Medium(3.0)
+    @variables vx vy vz
+    @parameters md::AbstractMedium = MED
+    nlsys = mtkcompile(
+        System(
+            [0 ~ gain(md, vx) - 4.0, 0 ~ vy^2 - vx, 0 ~ vz - gain(md, vy)],
+            [vx, vy, vz], [md]; name = :respec_op
+        )
+    )
+    nlsys_r = respecialize(nlsys)
+    prob_default = NonlinearProblem(nlsys_r, [vx => 1.0, vy => 1.0, vz => 1.0])
+    @test length(prob_default.p.nonnumeric) == 1
+    @test only(prob_default.p.nonnumeric[1]) == MED
+    prob_same = NonlinearProblem(
+        nlsys_r, [vx => 1.0, vy => 1.0, vz => 1.0, md => MED]
+    )
+    @test only(prob_same.p.nonnumeric[1]) == MED
+    prob_new = NonlinearProblem(
+        nlsys_r, [vx => 1.0, vy => 1.0, vz => 1.0, md => MED2]
+    )
+    @test only(prob_new.p.nonnumeric[1]) == MED2
 end
 
 @testset "`truncate_constant_floats`" begin
