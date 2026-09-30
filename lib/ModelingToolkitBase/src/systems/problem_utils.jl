@@ -76,37 +76,55 @@ end
 """
     $(TYPEDSIGNATURES)
 
-Turn any `Symbol` keys in `varmap` to the appropriate symbolic variables in `sys`. Any
-symbols that cannot be converted are ignored.
+Turn any `Symbol` keys in `varmap` to the appropriate symbolic variables in `sys`. Also
+remaps symbolic keys that share a name with a system symbol but are not identical to it
+(for example a pre-`respecialize` parameter left in an operating point). Keys that cannot
+be resolved are left unchanged.
 """
 function symbols_to_symbolics!(sys::AbstractSystem, varmap::AbstractDict)
-    return if is_split(sys)
+    if is_split(sys)
         ic = get_index_cache(sys)
         for k in collect(keys(varmap))
-            k isa Symbol || continue
-            newk = get(ic.symbol_to_variable, k, nothing)
+            newk = resolve_operating_point_key(ic.symbol_to_variable, k)
             newk === nothing && continue
-            varmap[newk] = varmap[k]
-            delete!(varmap, k)
+            remap_operating_point_key!(varmap, k, newk)
         end
     else
-        syms = all_symbols(sys)
+        name_to_sym = Dict{Symbol, SymbolicT}()
+        for sym in all_symbols(sys)
+            hasname(sym) || continue
+            s = sym
+            if iscall(s) && operation(s) === getindex
+                s = arguments(s)[1]
+            end
+            name_to_sym[getname(sym)] = s
+        end
         for k in collect(keys(varmap))
-            k isa Symbol || continue
-            idx = findfirst(syms) do sym
-                hasname(sym) || return false
-                name = getname(sym)
-                return name == k
-            end
-            idx === nothing && continue
-            newk = syms[idx]
-            if iscall(newk) && operation(newk) === getindex
-                newk = arguments(newk)[1]
-            end
-            varmap[newk] = varmap[k]
-            delete!(varmap, k)
+            newk = resolve_operating_point_key(name_to_sym, k)
+            newk === nothing && continue
+            remap_operating_point_key!(varmap, k, newk)
         end
     end
+    return
+end
+
+function resolve_operating_point_key(name_to_sym::AbstractDict, k::Symbol)
+    return get(name_to_sym, k, nothing)
+end
+
+function resolve_operating_point_key(name_to_sym::AbstractDict, k)
+    symbolic_type(k) === NotSymbolic() && return nothing
+    hasname(k) || return nothing
+    return get(name_to_sym, getname(k), nothing)
+end
+
+function remap_operating_point_key!(varmap::AbstractDict, k, newk)
+    if !(k isa Symbol) && isequal(unwrap(k), unwrap(newk))
+        return
+    end
+    varmap[newk] = varmap[k]
+    delete!(varmap, k)
+    return
 end
 
 """
