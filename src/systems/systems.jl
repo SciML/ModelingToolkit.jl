@@ -3,7 +3,7 @@ function MTKBase.__mtkcompile(
         inputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
         outputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
         disturbance_inputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
-        sort_eqs = true,
+        sort_eqs = true, initial_point = nothing,
         kwargs...
     )
     sys, statemachines = extract_top_level_statemachines(sys)
@@ -11,6 +11,9 @@ function MTKBase.__mtkcompile(
     sys = MTKBase.discover_maybe_zeros(sys)
     sys, source_info = MTKBase.apply_limited_lowering(sys, source_info)
     state = TearingState(sys, source_info; sort_eqs, defer_scalarization = true)
+    if initial_point !== nothing
+        state.initial_point[] = MTKTearing.initial_point_substituter(state.sys; initial_point)
+    end
     append!(state.statemachines, statemachines)
 
     @unpack structure, fullvars = state
@@ -70,7 +73,8 @@ function MTKBase.__mtkcompile(
         ]
         # Analytically eliminating `D(x) = 0` causes problems for SDEs
         ode_sys = mtkcompile(
-            sys; inputs, outputs, disturbance_inputs, eliminate_mm_zeros = false, kwargs...
+            sys; inputs, outputs, disturbance_inputs, eliminate_mm_zeros = false,
+            initial_point, kwargs...
         )
         eqs = equations(ode_sys)
         sorted_g_rows = fill(COMMON_ZERO, length(eqs), size(g, 2))

@@ -300,7 +300,7 @@ ModelingToolkit.VariableIrreducible
 
 ## State Priority
 
-When a model is structurally simplified, the algorithm will try to ensure that the variables with higher state priority become states of the system. A variable's state priority is a number set using the `state_priority` metadata.
+When a model is structurally simplified, the algorithm will try to ensure that the variables with higher state priority become states of the system. A variable's state priority is a number set using the `state_priority` metadata. A choice of states that is singular at the initial point of the system (as given by `initial_conditions`, `tspan` and the `initial_point` keyword of `mtkcompile`) is not taken even if it has the highest priority; see the index reduction section of the `mtkcompile` internals documentation for details.
 
 ```@example metadata
 @variables important_dof [state_priority = 10] unimportant_dof [state_priority = -2]
