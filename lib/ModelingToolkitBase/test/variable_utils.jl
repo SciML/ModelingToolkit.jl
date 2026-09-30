@@ -263,6 +263,25 @@ end
     end
 end
 
+@testset "get_possibly_indexed leaves symbolic indices unsubstituted" begin
+    t = ModelingToolkitBase.t_nounits
+    @variables a(t)[1:3]
+    @parameters i::Int
+    au = value(a)
+    iu = unwrap(i)
+    dd = ModelingToolkitBase.AtomicArrayDict{ModelingToolkitBase.SymbolicT}()
+    ModelingToolkitBase.write_possibly_indexed_array!(
+        dd, au, ModelingToolkitBase.COMMON_FALSE, ModelingToolkitBase.COMMON_NOTHING
+    )
+    indexed = au[iu]
+    @test !ModelingToolkitBase.has_const_int_indices(indexed)
+    @test ModelingToolkitBase.get_possibly_indexed(
+        dd, indexed, ModelingToolkitBase.COMMON_NOTHING
+    ) === ModelingToolkitBase.COMMON_NOTHING
+    wrapper = ModelingToolkitBase.AtomicArrayDictSubstitutionWrapper(dd)
+    @test isequal(get(wrapper, indexed, ModelingToolkitBase.COMMON_FALSE), indexed)
+end
+
 @testset "`shift2term` on an already-shifted array variable" begin
     @independent_variables tt
     @variables arr(tt)[1:2]
