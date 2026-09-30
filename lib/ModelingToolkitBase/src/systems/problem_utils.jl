@@ -1381,16 +1381,23 @@ Given `sys` and its corresponding initialization system `initsys`, return the
 """
 function construct_initializeprobpmap(
         sys::AbstractSystem, initsys::AbstractSystem; p_constructor = identity, eval_expression, eval_module,
-        kwargs...
+        despecialize = false, kwargs...
     )
     @assert is_initializesystem(initsys)
     if is_split(sys)
-        return InitializeprobParameterMap(
-            MTKParametersReconstructor(
-                initsys, sys; initials = true, unwrap_initials = true, p_constructor,
-                eval_expression, eval_module, kwargs...
-            )
+        getter = MTKParametersReconstructor(
+            initsys, sys; initials = true, unwrap_initials = true, p_constructor,
+            eval_expression, eval_module, despecialize, kwargs...
         )
+        if despecialize
+            return InitializeprobParameterMap(getter)
+        else
+            return let getter = getter
+                function initprobpmap_split(prob, initsol)
+                    return getter(initsol, prob)
+                end
+            end
+        end
     else
         return let getter = concrete_getu(
                 initsys, parameters(sys; initial_parameters = true);
