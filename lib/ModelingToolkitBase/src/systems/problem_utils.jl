@@ -1015,6 +1015,7 @@ function CopyParamsByTemplate(srcsys::AbstractSystem, syms::AbstractArray{Symbol
             _bufidx[2]:_bufidx[2]
         elseif _bufidx isa Tuple{Vararg{Int}} # indexing into a non-tunable array parameter
             push!(template, symidx)
+            push!(elem_types, typeof(symidx))
             continue
         else
             # Will error due to the typeassert on `bufidx`
