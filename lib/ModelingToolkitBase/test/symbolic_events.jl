@@ -2181,13 +2181,14 @@ end
     @test all(t -> minimum(s -> abs(s - t), sol_p.t) < 1.0e-10, 0.5:0.5:2)
     @test any(t -> isapprox(t, 1.0; atol = 1.0e-10), sol_p.t)
 
-    # Periodic tick with no affect.
+    # Periodic tick with no affect: ticks at 0.5, 1.0, 1.5 (and possibly endpoints via save_positions).
     cb_per = SymbolicDiscreteCallback(0.5, nothing)
     @named sys_per = System(eqs, t, [x, y], [k]; discrete_events = [cb_per])
     sys_per = mtkcompile(sys_per)
     sol_per = solve(ODEProblem(sys_per, [x => 1.0], (0.0, 2.0)), FBDF())
     @test SciMLBase.successful_retcode(sol_per)
     @test sol_per.t[end] ≈ 2.0
+    @test all(t -> minimum(s -> abs(s - t), sol_per.t) < 1.0e-8, 0.5:0.5:1.5)
 
     # Boolean discrete condition with no affect.
     cb_cond = SymbolicDiscreteCallback(x < 0.3, nothing)
