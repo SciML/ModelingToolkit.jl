@@ -2763,8 +2763,9 @@ function __process_SciMLProblem(
     end
 
     # `maybe_build_initialization_problem` fills unset `xˍt` entries of `op` with
-    # initialization guesses. `du0` is built from the user's operating point, so
-    # propagated guesses cannot take precedence over user-supplied guesses.
+    # guesses and initialization values. `du0` starts from the user's operating
+    # point so that user-supplied derivative guesses take precedence over those;
+    # the remaining slots are filled from `op` afterwards.
     du0_op = implicit_dae && build_initializeprob ? copy(op) : nothing
 
     if build_initializeprob
@@ -2892,6 +2893,11 @@ function __process_SciMLProblem(
                     write_possibly_indexed_array!(du0_op, ttk, sv, COMMON_NOTHING)
                 end
             end
+        end
+        for ddv in ddvs
+            get_possibly_indexed(du0_op, ddv, COMMON_NOTHING) === COMMON_NOTHING || continue
+            v = get_possibly_indexed(op, ddv, COMMON_NOTHING)
+            v === COMMON_NOTHING || write_possibly_indexed_array!(du0_op, ddv, v, COMMON_NOTHING)
         end
         # When the initialization problem is built, omitted derivative values are
         # solved for rather than erroring; zero is a neutral starting guess. Without
