@@ -1,12 +1,5 @@
 # https://github.com/SciML/SciMLSensitivity.jl/issues/1582
-# Lives under the parent ModelingToolkit Extensions group (`@mtktestset`): the
-# mass-matrix RHS needs full MTK `mtkcompile`, which ModelingToolkitBase refuses.
-# Imports mirror the context `ad.jl` provided when this testset lived there.
-#
-# Buffer is taken from `p` inside the Zygote closure (as in #4905's verification
-# table: `replace(Initials, p, p.initials)`), not closed over from `p0` outside.
-# That is what #4905 meant to test — the Initials cotangent survives an
-# `MTKParameters` rebuild (see that PR's body / commit that added this testset).
+# Needs full ModelingToolkit `mtkcompile` for the mass-matrix RHS.
 using ModelingToolkit
 using ModelingToolkit: t_nounits as t, D_nounits as D
 using Zygote
