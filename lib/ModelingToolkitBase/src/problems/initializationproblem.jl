@@ -549,9 +549,10 @@ function parameter_equation_to_residual(eq::Equation)
             """
             Cannot enforce non-numeric parameter equation `$eq` during initialization \
             because symbolic subtraction is not defined for this type. Parameter \
-            `$pname` cannot be supplied this way in the operating point. If it was \
-            respecialized, omit it from the operating point to use its default, or \
-            pass the value using the respecialized parameter itself.
+            `$pname` cannot be supplied this way in the operating point. Remove it \
+            from the operating point to use the default, or look the parameter up by \
+            name in `parameters(sys)` and use that symbol as the key (property access \
+            such as `sys.$pname` may still return a pre-respecialize symbol).
             """
         )
     )

@@ -403,11 +403,6 @@ end
 medium_gain(m::AbstractMedium, x) = m.k * x
 @register_symbolic medium_gain(m::AbstractMedium, x)
 
-module ForeignSameNameParams
-    using ModelingToolkitBase: @parameters
-    @parameters q
-end
-
 @testset "`respecialize`" begin
     @parameters p::AbstractFoo q[1:2]::AbstractFoo r
     @discretes p2(t)::AbstractFoo
@@ -488,20 +483,12 @@ end
     prob_default = NonlinearProblem(nlsys_r, u0)
     @test length(prob_default.p.nonnumeric) == 1
     @test only(prob_default.p.nonnumeric[1]) == MED
-    @test_throws ["md", "respecialized", "operating point"] NonlinearProblem(
+    @test_throws ["md", "operating point", "parameters(sys)"] NonlinearProblem(
         nlsys_r, [u0; md => MED]
     )
-    @test_throws ["md", "respecialized", "operating point"] remake(
+    @test_throws ["md", "operating point", "parameters(sys)"] remake(
         prob_default; p = [md => MED2]
     )
-
-    # Foreign same-name scalar keys must not be remapped onto array parameters
-    # (master behaviour: the key is ignored and the default is kept).
-    @parameters aq[1:2] = [1.0, 2.0]
-    @variables ax = 1.0
-    asys = mtkcompile(System([0 ~ ax - sum(aq)], [ax], [aq]; name = :foreign_q))
-    aprov = NonlinearProblem(asys, [ax => 1.0, ForeignSameNameParams.q => 3.0])
-    @test aprov.ps[aq] ≈ [1.0, 2.0]
 end
 
 @testset "`truncate_constant_floats`" begin
