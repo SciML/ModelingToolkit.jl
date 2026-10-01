@@ -76,55 +76,81 @@ end
 """
     $(TYPEDSIGNATURES)
 
-Turn any `Symbol` keys in `varmap` to the appropriate symbolic variables in `sys`. Also
-remaps symbolic keys that share a name with a system symbol but are not identical to it
-(for example a pre-`respecialize` parameter left in an operating point). Keys that cannot
-be resolved are left unchanged.
+Turn any `Symbol` keys in `varmap` to the appropriate symbolic variables in `sys`. Any
+symbols that cannot be converted are ignored.
 """
 function symbols_to_symbolics!(sys::AbstractSystem, varmap::AbstractDict)
-    if is_split(sys)
+    return if is_split(sys)
         ic = get_index_cache(sys)
         for k in collect(keys(varmap))
-            newk = resolve_operating_point_key(ic.symbol_to_variable, k)
+            k isa Symbol || continue
+            newk = get(ic.symbol_to_variable, k, nothing)
             newk === nothing && continue
-            remap_operating_point_key!(varmap, k, newk)
+            varmap[newk] = varmap[k]
+            delete!(varmap, k)
         end
     else
-        name_to_sym = Dict{Symbol, SymbolicT}()
-        for sym in all_symbols(sys)
-            hasname(sym) || continue
-            s = sym
-            if iscall(s) && operation(s) === getindex
-                s = arguments(s)[1]
-            end
-            name_to_sym[getname(sym)] = s
-        end
+        syms = all_symbols(sys)
         for k in collect(keys(varmap))
-            newk = resolve_operating_point_key(name_to_sym, k)
-            newk === nothing && continue
-            remap_operating_point_key!(varmap, k, newk)
+            k isa Symbol || continue
+            idx = findfirst(syms) do sym
+                hasname(sym) || return false
+                name = getname(sym)
+                return name == k
+            end
+            idx === nothing && continue
+            newk = syms[idx]
+            if iscall(newk) && operation(newk) === getindex
+                newk = arguments(newk)[1]
+            end
+            varmap[newk] = varmap[k]
+            delete!(varmap, k)
         end
     end
-    return
 end
 
-function resolve_operating_point_key(name_to_sym::AbstractDict, k::Symbol)
-    return get(name_to_sym, k, nothing)
-end
+"""
+    $(TYPEDSIGNATURES)
 
-function resolve_operating_point_key(name_to_sym::AbstractDict, k)
-    symbolic_type(k) === NotSymbolic() && return nothing
-    hasname(k) || return nothing
-    return get(name_to_sym, getname(k), nothing)
-end
-
-function remap_operating_point_key!(varmap::AbstractDict, k, newk)
-    if !(k isa Symbol) && isequal(unwrap(k), unwrap(newk))
-        return
+Remap operating-point keys that are stale bare parameters left over from before
+[`respecialize`](@ref): same name as exactly one system parameter, not themselves a
+system variable/parameter, and a different `symtype` (the signature of respecialize).
+Indexed keys (`r[1]`), calls (`Initial(x)`, `x(t)`), and same-symtype collisions are
+left untouched.
+"""
+function remap_stale_respecialize_op_keys!(sys::AbstractSystem, varmap::AbstractDict)
+    for k in collect(keys(varmap))
+        newk = matching_respecialized_parameter(sys, k)
+        newk === nothing && continue
+        varmap[newk] = varmap[k]
+        delete!(varmap, k)
     end
-    varmap[newk] = varmap[k]
-    delete!(varmap, k)
     return
+end
+
+function matching_respecialized_parameter(sys::AbstractSystem, k)
+    symbolic_type(k) === NotSymbolic() && return nothing
+    k = unwrap(k)
+    # Bare symbols only — not `r[1]`, `Initial(x)`, `x(t)`, etc.
+    iscall(k) && return nothing
+    hasname(k) || return nothing
+    # Already the live system symbol (identity check via index cache / isequal).
+    (is_parameter(sys, k) || is_variable(sys, k)) && return nothing
+
+    nm = getname(k)
+    matches = SymbolicT[]
+    for p in get_ps(sys)
+        p = unwrap(p)
+        hasname(p) || continue
+        iscall(p) && continue
+        getname(p) == nm || continue
+        push!(matches, p)
+    end
+    length(matches) == 1 || return nothing
+    p = only(matches)
+    # `respecialize` changes the concrete symtype; same-name/same-type is not that case.
+    symtype(k) == symtype(p) && return nothing
+    return p
 end
 
 """
@@ -1961,6 +1987,7 @@ function operating_point_preprocess(sys::AbstractSystem, op; name = "operating_p
     end
     op = recursive_unwrap(anydict(op))
     symbols_to_symbolics!(sys, op)
+    remap_stale_respecialize_op_keys!(sys, op)
     return op
 end
 
