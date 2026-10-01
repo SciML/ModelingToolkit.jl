@@ -55,6 +55,18 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
     @test istril(StructuralTransformations.sorted_incidence_matrix(model), 2)
 end
 
+@testset "sorted_incidence_matrix on scalar ODE" begin
+    @independent_variables t
+    @variables x(t)
+    @named sys = System([D(x) ~ -x], t)
+    compiled = mtkcompile(sys)
+    @test ModelingToolkit.get_schedule(compiled) !== nothing
+    M = StructuralTransformations.sorted_incidence_matrix(compiled)
+    @test size(M, 1) == length(equations(compiled))
+    @test size(M, 2) >= size(M, 1)
+    @test !iszero(M)
+end
+
 @testset "With parameters" begin
     function f!(du, u, (p1, p2), t)
         x = (*)(p1[4], u[1])
