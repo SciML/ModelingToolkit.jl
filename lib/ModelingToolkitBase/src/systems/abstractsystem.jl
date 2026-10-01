@@ -3055,14 +3055,14 @@ function component_post_processing(__source__, expr, isconnector)
             # we need to create a closure to escape explicit return in `body`.
             res = (() -> $body)()
             if $isdefined(res, :gui_metadata) && $getfield(res, :gui_metadata) === nothing
-                name = $(Meta.quot(fname))
+                __mtk_gui_name = $(Meta.quot(fname))
                 if $isconnector
                     $Setfield.@set!(res.connector_type = $connector_type(res))
                 end
                 $Setfield.@set!(
                     res.gui_metadata = $GUIMetadata(
                         $GlobalRef(
-                            @__MODULE__, name
+                            @__MODULE__, __mtk_gui_name
                         )
                     )
                 )
