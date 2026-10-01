@@ -487,6 +487,43 @@ end
     @test isbits(prob.f.initialization_data.initializeprob.p)
 end
 
+@testset "Static buffers survive `remake_buffer`" begin
+    # A callback-updated discrete is stored in a `BlockedArray`, which used to make the
+    # whole `MTKParameters` report as mutable, so the rebuilt buffers stayed `MVector`s.
+    @variables x(t) = 1.0
+    @parameters k = 2.0
+    @discretes g(t) = 1.0
+    event = ModelingToolkitBase.SymbolicContinuousCallback(
+        [x ~ 0.5], [g ~ Pre(g) + 1]; discrete_parameters = [g]
+    )
+    @named sys = System([D(x) ~ -k * g * x], t, [x], [k, g]; continuous_events = [event])
+    sys = mtkcompile(sys)
+    static_constructor(x) = SVector{length(x)}(x)
+    prob = ODEProblem(
+        sys, [], (0.0, 2.0);
+        u0_constructor = static_constructor, p_constructor = static_constructor
+    )
+    @test prob.p.discrete isa Tuple{<:BlockedVector{Float64, <:SVector}}
+    @test !ModelingToolkitBase.ArrayInterface.ismutable(prob.p)
+
+    @testset "Type-stable path (`setp_oop`)" begin
+        for (sym, val) in ((k, 1.5), (g, 3.0))
+            newp = setp_oop(sys, [sym])(prob.p, SA[val])
+            @test typeof(newp) == typeof(prob.p)
+            @test getp(sys, sym)(newp) == val
+        end
+        _, newp = setsym_oop(sys, [k])(prob, SA[1.5])
+        @test typeof(newp) == typeof(prob.p)
+        @test typeof(remake(prob; p = newp, lazy_initialization = true).p) == typeof(prob.p)
+    end
+    @testset "Generic path" begin
+        newp = remake_buffer(sys, prob.p, Any[k, g], Any[1.5, 3.0])
+        @test typeof(newp) == typeof(prob.p)
+        @test getp(sys, k)(newp) == 1.5
+        @test getp(sys, g)(newp) == 3.0
+    end
+end
+
 @testset "`anyeltypedual`" begin
     @variables x(t)
     @parameters p
