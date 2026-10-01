@@ -112,50 +112,6 @@ end
 """
     $(TYPEDSIGNATURES)
 
-Remap operating-point keys that are stale bare parameters left over from before
-[`respecialize`](@ref): same name as exactly one system parameter, not themselves a
-system variable/parameter, and a different `symtype` (the signature of respecialize).
-Indexed keys (`r[1]`), calls (`Initial(x)`, `x(t)`), and same-symtype collisions are
-left untouched.
-"""
-function remap_stale_respecialize_op_keys!(sys::AbstractSystem, varmap::AbstractDict)
-    for k in collect(keys(varmap))
-        newk = matching_respecialized_parameter(sys, k)
-        newk === nothing && continue
-        varmap[newk] = varmap[k]
-        delete!(varmap, k)
-    end
-    return
-end
-
-function matching_respecialized_parameter(sys::AbstractSystem, k)
-    symbolic_type(k) === NotSymbolic() && return nothing
-    k = unwrap(k)
-    # Bare symbols only — not `r[1]`, `Initial(x)`, `x(t)`, etc.
-    iscall(k) && return nothing
-    hasname(k) || return nothing
-    # Already the live system symbol (identity check via index cache / isequal).
-    (is_parameter(sys, k) || is_variable(sys, k)) && return nothing
-
-    nm = getname(k)
-    matches = SymbolicT[]
-    for p in get_ps(sys)
-        p = unwrap(p)
-        hasname(p) || continue
-        iscall(p) && continue
-        getname(p) == nm || continue
-        push!(matches, p)
-    end
-    length(matches) == 1 || return nothing
-    p = only(matches)
-    # `respecialize` changes the concrete symtype; same-name/same-type is not that case.
-    symtype(k) == symtype(p) && return nothing
-    return p
-end
-
-"""
-    $(TYPEDSIGNATURES)
-
 Utility function to get the value `val` corresponding to key `var` in `varmap`, and
 return `getindex(val, idx)` if it exists or `nothing` otherwise.
 """
@@ -1987,7 +1943,6 @@ function operating_point_preprocess(sys::AbstractSystem, op; name = "operating_p
     end
     op = recursive_unwrap(anydict(op))
     symbols_to_symbolics!(sys, op)
-    remap_stale_respecialize_op_keys!(sys, op)
     return op
 end
 

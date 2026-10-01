@@ -403,6 +403,11 @@ end
 medium_gain(m::AbstractMedium, x) = m.k * x
 @register_symbolic medium_gain(m::AbstractMedium, x)
 
+module ForeignSameNameParams
+    using ModelingToolkitBase: @parameters
+    @parameters q
+end
+
 @testset "`respecialize`" begin
     @parameters p::AbstractFoo q[1:2]::AbstractFoo r
     @discretes p2(t)::AbstractFoo
@@ -466,8 +471,8 @@ medium_gain(m::AbstractMedium, x) = m.k * x
     @parameters foo::AbstractFoo
     @test_throws ["does not exist"] respecialize(sys, [foo => Bar()])
 
-    # Re-supplying a pre-respecialize parameter symbol in the operating point must
-    # remap to the respecialized parameter (equal to the default or a new value).
+    # After respecialize, leaving the pre-respecialize parameter symbol in the
+    # operating point must raise a named ArgumentError (not a raw MethodError).
     MED = Medium(2.0)
     MED2 = Medium(3.0)
     @variables vx vy vz
@@ -479,17 +484,24 @@ medium_gain(m::AbstractMedium, x) = m.k * x
         )
     )
     nlsys_r = respecialize(nlsys)
-    prob_default = NonlinearProblem(nlsys_r, [vx => 1.0, vy => 1.0, vz => 1.0])
+    u0 = [vx => 1.0, vy => 1.0, vz => 1.0]
+    prob_default = NonlinearProblem(nlsys_r, u0)
     @test length(prob_default.p.nonnumeric) == 1
     @test only(prob_default.p.nonnumeric[1]) == MED
-    prob_same = NonlinearProblem(
-        nlsys_r, [vx => 1.0, vy => 1.0, vz => 1.0, md => MED]
+    @test_throws ["md", "respecialized", "operating point"] NonlinearProblem(
+        nlsys_r, [u0; md => MED]
     )
-    @test only(prob_same.p.nonnumeric[1]) == MED
-    prob_new = NonlinearProblem(
-        nlsys_r, [vx => 1.0, vy => 1.0, vz => 1.0, md => MED2]
+    @test_throws ["md", "respecialized", "operating point"] remake(
+        prob_default; p = [md => MED2]
     )
-    @test only(prob_new.p.nonnumeric[1]) == MED2
+
+    # Foreign same-name scalar keys must not be remapped onto array parameters
+    # (master behaviour: the key is ignored and the default is kept).
+    @parameters aq[1:2] = [1.0, 2.0]
+    @variables ax = 1.0
+    asys = mtkcompile(System([0 ~ ax - sum(aq)], [ax], [aq]; name = :foreign_q))
+    aprov = NonlinearProblem(asys, [ax => 1.0, ForeignSameNameParams.q => 3.0])
+    @test aprov.ps[aq] ≈ [1.0, 2.0]
 end
 
 @testset "`truncate_constant_floats`" begin
