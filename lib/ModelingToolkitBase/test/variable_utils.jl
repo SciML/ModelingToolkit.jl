@@ -267,6 +267,9 @@ end
 
 @testset "FixpointSubstituter resolves symbolic array indices" begin
     t = ModelingToolkitBase.t_nounits
+    D = ModelingToolkitBase.D_nounits
+    Sh = ModelingToolkitBase.Shift
+    Init = ModelingToolkitBase.Initial
     @variables a(t)[1:3]
     @parameters i::Int
     au = value(a)
@@ -283,6 +286,25 @@ end
         wrapper; maxiters = 10, warn_maxiters = false
     )
     @test ModelingToolkitBase.unwrap_const(subber(au[iu])) == 2.0
+
+    # Operator-wrapped keys: `dd[Op(a)]` is already the Op value, so
+    # `index_substituted_array` must not re-apply Op (mirrors `_get_stable_index`).
+    function check_op(opkey, query)
+        ddop = ModelingToolkitBase.AtomicArrayDict{ModelingToolkitBase.SymbolicT}()
+        ddop[opkey] = SU.Const{VartypeT}([1.0, 2.0, 3.0])
+        ddop[iu] = SU.Const{VartypeT}(2)
+        wrap = ModelingToolkitBase.AtomicArrayDictSubstitutionWrapper(ddop)
+        sb = Symbolics.FixpointSubstituter{true}(
+            wrap; maxiters = 10, warn_maxiters = false
+        )
+        return ModelingToolkitBase.unwrap_const(sb(query))
+    end
+    @test check_op(value(D(a)), value(D(a[i]))) == 2.0
+    @test check_op(value(Sh(t, 1)(a)), value(Sh(t, 1)(a[i]))) == 2.0
+    # `Initial(arr[idx])` rewrites to `Initial(arr)[idx]`; build that form directly
+    # because `Initial(a[i])` itself errors when `i` is symbolic.
+    init_a = value(Init()(a))
+    @test check_op(init_a, init_a[iu]) == 2.0
 end
 
 @testset "`shift2term` on an already-shifted array variable" begin

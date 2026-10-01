@@ -198,7 +198,9 @@ function index_substituted_array(res::SymbolicT, k::SymbolicT)
             return res[args[2:end]...]
         end
         BSImpl.Term(; f, args) && if f isa Operator && length(args) == 1 end => begin
-            return f(index_substituted_array(res, args[1]::SymbolicT))::SymbolicT
+            # `res` is already the value of `f(arr)`; do not re-apply `f`
+            # (mirrors `_get_stable_index`, which discards the operator).
+            return index_substituted_array(res, args[1]::SymbolicT)
         end
         _ => return res
     end
