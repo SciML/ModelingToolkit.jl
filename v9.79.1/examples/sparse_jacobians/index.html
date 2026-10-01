@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Automated Sparse Analytical Jacobians · ModelingToolkit.jl</title><meta name="title" content="Automated Sparse Analytical Jacobians · ModelingToolkit.jl"/><meta property="og:title" content="Automated Sparse Analytical Jacobians · ModelingToolkit.jl"/><meta property="twitter:title" content="Automated Sparse Analytical Jacobians · ModelingToolkit.jl"/><meta name="description" content="Documentation for ModelingToolkit.jl."/><meta property="og:description" content="Documentation for ModelingToolkit.jl."/><meta property="twitter:description" content="Documentation for ModelingToolkit.jl."/><meta property="og:url" content="https://docs.sciml.ai/ModelingToolkit/stable/examples/sparse_jacobians/"/><meta property="twitter:url" content="https://docs.sciml.ai/ModelingToolkit/stable/examples/sparse_jacobians/"/><link rel="canonical" href="https://docs.sciml.ai/ModelingToolkit/stable/examples/sparse_jacobians/"/><script data-outdated-warner src="../../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../search_index.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script><link href="../../assets/favicon.ico" rel="icon" type="image/x-icon"/></head><body><div id="documenter"><nav class="docs-sidebar"><a class="docs-logo" href="../../"><img src="../../assets/logo.png" alt="ModelingToolkit.jl logo"/></a><div class="docs-package-name"><span class="docs-autofit"><a href="../../">ModelingToolkit.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../../">Home</a></li><li><a class="tocitem" href="../../tutorials/ode_modeling/">Getting Started with ModelingToolkit.jl</a></li><li><span class="tocitem">Tutorials</span><ul><li><a class="tocitem" href="../../tutorials/acausal_components/">Acausal Component-Based Modeling</a></li><li><a class="tocitem" href="../../tutorials/nonlinear/">Modeling Nonlinear Systems</a></li><li><a class="tocitem" href="../../tutorials/initialization/">Initialization of ODESystems</a></li><li><a class="tocitem" href="../../tutorials/optimization/">Modeling Optimization Problems</a></li><li><a class="tocitem" href="../../tutorials/modelingtoolkitize/">Modelingtoolkitize: Automatically Translating Numerical to Symbolic Code</a></li><li><a class="tocitem" href="../../tutorials/programmatically_generating/">Programmatically Generating and Scripting ODESystems</a></li><li><a class="tocitem" href="../../tutorials/stochastic_diffeq/">Modeling with Stochasticity</a></li><li><a class="tocitem" href="../../tutorials/discrete_system/">(Experimental) Modeling Discrete Systems</a></li><li><a class="tocitem" href="../../tutorials/parameter_identifiability/">Parameter Identifiability in ODE Models</a></li><li><a class="tocitem" href="../../tutorials/change_independent_variable/">Changing the independent variable of ODEs</a></li><li><a class="tocitem" href="../../tutorials/bifurcation_diagram_computation/">Bifurcation Diagrams</a></li><li><a class="tocitem" href="../../tutorials/attractors/">Multi- and Nonlocal- Continuation</a></li><li><a class="tocitem" href="../../tutorials/SampledData/">Clocks and Sampled-Data Systems</a></li><li><a class="tocitem" href="../../tutorials/domain_connections/">Domains</a></li><li><a class="tocitem" href="../../tutorials/callable_params/">Callable parameters and interpolating data</a></li><li><a class="tocitem" href="../../tutorials/linear_analysis/">Linear Analysis</a></li><li><a class="tocitem" href="../../tutorials/disturbance_modeling/">Disturbance and input modeling modeling</a></li><li><a class="tocitem" href="../../tutorials/fmi/">Importing FMUs</a></li></ul></li><li><span class="tocitem">Examples</span><ul><li><input class="collapse-toggle" id="menuitem-4-1" type="checkbox"/><label class="tocitem" for="menuitem-4-1"><span class="docs-label">Basic Examples</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="../higher_order/">Automatic Transformation of Nth Order ODEs to 1st Order ODEs</a></li><li><a class="tocitem" href="../spring_mass/">Component-Based Modeling of a Spring-Mass System</a></li><li><a class="tocitem" href="../modelingtoolkitize_index_reduction/">Automated Index Reduction of DAEs</a></li><li><a class="tocitem" href="../remake/">Optimizing through an ODE solve and re-creating MTK Problems</a></li></ul></li><li><input class="collapse-toggle" id="menuitem-4-2" type="checkbox" checked/><label class="tocitem" for="menuitem-4-2"><span class="docs-label">Advanced Examples</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="../tearing_parallelism/">Exposing More Parallelism By Tearing Algebraic Equations in ODESystems</a></li><li class="is-active"><a class="tocitem" href>Automated Sparse Analytical Jacobians</a></li><li><a class="tocitem" href="../perturbation/">Symbolic-Numeric Perturbation Theory for ODEs</a></li></ul></li></ul></li><li><span class="tocitem">Basics</span><ul><li><a class="tocitem" href="../../basics/AbstractSystem/">The AbstractSystem Interface</a></li><li><a class="tocitem" href="../../basics/ContextualVariables/">Contextual Variable Types</a></li><li><a class="tocitem" href="../../basics/Variable_metadata/">Symbolic Metadata</a></li><li><a class="tocitem" href="../../basics/Composition/">Composing Models and Building Reusable Components</a></li><li><a class="tocitem" href="../../basics/Events/">Event Handling and Callback Functions</a></li><li><a class="tocitem" href="../../basics/Linearization/">Linearization</a></li><li><a class="tocitem" href="../../basics/InputOutput/">Input output</a></li><li><a class="tocitem" href="../../basics/MTKLanguage/">ModelingToolkit Language: Modeling with <code>@mtkmodel</code>, <code>@connectors</code> and <code>@mtkbuild</code></a></li><li><a class="tocitem" href="../../basics/Validation/">Model Validation and Units</a></li><li><a class="tocitem" href="../../basics/Debugging/">Debugging</a></li><li><a class="tocitem" href="../../basics/DependencyGraphs/">Dependency Graphs</a></li><li><a class="tocitem" href="../../basics/Precompilation/">Working with Precompilation and Binary Building</a></li><li><a class="tocitem" href="../../basics/FAQ/">Frequently Asked Questions</a></li></ul></li><li><span class="tocitem">System Types</span><ul><li><a class="tocitem" href="../../systems/ODESystem/">ODESystem</a></li><li><a class="tocitem" href="../../systems/SDESystem/">SDESystem</a></li><li><a class="tocitem" href="../../systems/JumpSystem/">JumpSystem</a></li><li><a class="tocitem" href="../../systems/NonlinearSystem/">NonlinearSystem</a></li><li><a class="tocitem" href="../../systems/OptimizationSystem/">OptimizationSystem</a></li><li><a class="tocitem" href="../../systems/PDESystem/">PDESystem</a></li><li><a class="tocitem" href="../../systems/DiscreteSystem/">DiscreteSystem</a></li><li><a class="tocitem" href="../../systems/ImplicitDiscreteSystem/">ImplicitDiscreteSystem</a></li></ul></li><li><a class="tocitem" href="../../comparison/">Comparison of ModelingToolkit vs Equation-Based and Block Modeling Languages</a></li><li><a class="tocitem" href="../../internals/">Internal Details</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Examples</a></li><li><a class="is-disabled">Advanced Examples</a></li><li class="is-active"><a href>Automated Sparse Analytical Jacobians</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Automated Sparse Analytical Jacobians</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/SciML/ModelingToolkit.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/SciML/ModelingToolkit.jl/blob/master/docs/src/examples/sparse_jacobians.md" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Automated-Sparse-Analytical-Jacobians"><a class="docs-heading-anchor" href="#Automated-Sparse-Analytical-Jacobians">Automated Sparse Analytical Jacobians</a><a id="Automated-Sparse-Analytical-Jacobians-1"></a><a class="docs-heading-anchor-permalink" href="#Automated-Sparse-Analytical-Jacobians" title="Permalink"></a></h1><p>In many cases where you have large stiff differential equations, getting a sparse Jacobian can be essential for performance. In this tutorial, we will show how to use <code>modelingtoolkitize</code> to regenerate an <code>ODEProblem</code> code with the analytical solution to the sparse Jacobian, along with the sparsity pattern required by DifferentialEquations.jl&#39;s solvers to specialize the solving process.</p><p>First, let&#39;s start out with an implementation of the 2-dimensional Brusselator partial differential equation discretized using finite differences:</p><pre><code class="language-julia hljs">using OrdinaryDiffEq, ModelingToolkit
+
+const N = 32
+const xyd_brusselator = range(0, stop = 1, length = N)
+brusselator_f(x, y, t) = (((x - 0.3)^2 + (y - 0.6)^2) &lt;= 0.1^2) * (t &gt;= 1.1) * 5.0
+limit(a, N) = a == N + 1 ? 1 : a == 0 ? N : a
+function brusselator_2d_loop(du, u, p, t)
+    A, B, alpha, dx = p
+    alpha = alpha / dx^2
+    @inbounds for I in CartesianIndices((N, N))
+        i, j = Tuple(I)
+        x, y = xyd_brusselator[I[1]], xyd_brusselator[I[2]]
+        ip1, im1, jp1, jm1 = limit(i + 1, N), limit(i - 1, N), limit(j + 1, N),
+        limit(j - 1, N)
+        du[i, j, 1] = alpha * (u[im1, j, 1] + u[ip1, j, 1] + u[i, jp1, 1] + u[i, jm1, 1] -
+                       4u[i, j, 1]) +
+                      B + u[i, j, 1]^2 * u[i, j, 2] - (A + 1) * u[i, j, 1] +
+                      brusselator_f(x, y, t)
+        du[i, j, 2] = alpha * (u[im1, j, 2] + u[ip1, j, 2] + u[i, jp1, 2] + u[i, jm1, 2] -
+                       4u[i, j, 2]) +
+                      A * u[i, j, 1] - u[i, j, 1]^2 * u[i, j, 2]
+    end
+end
+p = (3.4, 1.0, 10.0, step(xyd_brusselator))
+
+function init_brusselator_2d(xyd)
+    N = length(xyd)
+    u = zeros(N, N, 2)
+    for I in CartesianIndices((N, N))
+        x = xyd[I[1]]
+        y = xyd[I[2]]
+        u[I, 1] = 22 * (y * (1 - y))^(3 / 2)
+        u[I, 2] = 27 * (x * (1 - x))^(3 / 2)
+    end
+    u
+end
+u0 = init_brusselator_2d(xyd_brusselator)
+prob = ODEProblem(brusselator_2d_loop, u0, (0.0, 11.5), p)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi"><span class="sgr38_2" style="color:#56b6c2">ODEProblem</span> with uType <span class="sgr38_2" style="color:#56b6c2">Array{Float64, 3}</span> and tType <span class="sgr38_2" style="color:#56b6c2">Float64</span>. In-place: <span class="sgr38_2" style="color:#56b6c2">true</span>
+Non-trivial mass matrix: <span class="sgr38_2" style="color:#56b6c2">false</span>
+timespan: (0.0, 11.5)
+u0: 32×32×2 Array{Float64, 3}:
+[:, :, 1] =
+ 0.0  0.121344  0.326197  0.568534  …  0.568534  0.326197  0.121344  0.0
+ 0.0  0.121344  0.326197  0.568534     0.568534  0.326197  0.121344  0.0
+ 0.0  0.121344  0.326197  0.568534     0.568534  0.326197  0.121344  0.0
+ 0.0  0.121344  0.326197  0.568534     0.568534  0.326197  0.121344  0.0
+ 0.0  0.121344  0.326197  0.568534     0.568534  0.326197  0.121344  0.0
+ 0.0  0.121344  0.326197  0.568534  …  0.568534  0.326197  0.121344  0.0
+ 0.0  0.121344  0.326197  0.568534     0.568534  0.326197  0.121344  0.0
+ 0.0  0.121344  0.326197  0.568534     0.568534  0.326197  0.121344  0.0
+ 0.0  0.121344  0.326197  0.568534     0.568534  0.326197  0.121344  0.0
+ 0.0  0.121344  0.326197  0.568534     0.568534  0.326197  0.121344  0.0
+ ⋮                                  ⋱                      ⋮         
+ 0.0  0.121344  0.326197  0.568534     0.568534  0.326197  0.121344  0.0
+ 0.0  0.121344  0.326197  0.568534     0.568534  0.326197  0.121344  0.0
+ 0.0  0.121344  0.326197  0.568534  …  0.568534  0.326197  0.121344  0.0
+ 0.0  0.121344  0.326197  0.568534     0.568534  0.326197  0.121344  0.0
+ 0.0  0.121344  0.326197  0.568534     0.568534  0.326197  0.121344  0.0
+ 0.0  0.121344  0.326197  0.568534     0.568534  0.326197  0.121344  0.0
+ 0.0  0.121344  0.326197  0.568534     0.568534  0.326197  0.121344  0.0
+ 0.0  0.121344  0.326197  0.568534  …  0.568534  0.326197  0.121344  0.0
+ 0.0  0.121344  0.326197  0.568534     0.568534  0.326197  0.121344  0.0
+
+[:, :, 2] =
+ 0.0       0.0       0.0       0.0       …  0.0       0.0       0.0
+ 0.148923  0.148923  0.148923  0.148923     0.148923  0.148923  0.148923
+ 0.400332  0.400332  0.400332  0.400332     0.400332  0.400332  0.400332
+ 0.697746  0.697746  0.697746  0.697746     0.697746  0.697746  0.697746
+ 1.01722   1.01722   1.01722   1.01722      1.01722   1.01722   1.01722
+ 1.34336   1.34336   1.34336   1.34336   …  1.34336   1.34336   1.34336
+ 1.66501   1.66501   1.66501   1.66501      1.66501   1.66501   1.66501
+ 1.97352   1.97352   1.97352   1.97352      1.97352   1.97352   1.97352
+ 2.26207   2.26207   2.26207   2.26207      2.26207   2.26207   2.26207
+ 2.52509   2.52509   2.52509   2.52509      2.52509   2.52509   2.52509
+ ⋮                                       ⋱            ⋮         
+ 2.26207   2.26207   2.26207   2.26207      2.26207   2.26207   2.26207
+ 1.97352   1.97352   1.97352   1.97352      1.97352   1.97352   1.97352
+ 1.66501   1.66501   1.66501   1.66501   …  1.66501   1.66501   1.66501
+ 1.34336   1.34336   1.34336   1.34336      1.34336   1.34336   1.34336
+ 1.01722   1.01722   1.01722   1.01722      1.01722   1.01722   1.01722
+ 0.697746  0.697746  0.697746  0.697746     0.697746  0.697746  0.697746
+ 0.400332  0.400332  0.400332  0.400332     0.400332  0.400332  0.400332
+ 0.148923  0.148923  0.148923  0.148923  …  0.148923  0.148923  0.148923
+ 0.0       0.0       0.0       0.0          0.0       0.0       0.0</code></pre><p>Now let&#39;s use <code>modelingtoolkitize</code> to generate the symbolic version:</p><pre><code class="language-julia hljs">@mtkbuild sys = modelingtoolkitize(prob);</code></pre><p>Now we regenerate the problem using <code>jac=true</code> for the analytical Jacobian and <code>sparse=true</code> to make it sparse:</p><pre><code class="language-julia hljs">sparseprob = ODEProblem(sys, Pair[], (0.0, 11.5), jac = true, sparse = true)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi"><span class="sgr38_2" style="color:#56b6c2">ODEProblem</span> with uType <span class="sgr38_2" style="color:#56b6c2">Vector{Float64}</span> and tType <span class="sgr38_2" style="color:#56b6c2">Float64</span>. In-place: <span class="sgr38_2" style="color:#56b6c2">true</span>
+Initialization status: <span class="sgr38_2" style="color:#56b6c2">FULLY_DETERMINED</span>
+Non-trivial mass matrix: <span class="sgr38_2" style="color:#56b6c2">false</span>
+timespan: (0.0, 11.5)
+u0: 2048-element Vector{Float64}:
+ 0.0
+ 0.0
+ 0.5685341132743709
+ 0.0
+ 0.0
+ 0.0
+ 0.0
+ 0.0
+ 0.0
+ 0.0
+ ⋮
+ 0.1213443281371586
+ 0.1213443281371586
+ 0.0
+ 0.0
+ 0.0
+ 0.0
+ 0.0
+ 0.0
+ 0.0</code></pre><p>Hard? No! How much did that help?</p><pre><code class="language-julia hljs">using BenchmarkTools
+@btime solve(prob, save_everystep = false);</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">  11.068 s (1457199 allocations: 500.82 MiB)</code></pre><pre><code class="language-julia hljs">@btime solve(sparseprob, save_everystep = false);</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">  10.758 s (109851 allocations: 534.75 MiB)</code></pre><p>Notice though that the analytical solution to the Jacobian can be quite expensive. Thus in some cases we may only want to get the sparsity pattern. In this case, we can simply do:</p><pre><code class="language-julia hljs">sparsepatternprob = ODEProblem(sys, Pair[], (0.0, 11.5), sparse = true)
+@btime solve(sparsepatternprob, save_everystep = false);</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">  10.713 s (109768 allocations: 534.77 MiB)</code></pre></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../tearing_parallelism/">« Exposing More Parallelism By Tearing Algebraic Equations in ODESystems</a><a class="docs-footer-nextpage" href="../perturbation/">Symbolic-Numeric Perturbation Theory for ODEs »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.11.4 on <span class="colophon-date" title="Tuesday 20 May 2025 13:26">Tuesday 20 May 2025</span>. Using Julia version 1.10.9.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>

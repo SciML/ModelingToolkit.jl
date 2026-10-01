@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Parameter Identifiability in ODE Models · ModelingToolkit.jl</title><meta name="title" content="Parameter Identifiability in ODE Models · ModelingToolkit.jl"/><meta property="og:title" content="Parameter Identifiability in ODE Models · ModelingToolkit.jl"/><meta property="twitter:title" content="Parameter Identifiability in ODE Models · ModelingToolkit.jl"/><meta name="description" content="Documentation for ModelingToolkit.jl."/><meta property="og:description" content="Documentation for ModelingToolkit.jl."/><meta property="twitter:description" content="Documentation for ModelingToolkit.jl."/><meta property="og:url" content="https://docs.sciml.ai/ModelingToolkit/stable/tutorials/parameter_identifiability/"/><meta property="twitter:url" content="https://docs.sciml.ai/ModelingToolkit/stable/tutorials/parameter_identifiability/"/><link rel="canonical" href="https://docs.sciml.ai/ModelingToolkit/stable/tutorials/parameter_identifiability/"/><script data-outdated-warner src="../../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../search_index.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script><link href="../../assets/favicon.ico" rel="icon" type="image/x-icon"/></head><body><div id="documenter"><nav class="docs-sidebar"><a class="docs-logo" href="../../"><img src="../../assets/logo.png" alt="ModelingToolkit.jl logo"/></a><div class="docs-package-name"><span class="docs-autofit"><a href="../../">ModelingToolkit.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../../">Home</a></li><li><a class="tocitem" href="../ode_modeling/">Getting Started with ModelingToolkit.jl</a></li><li><span class="tocitem">Tutorials</span><ul><li><a class="tocitem" href="../acausal_components/">Acausal Component-Based Modeling</a></li><li><a class="tocitem" href="../nonlinear/">Modeling Nonlinear Systems</a></li><li><a class="tocitem" href="../initialization/">Initialization of ODESystems</a></li><li><a class="tocitem" href="../optimization/">Modeling Optimization Problems</a></li><li><a class="tocitem" href="../modelingtoolkitize/">Modelingtoolkitize: Automatically Translating Numerical to Symbolic Code</a></li><li><a class="tocitem" href="../programmatically_generating/">Programmatically Generating and Scripting ODESystems</a></li><li><a class="tocitem" href="../stochastic_diffeq/">Modeling with Stochasticity</a></li><li><a class="tocitem" href="../discrete_system/">(Experimental) Modeling Discrete Systems</a></li><li class="is-active"><a class="tocitem" href>Parameter Identifiability in ODE Models</a><ul class="internal"><li><a class="tocitem" href="#Local-Identifiability"><span>Local Identifiability</span></a></li><li><a class="tocitem" href="#Global-Identifiability"><span>Global Identifiability</span></a></li></ul></li><li><a class="tocitem" href="../bifurcation_diagram_computation/">Bifurcation Diagrams</a></li><li><a class="tocitem" href="../SampledData/">Clocks and Sampled-Data Systems</a></li><li><a class="tocitem" href="../domain_connections/">Domains</a></li><li><a class="tocitem" href="../callable_params/">Callable parameters and interpolating data</a></li><li><a class="tocitem" href="../linear_analysis/">Linear Analysis</a></li></ul></li><li><span class="tocitem">Examples</span><ul><li><input class="collapse-toggle" id="menuitem-4-1" type="checkbox"/><label class="tocitem" for="menuitem-4-1"><span class="docs-label">Basic Examples</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="../../examples/higher_order/">Automatic Transformation of Nth Order ODEs to 1st Order ODEs</a></li><li><a class="tocitem" href="../../examples/spring_mass/">Component-Based Modeling of a Spring-Mass System</a></li><li><a class="tocitem" href="../../examples/modelingtoolkitize_index_reduction/">Automated Index Reduction of DAEs</a></li><li><a class="tocitem" href="../../examples/remake/">Optimizing through an ODE solve and re-creating MTK Problems</a></li></ul></li><li><input class="collapse-toggle" id="menuitem-4-2" type="checkbox"/><label class="tocitem" for="menuitem-4-2"><span class="docs-label">Advanced Examples</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="../../examples/tearing_parallelism/">Exposing More Parallelism By Tearing Algebraic Equations in ODESystems</a></li><li><a class="tocitem" href="../../examples/sparse_jacobians/">Automated Sparse Analytical Jacobians</a></li><li><a class="tocitem" href="../../examples/perturbation/">Symbolic-Numeric Perturbation Theory for ODEs</a></li></ul></li></ul></li><li><span class="tocitem">Basics</span><ul><li><a class="tocitem" href="../../basics/AbstractSystem/">The AbstractSystem Interface</a></li><li><a class="tocitem" href="../../basics/ContextualVariables/">Contextual Variable Types</a></li><li><a class="tocitem" href="../../basics/Variable_metadata/">Symbolic Metadata</a></li><li><a class="tocitem" href="../../basics/Composition/">Composing Models and Building Reusable Components</a></li><li><a class="tocitem" href="../../basics/Events/">Event Handling and Callback Functions</a></li><li><a class="tocitem" href="../../basics/Linearization/">Linearization</a></li><li><a class="tocitem" href="../../basics/InputOutput/">Input output</a></li><li><a class="tocitem" href="../../basics/MTKLanguage/">ModelingToolkit Language: Modeling with <code>@mtkmodel</code>, <code>@connectors</code> and <code>@mtkbuild</code></a></li><li><a class="tocitem" href="../../basics/Validation/">Model Validation and Units</a></li><li><a class="tocitem" href="../../basics/Debugging/">Debugging</a></li><li><a class="tocitem" href="../../basics/DependencyGraphs/">Dependency Graphs</a></li><li><a class="tocitem" href="../../basics/Precompilation/">Working with Precompilation and Binary Building</a></li><li><a class="tocitem" href="../../basics/FAQ/">Frequently Asked Questions</a></li></ul></li><li><span class="tocitem">System Types</span><ul><li><a class="tocitem" href="../../systems/ODESystem/">ODESystem</a></li><li><a class="tocitem" href="../../systems/SDESystem/">SDESystem</a></li><li><a class="tocitem" href="../../systems/JumpSystem/">JumpSystem</a></li><li><a class="tocitem" href="../../systems/NonlinearSystem/">NonlinearSystem</a></li><li><a class="tocitem" href="../../systems/OptimizationSystem/">OptimizationSystem</a></li><li><a class="tocitem" href="../../systems/PDESystem/">PDESystem</a></li></ul></li><li><a class="tocitem" href="../../comparison/">Comparison of ModelingToolkit vs Equation-Based and Block Modeling Languages</a></li><li><a class="tocitem" href="../../internals/">Internal Details</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Tutorials</a></li><li class="is-active"><a href>Parameter Identifiability in ODE Models</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Parameter Identifiability in ODE Models</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/SciML/ModelingToolkit.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/SciML/ModelingToolkit.jl/blob/master/docs/src/tutorials/parameter_identifiability.md" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Parameter-Identifiability-in-ODE-Models"><a class="docs-heading-anchor" href="#Parameter-Identifiability-in-ODE-Models">Parameter Identifiability in ODE Models</a><a id="Parameter-Identifiability-in-ODE-Models-1"></a><a class="docs-heading-anchor-permalink" href="#Parameter-Identifiability-in-ODE-Models" title="Permalink"></a></h1><p>Ordinary differential equations are commonly used for modeling real-world processes. The problem of parameter identifiability is one of the key design challenges for mathematical models. A parameter is said to be <em>identifiable</em> if one can recover its value from experimental data. <em>Structural</em> identifiability is a theoretical property of a model that answers this question. In this tutorial, we will show how to use <code>StructuralIdentifiability.jl</code> with <code>ModelingToolkit.jl</code> to assess identifiability of parameters in ODE models. The theory behind <code>StructuralIdentifiability.jl</code> is presented in paper <sup class="footnote-reference"><a id="citeref-4" href="#footnote-4">[4]</a></sup>.</p><p>We will start by illustrating <strong>local identifiability</strong> in which a parameter is known up to <em>finitely many values</em>, and then proceed to determining <strong>global identifiability</strong>, that is, which parameters can be identified <em>uniquely</em>.</p><p>The package has a standalone data structure for ordinary differential equations, but is also compatible with <code>ODESystem</code> type from <code>ModelingToolkit.jl</code>.</p><h2 id="Local-Identifiability"><a class="docs-heading-anchor" href="#Local-Identifiability">Local Identifiability</a><a id="Local-Identifiability-1"></a><a class="docs-heading-anchor-permalink" href="#Local-Identifiability" title="Permalink"></a></h2><h3 id="Input-System"><a class="docs-heading-anchor" href="#Input-System">Input System</a><a id="Input-System-1"></a><a class="docs-heading-anchor-permalink" href="#Input-System" title="Permalink"></a></h3><p>We will consider the following model:</p><p class="math-container">\[\begin{cases}
+\frac{d\,x_4}{d\,t} = - \frac{k_5 x_4}{k_6 + x_4},\\
+\frac{d\,x_5}{d\,t} = \frac{k_5 x_4}{k_6 + x_4} - \frac{k_7 x_5}{(k_8 + x_5 + x_6)},\\
+\frac{d\,x_6}{d\,t} = \frac{k_7 x_5}{(k_8 + x_5 + x_6)} - \frac{k_9  x_6  (k_{10} - x_6) }{k_{10}},\\
+\frac{d\,x_7}{d\,t} = \frac{k_9  x_6  (k_{10} - x_6)}{ k_{10}},\\
+y_1 = x_4,\\
+y_2 = x_5\end{cases}\]</p><p>This model describes the biohydrogenation<sup class="footnote-reference"><a id="citeref-1" href="#footnote-1">[1]</a></sup> process<sup class="footnote-reference"><a id="citeref-2" href="#footnote-2">[2]</a></sup> with unknown initial conditions.</p><h3 id="Using-the-ODESystem-object"><a class="docs-heading-anchor" href="#Using-the-ODESystem-object">Using the <code>ODESystem</code> object</a><a id="Using-the-ODESystem-object-1"></a><a class="docs-heading-anchor-permalink" href="#Using-the-ODESystem-object" title="Permalink"></a></h3><p>To define the ode system in Julia, we use <code>ModelingToolkit.jl</code>.</p><p>We first define the parameters, variables, differential equations and the output equations.</p><pre><code class="language-julia hljs">using StructuralIdentifiability, ModelingToolkit
+using ModelingToolkit: t_nounits as t, D_nounits as D
+
+@mtkmodel Biohydrogenation begin
+    @variables begin
+        x4(t)
+        x5(t)
+        x6(t)
+        x7(t)
+        y1(t), [output = true]
+        y2(t), [output = true]
+    end
+    @parameters begin
+        k5
+        k6
+        k7
+        k8
+        k9
+        k10
+    end
+    # define equations
+    @equations begin
+        D(x4) ~ -k5 * x4 / (k6 + x4)
+        D(x5) ~ k5 * x4 / (k6 + x4) - k7 * x5 / (k8 + x5 + x6)
+        D(x6) ~ k7 * x5 / (k8 + x5 + x6) - k9 * x6 * (k10 - x6) / k10
+        D(x7) ~ k9 * x6 * (k10 - x6) / k10
+        y1 ~ x4
+        y2 ~ x5
+    end
+end
+
+# define the system
+@mtkbuild de = Biohydrogenation()</code></pre><p>After that, we are ready to check the system for local identifiability:</p><pre><code class="language-julia hljs"># query local identifiability
+# we pass the ode-system
+local_id_all = assess_local_identifiability(de, prob_threshold = 0.99)</code></pre><p>We can see that all unknowns (except <span>$x_7$</span>) and all parameters are locally identifiable with probability 0.99.</p><p>Let&#39;s try to check specific parameters and their combinations</p><pre><code class="language-julia hljs">to_check = [de.k5, de.k7, de.k10 / de.k9, de.k5 + de.k6]
+local_id_some = assess_local_identifiability(
+    de, funcs_to_check = to_check, prob_threshold = 0.99)</code></pre><p>Notice that in this case, everything (except the unknown variable <span>$x_7$</span>) is locally identifiable, including combinations such as <span>$k_{10}/k_9, k_5+k_6$</span></p><h2 id="Global-Identifiability"><a class="docs-heading-anchor" href="#Global-Identifiability">Global Identifiability</a><a id="Global-Identifiability-1"></a><a class="docs-heading-anchor-permalink" href="#Global-Identifiability" title="Permalink"></a></h2><p>In this part tutorial, let us cover an example problem of querying the ODE for globally identifiable parameters.</p><h3 id="Input-System-2"><a class="docs-heading-anchor" href="#Input-System-2">Input System</a><a class="docs-heading-anchor-permalink" href="#Input-System-2" title="Permalink"></a></h3><p>Let us consider the following four-dimensional model with two outputs:</p><p class="math-container">\[\begin{cases}
+x_1&#39;(t) = -b  x_1(t) + \frac{1 }{ c + x_4(t)},\\
+x_2&#39;(t) = \alpha  x_1(t) - \beta  x_2(t),\\
+x_3&#39;(t) = \gamma  x_2(t) - \delta  x_3(t),\\
+x_4&#39;(t) = \sigma  x_4(t)  \frac{(\gamma x_2(t) - \delta x_3(t))}{ x_3(t)},\\
+y(t) = x_1(t)
+\end{cases}\]</p><p>We will run a global identifiability check on this enzyme dynamics<sup class="footnote-reference"><a id="citeref-3" href="#footnote-3">[3]</a></sup> model. We will use the default settings: the probability of correctness will be <code>p=0.99</code> and we are interested in identifiability of all possible parameters.</p><p>Global identifiability needs information about local identifiability first, but the function we chose here will take care of that extra step for us.</p><pre><code class="language-julia hljs">using StructuralIdentifiability, ModelingToolkit
+using ModelingToolkit: t_nounits as t, D_nounits as D
+
+@mtkmodel GoodwinOsc begin
+    @parameters begin
+        b
+        c
+        α
+        β
+        γ
+        δ
+        σ
+    end
+    @variables begin
+        x1(t)
+        x2(t)
+        x3(t)
+        x4(t)
+        y(t), [output = true]
+        y2(t), [output = true]
+    end
+    @equations begin
+        D(x1) ~ -b * x1 + 1 / (c + x4)
+        D(x2) ~ α * x1 - β * x2
+        D(x3) ~ γ * x2 - δ * x3
+        D(x4) ~ σ * x4 * (γ * x2 - δ * x3) / x3
+        y ~ x1 + x2
+        y2 ~ x2
+    end
+end
+
+@named ode = GoodwinOsc()
+
+global_id = assess_identifiability(ode)</code></pre><p>We can see that only parameters <code>a, g</code> are unidentifiable, and everything else can be uniquely recovered.</p><p>Let us consider the same system but with two inputs, and we will find out identifiability with probability <code>0.9</code> for parameters <code>c</code> and <code>b</code>:</p><pre><code class="language-julia hljs">using StructuralIdentifiability, ModelingToolkit
+using ModelingToolkit: t_nounits as t, D_nounits as D
+
+@mtkmodel GoodwinOscillator begin
+    @parameters begin
+        b
+        c
+        α
+        β
+        γ
+        δ
+        σ
+    end
+    @variables begin
+        x1(t)
+        x2(t)
+        x3(t)
+        x4(t)
+        y(t), [output = true]
+        y2(t), [output = true]
+        u1(t), [input = true]
+        u2(t), [input = true]
+    end
+    @equations begin
+        D(x1) ~ -b * x1 + 1 / (c + x4)
+        D(x2) ~ α * x1 - β * x2 - u1
+        D(x3) ~ γ * x2 - δ * x3 + u2
+        D(x4) ~ σ * x4 * (γ * x2 - δ * x3) / x3
+        y ~ x1 + x2
+        y2 ~ x2
+    end
+end
+
+@mtkbuild ode = GoodwinOscillator()
+
+# check only 2 parameters
+to_check = [ode.b, ode.c]
+
+global_id = assess_identifiability(ode, funcs_to_check = to_check, prob_threshold = 0.9)</code></pre><p>Both parameters <code>b, c</code> are globally identifiable with probability <code>0.9</code> in this case.</p><section class="footnotes is-size-7"><ul><li class="footnote" id="footnote-1"><a class="tag is-link" href="#citeref-1">1</a><blockquote><p>R. Munoz-Tamayo, L. Puillet, J.B. Daniel, D. Sauvant, O. Martin, M. Taghipoor, P. Blavy <a href="https://doi.org/10.1017/S1751731117002774"><em>Review: To be or not to be an identifiable model. Is this a relevant question in animal science modelling?</em></a>, Animal, Vol 12 (4), 701-712, 2018. The model is the ODE system (3) in Supplementary Material 2, initial conditions are assumed to be unknown.</p></blockquote></li><li class="footnote" id="footnote-2"><a class="tag is-link" href="#citeref-2">2</a><blockquote><p>Moate P.J., Boston R.C., Jenkins T.C. and Lean I.J., <a href="https://doi.org/10.3168/jds.2007-0398"><em>Kinetics of Ruminal Lipolysis of Triacylglycerol and Biohydrogenationof Long-Chain Fatty Acids: New Insights from Old Data</em></a>, Journal of Dairy Science 91, 731–742, 2008</p></blockquote></li><li class="footnote" id="footnote-3"><a class="tag is-link" href="#citeref-3">3</a><blockquote><p>Goodwin, B.C. <a href="https://doi.org/10.1016/0065-2571(65)90067-1"><em>Oscillatory behavior in enzymatic control processes</em></a>, Advances in Enzyme Regulation, Vol 3 (C), 425-437, 1965</p></blockquote></li><li class="footnote" id="footnote-4"><a class="tag is-link" href="#citeref-4">4</a><blockquote><p>Dong, R., Goodbrake, C., Harrington, H. A., &amp; Pogudin, G. <a href="https://arxiv.org/pdf/2111.00991"><em>Computing input-output projections of dynamical models with applications to structural identifiability</em></a>. arXiv preprint arXiv:2111.00991.</p></blockquote></li></ul></section></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../discrete_system/">« (Experimental) Modeling Discrete Systems</a><a class="docs-footer-nextpage" href="../bifurcation_diagram_computation/">Bifurcation Diagrams »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.8.0 on <span class="colophon-date" title="Wednesday 29 January 2025 11:58">Wednesday 29 January 2025</span>. Using Julia version 1.10.8.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>

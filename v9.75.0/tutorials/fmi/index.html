@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Importing FMUs · ModelingToolkit.jl</title><meta name="title" content="Importing FMUs · ModelingToolkit.jl"/><meta property="og:title" content="Importing FMUs · ModelingToolkit.jl"/><meta property="twitter:title" content="Importing FMUs · ModelingToolkit.jl"/><meta name="description" content="Documentation for ModelingToolkit.jl."/><meta property="og:description" content="Documentation for ModelingToolkit.jl."/><meta property="twitter:description" content="Documentation for ModelingToolkit.jl."/><meta property="og:url" content="https://docs.sciml.ai/ModelingToolkit/stable/tutorials/fmi/"/><meta property="twitter:url" content="https://docs.sciml.ai/ModelingToolkit/stable/tutorials/fmi/"/><link rel="canonical" href="https://docs.sciml.ai/ModelingToolkit/stable/tutorials/fmi/"/><script data-outdated-warner src="../../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../search_index.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script><link href="../../assets/favicon.ico" rel="icon" type="image/x-icon"/></head><body><div id="documenter"><nav class="docs-sidebar"><a class="docs-logo" href="../../"><img src="../../assets/logo.png" alt="ModelingToolkit.jl logo"/></a><div class="docs-package-name"><span class="docs-autofit"><a href="../../">ModelingToolkit.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../../">Home</a></li><li><a class="tocitem" href="../ode_modeling/">Getting Started with ModelingToolkit.jl</a></li><li><span class="tocitem">Tutorials</span><ul><li><a class="tocitem" href="../acausal_components/">Acausal Component-Based Modeling</a></li><li><a class="tocitem" href="../nonlinear/">Modeling Nonlinear Systems</a></li><li><a class="tocitem" href="../initialization/">Initialization of ODESystems</a></li><li><a class="tocitem" href="../optimization/">Modeling Optimization Problems</a></li><li><a class="tocitem" href="../modelingtoolkitize/">Modelingtoolkitize: Automatically Translating Numerical to Symbolic Code</a></li><li><a class="tocitem" href="../programmatically_generating/">Programmatically Generating and Scripting ODESystems</a></li><li><a class="tocitem" href="../stochastic_diffeq/">Modeling with Stochasticity</a></li><li><a class="tocitem" href="../discrete_system/">(Experimental) Modeling Discrete Systems</a></li><li><a class="tocitem" href="../parameter_identifiability/">Parameter Identifiability in ODE Models</a></li><li><a class="tocitem" href="../change_independent_variable/">Changing the independent variable of ODEs</a></li><li><a class="tocitem" href="../bifurcation_diagram_computation/">Bifurcation Diagrams</a></li><li><a class="tocitem" href="../attractors/">Multi- and Nonlocal- Continuation</a></li><li><a class="tocitem" href="../SampledData/">Clocks and Sampled-Data Systems</a></li><li><a class="tocitem" href="../domain_connections/">Domains</a></li><li><a class="tocitem" href="../callable_params/">Callable parameters and interpolating data</a></li><li><a class="tocitem" href="../linear_analysis/">Linear Analysis</a></li><li><a class="tocitem" href="../disturbance_modeling/">Disturbance and input modeling modeling</a></li><li class="is-active"><a class="tocitem" href>Importing FMUs</a><ul class="internal"><li><a class="tocitem" href="#FMUs-of-full-models"><span>FMUs of full models</span></a></li><li><a class="tocitem" href="#FMUs-of-components"><span>FMUs of components</span></a></li></ul></li></ul></li><li><span class="tocitem">Examples</span><ul><li><input class="collapse-toggle" id="menuitem-4-1" type="checkbox"/><label class="tocitem" for="menuitem-4-1"><span class="docs-label">Basic Examples</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="../../examples/higher_order/">Automatic Transformation of Nth Order ODEs to 1st Order ODEs</a></li><li><a class="tocitem" href="../../examples/spring_mass/">Component-Based Modeling of a Spring-Mass System</a></li><li><a class="tocitem" href="../../examples/modelingtoolkitize_index_reduction/">Automated Index Reduction of DAEs</a></li><li><a class="tocitem" href="../../examples/remake/">Optimizing through an ODE solve and re-creating MTK Problems</a></li></ul></li><li><input class="collapse-toggle" id="menuitem-4-2" type="checkbox"/><label class="tocitem" for="menuitem-4-2"><span class="docs-label">Advanced Examples</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="../../examples/tearing_parallelism/">Exposing More Parallelism By Tearing Algebraic Equations in ODESystems</a></li><li><a class="tocitem" href="../../examples/sparse_jacobians/">Automated Sparse Analytical Jacobians</a></li><li><a class="tocitem" href="../../examples/perturbation/">Symbolic-Numeric Perturbation Theory for ODEs</a></li></ul></li></ul></li><li><span class="tocitem">Basics</span><ul><li><a class="tocitem" href="../../basics/AbstractSystem/">The AbstractSystem Interface</a></li><li><a class="tocitem" href="../../basics/ContextualVariables/">Contextual Variable Types</a></li><li><a class="tocitem" href="../../basics/Variable_metadata/">Symbolic Metadata</a></li><li><a class="tocitem" href="../../basics/Composition/">Composing Models and Building Reusable Components</a></li><li><a class="tocitem" href="../../basics/Events/">Event Handling and Callback Functions</a></li><li><a class="tocitem" href="../../basics/Linearization/">Linearization</a></li><li><a class="tocitem" href="../../basics/InputOutput/">Input output</a></li><li><a class="tocitem" href="../../basics/MTKLanguage/">ModelingToolkit Language: Modeling with <code>@mtkmodel</code>, <code>@connectors</code> and <code>@mtkbuild</code></a></li><li><a class="tocitem" href="../../basics/Validation/">Model Validation and Units</a></li><li><a class="tocitem" href="../../basics/Debugging/">Debugging</a></li><li><a class="tocitem" href="../../basics/DependencyGraphs/">Dependency Graphs</a></li><li><a class="tocitem" href="../../basics/Precompilation/">Working with Precompilation and Binary Building</a></li><li><a class="tocitem" href="../../basics/FAQ/">Frequently Asked Questions</a></li></ul></li><li><span class="tocitem">System Types</span><ul><li><a class="tocitem" href="../../systems/ODESystem/">ODESystem</a></li><li><a class="tocitem" href="../../systems/SDESystem/">SDESystem</a></li><li><a class="tocitem" href="../../systems/JumpSystem/">JumpSystem</a></li><li><a class="tocitem" href="../../systems/NonlinearSystem/">NonlinearSystem</a></li><li><a class="tocitem" href="../../systems/OptimizationSystem/">OptimizationSystem</a></li><li><a class="tocitem" href="../../systems/PDESystem/">PDESystem</a></li><li><a class="tocitem" href="../../systems/DiscreteSystem/">DiscreteSystem</a></li><li><a class="tocitem" href="../../systems/ImplicitDiscreteSystem/">ImplicitDiscreteSystem</a></li></ul></li><li><a class="tocitem" href="../../comparison/">Comparison of ModelingToolkit vs Equation-Based and Block Modeling Languages</a></li><li><a class="tocitem" href="../../internals/">Internal Details</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Tutorials</a></li><li class="is-active"><a href>Importing FMUs</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Importing FMUs</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/SciML/ModelingToolkit.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/SciML/ModelingToolkit.jl/blob/master/docs/src/tutorials/fmi.md" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Importing-FMUs"><a class="docs-heading-anchor" href="#Importing-FMUs">Importing FMUs</a><a id="Importing-FMUs-1"></a><a class="docs-heading-anchor-permalink" href="#Importing-FMUs" title="Permalink"></a></h1><p>ModelingToolkit is able to import FMUs following the <a href="https://fmi-standard.org/">FMI Standard</a> versions 2 and 3. This integration is done through <a href="https://github.com/ThummeTo/FMI.jl">FMI.jl</a> and requires importing it to enable the relevant functionality. Currently Model Exchange (ME) and CoSimulation (CS) FMUs are supported. Events, non-floating-point variables and array variables are not supported. Additionally, calculating the time derivatives of FMU states/outputs is not supported.</p><div class="admonition is-danger"><header class="admonition-header">Experimental</header><div class="admonition-body"><p>This functionality is currently experimental and subject to change without a breaking release of ModelingToolkit.jl.</p></div></div><h2 id="FMUs-of-full-models"><a class="docs-heading-anchor" href="#FMUs-of-full-models">FMUs of full models</a><a id="FMUs-of-full-models-1"></a><a class="docs-heading-anchor-permalink" href="#FMUs-of-full-models" title="Permalink"></a></h2><p>Here, we will demonstrate the usage of an FMU of an entire model (as opposed to a single component). First, the required libraries must be imported and the FMU loaded using FMI.jl.</p><pre><code class="language-julia hljs">using ModelingToolkit, FMI, FMIZoo, OrdinaryDiffEq
+using ModelingToolkit: t_nounits as t, D_nounits as D
+
+# This is a spring-pendulum FMU from FMIZoo.jl. It is a v2 FMU
+# and we are importing it in ModelExchange format.
+fmu = loadFMU(&quot;SpringPendulum1D&quot;, &quot;Dymola&quot;, &quot;2022x&quot;; type = :ME)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">Model name:	SpringPendulum1D
+Type:		0</code></pre><p>Following are the variables in the FMU (both states and parameters):</p><pre><code class="language-julia hljs">fmu.modelDescription.modelVariables</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">25-element Vector{FMICore.fmi2ScalarVariable}:
+ Name: &#39;mass_s0&#39; (reference: 16777216)
+ Name: &#39;mass_v0&#39; (reference: 16777217)
+ Name: &#39;fixed.s0&#39; (reference: 16777218)
+ Name: &#39;fixed.flange.s&#39; (reference: 234881026)
+ Name: &#39;fixed.flange.f&#39; (reference: 637534208)
+ Name: &#39;spring.flange_a.s&#39; (reference: 234881026)
+ Name: &#39;spring.flange_a.f&#39; (reference: 637534212)
+ Name: &#39;spring.flange_b.s&#39; (reference: 637534209)
+ Name: &#39;spring.flange_b.f&#39; (reference: 637534208)
+ Name: &#39;spring.s_rel&#39; (reference: 637534210)
+ ⋮
+ Name: &#39;der(mass.s)&#39; (reference: 587202560)
+ Name: &#39;mass.L&#39; (reference: 16777222)
+ Name: &#39;mass.flange_a.s&#39; (reference: 637534209)
+ Name: &#39;mass.flange_a.f&#39; (reference: 637534212)
+ Name: &#39;mass.flange_b.s&#39; (reference: 905969669)
+ Name: &#39;mass.flange_b.f&#39; (reference: 100663302)
+ Name: &#39;mass.v&#39; (reference: 33554433)
+ Name: &#39;der(mass.v)&#39; (reference: 587202561)
+ Name: &#39;mass.a&#39; (reference: 587202561)</code></pre><p>Next, <a href="@ref"><code>FMIComponent</code></a> is used to import the FMU as an MTK component. We provide the FMI major version as a <code>Val</code> to the constructor, along with the loaded FMU and the type as keyword arguments.</p><pre><code class="language-julia hljs">@named model = ModelingToolkit.FMIComponent(Val(2); fmu, type = :ME)</code></pre><p class="math-container">\[ \begin{align}
+\mathtt{mass\_\_vˍt}\left( t \right) &amp;= \mathtt{mass\_\_a}\left( t \right) \\
+\mathtt{mass\_\_sˍt}\left( t \right) &amp;= \mathtt{wrapper}\_{1}\left( \left[
+\begin{array}{c}
+\mathtt{mass\_\_s}\left( t \right) \\
+\mathtt{mass\_\_v}\left( t \right) \\
+\end{array}
+\right], \left[
+\begin{array}{c}
+\end{array}
+\right], \left[
+\begin{array}{c}
+\mathtt{mass\_s0} \\
+\mathtt{fixed\_\_s0} \\
+\mathtt{mass\_\_m} \\
+\mathtt{spring\_\_s\_rel0} \\
+\mathtt{mass\_\_L} \\
+\mathtt{spring\_\_c} \\
+\mathtt{mass\_v0} \\
+\end{array}
+\right], t \right) \\
+\mathtt{mass\_\_a}\left( t \right) &amp;= \mathtt{wrapper}\_{2}\left( \left[
+\begin{array}{c}
+\mathtt{mass\_\_s}\left( t \right) \\
+\mathtt{mass\_\_v}\left( t \right) \\
+\end{array}
+\right], \left[
+\begin{array}{c}
+\end{array}
+\right], \left[
+\begin{array}{c}
+\mathtt{mass\_s0} \\
+\mathtt{fixed\_\_s0} \\
+\mathtt{mass\_\_m} \\
+\mathtt{spring\_\_s\_rel0} \\
+\mathtt{mass\_\_L} \\
+\mathtt{spring\_\_c} \\
+\mathtt{mass\_v0} \\
+\end{array}
+\right], t \right) \\
+\frac{\mathrm{d} \mathtt{mass\_\_s}\left( t \right)}{\mathrm{d}t} &amp;= \mathtt{mass\_\_sˍt}\left( t \right) \\
+\frac{\mathrm{d} \mathtt{mass\_\_v}\left( t \right)}{\mathrm{d}t} &amp;= \mathtt{mass\_\_a}\left( t \right)
+\end{align}
+ \]</p><p>Note how hierarchical names in the FMU (e.g. <code>mass.m</code> or <code>spring.f</code>) are turned into flattened names, with <code>__</code> being the namespace separator (<code>mass__m</code> and <code>spring__f</code>).</p><div class="admonition is-info"><header class="admonition-header">Note</header><div class="admonition-body"><p>Eventually we plan to reconstruct a hierarchical system structure mirroring the one indicated by the variables in the FMU. This would allow accessing the above mentioned variables as <code>model.mass.m</code> and <code>model.spring.f</code> instead of <code>model.mass__m</code> and <code>model.spring__f</code> respectively.</p></div></div><p>Derivative variables such as <code>der(mass.v)</code> use the dummy derivative notation, and are hence transformed into a form similar to <code>mass__vˍt</code>. However, they can still be referred to as <code>D(model.mass__v)</code>.</p><pre><code class="language-julia hljs">equations(model)</code></pre><p class="math-container">\[ \begin{align}
+\mathtt{mass\_\_vˍt}\left( t \right) &amp;= \mathtt{mass\_\_a}\left( t \right) \\
+\mathtt{mass\_\_sˍt}\left( t \right) &amp;= \mathtt{wrapper}\_{1}\left( \left[
+\begin{array}{c}
+\mathtt{mass\_\_s}\left( t \right) \\
+\mathtt{mass\_\_v}\left( t \right) \\
+\end{array}
+\right], \left[
+\begin{array}{c}
+\end{array}
+\right], \left[
+\begin{array}{c}
+\mathtt{mass\_s0} \\
+\mathtt{fixed\_\_s0} \\
+\mathtt{mass\_\_m} \\
+\mathtt{spring\_\_s\_rel0} \\
+\mathtt{mass\_\_L} \\
+\mathtt{spring\_\_c} \\
+\mathtt{mass\_v0} \\
+\end{array}
+\right], t \right) \\
+\mathtt{mass\_\_a}\left( t \right) &amp;= \mathtt{wrapper}\_{2}\left( \left[
+\begin{array}{c}
+\mathtt{mass\_\_s}\left( t \right) \\
+\mathtt{mass\_\_v}\left( t \right) \\
+\end{array}
+\right], \left[
+\begin{array}{c}
+\end{array}
+\right], \left[
+\begin{array}{c}
+\mathtt{mass\_s0} \\
+\mathtt{fixed\_\_s0} \\
+\mathtt{mass\_\_m} \\
+\mathtt{spring\_\_s\_rel0} \\
+\mathtt{mass\_\_L} \\
+\mathtt{spring\_\_c} \\
+\mathtt{mass\_v0} \\
+\end{array}
+\right], t \right) \\
+\frac{\mathrm{d} \mathtt{mass\_\_s}\left( t \right)}{\mathrm{d}t} &amp;= \mathtt{mass\_\_sˍt}\left( t \right) \\
+\frac{\mathrm{d} \mathtt{mass\_\_v}\left( t \right)}{\mathrm{d}t} &amp;= \mathtt{mass\_\_a}\left( t \right)
+\end{align}
+ \]</p><p>Since the FMI spec allows multiple names to alias the same quantity, ModelingToolkit.jl creates equations to alias them. For example, it can be seen above that <code>der(mass.v)</code> and <code>mass.a</code> have the same reference, and hence refer to the same quantity. Correspondingly, there is an equation <code>mass__vˍt(t) ~ mass__a(t)</code> in the system.</p><div class="admonition is-info"><header class="admonition-header">Note</header><div class="admonition-body"><p>Any variables and/or parameters that are not part of the FMU should be ignored, as ModelingToolkit creates them to manage the FMU. Unexpected usage of these variables/parameters can lead to errors.</p></div></div><pre><code class="language-julia hljs">defaults(model)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">Dict{Any, Any} with 8 entries:
+  mass__L        =&gt; 0.0
+  wrapper⋆       =&gt; FMI2InstanceWrapper(Model name:	SpringPendulum1D…
+  spring__c      =&gt; 10.0
+  mass__m        =&gt; 1.0
+  mass_s0        =&gt; 0.5
+  mass_v0        =&gt; 0.0
+  spring__s_rel0 =&gt; 1.0
+  fixed__s0      =&gt; 0.1</code></pre><p>All parameters in the FMU are given a default equal to their start value, if present. Unknowns are not assigned defaults even if a start value is present, as this would conflict with ModelingToolkit&#39;s own initialization semantics.</p><p>We can simulate this model like any other ModelingToolkit system.</p><pre><code class="language-julia-repl hljs" style="display:block;">julia&gt; sys = structural_simplify(model)</code><code class="nohighlight hljs ansi" style="display:block;">┌ Warning: Internal error: Variable mass__s(t) was marked as being in 0 ~ (wrapper(Any[mass__s(t), mass__v(t)], Float64[], Any[mass_s0, fixed__s0, mass__m, spring__s_rel0, mass__L, spring__c, mass_v0], t))[1] - mass__sˍt(t), but was actually zero
+└ @ ModelingToolkit.StructuralTransformations ~/work/ModelingToolkit.jl/ModelingToolkit.jl/src/structural_transformation/utils.jl:262
+┌ Warning: Internal error: Variable mass__v(t) was marked as being in 0 ~ (wrapper(Any[mass__s(t), mass__v(t)], Float64[], Any[mass_s0, fixed__s0, mass__m, spring__s_rel0, mass__L, spring__c, mass_v0], t))[1] - mass__sˍt(t), but was actually zero
+└ @ ModelingToolkit.StructuralTransformations ~/work/ModelingToolkit.jl/ModelingToolkit.jl/src/structural_transformation/utils.jl:262
+┌ Warning: Internal error: Variable mass__s(t) was marked as being in 0 ~ (wrapper(Any[mass__s(t), mass__v(t)], Float64[], Any[mass_s0, fixed__s0, mass__m, spring__s_rel0, mass__L, spring__c, mass_v0], t))[2] - mass__a(t), but was actually zero
+└ @ ModelingToolkit.StructuralTransformations ~/work/ModelingToolkit.jl/ModelingToolkit.jl/src/structural_transformation/utils.jl:262
+┌ Warning: Internal error: Variable mass__v(t) was marked as being in 0 ~ (wrapper(Any[mass__s(t), mass__v(t)], Float64[], Any[mass_s0, fixed__s0, mass__m, spring__s_rel0, mass__L, spring__c, mass_v0], t))[2] - mass__a(t), but was actually zero
+└ @ ModelingToolkit.StructuralTransformations ~/work/ModelingToolkit.jl/ModelingToolkit.jl/src/structural_transformation/utils.jl:262
+<span class="sgr1">Model model:</span>
+<span class="sgr1">Equations (2):</span>
+  2 standard: see equations(model)
+<span class="sgr1">Unknowns (2):</span> see unknowns(model)
+  mass__s(t)
+  mass__v(t)
+<span class="sgr1">Parameters (8):</span> see parameters(model)
+  mass__L [defaults to 0.0]
+  spring__c [defaults to 10.0]
+  mass__m [defaults to 1.0]
+  mass_s0 [defaults to 0.5]
+  ⋮
+<span class="sgr1">Observed (4):</span> see observed(model)</code><br/><code class="language-julia-repl hljs" style="display:block;">julia&gt; prob = ODEProblem(sys, [sys.mass__s =&gt; 0.5, sys.mass__v =&gt; 0.0], (0.0, 5.0))</code><code class="nohighlight hljs ansi" style="display:block;">┌ Warning: Internal error: Variable mass__s(t) was marked as being in 0 ~ (wrapper(SymbolicUtils.BasicSymbolic{Float64}[mass__s(t), mass__v(t)], Float64[], SymbolicUtils.BasicSymbolic{Float64}[mass_s0, fixed__s0, mass__m, spring__s_rel0, mass__L, spring__c, mass_v0], t))[2] - mass__a(t), but was actually zero
+└ @ ModelingToolkit.StructuralTransformations ~/work/ModelingToolkit.jl/ModelingToolkit.jl/src/structural_transformation/utils.jl:262
+┌ Warning: Internal error: Variable mass__v(t) was marked as being in 0 ~ (wrapper(SymbolicUtils.BasicSymbolic{Float64}[mass__s(t), mass__v(t)], Float64[], SymbolicUtils.BasicSymbolic{Float64}[mass_s0, fixed__s0, mass__m, spring__s_rel0, mass__L, spring__c, mass_v0], t))[2] - mass__a(t), but was actually zero
+└ @ ModelingToolkit.StructuralTransformations ~/work/ModelingToolkit.jl/ModelingToolkit.jl/src/structural_transformation/utils.jl:262
+┌ Warning: Internal error: Variable mass__s(t) was marked as being in 0 ~ (wrapper(SymbolicUtils.BasicSymbolic{Float64}[mass__s(t), mass__v(t)], Float64[], SymbolicUtils.BasicSymbolic{Float64}[mass_s0, fixed__s0, mass__m, spring__s_rel0, mass__L, spring__c, mass_v0], t))[1] - mass__sˍt(t), but was actually zero
+└ @ ModelingToolkit.StructuralTransformations ~/work/ModelingToolkit.jl/ModelingToolkit.jl/src/structural_transformation/utils.jl:262
+┌ Warning: Internal error: Variable mass__v(t) was marked as being in 0 ~ (wrapper(SymbolicUtils.BasicSymbolic{Float64}[mass__s(t), mass__v(t)], Float64[], SymbolicUtils.BasicSymbolic{Float64}[mass_s0, fixed__s0, mass__m, spring__s_rel0, mass__L, spring__c, mass_v0], t))[1] - mass__sˍt(t), but was actually zero
+└ @ ModelingToolkit.StructuralTransformations ~/work/ModelingToolkit.jl/ModelingToolkit.jl/src/structural_transformation/utils.jl:262
+<span class="sgr38_2" style="color:#56b6c2">ODEProblem</span> with uType <span class="sgr38_2" style="color:#56b6c2">Vector{Float64}</span> and tType <span class="sgr38_2" style="color:#56b6c2">Float64</span>. In-place: <span class="sgr38_2" style="color:#56b6c2">true</span>
+Initialization status: <span class="sgr38_2" style="color:#56b6c2">FULLY_DETERMINED</span>
+Non-trivial mass matrix: <span class="sgr38_2" style="color:#56b6c2">false</span>
+timespan: (0.0, 5.0)
+u0: 2-element Vector{Float64}:
+ 0.5
+ 0.0</code><br/><code class="language-julia-repl hljs" style="display:block;">julia&gt; sol = solve(prob, Tsit5())</code><code class="nohighlight hljs ansi" style="display:block;">retcode: Success
+Interpolation: specialized 4th order &quot;free&quot; interpolation
+t: 53-element Vector{Float64}:
+ 0.0
+ 0.000166333998669328
+ 0.000166333998669328
+ 0.0018296739853626079
+ 0.0018296739853626079
+ 0.018252579723965046
+ 0.018252579723965046
+ 0.0628049056311173
+ 0.0628049056311173
+ 0.13413221122185767
+ ⋮
+ 3.8965775480896196
+ 4.1865811396986174
+ 4.1865811396986174
+ 4.450238792425324
+ 4.450238792425324
+ 4.739873150383787
+ 4.739873150383787
+ 5.0
+ 5.0
+u: 53-element Vector{Vector{Float64}}:
+ [0.5, 0.0]
+ [0.5000000830009954, 0.0009980039459963424]
+ [0.5000000830009954, 0.0009980039459963424]
+ [0.5000100430926603, 0.010977982660156045]
+ [0.5000100430926603, 0.010977982660156045]
+ [0.5009991925476527, 0.10945467878676397]
+ [0.5009991925476527, 0.10945467878676397]
+ [0.5117945229973937, 0.37435700342546413]
+ [0.5117945229973937, 0.37435700342546413]
+ [0.553169961473471, 0.78087710666022]
+ ⋮
+ [0.5175451840772557, -0.45800694663626157]
+ [0.6308152690522649, 1.1838110149591914]
+ [0.6308152690522649, 1.1838110149591914]
+ [1.0618874727123693, 1.8943128948707495]
+ [1.0618874727123693, 1.8943128948707495]
+ [1.5519539450537894, 1.2493052977445305]
+ [1.5519539450537894, 1.2493052977445305]
+ [1.6970341025378801, -0.19764541877156047]
+ [1.6970341025378801, -0.19764541877156047]</code></pre><p>We can interpolate the solution object to obtain values at arbitrary time points in the solved interval, just like a normal solution.</p><pre><code class="language-julia-repl hljs" style="display:block;">julia&gt; sol(0.0:0.1:1.0; idxs = sys.mass_a)</code><code class="nohighlight hljs ansi" style="display:block;">ERROR: ArgumentError: System model: variable mass_a does not exist</code></pre><p>FMUs following version 3 of the specification can be simulated with almost the same process. This time, we will create a model from a CoSimulation FMU.</p><pre><code class="language-julia hljs">fmu = loadFMU(&quot;SpringPendulum1D&quot;, &quot;Dymola&quot;, &quot;2023x&quot;, &quot;3.0&quot;; type = :CS)
+@named inner = ModelingToolkit.FMIComponent(
+    Val(3); fmu, communication_step_size = 0.001, type = :CS)</code></pre><p class="math-container">\[ \begin{align}
+\mathtt{\_\_mtk\_internal\_u}\left( t \right) &amp;= \left[
+\begin{array}{c}
+\mathtt{mass\_\_s}\left( t \right) \\
+\mathtt{mass\_\_v}\left( t \right) \\
+\end{array}
+\right]
+\end{align}
+ \]</p><p>This FMU has fewer equations, partly due to missing aliasing variables and partly due to being a CS FMU. CoSimulation FMUs are bundled with an integrator. As such, they do not function like ME FMUs. Instead, a callback steps the FMU at periodic intervals in time and obtains the updated state. This state is held constant until the next time the callback triggers. The periodic interval must be specified through the <code>communication_step_size</code> keyword argument. A smaller step size typically leads to less error but is more computationally expensive.</p><p>This model alone does not have any differential variables, and calling <code>structural_simplify</code> will lead to an <code>ODESystem</code> with no unknowns.</p><pre><code class="language-julia hljs">structural_simplify(inner)</code></pre><p class="math-container">\[ \begin{align}
+\end{align}
+ \]</p><p>Simulating this model will cause the OrdinaryDiffEq integrator to immediately finish, and will not trigger the callback. Thus, we wrap this system in a trivial system with a differential variable.</p><pre><code class="language-julia hljs">@variables x(t) = 1.0
+@mtkbuild sys = ODESystem([D(x) ~ x], t; systems = [inner])</code></pre><p class="math-container">\[ \begin{align}
+\frac{\mathrm{d} x\left( t \right)}{\mathrm{d}t} &amp;= x\left( t \right)
+\end{align}
+ \]</p><p>We can now simulate <code>sys</code>.</p><pre><code class="language-julia hljs">prob = ODEProblem(sys, [sys.inner.mass__s =&gt; 0.5, sys.inner.mass__v =&gt; 0.0], (0.0, 5.0))
+sol = solve(prob, Tsit5())</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">retcode: Success
+Interpolation: specialized 4th order &quot;free&quot; interpolation
+t: 10001-element Vector{Float64}:
+ 0.0
+ 0.0
+ 0.001
+ 0.001
+ 0.002
+ 0.002
+ 0.003
+ 0.003
+ 0.004
+ 0.004
+ ⋮
+ 4.996
+ 4.996
+ 4.997
+ 4.997
+ 4.998
+ 4.998
+ 4.999
+ 4.999
+ 5.0
+u: 10001-element Vector{Vector{Float64}}:
+ [1.0]
+ [1.0]
+ [1.0010005001667084]
+ [1.0010005001667084]
+ [1.0020020013340003]
+ [1.0020020013340003]
+ [1.003004504503377]
+ [1.003004504503377]
+ [1.004008010677342]
+ [1.004008010677342]
+ ⋮
+ [147.8206921899474]
+ [147.8206921899474]
+ [147.96858681712632]
+ [147.96858681712632]
+ [148.1166294129045]
+ [148.1166294129045]
+ [148.26482012532432]
+ [148.26482012532432]
+ [148.41315910257674]</code></pre><p>The variables of the FMU are discrete, and their timeseries can be obtained at intervals of <code>communication_step_size</code>.</p><pre><code class="language-julia hljs">sol[sys.inner.mass__s]</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">5002-element Vector{Float64}:
+ 0.5
+ 0.5
+ 0.5000032557675739
+ 0.5000126065628254
+ 0.5000277374082364
+ 0.5000489816151542
+ 0.5000761776744463
+ 0.5001092988967224
+ 0.5001483452819825
+ 0.5001934523600614
+ ⋮
+ 1.6980584968463255
+ 1.697907233814026
+ 1.6977499916178909
+ 1.6975867718588842
+ 1.6974175761995924
+ 1.6972424063642613
+ 1.697061264138831
+ 1.696874151370973
+ 1.696874151370973</code></pre><h2 id="FMUs-of-components"><a class="docs-heading-anchor" href="#FMUs-of-components">FMUs of components</a><a id="FMUs-of-components-1"></a><a class="docs-heading-anchor-permalink" href="#FMUs-of-components" title="Permalink"></a></h2><p>FMUs can also be imported as individual components. For this example, we will use custom FMUs used in the test suite of ModelingToolkit.jl.</p><pre><code class="language-julia hljs">fmu = loadFMU(
+    joinpath(@__DIR__, &quot;..&quot;, &quot;..&quot;, &quot;..&quot;, &quot;test&quot;, &quot;fmi&quot;, &quot;fmus&quot;, &quot;SimpleAdder.fmu&quot;);
+    type = :ME)
+fmu.modelDescription.modelVariables</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">7-element Vector{FMICore.fmi2ScalarVariable}:
+ Name: &#39;c&#39; (reference: 0)
+ Name: &#39;der(c)&#39; (reference: 1)
+ Name: &#39;a&#39; (reference: 2)
+ Name: &#39;b&#39; (reference: 3)
+ Name: &#39;out&#39; (reference: 4)
+ Name: &#39;out2&#39; (reference: 5)
+ Name: &#39;value&#39; (reference: 6)</code></pre><p>This FMU is equivalent to the following model:</p><pre><code class="language-julia hljs">@mtkmodel SimpleAdder begin
+    @variables begin
+        a(t)
+        b(t)
+        c(t)
+        out(t)
+        out2(t)
+    end
+    @parameters begin
+        value = 1.0
+    end
+    @equations begin
+        out ~ a + b + value
+        D(c) ~ out
+        out2 ~ 2c
+    end
+end</code></pre><p><code>a</code> and <code>b</code> are inputs, <code>c</code> is a state, and <code>out</code> and <code>out2</code> are outputs of the component.</p><pre><code class="language-julia-repl hljs" style="display:block;">julia&gt; @named adder = ModelingToolkit.FMIComponent(Val(2); fmu, type = :ME);</code><br/><code class="language-julia-repl hljs" style="display:block;">julia&gt; isinput(adder.a)</code><code class="nohighlight hljs ansi" style="display:block;">true</code><br/><code class="language-julia-repl hljs" style="display:block;">julia&gt; isinput(adder.b)</code><code class="nohighlight hljs ansi" style="display:block;">true</code><br/><code class="language-julia-repl hljs" style="display:block;">julia&gt; isoutput(adder.out)</code><code class="nohighlight hljs ansi" style="display:block;">true</code><br/><code class="language-julia-repl hljs" style="display:block;">julia&gt; isoutput(adder.out2)</code><code class="nohighlight hljs ansi" style="display:block;">true</code></pre><p>ModelingToolkit recognizes input and output variables of the component, and attaches the appropriate metadata. We can now use this component as a subcomponent of a larger system.</p><pre><code class="language-julia-repl hljs" style="display:block;">julia&gt; @variables a(t) b(t) c(t) [guess = 1.0];</code><br/><code class="language-julia-repl hljs" style="display:block;">julia&gt; @mtkbuild sys = ODESystem(
+           [adder.a ~ a, adder.b ~ b, D(a) ~ t,
+               D(b) ~ adder.out + adder.c, c^2 ~ adder.out + adder.value],
+           t;
+           systems = [adder])</code><code class="nohighlight hljs ansi" style="display:block;">┌ Warning: Internal error: Variable adder₊c(t) was marked as being in 0 ~ (adder₊wrapper(SymbolicUtils.BasicSymbolic{Float64}[adder₊c(t)], SymbolicUtils.BasicSymbolic{Float64}[adder₊a(t), adder₊b(t)], SymbolicUtils.BasicSymbolic{Float64}[adder₊value], t))[1] - adder₊cˍt(t), but was actually zero
+└ @ ModelingToolkit.StructuralTransformations ~/work/ModelingToolkit.jl/ModelingToolkit.jl/src/structural_transformation/utils.jl:262
+┌ Warning: Internal error: Variable adder₊a(t) was marked as being in 0 ~ (adder₊wrapper(SymbolicUtils.BasicSymbolic{Float64}[adder₊c(t)], SymbolicUtils.BasicSymbolic{Float64}[adder₊a(t), adder₊b(t)], SymbolicUtils.BasicSymbolic{Float64}[adder₊value], t))[1] - adder₊cˍt(t), but was actually zero
+└ @ ModelingToolkit.StructuralTransformations ~/work/ModelingToolkit.jl/ModelingToolkit.jl/src/structural_transformation/utils.jl:262
+┌ Warning: Internal error: Variable adder₊b(t) was marked as being in 0 ~ (adder₊wrapper(SymbolicUtils.BasicSymbolic{Float64}[adder₊c(t)], SymbolicUtils.BasicSymbolic{Float64}[adder₊a(t), adder₊b(t)], SymbolicUtils.BasicSymbolic{Float64}[adder₊value], t))[1] - adder₊cˍt(t), but was actually zero
+└ @ ModelingToolkit.StructuralTransformations ~/work/ModelingToolkit.jl/ModelingToolkit.jl/src/structural_transformation/utils.jl:262
+┌ Warning: Internal error: Variable adder₊c(t) was marked as being in 0 ~ (adder₊wrapper(SymbolicUtils.BasicSymbolic{Float64}[adder₊c(t)], SymbolicUtils.BasicSymbolic{Float64}[adder₊a(t), adder₊b(t)], SymbolicUtils.BasicSymbolic{Float64}[adder₊value], t))[2] - adder₊out2(t), but was actually zero
+└ @ ModelingToolkit.StructuralTransformations ~/work/ModelingToolkit.jl/ModelingToolkit.jl/src/structural_transformation/utils.jl:262
+┌ Warning: Internal error: Variable adder₊a(t) was marked as being in 0 ~ (adder₊wrapper(SymbolicUtils.BasicSymbolic{Float64}[adder₊c(t)], SymbolicUtils.BasicSymbolic{Float64}[adder₊a(t), adder₊b(t)], SymbolicUtils.BasicSymbolic{Float64}[adder₊value], t))[2] - adder₊out2(t), but was actually zero
+└ @ ModelingToolkit.StructuralTransformations ~/work/ModelingToolkit.jl/ModelingToolkit.jl/src/structural_transformation/utils.jl:262
+┌ Warning: Internal error: Variable adder₊b(t) was marked as being in 0 ~ (adder₊wrapper(SymbolicUtils.BasicSymbolic{Float64}[adder₊c(t)], SymbolicUtils.BasicSymbolic{Float64}[adder₊a(t), adder₊b(t)], SymbolicUtils.BasicSymbolic{Float64}[adder₊value], t))[2] - adder₊out2(t), but was actually zero
+└ @ ModelingToolkit.StructuralTransformations ~/work/ModelingToolkit.jl/ModelingToolkit.jl/src/structural_transformation/utils.jl:262
+┌ Warning: Internal error: Variable adder₊c(t) was marked as being in 0 ~ (adder₊wrapper(SymbolicUtils.BasicSymbolic{Float64}[adder₊c(t)], SymbolicUtils.BasicSymbolic{Float64}[adder₊a(t), adder₊b(t)], SymbolicUtils.BasicSymbolic{Float64}[adder₊value], t))[3] - adder₊out(t), but was actually zero
+└ @ ModelingToolkit.StructuralTransformations ~/work/ModelingToolkit.jl/ModelingToolkit.jl/src/structural_transformation/utils.jl:262
+┌ Warning: Internal error: Variable adder₊a(t) was marked as being in 0 ~ (adder₊wrapper(SymbolicUtils.BasicSymbolic{Float64}[adder₊c(t)], SymbolicUtils.BasicSymbolic{Float64}[adder₊a(t), adder₊b(t)], SymbolicUtils.BasicSymbolic{Float64}[adder₊value], t))[3] - adder₊out(t), but was actually zero
+└ @ ModelingToolkit.StructuralTransformations ~/work/ModelingToolkit.jl/ModelingToolkit.jl/src/structural_transformation/utils.jl:262
+┌ Warning: Internal error: Variable adder₊b(t) was marked as being in 0 ~ (adder₊wrapper(SymbolicUtils.BasicSymbolic{Float64}[adder₊c(t)], SymbolicUtils.BasicSymbolic{Float64}[adder₊a(t), adder₊b(t)], SymbolicUtils.BasicSymbolic{Float64}[adder₊value], t))[3] - adder₊out(t), but was actually zero
+└ @ ModelingToolkit.StructuralTransformations ~/work/ModelingToolkit.jl/ModelingToolkit.jl/src/structural_transformation/utils.jl:262
+<span class="sgr1">Model sys:</span>
+<span class="sgr1">Equations (4):</span>
+  4 standard: see equations(sys)
+<span class="sgr1">Unknowns (4):</span> see unknowns(sys)
+  a(t)
+  b(t)
+  adder₊c(t)
+  c(t)
+<span class="sgr1">Parameters (2):</span> see parameters(sys)
+  adder₊value [defaults to 1.0]
+  adder₊wrapper⋆ [defaults to FMI2InstanceWrapper(Model name:	SimpleAdder
+Type:		0, UInt32[0x00000001], UInt32[0x00000000], UInt32[0x00000005, 0x00000004], UInt32[0x00000006], UInt32[0x00000002, 0x00000003], 1.0e-6, nothing)]
+<span class="sgr1">Observed (6):</span> see observed(sys)</code><br/><code class="language-julia-repl hljs" style="display:block;">julia&gt; equations(sys)</code><code class="nohighlight hljs ansi" style="display:block;">4-element Vector{Equation}:
+ Differential(t)(a(t)) ~ t
+ Differential(t)(b(t)) ~ adder₊c(t) + adder₊out(t)
+ Differential(t)(adder₊c(t)) ~ adder₊cˍt(t)
+ 0 ~ adder₊value + adder₊out(t) - (c(t)^2)</code></pre><p>Note how the output <code>adder.out</code> is used in an algebraic equation of the system. We have also given <code>sys.c</code> a guess, expecting it to be solved for by initialization. ModelingToolkit is able to use FMUs in initialization to solve for initial states. As mentioned earlier, we cannot differentiate through an FMU. Thus, automatic differentiation has to be disabled for the solver.</p><pre><code class="language-julia hljs">prob = ODEProblem(sys, [sys.adder.c =&gt; 2.0, sys.a =&gt; 1.0, sys.b =&gt; 1.0],
+    (0.0, 1.0), [sys.adder.value =&gt; 2.0])
+solve(prob, Rodas5P(autodiff = false))</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">retcode: Success
+Interpolation: specialized 4rd order &quot;free&quot; stiffness-aware interpolation
+t: 23-element Vector{Float64}:
+ 0.0
+ 1.0e-6
+ 1.0e-6
+ 1.1e-5
+ 1.1e-5
+ 0.00011099999999999999
+ 0.00011099999999999999
+ 0.0011109999999999998
+ 0.0011109999999999998
+ 0.011110999999999996
+ ⋮
+ 0.18654232672188578
+ 0.35269441444276967
+ 0.35269441444276967
+ 0.5996609006045067
+ 0.5996609006045067
+ 0.7974991218086636
+ 0.7974991218086636
+ 1.0
+ 1.0
+u: 23-element Vector{Vector{Float64}}:
+ [1.0, 1.0, 2.0, 2.4494897532242415]
+ [1.0000000000005, 1.000006000005, 2.000004000003, 2.449490967528866]
+ [1.0000000000005, 1.000006000005, 2.000004000003, 2.449490967528866]
+ [1.0000000000605, 1.0000660006050037, 2.0000440003630024, 2.4495032150755596]
+ [1.0000000000605, 1.0000660006050037, 2.0000440003630024, 2.4495032150755596]
+ [1.0000000061605, 1.000666061608875, 2.000444036965507, 2.4496256995241894]
+ [1.0000000061605, 1.000666061608875, 2.000444036965507, 2.4496256995241894]
+ [1.0000006171605003, 1.0066721754922148, 2.004447705478185, 2.4508514423874646]
+ [1.0000006171605003, 1.0066721754922148, 2.004447705478185, 2.4508514423874646]
+ [1.0000617271605003, 1.0672871759358749, 2.0448168885834086, 2.4631989166722073]
+ ⋮
+ [1.0173990198294076, 2.3131380863021587, 2.863377337118342, 2.7074963892884947]
+ [1.0621966749895644, 3.882751080300773, 3.8767560782872312, 2.990810665192263]
+ [1.0621966749895644, 3.882751080300773, 3.8767560782872312, 2.990810665192263]
+ [1.1797965978569052, 7.19228603805808, 5.985802155158694, 3.517417157158069]
+ [1.1797965978569052, 7.19228603805808, 5.985802155158694, 3.517417157158069]
+ [1.3180024246427957, 11.026803179511106, 8.409303527686838, 4.0428871175628665]
+ [1.3180024246427957, 11.026803179511106, 8.409303527686838, 4.0428871175628665]
+ [1.5000000000000016, 16.505550563598145, 11.855536157581135, 4.691041237977434]
+ [1.5000000000000016, 16.505550563598145, 11.855536157581135, 4.691041237977434]</code></pre><p>CoSimulation FMUs follow a nearly identical process. Since CoSimulation FMUs operate using callbacks, after triggering the callbacks and altering the discrete state the algebraic equations may no longer be satisfied. To resolve for the values of algebraic variables, we use the <code>reinitializealg</code> keyword of <code>FMIComponent</code>. This is a DAE initialization algorithm to use at the end of every callback. Since CoSimulation FMUs are not directly involved in the RHS of the system - instead operating through callbacks - we can use a solver with automatic differentiation.</p><pre><code class="language-julia hljs">fmu = loadFMU(
+    joinpath(@__DIR__, &quot;..&quot;, &quot;..&quot;, &quot;..&quot;, &quot;test&quot;, &quot;fmi&quot;, &quot;fmus&quot;, &quot;SimpleAdder.fmu&quot;);
+    type = :CS)
+@named adder = ModelingToolkit.FMIComponent(
+    Val(2); fmu, type = :CS, communication_step_size = 1e-3,
+    reinitializealg = BrownFullBasicInit())
+@mtkbuild sys = ODESystem(
+    [adder.a ~ a, adder.b ~ b, D(a) ~ t,
+        D(b) ~ adder.out + adder.c, c^2 ~ adder.out + adder.value],
+    t;
+    systems = [adder])
+prob = ODEProblem(sys, [sys.adder.c =&gt; 2.0, sys.a =&gt; 1.0, sys.b =&gt; 1.0],
+    (0.0, 1.0), [sys.adder.value =&gt; 2.0])
+solve(prob, Rodas5P())</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">retcode: Success
+Interpolation: specialized 4rd order &quot;free&quot; stiffness-aware interpolation
+t: 2004-element Vector{Float64}:
+ 0.0
+ 0.0
+ 1.0e-6
+ 1.1e-5
+ 0.00011099999999999999
+ 0.001
+ 0.001
+ 0.002
+ 0.002
+ 0.003
+ ⋮
+ 0.996
+ 0.996
+ 0.997
+ 0.997
+ 0.998
+ 0.998
+ 0.999
+ 0.999
+ 1.0
+u: 2004-element Vector{Vector{Float64}}:
+ [1.0, 1.0, 2.2360679786694857]
+ [1.0, 1.0, 2.2360679786694857]
+ [1.0000000000005, 1.000005, 2.23606797749979]
+ [1.0000000000605, 1.0000550000000001, 2.23606797749979]
+ [1.0000000061605, 1.000555, 2.23606797749979]
+ [1.0000005, 1.005, 2.23606797749979]
+ [1.0000005, 1.005, 2.45051025298814]
+ [1.000002, 1.0110090055004999, 2.45051025298814]
+ [1.000002, 1.0110090055004999, 2.4517363246283344]
+ [1.0000045, 1.0170280325175058, 2.4517363246280173]
+ ⋮
+ [1.4960079999999851, 16.35754369983386, 4.671293088935029]
+ [1.4960079999999851, 16.35754369983386, 4.674778251409642]
+ [1.497004499999985, 16.389173203064352, 4.674778251407637]
+ [1.497004499999985, 16.389173203064352, 4.6782665275808215]
+ [1.498001999999985, 16.420855218475776, 4.678266527578814]
+ [1.498001999999985, 16.420855218475776, 4.681757919680873]
+ [1.499000499999985, 16.45258983225982, 4.681757919678864]
+ [1.499000499999985, 16.45258983225982, 4.685252429942133]
+ [1.4999999999999851, 16.484377130747994, 4.68525242994012]</code></pre></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../disturbance_modeling/">« Disturbance and input modeling modeling</a><a class="docs-footer-nextpage" href="../../examples/higher_order/">Automatic Transformation of Nth Order ODEs to 1st Order ODEs »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.10.2 on <span class="colophon-date" title="Friday 25 April 2025 13:36">Friday 25 April 2025</span>. Using Julia version 1.10.9.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
