@@ -1317,6 +1317,7 @@ point number or array of such numbers.
 """
 function is_floatingpoint_symtype(T)
     return T === Real || T === Number || T === Complex || T <: AbstractFloat ||
+        T isa DataType && T <: Complex && is_floatingpoint_symtype(T.parameters[1]) ||
         T <: AbstractArray && is_floatingpoint_symtype(eltype(T))
 end
 
