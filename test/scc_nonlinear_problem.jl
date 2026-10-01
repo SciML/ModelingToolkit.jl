@@ -460,6 +460,56 @@ end
     end
 end
 
+@testset "SCC block container follows the specialization level" begin
+    function nonlinear_chain(n)
+        @variables x[1:n]
+        eqs = [0 ~ x[i]^3 + x[i] - (i == 1 ? 1 : x[i - 1]) for i in 1:n]
+        return mtkcompile(System(eqs; name = :chain)), [x[i] => 1.0 for i in 1:n]
+    end
+    for n in (2, 7)
+        sys, op = nonlinear_chain(n)
+        for (spec, container) in (
+                (SciMLBase.FullSpecialize, Tuple),
+                (SciMLBase.AutoSpecialize, n <= 5 ? Tuple : Vector),
+                (SciMLBase.AutoDespecialize, Vector),
+            )
+            prob = SCCNonlinearProblem{true, spec}(sys, op)
+            @test length(prob.probs) == n
+            @test prob.probs isa container
+            @test SciMLBase.successful_retcode(solve(prob, NewtonRaphson()))
+        end
+    end
+end
+
+@testset "Initialization `SCCNonlinearProblem` type does not depend on the block count" begin
+    function chain_dae(n)
+        @variables x(t)[1:n] y(t)[1:n]
+        eqs = Equation[]
+        for i in 1:n
+            push!(eqs, D(x[i]) ~ -x[i] + y[i])
+            push!(eqs, 0 ~ y[i]^3 + y[i] - x[i] - (i == 1 ? 0 : y[i - 1]))
+        end
+        sys = mtkcompile(System(eqs, t; name = :chain))
+        return ODEProblem(
+            sys, [sys.x[i] => 1.0 / i for i in 1:n], (0.0, 1.0);
+            guesses = [sys.y[i] => 0.5 for i in 1:n]
+        )
+    end
+    probs = [chain_dae(n) for n in (2, 3, 7)]
+    initprobs = [prob.f.initialization_data.initializeprob for prob in probs]
+    @test all(ip -> ip isa SCCNonlinearProblem, initprobs)
+    @test [length(ip.probs) for ip in initprobs] == [2, 3, 7]
+    @test allequal(typeof.(initprobs))
+    for prob in probs
+        @test SciMLBase.successful_retcode(solve(prob, Rodas5P()))
+    end
+    # the precompile workload only covers user models if it builds this same type
+    workload = ModelingToolkit.precompile_scc_dae_problem().f.initialization_data.initializeprob
+    @test typeof(workload) === typeof(initprobs[1])
+    @test any(sp -> sp isa LinearProblem, workload.probs)
+    @test any(sp -> sp isa NonlinearProblem, workload.probs)
+end
+
 @testset "HashedRandom missing guesses in init `SCCNonlinearProblem` (#4603)" begin
     # Initialization decomposes into multiple SCCs and no guesses are provided,
     # so the default `HashedRandom` missing-guess strategy is used for the SCC

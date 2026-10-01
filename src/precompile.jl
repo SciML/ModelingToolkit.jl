@@ -20,8 +20,9 @@ end
     precompile_dae_problem()
 
 Small mass-matrix DAE used by the precompile workloads: one algebraic unknown fixed by a
-nonlinear constraint, so `ODEProblem` builds a non-trivial (SCC) initialization problem
-and `solve` runs `OverrideInit`.
+nonlinear constraint, so `ODEProblem` builds a single-block `NonlinearProblem`
+initialization problem and `solve` runs `OverrideInit`. See
+[`precompile_scc_dae_problem`](@ref) for the multi-block (`SCCNonlinearProblem`) case.
 """
 function precompile_dae_problem()
     t = MTKBase.t_nounits
@@ -30,6 +31,28 @@ function precompile_dae_problem()
     @variables x(t) y(t)
     sys = mtkcompile(System([D(x) ~ -k * x + y, 0 ~ y^3 + y - x], t; name = :precompile_dae))
     return ODEProblem(sys, [x => 1.0], (0.0, 1.0); guesses = [y => 0.5])
+end
+
+"""
+    precompile_scc_dae_problem()
+
+Small mass-matrix DAE used by the precompile workloads whose initialization problem is an
+`SCCNonlinearProblem` with a nonlinear block followed by a linear block. At the default
+`AutoDespecialize` the blocks are stored in a vector, so every model's multi-block
+initialization problem has this one type and the cached solve applies to all of them.
+"""
+function precompile_scc_dae_problem()
+    t = MTKBase.t_nounits
+    D = MTKBase.D_nounits
+    @parameters k = 1.0
+    @variables x(t) y(t) w(t)
+    sys = mtkcompile(
+        System(
+            [D(x) ~ -k * x + y + w, 0 ~ y^3 + y - x, 0 ~ (1 + y^2) * w - x], t;
+            name = :precompile_scc_dae
+        )
+    )
+    return ODEProblem(sys, [x => 1.0], (0.0, 1.0); guesses = [y => 0.5, w => 0.5])
 end
 
 PrecompileTools.@compile_workload begin
@@ -72,4 +95,5 @@ PrecompileTools.@compile_workload begin
 
     precompile_ode_problem()
     precompile_dae_problem()
+    precompile_scc_dae_problem()
 end
