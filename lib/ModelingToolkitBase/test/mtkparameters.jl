@@ -522,6 +522,19 @@ end
         @test getp(sys, k)(newp) == 1.5
         @test getp(sys, g)(newp) == 3.0
     end
+    @testset "`FullSpecialize` initialization map infers" begin
+        fprob = ODEProblem{false, SciMLBase.FullSpecialize}(
+            sys, [], (0.0, 2.0);
+            u0_constructor = static_constructor, p_constructor = static_constructor
+        )
+        initdata = fprob.f.initialization_data
+        pmap_T = only(
+            Base.return_types(
+                initdata.initializeprobpmap, (typeof(fprob), typeof(initdata.initializeprob))
+            )
+        )
+        @test pmap_T == typeof(fprob.p)
+    end
 end
 
 @testset "`anyeltypedual`" begin
