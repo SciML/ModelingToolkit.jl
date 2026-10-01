@@ -1561,7 +1561,10 @@ function namespace_expr(O::SymbolicT, sys::AbstractSystem, n::Symbol = nameof(sy
             for i in eachindex(args)
                 newargs[i] = namespace_expr(newargs[i], sys, n; cache, ivs)
             end
-            if isvar
+            # An indexed variable keeps `getindex` and its metadata; its parent was
+            # namespaced with the arguments above, and may be an array slice that
+            # `renamespace` does not handle on its own.
+            if isvar && f !== getindex
                 rescoped = renamespace(n, O)
                 f = Moshi.Data.variant_getfield(rescoped, BSImpl.Term{VartypeT}, :f)
                 meta = Moshi.Data.variant_getfield(rescoped, BSImpl.Term{VartypeT}, :metadata)
