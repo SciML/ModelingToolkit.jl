@@ -2114,7 +2114,7 @@ end
     @test SciMLBase.successful_retcode(sol)
     @test pos_hits[] == 0
     @test allunique(sol.t)
-    @test sol.t ≈ 0:0.5:2
+    @test minimum(t -> abs(t - 1), sol.t) < 1.0e-10
 
     # Symmetric: positive crossing with affect = nothing
     pos_hits[] = 0
@@ -2131,9 +2131,9 @@ end
     @test SciMLBase.successful_retcode(sol2)
     @test neg_hits[] == 0
     @test allunique(sol2.t)
-    @test sol2.t ≈ 0:0.5:2
+    @test minimum(t -> abs(t - 1), sol2.t) < 1.0e-10
 
-    # VectorContinuousCallback: two conditions, one edge ignored
+    # VectorContinuousCallback: two conditions, ignored negative edges
     pos_hits[] = 0
     @variables z(t)
     eqs3 = [D(x) ~ -k, D(z) ~ -k, 0 ~ y - x^2]
@@ -2152,4 +2152,6 @@ end
     @test SciMLBase.successful_retcode(sol3)
     @test pos_hits[] == 0
     @test allunique(sol3.t)
+    @test minimum(t -> abs(t - 1), sol3.t) < 1.0e-10
+    @test minimum(t -> abs(t - 1.5), sol3.t) < 1.0e-6
 end
