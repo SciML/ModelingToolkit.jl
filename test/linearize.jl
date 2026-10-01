@@ -466,3 +466,14 @@ end
     @test size(lsys.C) == (1, 0)
     @test size(lsys.D) == (1, 0)
 end
+
+@testset "Issue#5224: input Jacobian uses solved inputs, not guesses" begin
+    @variables x(t) = 1.0 u(t) [input = true] y(t) [output = true]
+    @named sys = System([D(x) ~ -x + u^2, y ~ x], t)
+    op = Dict(y => 4.0, D(x) => 0.0, u => missing, x => nothing)
+    mats, _, extras = linearize(sys, [u], [y]; op, guesses = Dict(u => 1.0, x => 1.0))
+    @test mats.A ≈ [-1.0;;]
+    # Analytic B is [4.0] (= 2u at u = 2); atol covers nonlinear-init residual.
+    @test mats.B ≈ [4.0;;] atol = 1.0e-6
+    @test extras.x ≈ [4.0]
+end

@@ -520,7 +520,6 @@ function (linfun::LinearizationFunction)(u, p, t)
     end
 
     fun = linfun.prob.f
-    input_vals = linfun.inputs_getter(linfun.prob)
     if u !== nothing # Handle systems without unknowns
         linfun.num_states == length(u) ||
             error("Number of unknown variables ($(linfun.num_states)) does not match the number of input unknowns ($(length(u)))")
@@ -543,6 +542,8 @@ function (linfun::LinearizationFunction)(u, p, t)
         if !success
             error("Initialization algorithm $(linfun.initializealg) failed with `unknowns = $u` and `p = $p`.")
         end
+        input_vals = linfun.num_inputs == 0 ? nothing :
+            linfun.inputs_getter(remake(linfun.prob; u0 = u, p = p))
         fg_xz = linfun.uf_jac(u, DI.Constant(p), DI.Constant(t))
         h_xz = linfun.h_jac(u, DI.Constant(p), DI.Constant(t))
         # The jacobian with respect to an empty input vector is not defined.
@@ -557,6 +558,8 @@ function (linfun::LinearizationFunction)(u, p, t)
         fg_xz = zeros(0, 0)
         fg_u = zeros(0, linfun.num_inputs)
         h_xz = zeros(size(linfun.hp_jac.buf, 1), 0)
+        input_vals = linfun.num_inputs == 0 ? nothing :
+            linfun.inputs_getter(remake(linfun.prob; p = p))
     end
     h_u = if linfun.num_inputs == 0
         zeros(eltype(h_xz), size(h_xz, 1), 0)
