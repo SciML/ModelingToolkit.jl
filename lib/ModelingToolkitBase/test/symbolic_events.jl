@@ -1,5 +1,6 @@
 using ModelingToolkitBase, OrdinaryDiffEq, StochasticDiffEq, JumpProcesses, Test
 using OrdinaryDiffEqRosenbrock
+using OrdinaryDiffEqCore
 using SciMLStructures: canonicalize, Discrete
 using ModelingToolkitBase: SymbolicContinuousCallback,
     SymbolicDiscreteCallback,
@@ -2087,41 +2088,50 @@ end
     @test sol[s] ≈ [ones(3), -ones(3), ones(3), -ones(3)]
 end
 
-@testset "Issue#5077: nothing affect edges skip reinit and duplicate saves" begin
+@testset "Issue#5077: nothing affect edges drop duplicate save and post-affect reinit" begin
+    # Count callback DAE inits. DiffEqBase still runs one init via
+    # change_t_via_interpolation!; this PR only removes the second (post-affect) one.
+    struct CountInit{A <: SciMLBase.DAEInitializationAlgorithm} <:
+        SciMLBase.DAEInitializationAlgorithm
+        alg::A
+        count::Base.RefValue{Int}
+    end
+    CountInit(alg) = CountInit(alg, Ref(0))
+    function OrdinaryDiffEqCore._initialize_dae!(integ, prob, alg::CountInit, x::Union{Val{true}, Val{false}})
+        alg.count[] += 1
+        return OrdinaryDiffEqCore._initialize_dae!(integ, prob, alg.alg, x)
+    end
+
     @variables x(t) y(t)
     @parameters k = 1.0
     eqs = [D(x) ~ -k, 0 ~ y - x^2]
-    pos_hits = Ref(0)
     neg_hits = Ref(0)
-    affect_pos = ModelingToolkitBase.ImperativeAffect(; modified = (;), observed = (;)) do m, o, ctx, integ
-        pos_hits[] += 1
-        nothing
-    end
     affect_neg = ModelingToolkitBase.ImperativeAffect(; modified = (;), observed = (;)) do m, o, ctx, integ
         neg_hits[] += 1
         nothing
     end
 
     # Negative crossing with affect_neg = nothing (issue reproducer)
+    cb_inits = CountInit(DiffEqBase.BrownFullBasicInit())
     cb = SymbolicContinuousCallback(
-        [x ~ 0], affect_pos; affect_neg = nothing,
-        reinitializealg = DiffEqBase.BrownFullBasicInit()
+        [x ~ 0], nothing; affect_neg = nothing,
+        reinitializealg = cb_inits
     )
     @named sys = System(eqs, t, [x, y], [k]; continuous_events = [cb])
     sys = mtkcompile(sys)
     prob = ODEProblem(sys, [x => 1.0], (0.0, 2.0))
     sol = solve(prob, FBDF(); saveat = 0.5)
     @test SciMLBase.successful_retcode(sol)
-    @test pos_hits[] == 0
     @test allunique(sol.t)
     @test minimum(t -> abs(t - 1), sol.t) < 1.0e-10
+    @test cb_inits.count[] == 1
 
     # Symmetric: positive crossing with affect = nothing
-    pos_hits[] = 0
     neg_hits[] = 0
+    cb_inits2 = CountInit(DiffEqBase.BrownFullBasicInit())
     cb2 = SymbolicContinuousCallback(
         [x ~ 0], nothing; affect_neg = affect_neg,
-        reinitializealg = DiffEqBase.BrownFullBasicInit()
+        reinitializealg = cb_inits2
     )
     @named sys2 = System(eqs, t, [x, y], [k]; continuous_events = [cb2])
     sys2 = mtkcompile(sys2)
@@ -2132,26 +2142,58 @@ end
     @test neg_hits[] == 0
     @test allunique(sol2.t)
     @test minimum(t -> abs(t - 1), sol2.t) < 1.0e-10
+    @test cb_inits2.count[] == 1
 
     # VectorContinuousCallback: two conditions, ignored negative edges
-    pos_hits[] = 0
+    cb_inits3 = CountInit(DiffEqBase.BrownFullBasicInit())
     @variables z(t)
     eqs3 = [D(x) ~ -k, D(z) ~ -k, 0 ~ y - x^2]
     cb_a = SymbolicContinuousCallback(
-        [x ~ 0], affect_pos; affect_neg = nothing,
-        reinitializealg = DiffEqBase.BrownFullBasicInit()
+        [x ~ 0], nothing; affect_neg = nothing,
+        reinitializealg = cb_inits3
     )
     cb_b = SymbolicContinuousCallback(
-        [z ~ 0], affect_pos; affect_neg = nothing,
-        reinitializealg = DiffEqBase.BrownFullBasicInit()
+        [z ~ 0], nothing; affect_neg = nothing,
+        reinitializealg = cb_inits3
     )
     @named sys3 = System(eqs3, t, [x, y, z], [k]; continuous_events = [cb_a, cb_b])
     sys3 = mtkcompile(sys3)
     prob3 = ODEProblem(sys3, [x => 1.0, z => 1.5], (0.0, 2.0))
     sol3 = solve(prob3, FBDF(); saveat = 0.5)
     @test SciMLBase.successful_retcode(sol3)
-    @test pos_hits[] == 0
     @test allunique(sol3.t)
     @test minimum(t -> abs(t - 1), sol3.t) < 1.0e-10
     @test minimum(t -> abs(t - 1.5), sol3.t) < 1.0e-6
+    @test cb_inits3.count[] == 2
+end
+
+@testset "Issue#5077: affect-less discrete and periodic events still solve" begin
+    @variables x(t) y(t)
+    @parameters k = 1.0
+    eqs = [D(x) ~ -k, 0 ~ y - x^2]
+
+    # Preset-time tick with no affect: still solves; saves include the tick.
+    cb_preset = SymbolicDiscreteCallback([1.0], nothing)
+    @named sys_p = System(eqs, t, [x, y], [k]; discrete_events = [cb_preset])
+    sys_p = mtkcompile(sys_p)
+    sol_p = solve(ODEProblem(sys_p, [x => 1.0], (0.0, 2.0)), FBDF(); saveat = 0.5)
+    @test SciMLBase.successful_retcode(sol_p)
+    @test all(t -> minimum(s -> abs(s - t), sol_p.t) < 1.0e-10, 0.5:0.5:2)
+    @test any(t -> isapprox(t, 1.0; atol = 1.0e-10), sol_p.t)
+
+    # Periodic tick with no affect.
+    cb_per = SymbolicDiscreteCallback(0.5, nothing)
+    @named sys_per = System(eqs, t, [x, y], [k]; discrete_events = [cb_per])
+    sys_per = mtkcompile(sys_per)
+    sol_per = solve(ODEProblem(sys_per, [x => 1.0], (0.0, 2.0)), FBDF())
+    @test SciMLBase.successful_retcode(sol_per)
+    @test sol_per.t[end] ≈ 2.0
+
+    # Boolean discrete condition with no affect.
+    cb_cond = SymbolicDiscreteCallback(x < 0.3, nothing)
+    @named sys_c = System(eqs, t, [x, y], [k]; discrete_events = [cb_cond])
+    sys_c = mtkcompile(sys_c)
+    sol_c = solve(ODEProblem(sys_c, [x => 1.0], (0.0, 2.0)), FBDF(); saveat = 0.5)
+    @test SciMLBase.successful_retcode(sol_c)
+    @test all(t -> minimum(s -> abs(s - t), sol_c.t) < 1.0e-10, 0.5:0.5:2)
 end
