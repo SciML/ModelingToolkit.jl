@@ -2879,6 +2879,18 @@ function __process_SciMLProblem(
             end
             no_override_merge_except_missing!(du0_op, binds)
             add_observed_equations!(du0_op, obs)
+            # Symbolic derivative values such as `D(x) => -w * x` may depend on
+            # variables only initialization determines, so non-derivative entries
+            # come from the post-initialization `op` without overriding set ones.
+            ddv_arrs = Set{SymbolicT}(first(split_indexed_var(ddv)) for ddv in ddvs)
+            for (k, v) in op
+                (isdifferential(k) || k in ddv_arrs) && continue
+                if Symbolics.isarraysymbolic(k)
+                    fill_unset_array_entries!(du0_op, k, v, COMMON_NOTHING)
+                elseif get_possibly_indexed(du0_op, k, COMMON_NOTHING) === COMMON_NOTHING
+                    write_possibly_indexed_array!(du0_op, k, v, COMMON_NOTHING)
+                end
+            end
         end
         merge_differential_toterm_entries!(du0_op; all_entries = true)
         # Problem-level guesses take precedence over system-level ones, matching

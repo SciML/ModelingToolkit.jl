@@ -1,10 +1,10 @@
 using Test, ModelingToolkit, SciMLBase, OrdinaryDiffEq
-using OrdinaryDiffEqBDF
+using OrdinaryDiffEqBDF, Sundials
 
 @testset "Derivative initialization after tearing" begin
     @independent_variables t
     D = Differential(t)
-    @variables y(t)[1:3] z(t) x(t) x1(t) x2(t) w(t)
+    @variables y(t)[1:3] z(t) x(t) x1(t) x2(t) w(t) v(t)
     @parameters k
     array_sys = complete(
         System(
@@ -17,6 +17,9 @@ using OrdinaryDiffEqBDF
             [0 ~ D(x1) + k * w * x1, 0 ~ D(x2) + k * w * x2, 0 ~ w - x1 - x2],
             t, [x1, x2, w], [k]; name = :scalar
         )
+    )
+    coupled_sys = complete(
+        System([0 ~ D(x) + v * x, 0 ~ v - x - 2], t, [x, v], []; name = :coupled)
     )
 
     @testset "Eliminated derivatives, $specialize, guesses = $guess_derivatives" for
@@ -37,7 +40,7 @@ using OrdinaryDiffEqBDF
         end
     end
 
-    @testset "Omitted derivatives give a consistent du0: $label" for (label, sys, op, guesses, du0) in (
+    @testset "Consistent du0: $label" for (label, sys, op, guesses, du0) in (
             (
                 "array, D(z) given", array_sys,
                 [y => [1.0, 2.0, 3.0], D(z) => 0.0], [z => 0.0], [-6.0, -12.0, -18.0, 0.0],
@@ -48,14 +51,19 @@ using OrdinaryDiffEqBDF
                 "scalar, D(w) given", scalar_sys,
                 [x1 => 1.0, x2 => 2.0, k => 1.0, D(w) => 0.0], [w => 0.0], [-3.0, -6.0, 0.0],
             ),
+            ("symbolic, initialized v", coupled_sys, [x => 1.0, D(x) => -v * x, D(v) => 0.0], [v => 0.0], [-3.0, 0.0]),
+            ("symbolic, D(v) omitted", coupled_sys, [x => 1.0, D(x) => -v * x], [v => 0.0], [-3.0, 0.0]),
+            ("symbolic, v given", coupled_sys, [x => 1.0, v => 3.0, D(x) => -v * x, D(v) => 0.0], [], [-3.0, 0.0]),
         )
         prob = DAEProblem(sys, op, (0.0, 1.0); guesses)
         @test prob.du0 ≈ du0
         residual = similar(prob.u0)
         prob.f(residual, prob.du0, prob.u0, prob.p, 0.0)
         @test residual ≈ zeros(length(residual)) atol = 1.0e-12
-        sol = solve(prob, DFBDF(); initializealg = SciMLBase.CheckInit())
-        @test SciMLBase.successful_retcode(sol)
+        for alg in (DFBDF(), IDA())
+            sol = solve(prob, alg; initializealg = SciMLBase.CheckInit())
+            @test SciMLBase.successful_retcode(sol)
+        end
     end
 
     @testset "Derivative root, sign = $sign, system guess = $system_guess" for
