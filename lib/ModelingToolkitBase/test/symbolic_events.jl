@@ -2085,3 +2085,45 @@ end
     @test sol(3.5; idxs = s) ≈ -ones(3)
     @test sol[s] ≈ [ones(3), -ones(3), ones(3), -ones(3)]
 end
+
+@testset "Issue#5200: discrete affect re-solves algebraic vars, keeps differentials" begin
+    using StaticArrays: SA
+    @variables x(t) v(t) λ(t) [guess = 0.0]
+    @discretes on(t) = 1.0
+    eqs = [D(x) ~ v, D(v) ~ -λ, 0 ~ 2λ + v - 2on]
+    ev = SymbolicDiscreteCallback([0.5], [on ~ 0.0]; discrete_parameters = [on])
+    @mtkcompile sys = System(eqs, t, [x, v, λ], [on]; discrete_events = [ev])
+
+    aff = affects(only(discrete_events(sys)))
+    @test aff isa AffectSystem
+    # Differential state `v` is pinned; algebraic/observed `λ` is what gets updated.
+    @test any(isequal(v), parameters(aff))
+    @test any(isequal(λ), unknowns(aff))
+
+    prob = ODEProblem(sys, [x => 0.0, v => 1.0], (0.0, 1.0))
+    sol = solve(prob, Rodas5P(); abstol = 1.0e-10, reltol = 1.0e-10)
+    @test SciMLBase.successful_retcode(sol)
+    i = findall(==(0.5), sol.t)
+    @test length(i) >= 2
+    @test sol.u[i[1]][2] ≈ sol.u[i[2]][2] rtol = 1.0e-10
+    t_after = sol.t[findfirst(>(0.5), sol.t)]
+    @test sol(t_after; idxs = λ) ≈ -sol(t_after; idxs = v) / 2 rtol = 1.0e-8
+
+    # Out-of-place `SVector` problems must not try to mutate state/parameters in place.
+    prob_oop = ODEProblem{false}(sys, SA[x => 0.0, v => 1.0], (0.0, 1.0))
+    sol_oop = solve(prob_oop, Rodas5P(); abstol = 1.0e-10, reltol = 1.0e-10)
+    @test SciMLBase.successful_retcode(sol_oop)
+    i_oop = findall(==(0.5), sol_oop.t)
+    @test length(i_oop) >= 2
+    @test sol_oop.u[i_oop[1]][2] ≈ sol_oop.u[i_oop[2]][2] rtol = 1.0e-10
+
+    @variables x2(t) v2(t)
+    ev2 = SymbolicDiscreteCallback([0.5], [v2 ~ -Pre(v2)])
+    @mtkcompile sys2 = System([D(x2) ~ v2, D(v2) ~ -1], t; discrete_events = [ev2])
+    prob2 = ODEProblem{false}(sys2, SA[x2 => 0.0, v2 => 1.0], (0.0, 1.0))
+    sol2 = solve(prob2, Tsit5())
+    @test SciMLBase.successful_retcode(sol2)
+    i2 = findall(==(0.5), sol2.t)
+    @test length(i2) >= 2
+    @test sol2.u[i2[2]][2] ≈ -sol2.u[i2[1]][2] rtol = 1.0e-10
+end
