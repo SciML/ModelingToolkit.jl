@@ -122,8 +122,7 @@ function InitializationProblem{iip, specialize}(
         )
     end
     for i in eachindex(pareqs)
-        eq = pareqs[i]
-        pareqs[i] = Symbolics.COMMON_ZERO ~ (eq.rhs - eq.lhs)
+        pareqs[i] = parameter_equation_to_residual(pareqs[i])
     end
     @set! isys.eqs = [equations(isys); pareqs]
 
@@ -529,6 +528,54 @@ function Base.showerror(io::IO, e::IncompleteInitializationError)
 end
 
 struct LinearInitializationProblem{iip} end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Convert a parameter-only initialization equation to residual form `0 ~ rhs - lhs`.
+Non-numeric sides cannot be subtracted (SymbolicUtils leaves `-(::BasicSymbolic,
+::BasicSymbolic)` unimplemented for non-numeric symtypes); throw an `ArgumentError`
+that names the involved parameter instead of a raw `MethodError`.
+"""
+function parameter_equation_to_residual(eq::Equation)
+    lhs = eq.lhs
+    rhs = eq.rhs
+    if residual_side_subtractable(lhs) && residual_side_subtractable(rhs)
+        return Symbolics.COMMON_ZERO ~ (rhs - lhs)
+    end
+    pname = parameter_equation_display_name(eq)
+    throw(
+        ArgumentError(
+            """
+            Cannot enforce non-numeric parameter equation `$eq` during initialization \
+            because symbolic subtraction is not defined for this type. Parameter \
+            `$pname` cannot be supplied this way in the operating point. Remove it \
+            from the operating point to use the default, or look the parameter up by \
+            name in `parameters(sys)` and use that symbol as the key (property access \
+            such as `sys.$pname` may still return a pre-respecialize symbol).
+            """
+        )
+    )
+end
+
+function residual_side_subtractable(x)
+    is_variable_numeric(x) && return true
+    SU.isconst(x) || return false
+    v = unwrap_const(x)
+    return v isa Number || (v isa AbstractArray && eltype(v) <: Number)
+end
+
+function parameter_equation_display_name(eq::Equation)
+    for side in (eq.lhs, eq.rhs)
+        SU.isconst(side) && continue
+        hasname(side) && return getname(side)
+        if iscall(side) && operation(side) === getindex
+            arr = arguments(side)[1]
+            hasname(arr) && return getname(arr)
+        end
+    end
+    return eq
+end
 
 function LinearInitializationProblem{iip}(
         sys::AbstractSystem, op; u0_constructor = identity, kwargs...
