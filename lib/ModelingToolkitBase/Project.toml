@@ -160,7 +160,6 @@ OptimizationOptimJL = "0.4.14"
 OrderedCollections = "1.8, 2"
 OrdinaryDiffEq = "7"
 OrdinaryDiffEqBDF = "2"
-OrdinaryDiffEqCore = "4.4"
 OrdinaryDiffEqDefault = "2"
 OrdinaryDiffEqDifferentiation = "3.11"
 OrdinaryDiffEqFunctionMap = "2"
@@ -231,7 +230,6 @@ OptimizationIpopt = "43fad042-7963-4b32-ab19-e2a4f9a67124"
 OptimizationOptimJL = "36348300-93cb-4f02-beb5-3c3902f8871e"
 OrdinaryDiffEq = "1dea7af3-3e70-54e6-95c3-0bf5283fa5ed"
 OrdinaryDiffEqBDF = "6ad6398a-0878-4a85-9266-38940aa047c8"
-OrdinaryDiffEqCore = "bbf590c4-e513-4bbe-9b18-05decba2e5d8"
 OrdinaryDiffEqDefault = "50262376-6c5a-4cf5-baba-aaf4f84d72d7"
 OrdinaryDiffEqDifferentiation = "4302a76b-040a-498a-8c04-15b101fed76b"
 OrdinaryDiffEqFunctionMap = "d3585ca7-f5d3-4ba6-8057-292ed1abd90f"
@@ -253,4 +251,4 @@ Sundials = "c3572dad-4567-51f8-b174-8c6c989267f4"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["BenchmarkTools", "BoundaryValueDiffEqMIRK", "BoundaryValueDiffEqAscher", "ControlSystemsBase", "DataInterpolations", "DelayDiffEq", "NonlinearSolve", "ForwardDiff", "ModelingToolkitStandardLibrary", "Optimization", "OptimizationIpopt", "OptimizationOptimJL", "OrdinaryDiffEq", "OrdinaryDiffEqDefault", "OrdinaryDiffEqDifferentiation", "REPL", "Random", "ReferenceTests", "SafeTestsets", "SciMLTesting", "StableRNGs", "Statistics", "SteadyStateDiffEq", "Test", "StochasticDiffEq", "Sundials", "Pkg", "OrdinaryDiffEqNonlinearSolve", "Logging", "OptimizationBase", "LinearSolve", "Latexify", "Distributed", "DiffEqNoiseProcess", "DynamicQuantities", "OrdinaryDiffEqSDIRK", "OrdinaryDiffEqRosenbrock", "OrdinaryDiffEqBDF", "OrdinaryDiffEqCore", "OrdinaryDiffEqFunctionMap", "OrdinaryDiffEqTsit5"]
+test = ["BenchmarkTools", "BoundaryValueDiffEqMIRK", "BoundaryValueDiffEqAscher", "ControlSystemsBase", "DataInterpolations", "DelayDiffEq", "NonlinearSolve", "ForwardDiff", "ModelingToolkitStandardLibrary", "Optimization", "OptimizationIpopt", "OptimizationOptimJL", "OrdinaryDiffEq", "OrdinaryDiffEqDefault", "OrdinaryDiffEqDifferentiation", "REPL", "Random", "ReferenceTests", "SafeTestsets", "SciMLTesting", "StableRNGs", "Statistics", "SteadyStateDiffEq", "Test", "StochasticDiffEq", "Sundials", "Pkg", "OrdinaryDiffEqNonlinearSolve", "Logging", "OptimizationBase", "LinearSolve", "Latexify", "Distributed", "DiffEqNoiseProcess", "DynamicQuantities", "OrdinaryDiffEqSDIRK", "OrdinaryDiffEqRosenbrock", "OrdinaryDiffEqBDF", "OrdinaryDiffEqFunctionMap", "OrdinaryDiffEqTsit5"]
