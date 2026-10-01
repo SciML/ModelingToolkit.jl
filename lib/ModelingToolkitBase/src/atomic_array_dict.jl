@@ -164,14 +164,46 @@ end
 Equivalent to `get(dd, k, default)`. If `k` is an indexed array, then return
 `dd[arr][idxs...]` for the corresponding array `arr` and indices, or `default`
 if `arr` does not exist.
+
+When `k` has non-constant (symbolic) indices and `arr` is present:
+- if `allow_symbolic_indices` is `false` (default), return `default` so
+  membership-style callers treat the entry as missing until indices are concrete;
+- if `allow_symbolic_indices` is `true`, return the symbolic `getindex` of the
+  substituted array value so a fixpoint substituter can resolve the indices next.
 """
-function get_possibly_indexed(dd::AtomicArrayDict, k::SymbolicT, default)
+function get_possibly_indexed(
+        dd::AtomicArrayDict, k::SymbolicT, default; allow_symbolic_indices::Bool = false
+    )
     arr, isarr = split_indexed_var(k)
     res = get(dd, arr, default)
     isarr || return res
     res === default && return default
+    if !has_const_int_indices(k)
+        allow_symbolic_indices || return default
+        return index_substituted_array(res, k)
+    end
     idx = get_stable_index(k)
     return res[idx]
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Build `getindex(res, idxs...)` using the (possibly symbolic) indices of the
+indexed term `k`. Recurses through wrapping [`Operator`](@ref)s.
+"""
+function index_substituted_array(res::SymbolicT, k::SymbolicT)
+    return Moshi.Match.@match k begin
+        BSImpl.Term(; f, args) && if f === getindex end => begin
+            return res[args[2:end]...]
+        end
+        BSImpl.Term(; f, args) && if f isa Operator && length(args) == 1 end => begin
+            # `res` is already the value of `f(arr)`; do not re-apply `f`
+            # (mirrors `_get_stable_index`, which discards the operator).
+            return index_substituted_array(res, args[1]::SymbolicT)
+        end
+        _ => return res
+    end
 end
 
 struct AtomicArraySet{D <: AbstractDict{SymbolicT, Nothing}} <: AbstractSet{SymbolicT}
@@ -261,7 +293,7 @@ const AADSubWrapper{D} = AtomicArrayDictSubstitutionWrapper{D}
 
 Base.get(def::Base.Callable, dd::AADSubWrapper, k) = def()
 function Base.get(def::Base.Callable, dd::AADSubWrapper, k::SymbolicT)
-    res = get_possibly_indexed(dd.dict, k, dd.default)
+    res = get_possibly_indexed(dd.dict, k, dd.default; allow_symbolic_indices = true)
     if res === dd.default
         arr, isarr = split_indexed_var(k)
         isarr && haskey(dd.dict, arr) && return k
