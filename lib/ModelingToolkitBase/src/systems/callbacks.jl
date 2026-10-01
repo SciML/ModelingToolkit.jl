@@ -143,6 +143,18 @@ function AffectSystem(
         @warn "No independent variable specified. Defaulting to t_nounits."
     end
     _unhack_sys = reverse_all_default_reversible_transformations(parent_sys)
+    # Variables assigned by the user affect (before parent alg/observed eqs are appended).
+    # Differential states not in this set are pinned to their pre-event values.
+    assigned = Set{SymbolicT}()
+    for eq in affect
+        lhs = eq.lhs
+        push!(assigned, lhs)
+        arr, isarr = split_indexed_var(lhs)
+        isarr && push!(assigned, arr)
+        if iscall(lhs) && operation(lhs) === getindex
+            push!(assigned, arguments(lhs)[1])
+        end
+    end
     extra_eqs = Equation[alg_equations(_unhack_sys); observed(_unhack_sys)]
     affect = [affect; extra_eqs]
 
@@ -157,6 +169,13 @@ function AffectSystem(
     for var in [unknowns(parent_sys); observables(parent_sys)]
         push!(parent_dvs, var)
         push!(parent_dvs, split_indexed_var(var)[1])
+    end
+    # Parent differential states must stay fixed across affects that do not assign them,
+    # so algebraic/observed equations re-solve for algebraic variables instead.
+    parent_diff_vars = Set{SymbolicT}()
+    for var in collect_differential_variables(_unhack_sys)
+        push!(parent_diff_vars, var)
+        push!(parent_diff_vars, split_indexed_var(var)[1])
     end
     for var in values(analytically_integrated(parent_sys))
         push!(discrete_parameters, var)
@@ -189,7 +208,14 @@ function AffectSystem(
             end
 
             if var in parent_dvs
-                push!(dvs, var)
+                arr, isarr = split_indexed_var(var)
+                is_diff = (var in parent_diff_vars) || (isarr && arr in parent_diff_vars)
+                is_assigned = (var in assigned) || (isarr && arr in assigned)
+                if is_diff && !is_assigned
+                    push!(params, var)
+                else
+                    push!(dvs, var)
+                end
                 continue
             end
             push!(params, var)
@@ -838,30 +864,49 @@ end
 ####################################
 
 """
-    ExplicitAffect{DVS, PS, UF, PF}
+    ExplicitAffect{DVS, PS, UF, UOOP, PF, POOP, US, PSOP}
 
 Callable struct representing a compiled explicit affect (one with no algebraic equations).
-Invokes `u_up!` to update state variables and `p_up!` to update discrete parameters, then
-optionally resets aggregated jumps. Created by [`compile_explicit_affect`](@ref).
+Invokes in-place or out-of-place update functions depending on the problem, then optionally
+resets aggregated jumps. Created by [`compile_explicit_affect`](@ref).
 
 # Fields
 - `dvs_to_update`: symbolic unknowns modified by this affect (emptiness is checked at call time)
 - `ps_to_update`: symbolic discrete parameters modified by this affect
 - `reset_jumps`: if `true`, call `reset_aggregated_jumps!` after the update
 - `u_up!`: compiled in-place function that writes updated state into the integrator
+- `u_up`: compiled out-of-place function that returns updated state component values
 - `p_up!`: compiled in-place function that writes updated parameters into the integrator
+- `p_up`: compiled out-of-place function that returns updated parameter values
+- `u_setter_oop`: `setsym_oop` setter applying OOP state values (or `nothing`)
+- `p_setter_oop`: `setp_oop` setter applying OOP parameter values (or `nothing`)
 """
-struct ExplicitAffect{DVS, PS, UF, PF}
+struct ExplicitAffect{DVS, PS, UF, UOOP, PF, POOP, US, PSOP}
     dvs_to_update::DVS
     ps_to_update::PS
     reset_jumps::Bool
     u_up!::UF
+    u_up::UOOP
     p_up!::PF
+    p_up::POOP
+    u_setter_oop::US
+    p_setter_oop::PSOP
 end
 
 function (ea::ExplicitAffect)(integ)
-    isempty(ea.dvs_to_update) || ea.u_up!(integ)
-    isempty(ea.ps_to_update) || ea.p_up!(integ)
+    if DiffEqBase.isinplace(SciMLBase.get_sol(integ).prob)
+        isempty(ea.dvs_to_update) || ea.u_up!(integ)
+        isempty(ea.ps_to_update) || ea.p_up!(integ)
+    else
+        if !isempty(ea.dvs_to_update)
+            new_u, _ = ea.u_setter_oop(integ, ea.u_up(integ))
+            integ.u = new_u
+        end
+        if !isempty(ea.ps_to_update)
+            integ.p = ea.p_setter_oop(integ, ea.p_up(integ))
+            finalize_parameters_hook!(integ, nothing)
+        end
+    end
     return ea.reset_jumps && reset_aggregated_jumps!(integ)
 end
 
@@ -1539,7 +1584,8 @@ Base.@nospecializeinfer function compile_explicit_affect(
     _ps = reorder_parameters(sys, ps)
     integ = gensym(:MTKIntegrator)
 
-    u_up,
+    # In-place updaters write through `outputidxs` into `integ.u` / `integ.p`.
+    _,
         u_up! = build_function_wrapper(
         sys, (@view rhss[is_u]), [Any[dvs]; _ps; Any[t]],
         BuildFunctionWrapperOptions(;
@@ -1552,7 +1598,7 @@ Base.@nospecializeinfer function compile_explicit_affect(
             )
         )
     )
-    p_up,
+    _,
         p_up! = build_function_wrapper(
         sys, (@view rhss[is_p]), [Any[dvs]; _ps; Any[t]],
         BuildFunctionWrapperOptions(;
@@ -1565,11 +1611,50 @@ Base.@nospecializeinfer function compile_explicit_affect(
             )
         )
     )
+    # Out-of-place updaters return the new component values (no outputidxs); callers apply
+    # them via setsym_oop / setp_oop so immutable `SVector` states/parameters work.
+    u_up,
+        _ = build_function_wrapper(
+        sys, (@view rhss[is_u]), [Any[dvs]; _ps; Any[t]],
+        BuildFunctionWrapperOptions(;
+            u_arg = 1, wrap_mtkparameters,
+            codegen_function_options = setproperties(
+                opts.codegen, (;
+                    wrap_code = add_integrator_header(sys, integ, :u),
+                    iip_config = (true, false),
+                )
+            )
+        )
+    )
+    p_up,
+        _ = build_function_wrapper(
+        sys, (@view rhss[is_p]), [Any[dvs]; _ps; Any[t]],
+        BuildFunctionWrapperOptions(;
+            u_arg = 1, wrap_mtkparameters,
+            codegen_function_options = setproperties(
+                opts.codegen, (;
+                    wrap_code = add_integrator_header(sys, integ, :p),
+                    iip_config = (true, false),
+                )
+            )
+        )
+    )
 
+    u_up = eval_or_rgf(u_up; eval_expression, eval_module)
     u_up! = eval_or_rgf(u_up!; eval_expression, eval_module)
+    p_up = eval_or_rgf(p_up; eval_expression, eval_module)
     p_up! = eval_or_rgf(p_up!; eval_expression, eval_module)
 
-    return ExplicitAffect(dvs_to_update, ps_to_update, reset_jumps, u_up!, p_up!)
+    # OOP setters must use the same symbol order as the generated `*_up` RHS vectors.
+    u_syms = collect(@view lhss[is_u])
+    p_syms = collect(@view lhss[is_p])
+    u_setter_oop = isempty(u_syms) ? nothing : setsym_oop(sys, u_syms)
+    p_setter_oop = isempty(p_syms) ? nothing : setp_oop(sys, p_syms)
+
+    return ExplicitAffect(
+        dvs_to_update, ps_to_update, reset_jumps, u_up!, u_up, p_up!, p_up,
+        u_setter_oop, p_setter_oop
+    )
 end
 
 """
