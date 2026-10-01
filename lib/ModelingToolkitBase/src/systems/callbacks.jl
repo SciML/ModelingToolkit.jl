@@ -970,7 +970,8 @@ end
 Sentinel affect that does nothing. Used as the default `affect` / `affect_neg` when a
 callback specifies no affect, rather than passing `nothing` to SciMLBase (so continuous
 rootfinding still stops at the event). Clears `derivative_discontinuity` so DiffEqBase
-skips re-initialization and the trailing duplicate save.
+skips the post-affect re-initialization and trailing duplicate save; the root-time
+re-evaluation from `change_t_via_interpolation!` still runs.
 """
 function EMPTY_AFFECT(integ, args...)
     SciMLBase.derivative_discontinuity!(integ, false)
@@ -984,7 +985,7 @@ end
     Callable struct for a `VectorContinuousCallback`. Routes an
     integrator call to the appropriate per-equation affect based on the equation index `idx`.
     Created inside [`generate_callback`](@ref) for vectors of `SymbolicContinuousCallback`s.
-    Skips `nothing` / [`EMPTY_AFFECT`](@ref) affects.
+    Skips `nothing` affects.
 
     # Fields
     - `eq2affect`: maps condition equation index → affect index
@@ -997,10 +998,7 @@ end
 
     function (va::VectorAffect)(integ, idx)
         f = va.affects[va.eq2affect[idx]]
-        if f === nothing || f === EMPTY_AFFECT
-            SciMLBase.derivative_discontinuity!(integ, false)
-            return
-        end
+        f === nothing && return
         return f(integ)
     end
 
@@ -1040,7 +1038,8 @@ else
             end
         end
         # DiffEqBase assumes a non-`nothing` VectorContinuousCallback affect modifies
-        # the integrator. Clear the flag when every triggered edge had no real affect.
+        # the integrator. Clear the flag when every triggered edge had no real affect so
+        # the post-affect re-init / trailing save are skipped (root-time re-eval remains).
         applied || SciMLBase.derivative_discontinuity!(integ, false)
         return
     end
