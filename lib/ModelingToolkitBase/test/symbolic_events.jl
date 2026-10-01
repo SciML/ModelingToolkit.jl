@@ -2085,3 +2085,27 @@ end
     @test sol(3.5; idxs = s) ≈ -ones(3)
     @test sol[s] ≈ [ones(3), -ones(3), ones(3), -ones(3)]
 end
+
+@testset "Symbolic array index in affect (issue #5078)" begin
+    @variables x(t) y(t)
+    @discretes k(t)::Int = 1 c(t) = 1.0
+    @parameters table[1:3] = [1.0, 2.0, 3.0]
+    eqs = [D(x) ~ -c * x, 0 ~ y - x^2]
+    event = SymbolicContinuousCallback(
+        [x ~ 0.5] => [k ~ Pre(k) + 1, c ~ table[k]],
+        discrete_parameters = [k, c],
+    )
+    @named sys = System(eqs, t, [x, y], [k, c, table]; continuous_events = [event])
+    if @isdefined(ModelingToolkit)
+        # ModelingToolkit.__mtkcompile calls discover_maybe_zeros; MTKBase's mtkcompile does not.
+        sys = @test_nowarn mtkcompile(sys)
+        @test !isempty(ModelingToolkitBase.continuous_events(sys))
+    else
+        tk = unwrap(table[k])
+        @named raw = System(
+            [k ~ Pre(k) + 1, c ~ table[k], 0 ~ y - x^2],
+            t, [x, y, k, c], [tk, Pre(k)]; is_discrete = true
+        )
+        @test_nowarn ModelingToolkitBase.discover_maybe_zeros(raw)
+    end
+end
