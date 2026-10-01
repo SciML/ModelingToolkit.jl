@@ -273,3 +273,29 @@ end
     twice = ModelingToolkitBase.shift2term(unwrap(Sh(tt, -1)(once)))
     @test isequal(twice, ModelingToolkitBase.shift2term(unwrap(Sh(tt, -2)(arr[1]))))
 end
+
+@testset "write_possibly_indexed_array! with array slices" begin
+    Const = ModelingToolkitBase.BSImpl.Const{ModelingToolkitBase.VartypeT}
+    for dims in ((5,), (3, 4)), initialized in (false, true)
+        @testset "shape=$dims initialized=$initialized" begin
+            @variables a[(1:n for n in dims)...]
+            arr = value(a)
+            indices = length(dims) == 1 ? (2:2:4,) : (1:2, 2:3)
+            slice_shape = map(length, indices)
+            values = reshape(collect(1.0:prod(slice_shape)), slice_shape)
+            initial = initialized ? 10.0 : -1.0
+            dd = ModelingToolkitBase.AtomicArrayDict{ModelingToolkitBase.SymbolicT}()
+            initialized && (dd[arr] = Const(fill(initial, dims)))
+            key = value(a[indices...])
+            ModelingToolkitBase.write_possibly_indexed_array!(dd, key, Const(values), Const(-1.0))
+            expected = fill(initial, dims)
+            expected[indices...] = values
+            @test SU.unwrap_const(dd[arr]) == expected
+            @test length(dd) == 1
+            @variables replacement[(1:n for n in slice_shape)...]
+            ModelingToolkitBase.write_possibly_indexed_array!(dd, key, value(replacement), Const(-1.0))
+            @test all(isequal.(collect(dd[arr][indices...]), collect(value(replacement))))
+            @test isequal(dd[arr][dims...], Const(initial))
+        end
+    end
+end
