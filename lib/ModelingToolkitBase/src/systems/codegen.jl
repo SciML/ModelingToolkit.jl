@@ -304,7 +304,7 @@ function generate_rhs(
 
     u_arg = scalar ? -1 : (implicit_dae ? 2 : 1)
     codegen_opts = opts.codegen
-    if !implicit_dae && assemble_residuals && rhss isa SymbolicT &&
+    if assemble_residuals && rhss isa SymbolicT &&
             Code.supports_with_allocator(rhss)
         # `ArrayMaker` otherwise allocates a `Float64` buffer out of place.
         oop_wrap, iip_wrap = codegen_opts.wrap_code
