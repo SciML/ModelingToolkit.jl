@@ -2764,8 +2764,7 @@ function __process_SciMLProblem(
 
     # `maybe_build_initialization_problem` fills unset `xˍt` entries of `op` with
     # guesses and initialization values. `du0` starts from the user's operating
-    # point so that user-supplied derivative guesses take precedence over those;
-    # the remaining slots are filled from `op` afterwards.
+    # point so that user-supplied derivative guesses take precedence over those.
     du0_op = implicit_dae && build_initializeprob ? copy(op) : nothing
 
     if build_initializeprob
@@ -2868,6 +2867,8 @@ function __process_SciMLProblem(
 
     if implicit_dae
         ddvs = map(default_toterm ∘ Differential(iv), dvs)
+        initsys = du0_op === nothing ? nothing :
+            kwargs.initialization_data.initializeprob.f.sys
         if du0_op === nothing
             du0_op = copy(op)
         else
@@ -2894,10 +2895,17 @@ function __process_SciMLProblem(
                 end
             end
         end
-        for ddv in ddvs
-            get_possibly_indexed(du0_op, ddv, COMMON_NOTHING) === COMMON_NOTHING || continue
-            v = get_possibly_indexed(op, ddv, COMMON_NOTHING)
-            v === COMMON_NOTHING || write_possibly_indexed_array!(du0_op, ddv, v, COMMON_NOTHING)
+        # Fill the remaining slots with values initialization propagated into `op`
+        # (e.g. derivatives that tearing turned into observed equations). For
+        # derivatives that stay initialization unknowns, `op` only holds the
+        # nonlinear solver's starting guess, so those keep the placeholder.
+        if initsys !== nothing
+            for ddv in ddvs
+                get_possibly_indexed(du0_op, ddv, COMMON_NOTHING) === COMMON_NOTHING || continue
+                is_variable(initsys, ddv) && continue
+                v = get_possibly_indexed(op, ddv, COMMON_NOTHING)
+                v === COMMON_NOTHING || write_possibly_indexed_array!(du0_op, ddv, v, COMMON_NOTHING)
+            end
         end
         # When the initialization problem is built, omitted derivative values are
         # solved for rather than erroring; zero is a neutral starting guess. Without
