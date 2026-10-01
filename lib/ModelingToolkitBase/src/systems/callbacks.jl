@@ -964,6 +964,19 @@ function (ia::ImplicitAffect)(integ)
     return ia.reset_jumps && reset_aggregated_jumps!(integ)
 end
 
+"""
+    EMPTY_AFFECT(integ, args...)
+
+Sentinel affect that does nothing. Used as the default `affect` / `affect_neg` when a
+callback specifies no affect, rather than passing `nothing` to SciMLBase (so continuous
+rootfinding still stops at the event). Clears `derivative_discontinuity` so DiffEqBase
+skips re-initialization and the trailing duplicate save.
+"""
+function EMPTY_AFFECT(integ, args...)
+    SciMLBase.derivative_discontinuity!(integ, false)
+    return nothing
+end
+
 @static if pkgversion(SciMLBase) < v"3"
     """
         VectorAffect{E2A, AFFS}
@@ -971,7 +984,7 @@ end
     Callable struct for a `VectorContinuousCallback`. Routes an
     integrator call to the appropriate per-equation affect based on the equation index `idx`.
     Created inside [`generate_callback`](@ref) for vectors of `SymbolicContinuousCallback`s.
-    Skips `nothing` affects.
+    Skips `nothing` / [`EMPTY_AFFECT`](@ref) affects.
 
     # Fields
     - `eq2affect`: maps condition equation index → affect index
@@ -984,7 +997,10 @@ end
 
     function (va::VectorAffect)(integ, idx)
         f = va.affects[va.eq2affect[idx]]
-        f === nothing && return
+        if f === nothing || f === EMPTY_AFFECT
+            SciMLBase.derivative_discontinuity!(integ, false)
+            return
+        end
         return f(integ)
     end
 
@@ -995,7 +1011,7 @@ else
     Callable struct for a `VectorContinuousCallback`. Routes an
     integrator call to the appropriate per-equation affect based on the equation index `idx`.
     Created inside [`generate_callback`](@ref) for vectors of `SymbolicContinuousCallback`s.
-    Skips `nothing` affects.
+    Skips `nothing` / [`EMPTY_AFFECT`](@ref) affects.
 
     # Fields
     - `eq2affect`: maps condition equation index → affect index
@@ -1013,18 +1029,18 @@ else
         for (i, evt) in enumerate(evts)
             if evt == 1
                 f = va.affects[va.eq2affect[i]]
-                f === nothing && continue
+                (f === nothing || f === EMPTY_AFFECT) && continue
                 f(integ)
                 applied = true
             elseif evt == -1
                 f = va.affect_negs[va.eq2affect[i]]
-                f === nothing && continue
+                (f === nothing || f === EMPTY_AFFECT) && continue
                 f(integ)
                 applied = true
             end
         end
         # DiffEqBase assumes a non-`nothing` VectorContinuousCallback affect modifies
-        # the integrator. Clear the flag when every triggered edge had a `nothing` affect.
+        # the integrator. Clear the flag when every triggered edge had no real affect.
         applied || SciMLBase.derivative_discontinuity!(integ, false)
         return
     end
@@ -1170,15 +1186,6 @@ function generate_discrete_callbacks(
 end
 
 """
-    EMPTY_AFFECT(args...)
-
-Sentinel affect that does nothing. Used for discrete callbacks (whose DiffEqBase path
-always invokes `affect!`) when no affect was specified. Continuous callbacks pass
-`nothing` through so DiffEqBase can skip re-initialization and the trailing event save.
-"""
-EMPTY_AFFECT(args...) = nothing
-
-"""
     generate_callback(cbs::Vector{SymbolicContinuousCallback}, sys; kwargs...)
 
 Generate a `VectorContinuousCallback` (or a single `ContinuousCallback` if there is only
@@ -1265,10 +1272,10 @@ function compile_vector_callback_affects(cbs, sys, ic; kwargs...)
     finals = []
     saved_clock_partitions = Vector{Int}[]
     for cb in cbs
-        affect = compile_affect(cb.affect, cb, sys; default = nothing, kwargs...)
+        affect = compile_affect(cb.affect, cb, sys; default = EMPTY_AFFECT, kwargs...)
         push!(affects, affect)
         affect_neg = (cb.affect_neg === cb.affect) ? affect :
-            compile_affect(cb.affect_neg, cb, sys; default = nothing, kwargs...)
+            compile_affect(cb.affect_neg, cb, sys; default = EMPTY_AFFECT, kwargs...)
         push!(affect_negs, affect_neg)
         push!(inits, compile_affect(cb.initialize, cb, sys; default = nothing, kwargs...))
         push!(finals, compile_affect(cb.finalize, cb, sys; default = nothing, kwargs...))
@@ -1308,15 +1315,12 @@ function generate_callback(cb, sys; tspan = nothing, kwargs...)
     ps = parameters(sys; initial_parameters = true)
 
     trigger = is_timed ? conditions(cb) : compile_condition(cb, sys, dvs, ps; kwargs...)
-    # Discrete DiffEqBase paths always call `affect!`, so substitute EMPTY_AFFECT.
-    # Continuous paths must keep `nothing` so DiffEqBase clears derivative_discontinuity.
-    affect_default = is_discrete(cb) ? EMPTY_AFFECT : nothing
-    affect = compile_affect(cb.affect, cb, sys; default = affect_default, kwargs...)
+    affect = compile_affect(cb.affect, cb, sys; default = EMPTY_AFFECT, kwargs...)
     affect_neg = if is_discrete(cb)
         nothing
     else
         (cb.affect === cb.affect_neg) ? affect :
-            compile_affect(cb.affect_neg, cb, sys; default = nothing, kwargs...)
+            compile_affect(cb.affect_neg, cb, sys; default = EMPTY_AFFECT, kwargs...)
     end
     init = compile_affect(
         cb.initialize, cb, sys; default = SciMLBase.INITIALIZE_DEFAULT,
