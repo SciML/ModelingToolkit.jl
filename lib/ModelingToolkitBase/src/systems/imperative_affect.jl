@@ -232,8 +232,10 @@ and writes back the returned values. Created by [`compile_functional_affect`](@r
 - `reset_jumps`: if `true`, call `reset_aggregated_jumps!` after the affect
 - `mod_og_val_fun`: OOP function that reads the current values of all modified variables
 - `obs_fun`: OOP function that reads the observed expressions
-- `mod_names`: `NTuple{N, Symbol}` naming the modified variables (for `NamedTuple` construction)
-- `obs_sym_tuple`: `NTuple{M, Symbol}` naming the observed values
+- `mod_names`: `Val` of the `NTuple{N, Symbol}` naming the modified variables (for
+  `NamedTuple` construction). A `Val`, so that the struct is `isbits` when its other fields
+  are, as a GPU kernel needs.
+- `obs_sym_tuple`: `Val` of the `NTuple{M, Symbol}` naming the observed values
 - `upd_funs`: `NamedTuple` of setter callables mapping each modified variable name to its setter
 """
 struct FunctionalAffect{UF, CTX, MOF, OF, MN, OST, UPS}
@@ -250,9 +252,9 @@ end
 @inline function (fa::FunctionalAffect)(integ)
     # Read the current values of the modified variables (pre-affect baseline)
     modvals = fa.mod_og_val_fun(integ.u, integ.p, integ.t)
-    upd_component_array = NamedTuple{fa.mod_names}(modvals)
+    upd_component_array = NamedTuple{unval(fa.mod_names)}(modvals)
     # Read the observed expressions
-    obs_component_array = NamedTuple{fa.obs_sym_tuple}(
+    obs_component_array = NamedTuple{unval(fa.obs_sym_tuple)}(
         fa.obs_fun(integ.u, integ.p, integ.t)
     )
     # Call the user-supplied affect function
@@ -262,6 +264,51 @@ end
         _generated_writeback(integ, fa.upd_funs, upd_vals)
     end
     return fa.reset_jumps && reset_aggregated_jumps!(integ)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+The compiled `ImperativeAffect` `fa` with the hooks that the setters of its modified
+parameters carry stripped off. On the integrator MTK builds, those hooks record the new
+values of discrete parameters for `sol.ps[...]`. Without them the affect needs only
+`state_values`, `parameter_values` and `current_time` of the value provider it is called
+with, so it can run on a stand-in for the integrator (e.g. inside a GPU kernel). Use with
+`save_discretes = false` on the problem.
+"""
+function without_parameter_hooks(fa::FunctionalAffect)
+    return FunctionalAffect(
+        fa.user_affect, fa.ctx, fa.reset_jumps, fa.mod_og_val_fun, fa.obs_fun,
+        fa.mod_names, fa.obs_sym_tuple, map(unwrap_parameter_hook, fa.upd_funs)
+    )
+end
+
+unwrap_parameter_hook(setter::SymbolicIndexingInterface.ParameterHookWrapper) = setter.setter
+unwrap_parameter_hook(setter) = setter
+
+unval(::Val{x}) where {x} = x
+
+"""
+    $(TYPEDSIGNATURES)
+
+The parts of the compiled `ImperativeAffect` `fa`, as a `NamedTuple`, for packages that
+check whether it can run somewhere other than the integrator it was compiled for:
+
+- `user_affect`, `ctx`: the function passed to `ImperativeAffect` and its context.
+- `modified_names`, `observed_names`: the names in the `NamedTuple`s it is called with.
+- `modified_values`, `observed_values`: generated functions `(u, p, t) -> Tuple` giving
+  the values of the modified variables and of the observed expressions.
+- `setters`: a `NamedTuple` of the setters writing back the values it returns, without the
+  hooks `without_parameter_hooks` strips.
+- `reset_jumps`: whether it resets the jump aggregators of the integrator.
+"""
+function functional_affect_parts(fa::FunctionalAffect)
+    return (;
+        fa.user_affect, fa.ctx, modified_names = unval(fa.mod_names),
+        observed_names = unval(fa.obs_sym_tuple), modified_values = fa.mod_og_val_fun,
+        observed_values = fa.obs_fun, setters = map(unwrap_parameter_hook, fa.upd_funs),
+        fa.reset_jumps,
+    )
 end
 
 """
@@ -367,7 +414,7 @@ function compile_functional_affect(
 
     return FunctionalAffect(
         func(affect), context(affect), reset_jumps,
-        mod_og_val_fun, obs_fun, mod_names, obs_sym_tuple, upd_funs
+        mod_og_val_fun, obs_fun, Val(mod_names), Val(obs_sym_tuple), upd_funs
     )
 end
 

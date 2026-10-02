@@ -62,6 +62,19 @@ an error.
 const TIME_DEPENDENT_PROBLEM_KWARGS = """
 - `callback`: An extra callback or `CallbackSet` to add to the problem, in addition to the
   ones defined symbolically in the system.
+- `affect_transform`: A function `(affect, event, sys; role) -> affect` applied to every
+  compiled affect of the system's symbolic events before it is put in its callback, for
+  packages that run affects somewhere other than the integrator they were compiled for
+  (e.g. a GPU kernel). `affect` is the compiled callable, or the placeholder the callback
+  uses when the event has none (`EMPTY_AFFECT`, `SciMLBase.INITIALIZE_DEFAULT`, ...), which
+  should be returned as is or replaced by a callable with the same signature. `event` is the
+  `SymbolicContinuousCallback` or `SymbolicDiscreteCallback` and `role` is one of
+  `:affect`, `:affect_neg`, `:initialize` and `:finalize`. The callbacks themselves (event
+  timing, root finding, reinitialization) are built as usual. See also
+  `without_parameter_hooks` and `functional_affect_parts`.
+- `save_discretes`: Whether events save the values of the discrete parameters they update,
+  as the timeseries of `sol.ps[...]`. `false` disables it, e.g. when the parameter object is
+  not one the host-side saving can read.
 """
 
 const PROBLEM_INTERNALS_HEADER = """
