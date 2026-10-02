@@ -873,8 +873,19 @@ True when the integrator's state container can be updated in-place.
 Chooses the branch from the state type rather than `get_sol(integ).prob`, so
 integrator-like value providers without a `sol` (e.g. jump `TestInt`) keep the
 in-place path. Immutable states such as `SVector` take the OOP setters.
+Callers that are not SymbolicIndexingInterface value providers (e.g. Catalyst's
+`(u, p, t)` `NamedTuple`) also keep the in-place path. A missing state buffer
+(`state_values === nothing`, e.g. a fully torn `D(x) ~ 0` system) stays on the
+in-place path so OOP writeback cannot materialize a `Vector{Any}`.
 """
-_affect_inplace(integ) = ArrayInterface.ismutable(state_values(integ))
+function _affect_inplace(integ)
+    if applicable(state_values, integ)
+        u = state_values(integ)
+        u === nothing && return true
+        return ArrayInterface.ismutable(u)
+    end
+    return true
+end
 
 function (ea::ExplicitAffect)(integ)
     if _affect_inplace(integ)

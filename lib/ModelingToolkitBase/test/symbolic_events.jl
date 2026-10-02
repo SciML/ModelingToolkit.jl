@@ -2102,7 +2102,7 @@ end
     # Explicit state update on an SVector problem.
     @variables x2(t) v2(t)
     ev2 = SymbolicDiscreteCallback([0.5], [x2 ~ Pre(x2) + 1, v2 ~ -Pre(v2)])
-    @mtkcompile sys2 = System([D(x2) ~ v2, D(v2) ~ -1], t; discrete_events = [ev2])
+    @mtkcompile sys2 = System([D(x2) ~ v2, D(v2) ~ -1.0], t; discrete_events = [ev2])
     prob2 = ODEProblem{false}(sys2, SA[x2 => 0.0, v2 => 1.0], (0.0, 1.0))
     sol2 = solve(prob2, Tsit5())
     @test SciMLBase.successful_retcode(sol2)
@@ -2123,11 +2123,13 @@ end
     @test sol3(2.0; idxs = z) ≈ 0.5 * exp(-2.0) rtol = 1.0e-5
     @test sol3.ps[k] == [1.0, 3.0]
 
-    # ImplicitAffect on an SVector problem.
+    # ImplicitAffect on an SVector problem. RHS must be non-zero: under
+    # ModelingToolkit (dummy derivatives) `D(w) ~ 0` tears `w` to observed,
+    # leaving `u0 === nothing` and an Any-eltype OOP writeback.
     @variables w(t) = 1.0
     ev4 = SymbolicDiscreteCallback([0.5], [0 ~ w^3 + w - (Pre(w) + 10)])
-    @mtkcompile sys4 = System([D(w) ~ 0.0], t; discrete_events = [ev4])
-    prob4 = ODEProblem{false}(sys4, SA[], (0.0, 1.0))
+    @mtkcompile sys4 = System([D(w) ~ 1.0e-16], t; discrete_events = [ev4])
+    prob4 = ODEProblem{false}(sys4, SA[w => 1.0], (0.0, 1.0))
     sol4 = solve(prob4, Tsit5())
     @test SciMLBase.successful_retcode(sol4)
     w1 = sol4(1.0; idxs = w)
@@ -2139,11 +2141,32 @@ end
     ev5 = SymbolicDiscreteCallback(
         [0.5], [0 ~ q - Pre(q) - a, a ~ 2.0]; discrete_parameters = [a]
     )
-    @mtkcompile sys5 = System([D(q) ~ 0.0], t, [q], [a]; discrete_events = [ev5])
-    prob5 = ODEProblem{false}(sys5, SA[], (0.0, 1.0))
+    @mtkcompile sys5 = System([D(q) ~ 1.0e-16], t, [q], [a]; discrete_events = [ev5])
+    prob5 = ODEProblem{false}(sys5, SA[q => 1.0], (0.0, 1.0))
     sol5 = solve(prob5, Tsit5())
     @test SciMLBase.successful_retcode(sol5)
     @test sol5.ps[a][end] ≈ 2.0 rtol = 1.0e-8
     # Residual uses the post-event discrete `a`, so q = Pre(q) + a = 3.
     @test sol5(1.0; idxs = q) ≈ 3.0 rtol = 1.0e-8
+end
+
+@testset "ExplicitAffect on NamedTuple without state_values" begin
+    # Catalyst (and similar) call compiled affects on `(; u, p, t)` NamedTuples
+    # that are not SymbolicIndexingInterface value providers.
+    @variables x(t)
+    @discretes on(t) = 1.0
+    ev = SymbolicDiscreteCallback(
+        [0.5], [on ~ 0.0, x ~ Pre(x) + 1];
+        discrete_parameters = [on]
+    )
+    @mtkcompile sys = System([D(x) ~ on], t, [x], [on]; discrete_events = [ev])
+    prob = ODEProblem(sys, [x => 0.0], (0.0, 1.0))
+    aff = ModelingToolkitBase.compile_equational_affect(
+        affects(only(discrete_events(sys))), sys
+    )
+    @test ModelingToolkitBase._affect_inplace((; u = prob.u0, p = prob.p, t = 0.5))
+    nt = (; u = copy(prob.u0), p = deepcopy(prob.p), t = 0.5)
+    aff(nt)
+    @test nt.u[1] ≈ 1.0
+    @test getp(prob, on)(nt.p) ≈ 0.0
 end
