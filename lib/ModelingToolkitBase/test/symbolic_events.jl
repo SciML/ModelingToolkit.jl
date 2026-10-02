@@ -2085,3 +2085,25 @@ end
     @test sol(3.5; idxs = s) ≈ -ones(3)
     @test sol[s] ≈ [ones(3), -ones(3), ones(3), -ones(3)]
 end
+
+@testset "Out-of-place equational affects on SVector problems" begin
+    using StaticArrays: SA
+    # Parameter-only discrete affect must update immutable parameter buffers.
+    @variables x(t)
+    @discretes on(t) = 1.0
+    ev = SymbolicDiscreteCallback([0.5], [on ~ 0.0]; discrete_parameters = [on])
+    @mtkcompile sys = System([D(x) ~ on], t, [x], [on]; discrete_events = [ev])
+    prob = ODEProblem{false}(sys, SA[x => 0.0], (0.0, 1.0))
+    sol = solve(prob, Tsit5())
+    @test SciMLBase.successful_retcode(sol)
+    @test sol(1.0; idxs = x) ≈ 0.5 rtol = 1.0e-8
+
+    # Explicit state update on an SVector problem.
+    @variables x2(t) v2(t)
+    ev2 = SymbolicDiscreteCallback([0.5], [x2 ~ Pre(x2) + 1, v2 ~ -Pre(v2)])
+    @mtkcompile sys2 = System([D(x2) ~ v2, D(v2) ~ -1], t; discrete_events = [ev2])
+    prob2 = ODEProblem{false}(sys2, SA[x2 => 0.0, v2 => 1.0], (0.0, 1.0))
+    sol2 = solve(prob2, Tsit5())
+    @test SciMLBase.successful_retcode(sol2)
+    @test sol2(0.7; idxs = v2) ≈ -0.7 rtol = 1.0e-8
+end
