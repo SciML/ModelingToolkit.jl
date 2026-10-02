@@ -564,6 +564,44 @@ end
     @test !haskey(ModelingToolkitBase.bindings(nlsys), z)
 end
 
+abstract type AbstractNonlinearMedium end
+struct NonlinearMedium <: AbstractNonlinearMedium
+    k::Float64
+end
+medium_gain(m::AbstractNonlinearMedium, x) = m.k * x
+@register_symbolic medium_gain(m::AbstractNonlinearMedium, x)
+
+@testset "NonlinearSystem conversion: nonnumeric bound parameters" begin
+    # https://github.com/SciML/ModelingToolkit.jl/issues/5066
+    # Subsystem parameters bound to a parent-level nonnumeric parameter must
+    # stay bound through conversion so `NonlinearProblem` can evaluate them.
+    @independent_variables t
+    D = Differential(t)
+    function Source5066(; name, medium)
+        @parameters med::AbstractNonlinearMedium = medium
+        @variables u(t)
+        System([D(u) ~ 4.0 - medium_gain(med, u)], t, [u], [med]; name)
+    end
+    function Load5066(; name, medium)
+        @parameters med::AbstractNonlinearMedium = medium
+        @variables v(t) w(t)
+        System([D(v) ~ w - medium_gain(med, v)], t, [v, w], [med]; name)
+    end
+    @parameters mC::AbstractNonlinearMedium = NonlinearMedium(2.0)
+    @named src = Source5066(medium = mC)
+    @named ld = Load5066(medium = mC)
+    sys = mtkcompile(
+        System([ld.w ~ src.u^2], t, [], [mC]; systems = [src, ld], name = :top)
+    )
+    nlsys = NonlinearSystem(sys)
+    prob = NonlinearProblem(nlsys, [src.u => 1.0, ld.v => 1.0])
+    sol = solve(prob)
+    @test SciMLBase.successful_retcode(sol)
+    @test sol[src.u] ≈ 2.0
+    @test sol[ld.v] ≈ 2.0
+    @test sol.ps[mC] == NonlinearMedium(2.0)
+end
+
 @testset "NonlinearSystem conversion: connectors" begin
     @independent_variables t
     D = Differential(t)
