@@ -171,7 +171,83 @@ function get_possibly_indexed(dd::AtomicArrayDict, k::SymbolicT, default)
     isarr || return res
     res === default && return default
     idx = get_stable_index(k)
-    return res[idx]
+    el = res[idx]
+    # Bare `nothing` is how a sentinel hole looks after `unwrap_const`.
+    return is_aad_unset(el, default) ? default : el
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Return whether `el` denotes an unset entry in an `AtomicArrayDict` value array.
+`default` is the sentinel written by `as_atomic_dict_with_defaults` (typically
+`COMMON_NOTHING`); bare `nothing` appears when a fully-`isconst` array containing
+that sentinel was previously unwrapped via `unwrap_const`.
+"""
+function is_aad_unset(el, default)
+    return el === default || el === nothing
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Normalize `cur` to an `Array{SymbolicT}` of `size(arr)`, mapping bare `nothing`
+and `default` holes to `default` and boxing numeric entries as consts.
+"""
+function aad_symbolic_buffer(arr::SymbolicT, cur, default::SymbolicT)
+    if !(cur isa AbstractArray)
+        el = cur isa SymbolicT ? cur : SConst(cur)
+        return fill(el, size(arr))
+    end
+    out = Array{SymbolicT}(undef, size(arr))
+    for i in eachindex(cur)
+        el = cur[i]
+        if is_aad_unset(el, default)
+            out[i] = default
+        elseif el isa SymbolicT
+            out[i] = el
+        else
+            out[i] = SConst(el)
+        end
+    end
+    return out
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Fill elements of the array key `arr` in `dd` that are currently `default` with the
+corresponding elements of `v`, broadcasting `v` if it is scalar. Elements already
+present keep their values. Holes may be the symbolic sentinel `default` or bare
+`nothing` left by unwrapping a const array that contained that sentinel.
+"""
+function fill_unset_array_entries!(
+        dd::AbstractDict{SymbolicT}, arr::SymbolicT, v, default::SymbolicT
+    )
+    src = unwrap_const(v)
+    src_isarr = src isa AbstractArray ||
+        (src isa SymbolicT && SU.is_array_shape(SU.shape(src)))
+    tgt = if haskey(dd, arr)
+        aad_symbolic_buffer(arr, unwrap_const(dd[arr]), default)
+    else
+        fill(default, size(arr))
+    end
+    changed = false
+    for i in eachindex(tgt)
+        is_aad_unset(tgt[i], default) || continue
+        si = src_isarr ? unwrap_const(src[i]) : src
+        is_aad_unset(si, default) && continue
+        tgt[i] = si isa SymbolicT ? si : SConst(si)
+        changed = true
+    end
+    if changed
+        if all(SU.isconst, tgt)
+            dd[arr] = BSImpl.Const{VartypeT}(unwrap_const.(tgt))
+        else
+            dd[arr] = BSImpl.Const{VartypeT}(tgt)
+        end
+    end
+    return dd
 end
 
 struct AtomicArraySet{D <: AbstractDict{SymbolicT, Nothing}} <: AbstractSet{SymbolicT}
