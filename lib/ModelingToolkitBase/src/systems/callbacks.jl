@@ -265,6 +265,7 @@ function AffectSystem(
         push!(parent_diff_vars, var)
         push!(parent_diff_vars, split_indexed_var(var)[1])
     end
+    # Free algebraic DOFs are non-differential unknowns (not observed outputs).
     parent_alg = Set{SymbolicT}()
     for var in unknowns(_unhack_sys)
         if !_diff_appears_in_vars(var, parent_diff_vars)
@@ -272,52 +273,53 @@ function AffectSystem(
             push!(parent_alg, split_indexed_var(var)[1])
         end
     end
-    for eq in observed(_unhack_sys)
-        lhs = eq.lhs
-        push!(parent_alg, lhs)
-        push!(parent_alg, split_indexed_var(lhs)[1])
-    end
-    extra_eqs = Equation[alg_equations(_unhack_sys); observed(_unhack_sys)]
-    # Pin a parent differential only when it appears solely via appended parent equations
-    # (not in the user affect outside Pre) and an algebraic unknown remains free to absorb.
+    alg_extra = Equation[alg_equations(_unhack_sys)...]
+    obs_extra = Equation[observed(_unhack_sys)...]
+    extra_eqs = Equation[alg_extra; obs_extra]
+    # Pin a parent differential only when it appears in a parent *algebraic* equation
+    # (not merely an observed definition) outside the user affect, and an algebraic
+    # unknown remains free to absorb that equation.
     pin_subs = Dict{SymbolicT, SymbolicT}()
     _varsbuf_extra = Set{SymbolicT}()
     for var in parent_diff_vars
         _diff_appears_in_vars(var, user_outside_pre) && continue
-        can_pin = false
-        appears_in_extra = false
-        for eq in extra_eqs
+        appears_in_alg = false
+        can_pin = true
+        for eq in alg_extra
             eq_vars = _vars_outside_pre!(_varsbuf_extra, eq)
             _diff_appears_in_vars(var, eq_vars) || continue
-            appears_in_extra = true
+            appears_in_alg = true
+            eq_has_free_alg = false
             for a in eq_vars
+                isequal(a, var) && continue
                 _is_alg_member(a, parent_alg) || continue
                 _is_user_assigned(a, assigned) && continue
-                can_pin = true
+                eq_has_free_alg = true
                 break
             end
-            can_pin && break
+            if !eq_has_free_alg
+                can_pin = false
+                break
+            end
         end
-        if appears_in_extra && can_pin
+        if appears_in_alg && can_pin
             pin_subs[var] = affect_pin_replacement(var)
         end
     end
     affect = Equation[user_affect; extra_eqs]
     isempty(pin_subs) || (affect = substitute(affect, pin_subs))
-    # Parent algebraic/observed equations that become parameter-only and non-trivial are errors.
+    # Algebraic parent equations that become parameter-only and non-trivial are errors.
     if !isempty(pin_subs)
-        for eq in substitute(extra_eqs, pin_subs)
+        for eq in substitute(alg_extra, pin_subs)
             eq_vars = _vars_outside_pre!(_varsbuf_extra, eq)
             has_free = false
             for a in eq_vars
                 if _is_alg_member(a, parent_alg) && !_is_user_assigned(a, assigned)
-                    # still free if not replaced by a pin param / Pre
                     hasmetadata(a, AffectPinOrigin) && continue
                     iscall(a) && operation(a) isa Pre && continue
                     has_free = true
                     break
                 end
-                # differential that was not pinned remains free
                 if _diff_appears_in_vars(a, parent_diff_vars) && a ∉ keys(pin_subs)
                     has_free = true
                     break
