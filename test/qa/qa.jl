@@ -314,6 +314,7 @@ const NONPUBLIC_QUALIFIED_ACCESSES = (
     :reverse_all_default_reversible_transformations, :simplify_sde_system, :simplify_shifts,
     :singular_check, :steady_state_sccprob, :topsort_equations,
     :torn_system_jacobian_sparsity, :Type, :UNBALANCED_SYSTEM_EXCEPTIONS,
+    :getunshifted, :process_SciMLProblem, :scalarized_vars, :split_indexed_var, :unwrap_vars,
     :wrap_symbolic_linear_interface,
     # ModelingToolkitTearing
     :backshift_expr, :ClockInference, :DefaultReassembleAlgorithm, :get_time_domain,
