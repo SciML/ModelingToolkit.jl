@@ -74,7 +74,9 @@ const TIME_DEPENDENT_PROBLEM_KWARGS = """
   `without_parameter_hooks` and `functional_affect_parts`.
 - `save_discretes`: Whether events save the values of the discrete parameters they update,
   as the timeseries of `sol.ps[...]`. `false` disables it, e.g. when the parameter object is
-  not one the host-side saving can read.
+  not one the host-side saving can read. Their timeseries are then empty, and reading a
+  value that needs one of them at some time (e.g. `sol[z]` or `sol(t; idxs = z)` for an
+  observed `z` that depends on one) throws an error.
 """
 
 const PROBLEM_INTERNALS_HEADER = """
