@@ -430,6 +430,7 @@ function generate_initializesystem_timeindependent(
         Vector{Equation}(eqs_ics),
         vars,
         pars;
+        bindings = newbinds,
         initial_conditions = guesses,
         checks = check_units,
         name,
