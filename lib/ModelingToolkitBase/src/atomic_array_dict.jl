@@ -39,9 +39,59 @@ function Base.showerror(io::IO, err::IndexedArrayKeyError)
     )
 end
 
+"""
+    $TYPEDEF
+
+How a symbolic key relates to the composite it is stored under. `COMPOSITE_NONE` means the
+key is atomic in its own right.
+"""
+@enum CompositeKind COMPOSITE_NONE COMPOSITE_ARRAY COMPOSITE_RECORD
+
+"""
+    $TYPEDSIGNATURES
+
+Given a symbolic `k`, return the composite it is stored under and which kind it is. Struct
+symbolics are stored under the whole record, array elements under the whole array. A key
+that is its own root is `COMPOSITE_NONE`, except for a whole record, which is
+`COMPOSITE_RECORD` because its value is laid out leaf-wise.
+"""
+function split_composite_var(k::SymbolicT)::Tuple{SymbolicT, CompositeKind}
+    root, isrec = record_key_root(k)
+    isrec && return root, COMPOSITE_RECORD
+    arr, isarr = split_indexed_var(k)
+    isarr && return arr, COMPOSITE_ARRAY
+    return k, COMPOSITE_NONE
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Peel field accesses and indices off `k` and return the result, along with whether it is a
+struct symbolic. Unlike [`split_field_access`](@ref) this does *not* commute with
+operators: `Initial(p.y)` is its own key, not a projection of `Initial(p)`. Operators are
+applied to leaves, not to records, since a record symtype does not flatten into a numeric
+parameter buffer.
+"""
+function record_key_root(k::SymbolicT)::Tuple{SymbolicT, Bool}
+    x = k
+    while iscall(x)
+        f = operation(x)
+        f isa Symbolics.SymbolicGetproperty || f === getindex || break
+        x = arguments(x)[1]::SymbolicT
+    end
+    return x, Symbolics.issymstruct(x)
+end
+
 function validate_atomic_array_key(k::SymbolicT)
     return split_indexed_var(k)[2] && throw(IndexedArrayKeyError(k))
 end
+
+"""
+    $TYPEDSIGNATURES
+
+The leaf-wise value buffer stored for a record key.
+"""
+record_buffer(stored::SymbolicT) = Vector{SymbolicT}(collect(stored))
 
 Base.copy(dd::AtomicArrayDict) = AtomicArrayDict(copy(dd.dict); __check = false)
 function Base.empty(dd::AtomicArrayDict, ::Type{K}, ::Type{V}) where {K, V}
@@ -59,9 +109,46 @@ Base.haskey(dd::AtomicArrayDict, k) = haskey(dd.dict, k)
 
 Base.getindex(dd::AtomicArrayDict, k) = dd.dict[k]
 
+"""
+    $TYPEDSIGNATURES
+
+Whether `v` has no fields to project out of, and so is written to every node a record key
+lowers to rather than being decomposed. The sentinels used for "unspecified" and "solve
+for this" are the cases: `getproperty` on them would throw.
+"""
+function is_unprojectable_record_value(v::SymbolicT)
+    return v === COMMON_NOTHING || v === COMMON_MISSING
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Write `v` under the record key `k` by lowering it, one entry per
+[`record_lowering_nodes`](@ref), each holding the corresponding projection of `v`.
+
+A record key is not a representation this dictionary keeps: `as_atomic_dict_with_defaults`
+lowers the ones it builds, and nothing downstream expects one. Writing directly has to do
+the same, or a record key enters through a path which does not normalize it - the system
+field returned by `get_initial_conditions` is an `AtomicArrayDict`, and mutating it is a
+supported way to set initial conditions.
+"""
+function __aad_setindex_record!(dd::AtomicArrayDict, v::SymbolicT, k::SymbolicT)
+    broadcast_value = is_unprojectable_record_value(v)
+    for node in record_lowering_nodes(k)
+        entry = broadcast_value ? v : record_leaf_entry(node, k, v)
+        __unsafe_aad_setindex!(dd, entry, node)
+    end
+    return v
+end
+
 function Base.setindex!(dd::AtomicArrayDict, v, k)
     k = unwrap(k)
     validate_atomic_array_key(k)
+    if Symbolics.issymstruct(k)
+        # `v` is commonly a plain value of the struct type rather than a symbolic, since
+        # that is the natural thing to write; wrap it so it can be projected.
+        return __aad_setindex_record!(dd, BSImpl.Const{VartypeT}(unwrap(v)), k)
+    end
     return __unsafe_aad_setindex!(dd, v, k)
 end
 
@@ -87,24 +174,60 @@ otherwise.
 """
 function as_atomic_dict_with_defaults(dict::AbstractDict{SymbolicT, SymbolicT}, default::SymbolicT)
     dd = AtomicArrayDict(empty(dict))
-    indexed_array_vals = empty(dict, SymbolicT, Array{SymbolicT})
+    # `root => [(index => value), ...]` for every entry written through an array element.
+    indexed_array_writes = empty(dict, SymbolicT, Vector{Pair{Any, SymbolicT}})
+    record_vals = empty(dict, SymbolicT, Vector{SymbolicT})
+    # `(root, node, value, leaf indices)` for every entry stored under a record.
+    record_writes = Tuple{SymbolicT, SymbolicT, SymbolicT, Vector{Int}}[]
     for (k, v) in dict
-        arr, isarr = split_indexed_var(k)
-        if isarr
-            buffer = get!(() -> fill(default, size(arr)), indexed_array_vals, arr)
-            si = get_stable_index(k)
-            buffer[si] = v
+        root, kind = split_composite_var(k)
+        if kind === COMPOSITE_RECORD
+            push!(record_writes, (root, k, v, record_node_indices(root, k)))
+        elseif kind === COMPOSITE_ARRAY
+            # Collected rather than applied here: the buffer they are applied to depends
+            # on whether `dict` also writes the whole array, which may come later in
+            # iteration order.
+            push!(get!(() -> Pair{Any, SymbolicT}[], indexed_array_writes, root),
+                get_stable_index(k) => v)
         else
             dd[k] = v
         end
     end
-    for (k, v) in indexed_array_vals
-        if all(SU.isconst, v)
-            dd[k] = BSImpl.Const{VartypeT}(unwrap_const.(v))
+    # Broadest writes first, as for records below: an entry for one element overrides the
+    # whole-array entry it belongs to, rather than replacing it wholesale. This matches
+    # `write_possibly_indexed_array!`, which seeds from the existing entry.
+    for (root, writes) in indexed_array_writes
+        buffer::Array{SymbolicT} = if haskey(dd, root)
+            collect(dd[root])
         else
-            dd[k] = BSImpl.Const{VartypeT}(v)
+            fill(default, size(root))
+        end
+        isempty(buffer) && continue
+        for (si, v) in writes
+            buffer[si] = v
+        end
+        if all(SU.isconst, buffer)
+            __unsafe_aad_setindex!(dd, BSImpl.Const{VartypeT}(unwrap_const.(buffer)), root)
+        else
+            __unsafe_aad_setindex!(dd, BSImpl.Const{VartypeT}(buffer), root)
         end
     end
+    # Broadest writes first, so that a more specific entry overrides the record it
+    # belongs to rather than the other way round.
+    sort!(record_writes; by = length ∘ last, rev = true)
+    for (root, node, v, idxs) in record_writes
+        leaves = record_leaves(root)
+        buffer = get!(() -> fill(default, length(leaves)), record_vals, root)
+        for i in idxs
+            buffer[i] = record_leaf_entry(leaves[i], node, v)
+        end
+    end
+    for (k, v) in record_vals
+        __unsafe_aad_setindex!(dd, BSImpl.Const{VartypeT}(v), k)
+    end
+    # Records are the right granularity for resolving what was asked for, but nothing
+    # downstream expects a record key, so lower before returning.
+    lower_record_entries!(dd, default)
     return dd
 end
 
@@ -117,20 +240,20 @@ create the key and set all other entries to `default`. If `k` is an array symbol
 is scalar-shaped, `v` is broadcast to `size(k)`.
 """
 function write_possibly_indexed_array!(dd::AtomicArrayDict{SymbolicT}, k::SymbolicT, v::SymbolicT, default::SymbolicT)
-    arr, isarr = split_indexed_var(k)
+    root, isarr = split_indexed_var(k)
     if isarr
-        buffer::Array{SymbolicT} = if haskey(dd, arr)
-            collect(dd[arr])
+        buffer::Array{SymbolicT} = if haskey(dd, root)
+            collect(dd[root])
         else
-            fill(default, size(arr))
+            fill(default, size(root))
         end
         isempty(buffer) && return dd
         idx = get_stable_index(k)
         buffer[idx] = v
         if all(SU.isconst, buffer)
-            dd[arr] = BSImpl.Const{VartypeT}(unwrap_const.(buffer))
+            dd[root] = BSImpl.Const{VartypeT}(unwrap_const.(buffer))
         else
-            dd[arr] = BSImpl.Const{VartypeT}(buffer)
+            dd[root] = BSImpl.Const{VartypeT}(buffer)
         end
     else
         shk = SU.shape(k)
@@ -154,8 +277,27 @@ end
 Check if `dd` has the key `k`. If `k` is indexed, check if `dd` has the array as a key.
 """
 function has_possibly_indexed_key(dd::AtomicArrayDict, k::SymbolicT)
-    arr, _ = split_indexed_var(k)
-    return haskey(dd, arr)
+    haskey(dd, k) && return true
+    haskey(dd, split_indexed_var(k)[1]) && return true
+    return nearest_present_ancestor(dd, k) !== nothing
+end
+
+"""
+    $TYPEDSIGNATURES
+
+The innermost proper ancestor of `k` that is a key of `dd`, or `nothing`. A struct
+projection is stored under whichever ancestor `lower_record_entries!` stopped at, which is
+not necessarily its immediate parent.
+"""
+function nearest_present_ancestor(dd::AtomicArrayDict, k::SymbolicT)
+    x = k
+    while iscall(x)
+        f = operation(x)
+        f isa Symbolics.SymbolicGetproperty || f === getindex || break
+        x = arguments(x)[1]::SymbolicT
+        haskey(dd, x) && return x
+    end
+    return nothing
 end
 
 """
@@ -166,12 +308,88 @@ Equivalent to `get(dd, k, default)`. If `k` is an indexed array, then return
 if `arr` does not exist.
 """
 function get_possibly_indexed(dd::AtomicArrayDict, k::SymbolicT, default)
+    haskey(dd, k) && return dd[k]
     arr, isarr = split_indexed_var(k)
-    res = get(dd, arr, default)
-    isarr || return res
-    res === default && return default
-    idx = get_stable_index(k)
-    return res[idx]
+    if isarr
+        res = get(dd, arr, default)
+        res === default || return res[get_stable_index(k)]
+    end
+    anc = nearest_present_ancestor(dd, k)
+    anc === nothing && return default
+    return record_leaf_entry(k, anc, dd[anc])
+end
+
+"""
+    $TYPEDSIGNATURES
+
+The nodes a record key is lowered to: the deepest projections of `root` whose symtype
+flattens into a numeric buffer. This is a leaf, except where a field is a numeric array,
+which stays whole because ordinary array atomicity already covers it.
+
+This is the granularity `Initial` uses, and lowering is how the two are kept in agreement.
+Records are not left atomic here, because `Initial` cannot be applied to one: `Initial(p)`
+carries a record symtype, which has no slot in the flat numeric initials buffer, and unlike
+`getindex` it does not commute with field access, so `Initial(p).x` is a different symbolic
+from the `Initial(p.x)` the index cache holds. Arrays go the other way - atomic in both
+places - because an array parameter *is* a contiguous numeric block.
+"""
+function record_lowering_nodes(root::SymbolicT)::Vector{SymbolicT}
+    nodes = SymbolicT[]
+    _record_lowering_nodes!(nodes, root)
+    return nodes
+end
+
+function _record_lowering_nodes!(nodes::Vector{SymbolicT}, node::SymbolicT)
+    T = SU.symtype(node)
+    if !Symbolics.issymstruct(node)
+        if SU.is_array_shape(SU.shape(node)) && !(T <: AbstractArray{<:Number})
+            for idx in SU.stable_eachindex(node)
+                _record_lowering_nodes!(nodes, node[idx]::SymbolicT)
+            end
+            return nodes
+        end
+        push!(nodes, node)
+        return nodes
+    end
+    for fname in fieldnames(T::DataType)
+        field = Symbolics.SymbolicGetproperty{T, fname}()(node)::SymbolicT
+        _record_lowering_nodes!(nodes, field)
+    end
+    return nodes
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Replace every record key of `dd` with its [`record_lowering_nodes`](@ref). Records are the
+right granularity for resolving what the user asked for, but everything downstream of that
+is keyed per numeric buffer entry. Entries still holding `default` are dropped.
+"""
+function lower_record_entries!(dd::AtomicArrayDict{SymbolicT}, default::SymbolicT)
+    for k in collect(keys(dd))
+        Symbolics.issymstruct(k) || continue
+        leaves = record_leaves(k)
+        buffer = record_buffer(dd[k])
+        lowered = Pair{SymbolicT, SymbolicT}[]
+        for node in record_lowering_nodes(k)
+            idxs = record_node_indices(k, node)
+            any(i -> buffer[i] === default, idxs) && continue
+            if length(idxs) == 1 && isequal(node, leaves[only(idxs)])
+                push!(lowered, node => buffer[only(idxs)])
+                continue
+            end
+            # Leaves below this node may be symbolic rather than constant, in which case
+            # the assembled value is a symbolic literal. Holes are already excluded above,
+            # so everything here is specified.
+            vals = map(x -> SU.isconst(x) ? unwrap_const(x) : x, buffer)
+            push!(lowered, node => BSImpl.Const{VartypeT}(record_node_value(k, node, vals)))
+        end
+        delete!(dd, k)
+        for (node, v) in lowered
+            __unsafe_aad_setindex!(dd, v, node)
+        end
+    end
+    return dd
 end
 
 struct AtomicArraySet{D <: AbstractDict{SymbolicT, Nothing}} <: AbstractSet{SymbolicT}
@@ -190,7 +408,9 @@ Base.isempty(x::AtomicArraySet) = isempty(x.dd)
 Base.length(x::AtomicArraySet) = length(x.dd)
 Base.sizehint!(x::AtomicArraySet, n::Integer) = (sizehint!(x.dd, n); x)
 Base.in(item, x::AtomicArraySet) = haskey(x.dd, item)
-Base.push!(x::AtomicArraySet, item) = (x.dd[item] = nothing; x)
+# Deliberately bypasses the record lowering in `setindex!`: a set records which variables
+# exist, and its callers expect a record pushed into it to stay one entry.
+Base.push!(x::AtomicArraySet, item) = (__unsafe_aad_setindex!(x.dd, nothing, unwrap(item)); x)
 Base.delete!(x::AtomicArraySet, item) = (delete!(x.dd, item); x)
 Base.empty(::AtomicArraySet{D}) where {D} = AtomicArraySet{D}()
 Base.copy(x::AtomicArraySet{D}) where {D} = AtomicArraySet{D}(copy(x.dd))
@@ -204,7 +424,8 @@ end
 """
     $TYPEDSIGNATURES
 
-Add `item` to `x`. If `item` is an indexed array, add the array instead.
+Add `item` to `x`. If `item` is an indexed array, add the array instead. Struct projections
+are added as-is: these sets track which variables exist, which is leaf granularity.
 """
 function push_as_atomic_array!(x::AtomicArraySet, item::SymbolicT)
     return push!(x, split_indexed_var(item)[1])
@@ -265,6 +486,7 @@ function Base.get(def::Base.Callable, dd::AADSubWrapper, k::SymbolicT)
     if res === dd.default
         arr, isarr = split_indexed_var(k)
         isarr && haskey(dd.dict, arr) && return k
+        nearest_present_ancestor(dd.dict, k) === nothing || return k
         return def()
     end
     if SU.is_array_shape(SU.shape(k)) && any(
