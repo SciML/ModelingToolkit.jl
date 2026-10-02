@@ -133,7 +133,6 @@ function AffectSystem(spec::SymbolicAffect; iv = nothing, alg_eqs = Equation[], 
     return AffectSystem(affect; iv, discrete_parameters = spec.discrete_parameters, kwargs...)
 end
 
-
 """
 Metadata marking an affect-system parameter that stands in for a pinned parent
 differential (used when `Pre` of an indexed/array variable is not settable via `setsym`).
@@ -185,9 +184,8 @@ function _diff_appears_in_vars(d, vars::Set{SymbolicT})
     d in vars && return true
     arr, isarr = split_indexed_var(d)
     isarr && arr in vars && return true
-    if iscall(d) && operation(d) === getindex
-        arguments(d)[1] in vars && return true
-        # element in vars covers parent mention of this element
+    if iscall(d) && operation(d) === getindex && arguments(d)[1] in vars
+        return true
     end
     # parent differential mentioned via an indexed element in vars
     for v in vars
@@ -199,22 +197,12 @@ function _diff_appears_in_vars(d, vars::Set{SymbolicT})
     return false
 end
 
-function _is_alg_member(a, parent_alg::Set{SymbolicT})
-    a in parent_alg && return true
+function _in_sym_set(a, syms::Set{SymbolicT})
+    a in syms && return true
     arr, isarr = split_indexed_var(a)
-    isarr && arr in parent_alg && return true
+    isarr && arr in syms && return true
     if iscall(a) && operation(a) === getindex
-        arguments(a)[1] in parent_alg && return true
-    end
-    return false
-end
-
-function _is_user_assigned(a, assigned::Set{SymbolicT})
-    a in assigned && return true
-    arr, isarr = split_indexed_var(a)
-    isarr && arr in assigned && return true
-    if iscall(a) && operation(a) === getindex
-        arguments(a)[1] in assigned && return true
+        arguments(a)[1] in syms && return true
     end
     return false
 end
@@ -276,33 +264,52 @@ function AffectSystem(
     alg_extra = Equation[alg_equations(_unhack_sys)...]
     obs_extra = Equation[observed(_unhack_sys)...]
     extra_eqs = Equation[alg_extra; obs_extra]
-    # Pin a parent differential only when it appears in a parent *algebraic* equation
-    # (not merely an observed definition) outside the user affect, and an algebraic
-    # unknown remains free to absorb that equation.
+    # Pin differentials that appear only via parent algebraic equations when those
+    # equations can be matched to *distinct* free algebraic unknowns (bipartite matching).
     pin_subs = Dict{SymbolicT, SymbolicT}()
     _varsbuf_extra = Set{SymbolicT}()
+    candidates = SymbolicT[]
     for var in parent_diff_vars
         _diff_appears_in_vars(var, user_outside_pre) && continue
-        appears_in_alg = false
-        can_pin = true
         for eq in alg_extra
             eq_vars = _vars_outside_pre!(_varsbuf_extra, eq)
-            _diff_appears_in_vars(var, eq_vars) || continue
-            appears_in_alg = true
-            eq_has_free_alg = false
-            for a in eq_vars
-                isequal(a, var) && continue
-                _is_alg_member(a, parent_alg) || continue
-                _is_user_assigned(a, assigned) && continue
-                eq_has_free_alg = true
-                break
-            end
-            if !eq_has_free_alg
-                can_pin = false
+            if _diff_appears_in_vars(var, eq_vars)
+                push!(candidates, var)
                 break
             end
         end
-        if appears_in_alg && can_pin
+    end
+    free_algs = SymbolicT[]
+    for var in unknowns(_unhack_sys)
+        _diff_appears_in_vars(var, parent_diff_vars) && continue
+        _in_sym_set(var, assigned) && continue
+        push!(free_algs, var)
+    end
+    eqs_needing_absorb = Equation[]
+    for eq in alg_extra
+        eq_vars = _vars_outside_pre!(_varsbuf_extra, eq)
+        any(c -> _diff_appears_in_vars(c, eq_vars), candidates) || continue
+        push!(eqs_needing_absorb, eq)
+    end
+    can_pin_candidates = !isempty(candidates) && !isempty(eqs_needing_absorb)
+    if can_pin_candidates
+        g = BipartiteGraph(length(eqs_needing_absorb), length(free_algs))
+        for (i, eq) in enumerate(eqs_needing_absorb)
+            eq_vars = _vars_outside_pre!(_varsbuf_extra, eq)
+            for (j, a) in enumerate(free_algs)
+                _in_sym_set(a, eq_vars) && add_edge!(g, i, j)
+            end
+        end
+        matching = maximal_matching(g)
+        matched_srcs = Set{Int}()
+        for j in 1:length(free_algs)
+            m = matching[j]
+            m isa Int && push!(matched_srcs, m)
+        end
+        can_pin_candidates = length(matched_srcs) == length(eqs_needing_absorb)
+    end
+    if can_pin_candidates
+        for var in candidates
             pin_subs[var] = affect_pin_replacement(var)
         end
     end
@@ -314,7 +321,7 @@ function AffectSystem(
             eq_vars = _vars_outside_pre!(_varsbuf_extra, eq)
             has_free = false
             for a in eq_vars
-                if _is_alg_member(a, parent_alg) && !_is_user_assigned(a, assigned)
+                if _in_sym_set(a, parent_alg) && !_in_sym_set(a, assigned)
                     hasmetadata(a, AffectPinOrigin) && continue
                     iscall(a) && operation(a) isa Pre && continue
                     has_free = true
@@ -411,15 +418,15 @@ function AffectSystem(
             affectsys; fully_determined = nothing, homotopy = homotopy_enabled(parent_sys)
         )
     )::System
-    # get accessed parameters p from Pre(p) / AffectPinOrigin pins in the callback parameters
-    accessed_params = SymbolicT[]
+    # Accessed parameters: true parameters from Pre(...), plus pinned differentials only.
+    accessed_params = Vector{SymbolicT}(filter(isparameter, map(unPre, collect(pre_params))))
+    pinned_origins = keys(pin_subs)
     for p in pre_params
         up = unPre(p)
         up isa SymbolicT || continue
-        # `Pre` may wrap parent unknowns (pinned differential states) as well as parameters.
-        if isparameter(up) || up in parent_dvs
-            push!(accessed_params, up)
-        end
+        isparameter(up) && continue
+        any(isequal(up), pinned_origins) || continue
+        push!(accessed_params, up)
     end
     for p in sys_params
         if hasmetadata(p, AffectPinOrigin)
@@ -1794,20 +1801,19 @@ Base.@nospecializeinfer function compile_implicit_affect(
 
     dvs_to_access = unknowns(affsys)
     aff_ps = parameters(affsys)
-    # Never pass Pre(indexed) / Pre(array parent) to setsym; those are represented as
-    # AffectPinOrigin parameters instead. Filter any residual unsettable Pre forms.
-    settable_aff_ps = SymbolicT[
-        p for p in aff_ps if !(
-            iscall(p) && operation(p) isa Pre && _is_array_or_indexed(unPre(p))
-        )
-    ]
-    ps_to_access = map(parent_symbol_for_affect_param, settable_aff_ps)
+    for p in aff_ps
+        if iscall(p) && operation(p) isa Pre && _is_array_or_indexed(unPre(p))
+            error(
+                "Invalid affect parameter $p: Pre of an indexed or array variable cannot be set via setsym. Use an AffectPinOrigin stand-in instead."
+            )
+        end
+    end
+    ps_to_access = map(parent_symbol_for_affect_param, aff_ps)
 
     affu_getter = getsym(sys, dvs_to_access)
     affp_getter = getsym(sys, ps_to_access)
     affu_setter! = setsym(affsys, unknowns(affsys))
-    affp_setter! = isempty(settable_aff_ps) ? Returns(nothing) :
-                   setsym(affsys, settable_aff_ps)
+    affp_setter! = isempty(aff_ps) ? Returns(nothing) : setsym(affsys, aff_ps)
     u_setter! = setsym(sys, dvs_to_update)
     p_setter! = setsym(sys, ps_to_update)
     u_getter = getsym(affsys, dvs_to_update)

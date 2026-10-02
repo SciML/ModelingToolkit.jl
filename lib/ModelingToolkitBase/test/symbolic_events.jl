@@ -2164,6 +2164,25 @@ end
     @test sol_inv.u[i_inv[2]] ≈ [0.5, 2.0] rtol = 1.0e-10
 end
 
+@testset "Two algebraics sharing a differential stay free when only one is assigned" begin
+    # Assigning one algebraic must not pin the differential when two algebraic eqs
+    # share a single free algebraic absorber (master solves; x moves).
+    @variables x(t) = 1.0 λ(t) [guess = 0.0] μ(t) [guess = 0.0]
+    eqs = [D(x) ~ -x, 0 ~ λ + μ - x, 0 ~ λ - μ - 2x]
+    ev = SymbolicDiscreteCallback([0.5], [λ ~ 3.0])
+    @mtkcompile sys = System(eqs, t; discrete_events = [ev])
+    aff = affects(only(discrete_events(sys)))
+    @test any(isequal(x), unknowns(aff))
+    prob = ODEProblem(sys, [], (0.0, 1.0))
+    sol = solve(prob, Rodas5P(); abstol = 1.0e-10, reltol = 1.0e-10)
+    @test SciMLBase.successful_retcode(sol)
+    i = findall(==(0.5), sol.t)
+    @test length(i) >= 2
+    @test sol.u[i[2]][1] ≈ 2.0 rtol = 1.0e-8
+    @test sol.u[i[2]][2] ≈ 3.0 rtol = 1.0e-8
+    @test sol.u[i[2]][3] ≈ -1.0 rtol = 1.0e-8
+end
+
 @testset "Issue#5200 array differential with algebraic and discrete-only affect" begin
     @variables u(t)[1:2] λ(t) [guess = 0.0]
     @discretes on(t) = 1.0
