@@ -66,6 +66,20 @@ using OrdinaryDiffEqBDF, Sundials
         end
     end
 
+    @testset "Symbolic du0 with v => $vval" for vval in (missing, nothing)
+        prob = DAEProblem(
+            coupled_sys, [x => 1.0, v => vval, D(x) => -v * x, D(v) => 0.0],
+            (0.0, 1.0); guesses = [v => 0.0]
+        )
+        @test prob.u0 ≈ [1.0, 3.0]
+        @test prob.du0 ≈ [-3.0, 0.0]
+        integ = init(prob, DFBDF(); initializealg = SciMLBase.OverrideInit())
+        @test integ.du ≈ [-3.0, 0.0]
+        residual = similar(integ.u)
+        prob.f(residual, integ.du, integ.u, integ.p, 0.0)
+        @test residual ≈ zeros(2) atol = 1.0e-12
+    end
+
     @testset "Derivative root, sign = $sign, system guess = $system_guess" for
         sign in (-1.0, 1.0), system_guess in (false, true)
         derivative_guesses = [D(x) => sign]

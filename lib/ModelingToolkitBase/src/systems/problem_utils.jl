@@ -2882,12 +2882,18 @@ function __process_SciMLProblem(
             # Symbolic derivative values such as `D(x) => -w * x` may depend on
             # variables only initialization determines, so non-derivative entries
             # come from the post-initialization `op` without overriding set ones.
+            # An explicit `missing` requested initialization, so it counts as unset.
             ddv_arrs = Set{SymbolicT}(first(split_indexed_var(ddv)) for ddv in ddvs)
             for (k, v) in op
                 (isdifferential(k) || k in ddv_arrs) && continue
+                v === COMMON_MISSING && continue
                 if Symbolics.isarraysymbolic(k)
+                    get(du0_op, k, COMMON_NOTHING) === COMMON_MISSING && delete!(du0_op, k)
                     fill_unset_array_entries!(du0_op, k, v, COMMON_NOTHING)
-                elseif get_possibly_indexed(du0_op, k, COMMON_NOTHING) === COMMON_NOTHING
+                elseif (
+                        cur = get_possibly_indexed(du0_op, k, COMMON_NOTHING);
+                        cur === COMMON_NOTHING || cur === COMMON_MISSING
+                    )
                     write_possibly_indexed_array!(du0_op, k, v, COMMON_NOTHING)
                 end
             end
