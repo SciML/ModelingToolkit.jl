@@ -133,6 +133,106 @@ function AffectSystem(spec::SymbolicAffect; iv = nothing, alg_eqs = Equation[], 
     return AffectSystem(affect; iv, discrete_parameters = spec.discrete_parameters, kwargs...)
 end
 
+
+"""
+Metadata marking an affect-system parameter that stands in for a pinned parent
+differential (used when `Pre` of an indexed/array variable is not settable via `setsym`).
+"""
+struct AffectPinOrigin end
+
+function _is_array_or_indexed(var)
+    _, isarr = split_indexed_var(var)
+    isarr && return true
+    return iscall(var) && operation(var) === getindex
+end
+
+"""
+Replacement for a pinned differential in affect equations. Scalars use `Pre(var)`.
+Indexed/array differentials use a fixed-name parameter with `AffectPinOrigin` metadata
+so `setsym` never receives `Pre` of an indexed variable or array parent.
+"""
+function affect_pin_replacement(var)
+    if _is_array_or_indexed(var)
+        base = split_indexed_var(var)[1]
+        idxs = (iscall(var) && operation(var) === getindex) ? arguments(var)[2:end] : ()
+        nm = Symbol(
+            "__mtk_pin_", getname(base),
+            isempty(idxs) ? "" : "_" * join(string.(idxs), "_")
+        )
+        p = toparam(Symbolics.variable(nm; T = symtype(var)))
+        return setmetadata(p, AffectPinOrigin, var)
+    end
+    return Pre(var)
+end
+
+function _vars_outside_pre!(buf, eq)
+    empty!(buf)
+    SU.search_variables!(buf, eq; is_atomic = OperatorIsAtomic{Union{Pre, Differential}}())
+    out = Set{SymbolicT}()
+    for var in buf
+        iscall(var) && operation(var) isa Pre && continue
+        push!(out, var)
+        arr, isarr = split_indexed_var(var)
+        isarr && push!(out, arr)
+        if iscall(var) && operation(var) === getindex
+            push!(out, arguments(var)[1])
+        end
+    end
+    return out
+end
+
+function _diff_appears_in_vars(d, vars::Set{SymbolicT})
+    d in vars && return true
+    arr, isarr = split_indexed_var(d)
+    isarr && arr in vars && return true
+    if iscall(d) && operation(d) === getindex
+        arguments(d)[1] in vars && return true
+        # element in vars covers parent mention of this element
+    end
+    # parent differential mentioned via an indexed element in vars
+    for v in vars
+        iscall(v) && operation(v) === getindex || continue
+        isequal(arguments(v)[1], d) && return true
+        a, ia = split_indexed_var(v)
+        ia && isequal(a, d) && return true
+    end
+    return false
+end
+
+function _is_alg_member(a, parent_alg::Set{SymbolicT})
+    a in parent_alg && return true
+    arr, isarr = split_indexed_var(a)
+    isarr && arr in parent_alg && return true
+    if iscall(a) && operation(a) === getindex
+        arguments(a)[1] in parent_alg && return true
+    end
+    return false
+end
+
+function _is_user_assigned(a, assigned::Set{SymbolicT})
+    a in assigned && return true
+    arr, isarr = split_indexed_var(a)
+    isarr && arr in assigned && return true
+    if iscall(a) && operation(a) === getindex
+        arguments(a)[1] in assigned && return true
+    end
+    return false
+end
+
+function _eq_identically_zero(eq::Equation)
+    r = simplify(expand(eq.lhs - eq.rhs))
+    return isequal(r, 0) || (r isa Number && iszero(r))
+end
+
+function parent_symbol_for_affect_param(p)
+    up = unPre(p)
+    !isequal(up, p) && return up
+    if hasmetadata(p, AffectPinOrigin)
+        return getmetadata(p, AffectPinOrigin)
+    end
+    return p
+end
+
 function AffectSystem(
         affect::Vector{Equation}; discrete_parameters = SymbolicT[],
         iv = nothing, parent_sys, kwargs...
@@ -143,10 +243,10 @@ function AffectSystem(
         @warn "No independent variable specified. Defaulting to t_nounits."
     end
     _unhack_sys = reverse_all_default_reversible_transformations(parent_sys)
-    # Variables assigned by the user affect (before parent alg/observed eqs are appended).
-    # Differential states not in this set are pinned to their pre-event values via Pre(...).
+    # User affect equations (before parent alg/observed eqs are appended).
+    user_affect = affect
     assigned = Set{SymbolicT}()
-    for eq in affect
+    for eq in user_affect
         lhs = eq.lhs
         push!(assigned, lhs)
         arr, isarr = split_indexed_var(lhs)
@@ -155,21 +255,79 @@ function AffectSystem(
             push!(assigned, arguments(lhs)[1])
         end
     end
+    _varsbuf_user = Set{SymbolicT}()
+    user_outside_pre = Set{SymbolicT}()
+    for eq in user_affect
+        union!(user_outside_pre, _vars_outside_pre!(_varsbuf_user, eq))
+    end
     parent_diff_vars = Set{SymbolicT}()
     for var in collect_differential_variables(_unhack_sys)
         push!(parent_diff_vars, var)
         push!(parent_diff_vars, split_indexed_var(var)[1])
     end
-    extra_eqs = Equation[alg_equations(_unhack_sys); observed(_unhack_sys)]
-    affect = [affect; extra_eqs]
-    # Pin unassigned parent differential states so tearing re-solves algebraic/observed
-    # variables instead of rewriting differentials when discrete parameters change.
-    pin_subs = Dict{SymbolicT, SymbolicT}()
-    for var in parent_diff_vars
-        (var in assigned) && continue
-        pin_subs[var] = Pre(var)
+    parent_alg = Set{SymbolicT}()
+    for var in unknowns(_unhack_sys)
+        if !_diff_appears_in_vars(var, parent_diff_vars)
+            push!(parent_alg, var)
+            push!(parent_alg, split_indexed_var(var)[1])
+        end
     end
+    for eq in observed(_unhack_sys)
+        lhs = eq.lhs
+        push!(parent_alg, lhs)
+        push!(parent_alg, split_indexed_var(lhs)[1])
+    end
+    extra_eqs = Equation[alg_equations(_unhack_sys); observed(_unhack_sys)]
+    # Pin a parent differential only when it appears solely via appended parent equations
+    # (not in the user affect outside Pre) and an algebraic unknown remains free to absorb.
+    pin_subs = Dict{SymbolicT, SymbolicT}()
+    _varsbuf_extra = Set{SymbolicT}()
+    for var in parent_diff_vars
+        _diff_appears_in_vars(var, user_outside_pre) && continue
+        can_pin = false
+        appears_in_extra = false
+        for eq in extra_eqs
+            eq_vars = _vars_outside_pre!(_varsbuf_extra, eq)
+            _diff_appears_in_vars(var, eq_vars) || continue
+            appears_in_extra = true
+            for a in eq_vars
+                _is_alg_member(a, parent_alg) || continue
+                _is_user_assigned(a, assigned) && continue
+                can_pin = true
+                break
+            end
+            can_pin && break
+        end
+        if appears_in_extra && can_pin
+            pin_subs[var] = affect_pin_replacement(var)
+        end
+    end
+    affect = Equation[user_affect; extra_eqs]
     isempty(pin_subs) || (affect = substitute(affect, pin_subs))
+    # Parent algebraic/observed equations that become parameter-only and non-trivial are errors.
+    if !isempty(pin_subs)
+        for eq in substitute(extra_eqs, pin_subs)
+            eq_vars = _vars_outside_pre!(_varsbuf_extra, eq)
+            has_free = false
+            for a in eq_vars
+                if _is_alg_member(a, parent_alg) && !_is_user_assigned(a, assigned)
+                    # still free if not replaced by a pin param / Pre
+                    hasmetadata(a, AffectPinOrigin) && continue
+                    iscall(a) && operation(a) isa Pre && continue
+                    has_free = true
+                    break
+                end
+                # differential that was not pinned remains free
+                if _diff_appears_in_vars(a, parent_diff_vars) && a ∉ keys(pin_subs)
+                    has_free = true
+                    break
+                end
+            end
+            if !has_free && !_eq_identically_zero(eq)
+                throw(UnsolvableCallbackError([eq]))
+            end
+        end
+    end
 
     discrete_parameters = SymbolicAffect(affect; discrete_parameters).discrete_parameters
 
@@ -251,7 +409,7 @@ function AffectSystem(
             affectsys; fully_determined = nothing, homotopy = homotopy_enabled(parent_sys)
         )
     )::System
-    # get accessed parameters p from Pre(p) in the callback parameters
+    # get accessed parameters p from Pre(p) / AffectPinOrigin pins in the callback parameters
     accessed_params = SymbolicT[]
     for p in pre_params
         up = unPre(p)
@@ -261,7 +419,14 @@ function AffectSystem(
             push!(accessed_params, up)
         end
     end
-    union!(accessed_params, sys_params)
+    for p in sys_params
+        if hasmetadata(p, AffectPinOrigin)
+            origin = getmetadata(p, AffectPinOrigin)
+            origin isa SymbolicT && push!(accessed_params, origin)
+        else
+            push!(accessed_params, p)
+        end
+    end
 
     # add scalarized unknowns to the map.
     _obs = observed(reverse_all_default_reversible_transformations(affectsys))
@@ -871,54 +1036,35 @@ end
 ####################################
 
 """
-    ExplicitAffect{DVS, PS, UF, UOOP, PF, POOP, US, PSOP}
+    ExplicitAffect{DVS, PS, UF, PF}
 
 Callable struct representing a compiled explicit affect (one with no algebraic equations).
-Invokes in-place or out-of-place update functions depending on the problem, then optionally
-resets aggregated jumps. Created by [`compile_explicit_affect`](@ref).
+Invokes `u_up!` to update state variables and `p_up!` to update discrete parameters, then
+optionally resets aggregated jumps. Created by [`compile_explicit_affect`](@ref).
 
 # Fields
 - `dvs_to_update`: symbolic unknowns modified by this affect (emptiness is checked at call time)
 - `ps_to_update`: symbolic discrete parameters modified by this affect
 - `reset_jumps`: if `true`, call `reset_aggregated_jumps!` after the update
 - `u_up!`: compiled in-place function that writes updated state into the integrator
-- `u_up`: compiled out-of-place function that returns updated state component values
 - `p_up!`: compiled in-place function that writes updated parameters into the integrator
-- `p_up`: compiled out-of-place function that returns updated parameter values
-- `u_setter_oop`: `setsym_oop` setter applying OOP state values (or `nothing`)
-- `p_setter_oop`: `setp_oop` setter applying OOP parameter values (or `nothing`)
 """
-struct ExplicitAffect{DVS, PS, UF, UOOP, PF, POOP, US, PSOP}
+struct ExplicitAffect{DVS, PS, UF, PF}
     dvs_to_update::DVS
     ps_to_update::PS
     reset_jumps::Bool
     u_up!::UF
-    u_up::UOOP
     p_up!::PF
-    p_up::POOP
-    u_setter_oop::US
-    p_setter_oop::PSOP
 end
 
 function (ea::ExplicitAffect)(integ)
-    if DiffEqBase.isinplace(SciMLBase.get_sol(integ).prob)
-        isempty(ea.dvs_to_update) || ea.u_up!(integ)
-        isempty(ea.ps_to_update) || ea.p_up!(integ)
-    else
-        if !isempty(ea.dvs_to_update)
-            new_u, _ = ea.u_setter_oop(integ, ea.u_up(integ))
-            integ.u = new_u
-        end
-        if !isempty(ea.ps_to_update)
-            integ.p = ea.p_setter_oop(integ, ea.p_up(integ))
-            finalize_parameters_hook!(integ, nothing)
-        end
-    end
+    isempty(ea.dvs_to_update) || ea.u_up!(integ)
+    isempty(ea.ps_to_update) || ea.p_up!(integ)
     return ea.reset_jumps && reset_aggregated_jumps!(integ)
 end
 
 """
-    ImplicitAffect{DVS, PS, AFFSYS, AFF, UG, AG, AUS, APS, US, PST, USOOP, PSOOP, UGT, PG, PROB}
+    ImplicitAffect{DVS, PS, AFFSYS, AFF, UG, AG, AUS, APS, US, PST, UGT, PG, PROB}
 
 Callable struct representing a compiled implicit affect (one whose equations require solving
 an `ImplicitDiscreteProblem` at each callback invocation). Created by
@@ -939,17 +1085,13 @@ arrays directly; `remake` is then called to produce a transient local copy with 
 - `affp_getter`: reads current parent-system parameters into the affect problem's `p`
 - `affu_setter!`: sets the affect problem's unknowns in-place
 - `affp_setter!`: sets the affect problem's parameters in-place
-- `u_setter!`: writes solved unknowns back into the parent integrator (in-place)
-- `p_setter!`: writes solved parameters back into the parent integrator (in-place)
-- `u_setter_oop`: `setsym_oop` writer for out-of-place parent state updates (or `nothing`)
-- `p_setter_oop`: `setp_oop` writer for out-of-place parent parameter updates (or `nothing`)
+- `u_setter!`: writes solved unknowns back into the parent integrator
+- `p_setter!`: writes solved parameters back into the parent integrator
 - `u_getter`: reads solved unknowns from the affect solution
 - `p_getter`: reads solved parameters from the affect solution
 - `affprob`: the pre-built `ImplicitDiscreteProblem` (mutated in-place each call)
 """
-struct ImplicitAffect{
-        DVS, PS, AFFSYS, AFF, UG, AG, AUS, APS, US, PST, USOOP, PSOOP, UGT, PG, PROB,
-    }
+struct ImplicitAffect{DVS, PS, AFFSYS, AFF, UG, AG, AUS, APS, US, PST, UGT, PG, PROB}
     dvs_to_update::DVS
     ps_to_update::PS
     affsys::AFFSYS
@@ -961,8 +1103,6 @@ struct ImplicitAffect{
     affp_setter!::APS
     u_setter!::US
     p_setter!::PST
-    u_setter_oop::USOOP
-    p_setter_oop::PSOOP
     u_getter::UGT
     p_getter::PG
     affprob::PROB
@@ -1017,19 +1157,8 @@ function (ia::ImplicitAffect)(integ)
     )
     (check_error(affsol) === ReturnCode.InitialFailure) &&
         throw(UnsolvableCallbackError(all_equations(ia.aff)))
-    if DiffEqBase.isinplace(SciMLBase.get_sol(integ).prob)
-        ia.u_setter!(integ, ia.u_getter(affsol))
-        ia.p_setter!(integ, ia.p_getter(affsol))
-    else
-        if !isempty(ia.dvs_to_update)
-            new_u, _ = ia.u_setter_oop(integ, ia.u_getter(affsol))
-            integ.u = new_u
-        end
-        if !isempty(ia.ps_to_update)
-            integ.p = ia.p_setter_oop(integ, ia.p_getter(affsol))
-            finalize_parameters_hook!(integ, nothing)
-        end
-    end
+    ia.u_setter!(integ, ia.u_getter(affsol))
+    ia.p_setter!(integ, ia.p_getter(affsol))
     return ia.reset_jumps && reset_aggregated_jumps!(integ)
 end
 
@@ -1608,8 +1737,7 @@ Base.@nospecializeinfer function compile_explicit_affect(
     _ps = reorder_parameters(sys, ps)
     integ = gensym(:MTKIntegrator)
 
-    # In-place updaters write through `outputidxs` into `integ.u` / `integ.p`.
-    _,
+    u_up,
         u_up! = build_function_wrapper(
         sys, (@view rhss[is_u]), [Any[dvs]; _ps; Any[t]],
         BuildFunctionWrapperOptions(;
@@ -1622,7 +1750,7 @@ Base.@nospecializeinfer function compile_explicit_affect(
             )
         )
     )
-    _,
+    p_up,
         p_up! = build_function_wrapper(
         sys, (@view rhss[is_p]), [Any[dvs]; _ps; Any[t]],
         BuildFunctionWrapperOptions(;
@@ -1635,50 +1763,11 @@ Base.@nospecializeinfer function compile_explicit_affect(
             )
         )
     )
-    # Out-of-place updaters return the new component values (no outputidxs); callers apply
-    # them via setsym_oop / setp_oop so immutable `SVector` states/parameters work.
-    u_up,
-        _ = build_function_wrapper(
-        sys, (@view rhss[is_u]), [Any[dvs]; _ps; Any[t]],
-        BuildFunctionWrapperOptions(;
-            u_arg = 1, wrap_mtkparameters,
-            codegen_function_options = setproperties(
-                opts.codegen, (;
-                    wrap_code = add_integrator_header(sys, integ, :u),
-                    iip_config = (true, false),
-                )
-            )
-        )
-    )
-    p_up,
-        _ = build_function_wrapper(
-        sys, (@view rhss[is_p]), [Any[dvs]; _ps; Any[t]],
-        BuildFunctionWrapperOptions(;
-            u_arg = 1, wrap_mtkparameters,
-            codegen_function_options = setproperties(
-                opts.codegen, (;
-                    wrap_code = add_integrator_header(sys, integ, :p),
-                    iip_config = (true, false),
-                )
-            )
-        )
-    )
 
-    u_up = eval_or_rgf(u_up; eval_expression, eval_module)
     u_up! = eval_or_rgf(u_up!; eval_expression, eval_module)
-    p_up = eval_or_rgf(p_up; eval_expression, eval_module)
     p_up! = eval_or_rgf(p_up!; eval_expression, eval_module)
 
-    # OOP setters must use the same symbol order as the generated `*_up` RHS vectors.
-    u_syms = collect(@view lhss[is_u])
-    p_syms = collect(@view lhss[is_p])
-    u_setter_oop = isempty(u_syms) ? nothing : setsym_oop(sys, u_syms)
-    p_setter_oop = isempty(p_syms) ? nothing : setp_oop(sys, p_syms)
-
-    return ExplicitAffect(
-        dvs_to_update, ps_to_update, reset_jumps, u_up!, u_up, p_up!, p_up,
-        u_setter_oop, p_setter_oop
-    )
+    return ExplicitAffect(dvs_to_update, ps_to_update, reset_jumps, u_up!, p_up!)
 end
 
 """
@@ -1702,16 +1791,23 @@ Base.@nospecializeinfer function compile_implicit_affect(
     dvs_to_update = setdiff(unknowns(aff), getfield.(observed(sys), :lhs))
 
     dvs_to_access = unknowns(affsys)
-    ps_to_access = [unPre(p) for p in parameters(affsys)]
+    aff_ps = parameters(affsys)
+    # Never pass Pre(indexed) / Pre(array parent) to setsym; those are represented as
+    # AffectPinOrigin parameters instead. Filter any residual unsettable Pre forms.
+    settable_aff_ps = SymbolicT[
+        p for p in aff_ps if !(
+            iscall(p) && operation(p) isa Pre && _is_array_or_indexed(unPre(p))
+        )
+    ]
+    ps_to_access = map(parent_symbol_for_affect_param, settable_aff_ps)
 
     affu_getter = getsym(sys, dvs_to_access)
     affp_getter = getsym(sys, ps_to_access)
     affu_setter! = setsym(affsys, unknowns(affsys))
-    affp_setter! = setsym(affsys, parameters(affsys))
+    affp_setter! = isempty(settable_aff_ps) ? Returns(nothing) :
+                   setsym(affsys, settable_aff_ps)
     u_setter! = setsym(sys, dvs_to_update)
     p_setter! = setsym(sys, ps_to_update)
-    u_setter_oop = isempty(dvs_to_update) ? nothing : setsym_oop(sys, dvs_to_update)
-    p_setter_oop = isempty(ps_to_update) ? nothing : setp_oop(sys, ps_to_update)
     u_getter = getsym(affsys, dvs_to_update)
     p_getter = getsym(affsys, ps_to_update)
 
@@ -1725,7 +1821,7 @@ Base.@nospecializeinfer function compile_implicit_affect(
         dvs_to_update, ps_to_update, affsys, aff,
         reset_jumps,
         affu_getter, affp_getter, affu_setter!, affp_setter!,
-        u_setter!, p_setter!, u_setter_oop, p_setter_oop, u_getter, p_getter,
+        u_setter!, p_setter!, u_getter, p_getter,
         affprob
     )
 end

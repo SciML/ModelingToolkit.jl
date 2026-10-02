@@ -76,9 +76,9 @@ using SymbolicIndexingInterface: ArraySymbolic, ContinuousTimeseries, NotSymboli
     all_symbols, all_variable_symbols, current_time, getname, getsym, getu, hasname,
     independent_variable_symbols, is_independent_variable, is_markovian, is_parameter,
     is_time_dependent, is_timeseries_parameter, is_variable, parameter_index,
-    parameter_symbols, parameter_values, set_parameter!, setp, setp_oop, setsym, setsym_oop,
-    setu, state_values, symbolic_container, symbolic_type, timeseries_parameter_index,
-    variable_index, variable_symbols, finalize_parameters_hook!
+    parameter_symbols, parameter_values, set_parameter!, setp, setp_oop, setsym, setu,
+    state_values, symbolic_container, symbolic_type, timeseries_parameter_index,
+    variable_index, variable_symbols
 import LinearAlgebra
 using LinearAlgebra: Diagonal, I, UniformScaling, diag, diagm, dot, isdiag, tr
 import SparseArrays

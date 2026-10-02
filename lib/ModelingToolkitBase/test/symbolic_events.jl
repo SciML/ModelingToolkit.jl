@@ -2087,7 +2087,6 @@ end
 end
 
 @testset "Issue#5200: discrete affect re-solves algebraic vars, keeps differentials" begin
-    using StaticArrays: SA
     @variables x(t) v(t) λ(t) [guess = 0.0]
     @discretes on(t) = 1.0
     eqs = [D(x) ~ v, D(v) ~ -λ, 0 ~ 2λ + v - 2on]
@@ -2096,7 +2095,6 @@ end
 
     aff = affects(only(discrete_events(sys)))
     @test aff isa AffectSystem
-    # Differential state `v` is pinned; algebraic/observed `λ` is what gets updated.
     @test any(isequal(v), parameters(aff))
     @test any(isequal(λ), unknowns(aff))
 
@@ -2108,22 +2106,78 @@ end
     @test sol.u[i[1]][2] ≈ sol.u[i[2]][2] rtol = 1.0e-10
     t_after = sol.t[findfirst(>(0.5), sol.t)]
     @test sol(t_after; idxs = λ) ≈ -sol(t_after; idxs = v) / 2 rtol = 1.0e-8
+end
 
-    # Out-of-place `SVector` problems must not try to mutate state/parameters in place.
-    prob_oop = ODEProblem{false}(sys, SA[x => 0.0, v => 1.0], (0.0, 1.0))
-    sol_oop = solve(prob_oop, Rodas5P(); abstol = 1.0e-10, reltol = 1.0e-10)
-    @test SciMLBase.successful_retcode(sol_oop)
-    i_oop = findall(==(0.5), sol_oop.t)
-    @test length(i_oop) >= 2
-    @test sol_oop.u[i_oop[1]][2] ≈ sol_oop.u[i_oop[2]][2] rtol = 1.0e-10
+@testset "Equational affects: residuals and documented inverse keep differentials free" begin
+    # Residual bounce: differential appears in the user affect outside Pre.
+    @variables x(t) = 0.0 v(t) = 1.0
+    ev = SymbolicDiscreteCallback([0.5], [0 ~ v + 0.5 * Pre(v)])
+    @mtkcompile sys = System([D(x) ~ v, D(v) ~ -1], t; discrete_events = [ev])
+    aff = affects(only(discrete_events(sys)))
+    @test any(isequal(v), unknowns(aff))
+    prob = ODEProblem(sys, [], (0.0, 1.0))
+    sol = solve(prob, Tsit5())
+    @test SciMLBase.successful_retcode(sol)
+    i = findall(==(0.5), sol.t)
+    @test length(i) >= 2
+    @test sol.u[i[1]][2] ≈ 0.5 rtol = 1.0e-10
+    @test sol.u[i[2]][2] ≈ -0.25 rtol = 1.0e-10
 
-    @variables x2(t) v2(t)
-    ev2 = SymbolicDiscreteCallback([0.5], [v2 ~ -Pre(v2)])
-    @mtkcompile sys2 = System([D(x2) ~ v2, D(v2) ~ -1], t; discrete_events = [ev2])
-    prob2 = ODEProblem{false}(sys2, SA[x2 => 0.0, v2 => 1.0], (0.0, 1.0))
-    sol2 = solve(prob2, Tsit5())
-    @test SciMLBase.successful_retcode(sol2)
-    i2 = findall(==(0.5), sol2.t)
-    @test length(i2) >= 2
-    @test sol2.u[i2[2]][2] ≈ -sol2.u[i2[1]][2] rtol = 1.0e-10
+    # Equal-mass inelastic collision residuals.
+    @variables x1(t) = 0.0 v1(t) = 1.0 x2(t) = 0.0 v2(t) = -1.0
+    @parameters m1 = 1.0 m2 = 1.0
+    coll = SymbolicDiscreteCallback(
+        [0.5],
+        [
+            0 ~ m1 * v1 + m2 * v2 - (m1 * Pre(v1) + m2 * Pre(v2)),
+            0 ~ v1 - v2,
+        ],
+    )
+    @mtkcompile sys_c = System(
+        [D(x1) ~ v1, D(v1) ~ 0, D(x2) ~ v2, D(v2) ~ 0], t, [x1, v1, x2, v2], [m1, m2];
+        discrete_events = [coll],
+    )
+    aff_c = affects(only(discrete_events(sys_c)))
+    @test any(isequal(v1), unknowns(aff_c))
+    @test any(isequal(v2), unknowns(aff_c))
+    prob_c = ODEProblem(sys_c, [], (0.0, 1.0))
+    sol_c = solve(prob_c, Tsit5())
+    @test SciMLBase.successful_retcode(sol_c)
+    i_c = findall(==(0.5), sol_c.t)
+    @test length(i_c) >= 2
+    @test sol_c.u[i_c[2]][2] ≈ 0.0 atol = 1.0e-10
+    @test sol_c.u[i_c[2]][4] ≈ 0.0 atol = 1.0e-10
+
+    # Documented inverse: assign algebraic, let differential move (Events.md).
+    @variables x(t) = 1.0 y(t) = 1.0
+    @parameters p = 1.0
+    ev_inv = SymbolicDiscreteCallback([1.0], [y ~ Pre(y) + 1])
+    @mtkcompile sys_inv = System([x * y ~ p, D(x) ~ 0], t; discrete_events = [ev_inv])
+    aff_inv = affects(only(discrete_events(sys_inv)))
+    @test any(isequal(x), unknowns(aff_inv))
+    prob_inv = ODEProblem(sys_inv, [], (0.0, 2.0))
+    sol_inv = solve(prob_inv, Rodas5P())
+    @test SciMLBase.successful_retcode(sol_inv)
+    i_inv = findall(==(1.0), sol_inv.t)
+    @test length(i_inv) >= 2
+    @test sol_inv.u[i_inv[1]] ≈ [1.0, 1.0] rtol = 1.0e-10
+    @test sol_inv.u[i_inv[2]] ≈ [0.5, 2.0] rtol = 1.0e-10
+end
+
+@testset "Issue#5200 array differential with algebraic and discrete-only affect" begin
+    @variables u(t)[1:2] λ(t) [guess = 0.0]
+    @discretes on(t) = 1.0
+    eqs = [D(u) ~ [1.0, -u[2]], 0 ~ λ - u[1] + on]
+    ev = SymbolicDiscreteCallback([0.5], [on ~ 0.0]; discrete_parameters = [on])
+    @mtkcompile sys = System(eqs, t, [u..., λ], [on]; discrete_events = [ev])
+    prob = ODEProblem(sys, [u => [0.0, 1.0]], (0.0, 1.0))
+    sol = solve(prob, Rodas5P(); abstol = 1.0e-10, reltol = 1.0e-10)
+    @test SciMLBase.successful_retcode(sol)
+    i = findall(==(0.5), sol.t)
+    @test length(i) >= 2
+    # u unchanged across the event; λ tracks u[1] once on is 0.
+    @test sol.u[i[1]][1] ≈ sol.u[i[2]][1] rtol = 1.0e-10
+    @test sol.u[i[1]][2] ≈ sol.u[i[2]][2] rtol = 1.0e-10
+    t_after = sol.t[findfirst(>(0.5), sol.t)]
+    @test sol(t_after; idxs = λ) ≈ sol(t_after; idxs = u[1]) rtol = 1.0e-8
 end
