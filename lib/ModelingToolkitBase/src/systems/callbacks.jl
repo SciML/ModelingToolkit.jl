@@ -867,8 +867,17 @@ struct ExplicitAffect{DVS, PS, UF, UOOP, PF, POOP, US, PSOP}
     p_setter_oop::PSOP
 end
 
+"""
+True when the integrator's state container can be updated in-place.
+
+Chooses the branch from the state type rather than `get_sol(integ).prob`, so
+integrator-like value providers without a `sol` (e.g. jump `TestInt`) keep the
+in-place path. Immutable states such as `SVector` take the OOP setters.
+"""
+_affect_inplace(integ) = ArrayInterface.ismutable(state_values(integ))
+
 function (ea::ExplicitAffect)(integ)
-    if DiffEqBase.isinplace(SciMLBase.get_sol(integ).prob)
+    if _affect_inplace(integ)
         isempty(ea.dvs_to_update) || ea.u_up!(integ)
         isempty(ea.ps_to_update) || ea.p_up!(integ)
     else
@@ -984,7 +993,7 @@ function (ia::ImplicitAffect)(integ)
     )
     (check_error(affsol) === ReturnCode.InitialFailure) &&
         throw(UnsolvableCallbackError(all_equations(ia.aff)))
-    if DiffEqBase.isinplace(SciMLBase.get_sol(integ).prob)
+    if _affect_inplace(integ)
         ia.u_setter!(integ, ia.u_getter(affsol))
         ia.p_setter!(integ, ia.p_getter(affsol))
     else

@@ -2097,6 +2097,7 @@ end
     sol = solve(prob, Tsit5())
     @test SciMLBase.successful_retcode(sol)
     @test sol(1.0; idxs = x) ≈ 0.5 rtol = 1.0e-8
+    @test sol.ps[on] == [1.0, 0.0]
 
     # Explicit state update on an SVector problem.
     @variables x2(t) v2(t)
@@ -2106,4 +2107,43 @@ end
     sol2 = solve(prob2, Tsit5())
     @test SciMLBase.successful_retcode(sol2)
     @test sol2(0.7; idxs = v2) ≈ -0.7 rtol = 1.0e-8
+
+    # Mixed state + discrete parameter update.
+    @variables z(t)
+    @discretes k(t) = 1.0
+    ev3 = SymbolicDiscreteCallback(
+        [0.5], [z ~ Pre(z) / 2, k ~ Pre(k) + 2];
+        discrete_parameters = [k]
+    )
+    @mtkcompile sys3 = System([D(z) ~ -z], t, [z], [k]; discrete_events = [ev3])
+    prob3 = ODEProblem{false}(sys3, SA[z => 1.0], (0.0, 2.0))
+    sol3 = solve(prob3, Tsit5())
+    @test SciMLBase.successful_retcode(sol3)
+    # z(0.5-)=e^{-1/2}, halved, then free decay to t=2 ⇒ (1/2)e^{-2}.
+    @test sol3(2.0; idxs = z) ≈ 0.5 * exp(-2.0) rtol = 1.0e-5
+    @test sol3.ps[k] == [1.0, 3.0]
+
+    # ImplicitAffect on an SVector problem.
+    @variables w(t) = 1.0
+    ev4 = SymbolicDiscreteCallback([0.5], [0 ~ w^3 + w - (Pre(w) + 10)])
+    @mtkcompile sys4 = System([D(w) ~ 0.0], t; discrete_events = [ev4])
+    prob4 = ODEProblem{false}(sys4, SA[], (0.0, 1.0))
+    sol4 = solve(prob4, Tsit5())
+    @test SciMLBase.successful_retcode(sol4)
+    w1 = sol4(1.0; idxs = w)
+    @test w1^3 + w1 ≈ 11.0 rtol = 1.0e-8
+
+    # ImplicitAffect with a discrete parameter.
+    @variables q(t) = 1.0
+    @discretes a(t) = 1.0
+    ev5 = SymbolicDiscreteCallback(
+        [0.5], [0 ~ q - Pre(q) - a, a ~ 2.0]; discrete_parameters = [a]
+    )
+    @mtkcompile sys5 = System([D(q) ~ 0.0], t, [q], [a]; discrete_events = [ev5])
+    prob5 = ODEProblem{false}(sys5, SA[], (0.0, 1.0))
+    sol5 = solve(prob5, Tsit5())
+    @test SciMLBase.successful_retcode(sol5)
+    @test sol5.ps[a][end] ≈ 2.0 rtol = 1.0e-8
+    # Residual uses the post-event discrete `a`, so q = Pre(q) + a = 3.
+    @test sol5(1.0; idxs = q) ≈ 3.0 rtol = 1.0e-8
 end
