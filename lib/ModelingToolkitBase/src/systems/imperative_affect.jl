@@ -270,10 +270,12 @@ end
     $(TYPEDSIGNATURES)
 
 The compiled `ImperativeAffect` `fa` with the hooks that the setters of its modified
-parameters carry stripped off. On the integrator MTK builds, those hooks record the new
-values of discrete parameters for `sol.ps[...]`. Without them the affect needs only
-`state_values`, `parameter_values` and `current_time` of the value provider it is called
-with, so it can run on a stand-in for the integrator (e.g. inside a GPU kernel). Use with
+parameters carry stripped off. After a write, those hooks call
+`SymbolicIndexingInterface.finalize_parameters_hook!`, which on an integrator marks a
+derivative discontinuity; a callback already marks one before it runs its affect, so inside
+a callback they change nothing. Without them the affect needs only `state_values`,
+`parameter_values` and `current_time` of the value provider it is called with, so it can run
+on a stand-in for the integrator (e.g. inside a GPU kernel), usually together with
 `save_discretes = false` on the problem.
 """
 function without_parameter_hooks(fa::FunctionalAffect)
