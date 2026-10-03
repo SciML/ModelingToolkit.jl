@@ -2085,3 +2085,29 @@ end
     @test sol(3.5; idxs = s) ≈ -ones(3)
     @test sol[s] ≈ [ones(3), -ones(3), ones(3), -ones(3)]
 end
+
+@testset "User `callback` with discrete events" begin
+    @variables x(t) = 1.0
+    @parameters k = 1.0
+    @discretes d(t) = 0.0
+    tick = SymbolicDiscreteCallback(0.1, [d ~ Pre(d) + 1]; discrete_parameters = [d])
+    bump = SymbolicContinuousCallback([x ~ 0.2], [d ~ Pre(d) + 0.5]; discrete_parameters = [d])
+    kick(integ) = (integ.u[1] += 1.0)
+    for continuous_events in ([], [bump])
+        @mtkcompile sys = System(
+            [D(x) ~ -k * x + 0.01 * d], t, [x], [k, d];
+            discrete_events = [tick], continuous_events
+        )
+        ref = solve(
+            ODEProblem(sys, [], (0.0, 1.0)), Tsit5(); tstops = [0.5], abstol = 1.0e-10, reltol = 1.0e-10
+        )
+        user = DiscreteCallback((u, t, integ) -> t == 0.5, kick)
+        prob = ODEProblem(sys, [], (0.0, 1.0); callback = user)
+        @test user in get_callback(prob).discrete_callbacks
+        sol = solve(prob, Tsit5(); tstops = [0.5], abstol = 1.0e-10, reltol = 1.0e-10)
+        @test SciMLBase.successful_retcode(sol)
+        # the kick decays like the homogeneous solution: the events depend only on time
+        @test sol(1.0; idxs = x) - ref(1.0; idxs = x) ≈ exp(-0.5) rtol = 1.0e-6
+        @test sol.ps[d] == ref.ps[d]
+    end
+end
