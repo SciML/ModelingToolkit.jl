@@ -3023,21 +3023,24 @@ function process_kwargs(
         sys::System, problem_type = nothing; expression = Val{false}, callback = nothing,
         eval_expression = false, eval_module = @__MODULE__,
         _skip_events = false, _skip_tstops = false, tspan = nothing,
-        affect_transform = nothing, save_discretes::Bool = true, kwargs...
+        affect_transform = nothing, save_discretes = nothing, kwargs...
     )
     # Read before `filter_kwargs`, which removes an `MTKVerbosity` value.
     mtk_verbosity = _problem_verbosity(kwargs)
     # Read before `filter_kwargs`, which keeps only solver keywords.
     codegen_kwargs = event_codegen_kwargs(kwargs)
     kwargs = filter_kwargs(kwargs, problem_type)
-    kwargs1 = (;)
+    # `save_discretes` is also a solve option, which the integrator applies to callbacks
+    # that are not built from symbolic events: forward it as passed
+    kwargs1 = save_discretes === nothing ? (;) : (; save_discretes)
 
     if is_time_dependent(sys)
         if expression == Val{false} && !_skip_events
             cbs = if _has_symbolic_events(sys)
                 @invokelatest process_events(
                     sys; callback, eval_expression, eval_module, tspan, mtk_verbosity,
-                    affect_transform, save_discretes, kwargs..., codegen_kwargs...
+                    affect_transform, save_discretes = something(save_discretes, true),
+                    kwargs..., codegen_kwargs...
                 )
             else
                 callback
