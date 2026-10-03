@@ -122,9 +122,39 @@ function residual_allocator_arg(arg)
     return SSym(name; type = Any, shape = SU.ShapeVecT())
 end
 
-function residual_allocator_term(args)
+"""
+    PromotedZeros{T}()
+
+Residual allocator returning `zeros(T, sz)`.
+"""
+struct PromotedZeros{T} end
+(::PromotedZeros{T})(sz) where {T} = zeros(T, sz)
+
+numeric_eltype(::Type{T}) where {T <: Number} = T
+numeric_eltype(::Type{<:AbstractArray{T}}) where {T} = T <: Number ? T : Union{}
+numeric_eltype(::Type{<:MTKParameters{T}}) where {T} = numeric_eltype(T)
+numeric_eltype(::Type) = Union{}
+
+"""
+    promoted_zeros(args...)
+
+Return a `PromotedZeros` allocator whose element type promotes `Float64` with the
+numeric element types of `args`, ignoring non-numeric arguments such as callable
+parameters. The element type depends only on the argument types, so for `Float64` inputs
+the allocation is identical to the default `zeros(sz)`.
+"""
+@inline function promoted_zeros(args...)
+    return PromotedZeros{promote_type(Float64, map(numeric_eltype ∘ typeof, args)...)}()
+end
+
+# SymbolicUtils builds an `ArrayMaker` of at most this many elements as an `SArray` of its
+# element values, whose eltype already follows the inputs, but only if no allocator is
+# attached.
+const STATIC_RESIDUAL_LENGTH = 16
+
+function residual_allocator_term(args, allocator = similar_for_residual)
     return STerm(
-        similar_for_residual, map(residual_allocator_arg, args);
+        allocator, map(residual_allocator_arg, args);
         type = SU.FnType{Tuple, Any, Any},
         shape = SU.ShapeVecT(),
     )
@@ -143,10 +173,10 @@ function inject_similar_for_residual(body, alloc_term)
     end
 end
 
-function wrap_oop_similar_for_residual(fn)
+function wrap_oop_similar_for_residual(fn, allocator = similar_for_residual)
     fn isa Func || return fn
     isempty(fn.args) && return fn
-    alloc_term = residual_allocator_term(fn.args)
+    alloc_term = residual_allocator_term(fn.args, allocator)
     return Func(
         fn.args, fn.kwargs, inject_similar_for_residual(fn.body, alloc_term),
         fn.pre
@@ -305,12 +335,19 @@ function generate_rhs(
     u_arg = scalar ? -1 : (implicit_dae ? 2 : 1)
     codegen_opts = opts.codegen
     if assemble_residuals && rhss isa SymbolicT &&
-            Code.supports_with_allocator(rhss)
+            Code.supports_with_allocator(rhss) &&
+            (!implicit_dae || length(rhss) > STATIC_RESIDUAL_LENGTH)
         # `ArrayMaker` otherwise allocates a `Float64` buffer out of place.
+        allocator = implicit_dae ? promoted_zeros : similar_for_residual
         oop_wrap, iip_wrap = codegen_opts.wrap_code
         codegen_opts = setproperties(
             codegen_opts,
-            (; wrap_code = (wrap_oop_similar_for_residual ∘ oop_wrap, iip_wrap))
+            (;
+                wrap_code = (
+                    Base.Fix2(wrap_oop_similar_for_residual, allocator) ∘ oop_wrap,
+                    iip_wrap,
+                ),
+            )
         )
     end
     res = build_function_wrapper(

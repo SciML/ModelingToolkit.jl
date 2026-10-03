@@ -8,6 +8,7 @@ using DiffEqBase: BrownFullBasicInit
 using ModelingToolkitBase: generate_rhs, eval_or_rgf
 using SciMLStructures: replace, Tunable
 using ForwardDiff
+using StaticArrays: SVector
 
 # A system whose interior is written as one array equation over slices, as produced by a
 # finite-difference PDE discretization that does not scalarize.
@@ -213,31 +214,41 @@ end
     @test maximum(abs, sol.u[end] .- [exp(-pi^2 * 0.1) * sinpi(x) for x in xs]) < 1.0e-2
 end
 
+oop_bytes(f, du, u, p, t) = @allocated f(du, u, p, t)
+
+# Replace the promoting allocator with a fixed `Float64` one, i.e. `zeros(sz)`.
+fixed_float64_allocator(ex) = ex
+function fixed_float64_allocator(ex::Expr)
+    if Meta.isexpr(ex, :call) && ex.args[1] === ModelingToolkitBase.promoted_zeros
+        return ModelingToolkitBase.PromotedZeros{Float64}()
+    end
+    return Expr(ex.head, map(fixed_float64_allocator, ex.args)...)
+end
+
 @testset "OOP DAE residual promotes Dual inputs" begin
-    # large enough that `DAEProblem{false}` keeps `Vector` state rather than `SVector`
-    n = 20
     @independent_variables t
-    @variables u(t)[1:n]
     @parameters k
     D = Differential(t)
-    lap = u[1:(n - 2)] .- 2 .* u[2:(n - 1)] .+ u[3:n]
-    eqs = [
-        broadcast(-, D(u[2:(n - 1)]), k .* lap) ~ zeros(n - 2),
-        u[1] ~ sin(t), u[n] ~ 0.0,
-    ]
-    op = vcat(
-        [u[i] => (0.1 * i)^2 for i in 1:n], [D(u[i]) => 0.01 * i for i in 1:n], [k => 2.0]
-    )
     tval = 0.3
-    for split in (true, false)
+    # up to 16 rows the residual is an `SVector`; longer ones need a promoting allocator
+    for n in (8, 20), split in (true, false)
+        @variables u(t)[1:n]
+        lap = u[1:(n - 2)] .- 2 .* u[2:(n - 1)] .+ u[3:n]
+        eqs = [
+            broadcast(-, D(u[2:(n - 1)]), k .* lap) ~ zeros(n - 2),
+            u[1] ~ sin(t), u[n] ~ 0.0,
+        ]
+        op = vcat(
+            [u[i] => (0.1 * i)^2 for i in 1:n], [D(u[i]) => 0.01 * i for i in 1:n],
+            [k => 2.0]
+        )
         sys = complete(System(eqs, t, collect(u), [k]; name = :sys); split)
         prob = DAEProblem{false}(sys, op, (0.0, 1.0); build_initializeprob = false)
-        @test prob.u0 isa Vector{Float64}
         du0, u0, p = prob.du0, prob.u0, prob.p
         f = prob.f
-        resid = f(du0, u0, p, tval)
-        @test eltype(resid) === Float64
-        @test length(resid) == n
+        resid = @inferred f(du0, u0, p, tval)
+        @test resid isa (n <= 16 ? SVector{n, Float64} : Vector{Float64})
+
 
         Ju = ForwardDiff.jacobian(x -> f(du0, x, p, tval), u0)
         @test Ju[1, 1:3] ≈ [2.0, -4.0, 2.0]
@@ -253,8 +264,32 @@ end
         @test all(iszero, Jp[(n - 1):n, 1])
 
         oop_expr, _ = generate_rhs(sys; implicit_dae = true, expression = Val{true})
-        @test occursin("similar_for_residual", string(oop_expr))
+        @test occursin("promoted_zeros", string(oop_expr)) == (n > 16)
         f_oop = eval_or_rgf(oop_expr)
         @test ForwardDiff.jacobian(x -> f_oop(du0, x, p, tval), u0) ≈ Ju
+        if n > 16
+            # choosing the eltype costs nothing for Float64 inputs
+            f_fixed = eval_or_rgf(fixed_float64_allocator(oop_expr))
+            @test f_fixed(du0, u0, p, tval) == f_oop(du0, u0, p, tval)
+            oop_bytes(f_fixed, du0, u0, p, tval)
+            oop_bytes(f_oop, du0, u0, p, tval)
+            @test oop_bytes(f_oop, du0, u0, p, tval) == oop_bytes(f_fixed, du0, u0, p, tval)
+        end
     end
+end
+
+@testset "OOP DAE residual ignores callable parameters" begin
+    n = 20
+    @independent_variables t
+    @variables u(t)[1:n]
+    @parameters (gain::Function)(..)
+    D = Differential(t)
+    sys = complete(
+        System([D(u) ~ gain(t) .* u], t, [u], [gain]; name = :sys); split = false
+    )
+    oop_expr, _ = generate_rhs(sys; implicit_dae = true, expression = Val{true})
+    f_oop = eval_or_rgf(oop_expr)
+    resid = @inferred f_oop(zeros(n), ones(n), [sin], 0.3)
+    @test resid isa Vector{Float64}
+    @test resid ≈ fill(sin(0.3), n)
 end
