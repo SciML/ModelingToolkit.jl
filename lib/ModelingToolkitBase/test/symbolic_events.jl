@@ -2140,6 +2140,31 @@ SymbolicIndexingInterface.current_time(s::AffectStandIn) = s.t
     @test isempty(sol.ps[g])
     @test isempty(sol.ps[h])
 
+    # `save_discretes` is forwarded to the solve, so it also applies to callbacks that are
+    # not built from symbolic events (the integrator applies it to the saves after an affect,
+    # not to the save at initialization, hence `initialize_save_discretes = false` here)
+    @mtkcompile csys = System(
+        [D(x) ~ -k * x + 0.01 * h], t, [x], [k, h];
+        continuous_events = [SymbolicContinuousCallback([x ~ 0.6], down; discrete_parameters = [h])]
+    )
+    hparts = ODEProblem(csys, [], (0.0, 1.0)).kwargs[:callback].saved_clock_partitions
+    plain = SciMLBase.DiscreteCallback(
+        (u, t, integ) -> t == 0.25, integ -> nothing;
+        saved_clock_partitions = hparts, initialize_save_discretes = false
+    )
+    nh = length(solve(ODEProblem(csys, [], (0.0, 1.0)), Tsit5()).ps[h])
+    prob = ODEProblem(csys, [], (0.0, 1.0); callback = plain)
+    @test !haskey(prob.kwargs, :save_discretes)
+    @test length(solve(prob, Tsit5(); tstops = [0.25]).ps[h]) == nh + 1
+    prob = ODEProblem(csys, [], (0.0, 1.0); callback = plain, save_discretes = false)
+    @test prob.kwargs[:save_discretes] === false
+    sol = solve(prob, Tsit5(); tstops = [0.25])
+    @test SciMLBase.successful_retcode(sol)
+    @test isempty(sol.ps[h])
+    for kw in ((; expression = Val{true}), (; _skip_events = true))
+        @test ModelingToolkitBase.process_kwargs(csys; save_discretes = false, kw...)[:save_discretes] === false
+    end
+
     # a stripped affect is `isbits` and runs on a plain value provider
     hooked = only(ODEProblem(sys, [], (0.0, 1.0)).kwargs[:callback].discrete_callbacks).affect!.affect!
     @test hooked isa ModelingToolkitBase.FunctionalAffect

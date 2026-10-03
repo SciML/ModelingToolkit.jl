@@ -76,7 +76,9 @@ const TIME_DEPENDENT_PROBLEM_KWARGS = """
   as the timeseries of `sol.ps[...]`. `false` disables it, e.g. when the parameter object is
   not one the host-side saving can read. Their timeseries are then empty, and reading a
   value that needs one of them at some time (e.g. `sol[z]` or `sol(t; idxs = z)` for an
-  observed `z` that depends on one) throws an error.
+  observed `z` that depends on one) throws an error. It is also stored on the problem and
+  passed to `solve` as the integrator option of the same name, which applies it to the
+  callbacks passed with `callback`.
 """
 
 const PROBLEM_INTERNALS_HEADER = """
