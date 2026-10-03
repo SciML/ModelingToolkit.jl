@@ -2103,7 +2103,7 @@ end
     @test SciMLBase.successful_retcode(sol)
     i = findall(==(0.5), sol.t)
     @test length(i) >= 2
-    @test sol.u[i[1]][2] ≈ sol.u[i[2]][2] rtol = 1.0e-10
+    @test sol[v][i[1]] ≈ sol[v][i[2]] rtol = 1.0e-10
     t_after = sol.t[findfirst(>(0.5), sol.t)]
     @test sol(t_after; idxs = λ) ≈ -sol(t_after; idxs = v) / 2 rtol = 1.0e-8
 end
@@ -2120,10 +2120,11 @@ end
     @test SciMLBase.successful_retcode(sol)
     i = findall(==(0.5), sol.t)
     @test length(i) >= 2
-    @test sol.u[i[1]][2] ≈ 0.5 rtol = 1.0e-10
-    @test sol.u[i[2]][2] ≈ -0.25 rtol = 1.0e-10
+    @test sol[v][i[1]] ≈ 0.5 rtol = 1.0e-10
+    @test sol[v][i[2]] ≈ -0.25 rtol = 1.0e-10
 
-    # Equal-mass inelastic collision residuals.
+    # Equal-mass inelastic collision residuals. Non-zero RHS keeps velocities as
+    # states under ModelingToolkit (exact `D(v) ~ 0` tears them to observed).
     @variables x1(t) = 0.0 v1(t) = 1.0 x2(t) = 0.0 v2(t) = -1.0
     @parameters m1 = 1.0 m2 = 1.0
     coll = SymbolicDiscreteCallback(
@@ -2134,7 +2135,8 @@ end
         ],
     )
     @mtkcompile sys_c = System(
-        [D(x1) ~ v1, D(v1) ~ 0, D(x2) ~ v2, D(v2) ~ 0], t, [x1, v1, x2, v2], [m1, m2];
+        [D(x1) ~ v1, D(v1) ~ 1.0e-16, D(x2) ~ v2, D(v2) ~ 1.0e-16], t,
+        [x1, v1, x2, v2], [m1, m2];
         discrete_events = [coll],
     )
     aff_c = affects(only(discrete_events(sys_c)))
@@ -2145,14 +2147,15 @@ end
     @test SciMLBase.successful_retcode(sol_c)
     i_c = findall(==(0.5), sol_c.t)
     @test length(i_c) >= 2
-    @test sol_c.u[i_c[2]][2] ≈ 0.0 atol = 1.0e-10
-    @test sol_c.u[i_c[2]][4] ≈ 0.0 atol = 1.0e-10
+    @test sol_c[v1][i_c[2]] ≈ 0.0 atol = 1.0e-10
+    @test sol_c[v2][i_c[2]] ≈ 0.0 atol = 1.0e-10
 
     # Documented inverse: assign algebraic, let differential move (Events.md).
+    # Non-zero RHS keeps `x` as a state under ModelingToolkit.
     @variables x(t) = 1.0 y(t) = 1.0
     @parameters p = 1.0
     ev_inv = SymbolicDiscreteCallback([1.0], [y ~ Pre(y) + 1])
-    @mtkcompile sys_inv = System([x * y ~ p, D(x) ~ 0], t; discrete_events = [ev_inv])
+    @mtkcompile sys_inv = System([x * y ~ p, D(x) ~ 1.0e-16], t; discrete_events = [ev_inv])
     aff_inv = affects(only(discrete_events(sys_inv)))
     @test any(isequal(x), unknowns(aff_inv))
     prob_inv = ODEProblem(sys_inv, [], (0.0, 2.0))
@@ -2160,8 +2163,10 @@ end
     @test SciMLBase.successful_retcode(sol_inv)
     i_inv = findall(==(1.0), sol_inv.t)
     @test length(i_inv) >= 2
-    @test sol_inv.u[i_inv[1]] ≈ [1.0, 1.0] rtol = 1.0e-10
-    @test sol_inv.u[i_inv[2]] ≈ [0.5, 2.0] rtol = 1.0e-10
+    @test sol_inv[x][i_inv[1]] ≈ 1.0 rtol = 1.0e-10
+    @test sol_inv[y][i_inv[1]] ≈ 1.0 rtol = 1.0e-10
+    @test sol_inv[x][i_inv[2]] ≈ 0.5 rtol = 1.0e-10
+    @test sol_inv[y][i_inv[2]] ≈ 2.0 rtol = 1.0e-10
 end
 
 @testset "Two algebraics sharing a differential stay free when only one is assigned" begin
@@ -2178,9 +2183,10 @@ end
     @test SciMLBase.successful_retcode(sol)
     i = findall(==(0.5), sol.t)
     @test length(i) >= 2
-    @test sol.u[i[2]][1] ≈ 2.0 rtol = 1.0e-8
-    @test sol.u[i[2]][2] ≈ 3.0 rtol = 1.0e-8
-    @test sol.u[i[2]][3] ≈ -1.0 rtol = 1.0e-8
+    # Index by symbol: unknown order is not stable across simplification paths.
+    @test sol[x][i[2]] ≈ 2.0 rtol = 1.0e-8
+    @test sol[λ][i[2]] ≈ 3.0 rtol = 1.0e-8
+    @test sol[μ][i[2]] ≈ -1.0 rtol = 1.0e-8
 end
 
 @testset "Issue#5200 array differential with algebraic and discrete-only affect" begin

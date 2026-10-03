@@ -253,6 +253,31 @@ function AffectSystem(
         push!(parent_diff_vars, var)
         push!(parent_diff_vars, split_indexed_var(var)[1])
     end
+    # Dummy-derivative variables from index reduction (e.g. `xˍt` for `D(x)`). Never pin
+    # these, and never pin other differentials that appear alongside them in algebraic
+    # constraints — those equations are the differentiated constraints and must stay
+    # matched to free unknowns.
+    dummy_deriv_vars = Set{SymbolicT}()
+    if has_schedule(_unhack_sys)
+        schedule = get_schedule(_unhack_sys)
+        if schedule isa Schedule
+            for (k, v) in schedule.dummy_sub
+                ttk = default_toterm(k)
+                if isequal(ttk, v)
+                    push!(dummy_deriv_vars, unwrap(v))
+                    push!(dummy_deriv_vars, split_indexed_var(unwrap(v))[1])
+                end
+            end
+        end
+    end
+    # User affect may still write `D(x)`; treat its toterm (`xˍt`) as user-touched too.
+    for var in collect(user_outside_pre)
+        if iscall(var) && operation(var) isa Differential
+            ttk = unwrap(default_toterm(var))
+            push!(user_outside_pre, ttk)
+            push!(user_outside_pre, split_indexed_var(ttk)[1])
+        end
+    end
     # Free algebraic DOFs are non-differential unknowns (not observed outputs).
     parent_alg = Set{SymbolicT}()
     for var in unknowns(_unhack_sys)
@@ -264,14 +289,41 @@ function AffectSystem(
     alg_extra = Equation[alg_equations(_unhack_sys)...]
     obs_extra = Equation[observed(_unhack_sys)...]
     extra_eqs = Equation[alg_extra; obs_extra]
-    # Pin differentials that appear only via parent algebraic equations when those
+    # Differentials that appear in index-reduced algebraic constraints (constraints that
+    # mention a dummy derivative) must not be pinned.
+    index_reduced_ban = Set{SymbolicT}()
+    _varsbuf_extra = Set{SymbolicT}()
+    if !isempty(dummy_deriv_vars)
+        for eq in alg_extra
+            eq_vars = _vars_outside_pre!(_varsbuf_extra, eq)
+            any(d -> _in_sym_set(d, eq_vars), dummy_deriv_vars) || continue
+            for var in parent_diff_vars
+                if _diff_appears_in_vars(var, eq_vars)
+                    push!(index_reduced_ban, var)
+                end
+            end
+        end
+    end
+    # Pin sources: parent algebraic equations, plus observed equations that mention both a
+    # parent differential and a user-assigned symbol (index-1 algebraics torn into
+    # `observed` — the discrete-only #5200 pattern).
+    pin_source_eqs = Equation[alg_extra...]
+    for eq in obs_extra
+        eq_vars = _vars_outside_pre!(_varsbuf_extra, eq)
+        any(d -> _in_sym_set(d, eq_vars), dummy_deriv_vars) && continue
+        any(d -> _diff_appears_in_vars(d, eq_vars), parent_diff_vars) || continue
+        any(a -> _in_sym_set(a, assigned), eq_vars) || continue
+        push!(pin_source_eqs, eq)
+    end
+    # Pin differentials that appear only via parent algebraic/observed equations when those
     # equations can be matched to *distinct* free algebraic unknowns (bipartite matching).
     pin_subs = Dict{SymbolicT, SymbolicT}()
-    _varsbuf_extra = Set{SymbolicT}()
     candidates = SymbolicT[]
     for var in parent_diff_vars
         _diff_appears_in_vars(var, user_outside_pre) && continue
-        for eq in alg_extra
+        _in_sym_set(var, dummy_deriv_vars) && continue
+        _in_sym_set(var, index_reduced_ban) && continue
+        for eq in pin_source_eqs
             eq_vars = _vars_outside_pre!(_varsbuf_extra, eq)
             if _diff_appears_in_vars(var, eq_vars)
                 push!(candidates, var)
@@ -285,8 +337,19 @@ function AffectSystem(
         _in_sym_set(var, assigned) && continue
         push!(free_algs, var)
     end
+    # Observed LHS of pin-source observed equations can absorb when tearing moved the
+    # algebraic out of `unknowns`.
+    for eq in pin_source_eqs
+        # Algebraic pin sources already use `unknowns`; only observed sources need this.
+        any(ae -> ae === eq, alg_extra) && continue
+        lhs = unwrap(eq.lhs)
+        _diff_appears_in_vars(lhs, parent_diff_vars) && continue
+        _in_sym_set(lhs, assigned) && continue
+        _in_sym_set(lhs, dummy_deriv_vars) && continue
+        push!(free_algs, lhs)
+    end
     eqs_needing_absorb = Equation[]
-    for eq in alg_extra
+    for eq in pin_source_eqs
         eq_vars = _vars_outside_pre!(_varsbuf_extra, eq)
         any(c -> _diff_appears_in_vars(c, eq_vars), candidates) || continue
         push!(eqs_needing_absorb, eq)
@@ -309,34 +372,38 @@ function AffectSystem(
         can_pin_candidates = length(matched_srcs) == length(eqs_needing_absorb)
     end
     if can_pin_candidates
-        for var in candidates
-            pin_subs[var] = affect_pin_replacement(var)
+        trial_subs = Dict{SymbolicT, SymbolicT}(
+            var => affect_pin_replacement(var) for var in candidates
+        )
+        parent_unknown_set = Set{SymbolicT}()
+        for var in unknowns(_unhack_sys)
+            push!(parent_unknown_set, var)
+            push!(parent_unknown_set, split_indexed_var(var)[1])
         end
-    end
-    affect = Equation[user_affect; extra_eqs]
-    isempty(pin_subs) || (affect = substitute(affect, pin_subs))
-    # Algebraic parent equations that become parameter-only and non-trivial are errors.
-    if !isempty(pin_subs)
-        for eq in substitute(alg_extra, pin_subs)
+        pin_ok = true
+        for eq in substitute(alg_extra, trial_subs)
             eq_vars = _vars_outside_pre!(_varsbuf_extra, eq)
             has_free = false
             for a in eq_vars
-                if _in_sym_set(a, parent_alg) && !_in_sym_set(a, assigned)
-                    hasmetadata(a, AffectPinOrigin) && continue
-                    iscall(a) && operation(a) isa Pre && continue
-                    has_free = true
-                    break
-                end
-                if _diff_appears_in_vars(a, parent_diff_vars) && a ∉ keys(pin_subs)
+                iscall(a) && operation(a) isa Pre && continue
+                hasmetadata(a, AffectPinOrigin) && continue
+                any(isequal(a), keys(trial_subs)) && continue
+                if _in_sym_set(a, parent_unknown_set) && !_in_sym_set(a, assigned)
                     has_free = true
                     break
                 end
             end
             if !has_free && !_eq_identically_zero(eq)
-                throw(UnsolvableCallbackError([eq]))
+                pin_ok = false
+                break
             end
         end
+        if pin_ok
+            pin_subs = trial_subs
+        end
     end
+    affect = Equation[user_affect; extra_eqs]
+    isempty(pin_subs) || (affect = substitute(affect, pin_subs))
 
     discrete_parameters = SymbolicAffect(affect; discrete_parameters).discrete_parameters
 
