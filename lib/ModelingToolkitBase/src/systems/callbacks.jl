@@ -1287,8 +1287,8 @@ function compile_vector_callback_affects(cbs, sys, ic; kwargs...)
         push!(affects, affect)
         affect_neg = (cb.affect_neg === cb.affect) ? affect :
             compile_affect(
-            cb.affect_neg, cb, sys; default = EMPTY_AFFECT, role = :affect_neg, kwargs...
-        )
+                cb.affect_neg, cb, sys; default = EMPTY_AFFECT, role = :affect_neg, kwargs...
+            )
         push!(affect_negs, affect_neg)
         push!(
             inits,
@@ -1345,9 +1345,9 @@ function generate_callback(
     else
         (cb.affect === cb.affect_neg) ? affect :
             compile_affect(
-            cb.affect_neg, cb, sys; default = EMPTY_AFFECT, affect_transform,
-            role = :affect_neg, kwargs...
-        )
+                cb.affect_neg, cb, sys; default = EMPTY_AFFECT, affect_transform,
+                role = :affect_neg, kwargs...
+            )
     end
     init = compile_affect(
         cb.initialize, cb, sys; default = SciMLBase.INITIALIZE_DEFAULT, affect_transform,
