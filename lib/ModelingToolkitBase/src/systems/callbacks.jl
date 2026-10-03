@@ -871,25 +871,42 @@ end
 True when the integrator's state/parameter containers can be updated in-place.
 
 Preference order:
-1. Non-SII callers (e.g. Catalyst `(u, p, t)` `NamedTuple`) → in-place.
-2. When `get_sol(integ).prob` is available, use `isinplace(prob)` so
-   `ODEProblem{false}` takes OOP setters even if the continuous state was torn
-   to an empty mutable `Vector` while discrete buffers remain immutable
-   `SVector`s.
-3. Otherwise (e.g. jump `TestInt` without a `sol`), fall back to state
-   mutability. A missing state buffer (`u === nothing`) uses the OOP path.
+1. Prefer the integrator's state buffer via `state_values`:
+   - `u === nothing` → out-of-place
+   - immutable `u` (e.g. `SVector`) → out-of-place
+   - mutable `u` → continue
+2. An immutable integrator wrapper (e.g. SciMLSensitivity's `FakeIntegrator`)
+   cannot take `integ.u = …` / `setfield!`, so stay in-place and mutate the
+   wrapped buffers via `set_state!` / `set_parameter!`.
+3. Otherwise, when `get_sol(integ).prob` is available, use `isinplace(prob)` so
+   torn `ODEProblem{false}` systems (empty mutable `Float64[]` state with
+   immutable `SVector` discrete buffers) still take the OOP path.
+4. When `state_values` is not applicable (e.g. Catalyst `(u, p, t)`
+   `NamedTuple`), fall back to `isinplace(get_sol(integ).prob)` if available,
+   otherwise in-place.
 """
 function _affect_inplace(integ)
-    applicable(state_values, integ) || return true
+    if !applicable(state_values, integ)
+        if hasmethod(SciMLBase.get_sol, Tuple{typeof(integ)})
+            try
+                return SciMLBase.isinplace(SciMLBase.get_sol(integ).prob)
+            catch
+            end
+        end
+        return true
+    end
+    u = state_values(integ)
+    u === nothing && return false
+    ArrayInterface.ismutable(u) || return false
+    # Immutable wrappers (FakeIntegrator) must mutate buffers in place.
+    !ismutable(integ) && return true
     if hasmethod(SciMLBase.get_sol, Tuple{typeof(integ)})
         try
             return SciMLBase.isinplace(SciMLBase.get_sol(integ).prob)
         catch
         end
     end
-    u = state_values(integ)
-    u === nothing && return false
-    return ArrayInterface.ismutable(u)
+    return true
 end
 
 """

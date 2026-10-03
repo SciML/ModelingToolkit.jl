@@ -2123,12 +2123,14 @@ end
     @test sol3(2.0; idxs = z) ≈ 0.5 * exp(-2.0) rtol = 1.0e-5
     @test sol3.ps[k] == [1.0, 3.0]
 
-    # ImplicitAffect on an SVector problem. `D(w) ~ 0` tears `w` to observed under
-    # ModelingToolkit (`u0 === nothing`); the OOP RHS and writeback must keep a
-    # concrete state eltype (not `Vector{Any}`).
+    # ImplicitAffect on an SVector problem. Use `D(w) ~ 0.0` so the kept-state
+    # MTKBase-only RHS stays Float64-typed (`D(w) ~ 0` yields `SVector{1,Int64}`
+    # for `du` when tearing does not remove `w`). Under top-level ModelingToolkit,
+    # `w` may still tear to observed (`u0 === nothing`); the OOP RHS path then
+    # uses `generate_empty_ode_function` for a concrete eltype.
     @variables w(t) = 1.0
     ev4 = SymbolicDiscreteCallback([0.5], [0 ~ w^3 + w - (Pre(w) + 10)])
-    @mtkcompile sys4 = System([D(w) ~ 0], t; discrete_events = [ev4])
+    @mtkcompile sys4 = System([D(w) ~ 0.0], t; discrete_events = [ev4])
     aff4 = ModelingToolkitBase.compile_equational_affect(
         affects(only(discrete_events(sys4))), sys4
     )
@@ -2198,4 +2200,61 @@ end
     aff(nt)
     @test nt.u[1] ≈ 1.0
     @test getp(prob, on)(nt.p) ≈ 0.0
+end
+
+@testset "Immutable integrator with mutable Vector prefers in-place writeback" begin
+    # Mirrors SciMLSensitivity's FakeIntegrator: immutable wrapper, get_sol
+    # returns an OOP stub, but u is a mutable Vector updated via set_state! /
+    # set_parameter! (integ.u = would setfield! and crash).
+    struct FakeOOPCallbackProblem end
+    SciMLBase.isinplace(::FakeOOPCallbackProblem) = false
+    struct FakeOOPCallbackSolution
+        prob::FakeOOPCallbackProblem
+    end
+    struct FakeOOPIntegrator{U, P, T, O}
+        u::U
+        p::P
+        t::T
+        opts::O
+    end
+    SymbolicIndexingInterface.state_values(x::FakeOOPIntegrator) = x.u
+    SymbolicIndexingInterface.parameter_values(x::FakeOOPIntegrator) = x.p
+    SymbolicIndexingInterface.current_time(x::FakeOOPIntegrator) = x.t
+    SciMLBase.get_sol(::FakeOOPIntegrator) = FakeOOPCallbackSolution(FakeOOPCallbackProblem())
+
+    @variables x(t)
+    @discretes on(t) = 1.0
+    ev = SymbolicDiscreteCallback(
+        [0.5], [on ~ 0.0, x ~ Pre(x) + 1];
+        discrete_parameters = [on]
+    )
+    @mtkcompile sys = System([D(x) ~ on], t, [x], [on]; discrete_events = [ev])
+    # Mutable buffers so IIP set_parameter! can write; get_sol still claims OOP.
+    prob = ODEProblem(sys, [x => 0.0], (0.0, 1.0))
+    aff = ModelingToolkitBase.compile_equational_affect(
+        affects(only(discrete_events(sys))), sys
+    )
+    @test aff isa ModelingToolkitBase.ExplicitAffect
+    integ = FakeOOPIntegrator([0.0], deepcopy(prob.p), 0.5, (;))
+    @test ModelingToolkitBase._affect_inplace(integ)
+    aff(integ)
+    @test integ.u[1] ≈ 1.0
+    @test getp(prob, on)(integ.p) ≈ 0.0
+
+    @variables q(t) = 1.0
+    @discretes a(t) = 1.0
+    ev_i = SymbolicDiscreteCallback(
+        [0.5], [a^3 + a ~ 10]; discrete_parameters = [a]
+    )
+    @mtkcompile sys_i = System([D(q) ~ -q], t, [q], [a]; discrete_events = [ev_i])
+    aff_i = ModelingToolkitBase.compile_equational_affect(
+        affects(only(discrete_events(sys_i))), sys_i
+    )
+    @test aff_i isa ModelingToolkitBase.ImplicitAffect
+    prob_i = ODEProblem(sys_i, [q => 1.0], (0.0, 1.0))
+    integ_i = FakeOOPIntegrator([1.0], deepcopy(prob_i.p), 0.5, (;))
+    @test ModelingToolkitBase._affect_inplace(integ_i)
+    aff_i(integ_i)
+    a_end = getp(prob_i, a)(integ_i.p)
+    @test a_end^3 + a_end ≈ 10.0 rtol = 1.0e-8
 end
