@@ -2153,14 +2153,14 @@ SymbolicIndexingInterface.current_time(s::AffectStandIn) = s.t
         saved_clock_partitions = hparts, initialize_save_discretes = false
     )
     nh = length(solve(ODEProblem(csys, [], (0.0, 1.0)), Tsit5()).ps[h])
-    prob = ODEProblem(csys, [], (0.0, 1.0); callback = plain)
-    @test !haskey(prob.kwargs, :save_discretes)
-    @test length(solve(prob, Tsit5(); tstops = [0.25]).ps[h]) == nh + 1
-    prob = ODEProblem(csys, [], (0.0, 1.0); callback = plain, save_discretes = false)
-    @test prob.kwargs[:save_discretes] === false
-    sol = solve(prob, Tsit5(); tstops = [0.25])
-    @test SciMLBase.successful_retcode(sol)
-    @test isempty(sol.ps[h])
+    cprob = ODEProblem(csys, [], (0.0, 1.0); callback = plain)
+    @test !haskey(cprob.kwargs, :save_discretes)
+    @test length(solve(cprob, Tsit5(); tstops = [0.25]).ps[h]) == nh + 1
+    cprob = ODEProblem(csys, [], (0.0, 1.0); callback = plain, save_discretes = false)
+    @test cprob.kwargs[:save_discretes] === false
+    csol = solve(cprob, Tsit5(); tstops = [0.25])
+    @test SciMLBase.successful_retcode(csol)
+    @test isempty(csol.ps[h])
     for kw in ((; expression = Val{true}), (; _skip_events = true))
         @test ModelingToolkitBase.process_kwargs(csys; save_discretes = false, kw...)[:save_discretes] === false
     end
