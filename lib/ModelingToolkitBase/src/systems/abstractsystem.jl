@@ -1062,6 +1062,7 @@ function Base.propertynames(sys::AbstractSystem; private = false)
             push!(names, getname(s))
         end
         has_unknowns(sys) && for s in get_unknowns(sys)
+            hasname(s) || continue
             push!(names, getname(s))
         end
         has_ps(sys) && for s in get_ps(sys)
@@ -1069,6 +1070,7 @@ function Base.propertynames(sys::AbstractSystem; private = false)
             push!(names, getname(s))
         end
         has_observed(sys) && for s in get_observed(sys)
+            hasname(s.lhs) || continue
             push!(names, getname(s.lhs))
         end
         has_iv(sys) && push!(names, getname(get_iv(sys)))
@@ -1108,14 +1110,14 @@ function getvar(sys::AbstractSystem, name::Symbol; namespace = does_namespacing(
     end
 
     sts = get_unknowns(sys)
-    i = findfirst(x -> getname(x) == name, sts)
+    i = findfirst(x -> hasname(x) && getname(x) == name, sts)
     if i !== nothing
         return namespace ? renamespace(sys, sts[i]) : sts[i]
     end
 
     if has_ps(sys)
         ps = get_ps(sys)
-        i = findfirst(x -> getname(x) == name, ps)
+        i = findfirst(x -> hasname(x) && getname(x) == name, ps)
         if i !== nothing
             return namespace ? renamespace(sys, ps[i]) : ps[i]
         end
@@ -1123,7 +1125,7 @@ function getvar(sys::AbstractSystem, name::Symbol; namespace = does_namespacing(
 
     if has_observed(sys)
         obs = get_observed(sys)
-        i = findfirst(x -> getname(x.lhs) == name, obs)
+        i = findfirst(x -> hasname(x.lhs) && getname(x.lhs) == name, obs)
         if i !== nothing
             return namespace ? renamespace(sys, obs[i].lhs) : obs[i].lhs
         end

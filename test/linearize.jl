@@ -447,3 +447,22 @@ end
     @test m1.C ≈ m2.C
     @test m1.D ≈ m2.D
 end
+
+@testset "Linearization without inputs" begin
+    @variables x(t) y(t)
+    @named sys0 = System([D(x) ~ -x^2, y ~ 2x], t)
+    for autodiff in (AutoForwardDiff(), AutoFiniteDiff())
+        lsys, _ = linearize(sys0, [], [y]; op = Dict(x => 1.0), autodiff)
+        @test lsys.A ≈ [-2.0;;]
+        @test size(lsys.B) == (1, 0)
+        @test lsys.C == [2.0;;]
+        @test size(lsys.D) == (1, 0)
+    end
+    # A model without unknowns and inputs
+    @named sys1 = System([y ~ 2.0 + 0 * t], t)
+    lsys, _ = linearize(sys1, [], [y])
+    @test size(lsys.A) == (0, 0)
+    @test size(lsys.B) == (0, 0)
+    @test size(lsys.C) == (1, 0)
+    @test size(lsys.D) == (1, 0)
+end
