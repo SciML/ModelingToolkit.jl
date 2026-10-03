@@ -8,7 +8,6 @@ using DiffEqBase: BrownFullBasicInit
 using ModelingToolkitBase: generate_rhs, eval_or_rgf
 using SciMLStructures: replace, Tunable
 using ForwardDiff
-using StaticArrays: SVector
 
 # A system whose interior is written as one array equation over slices, as produced by a
 # finite-difference PDE discretization that does not scalarize.
@@ -216,13 +215,12 @@ end
 
 oop_bytes(f, du, u, p, t) = @allocated f(du, u, p, t)
 
-# Replace the promoting allocator with a fixed `Float64` one, i.e. `zeros(sz)`.
-fixed_float64_allocator(ex) = ex
-function fixed_float64_allocator(ex::Expr)
-    if Meta.isexpr(ex, :call) && ex.args[1] === ModelingToolkitBase.promoted_zeros
-        return ModelingToolkitBase.PromotedZeros{Float64}()
-    end
-    return Expr(ex.head, map(fixed_float64_allocator, ex.args)...)
+# The `Float64` branch of a generated OOP residual, i.e. the default lowering.
+function default_branch(ex::Expr)
+    body = ex.args[2]
+    Meta.isexpr(body, :block) && length(body.args) == 1 &&
+        Meta.isexpr(body.args[1], :if) || return nothing
+    return Expr(:function, ex.args[1], body.args[1].args[2])
 end
 
 @testset "OOP DAE residual promotes Dual inputs" begin
@@ -230,8 +228,8 @@ end
     @parameters k
     D = Differential(t)
     tval = 0.3
-    # up to 16 rows the residual is an `SVector`; longer ones need a promoting allocator
-    for n in (8, 20), split in (true, false)
+    # sizes around the length at which SymbolicUtils switches residual containers
+    for n in (4, 5, 8, 16, 17, 20), split in (true, false)
         @variables u(t)[1:n]
         lap = u[1:(n - 2)] .- 2 .* u[2:(n - 1)] .+ u[3:n]
         eqs = [
@@ -247,8 +245,8 @@ end
         du0, u0, p = prob.du0, prob.u0, prob.p
         f = prob.f
         resid = @inferred f(du0, u0, p, tval)
-        @test resid isa (n <= 16 ? SVector{n, Float64} : Vector{Float64})
-
+        @test eltype(resid) === Float64
+        @test length(resid) == n
 
         Ju = ForwardDiff.jacobian(x -> f(du0, x, p, tval), u0)
         @test Ju[1, 1:3] ≈ [2.0, -4.0, 2.0]
@@ -264,17 +262,23 @@ end
         @test all(iszero, Jp[(n - 1):n, 1])
 
         oop_expr, _ = generate_rhs(sys; implicit_dae = true, expression = Val{true})
-        @test occursin("promoted_zeros", string(oop_expr)) == (n > 16)
         f_oop = eval_or_rgf(oop_expr)
         @test ForwardDiff.jacobian(x -> f_oop(du0, x, p, tval), u0) ≈ Ju
-        if n > 16
-            # choosing the eltype costs nothing for Float64 inputs
-            f_fixed = eval_or_rgf(fixed_float64_allocator(oop_expr))
-            @test f_fixed(du0, u0, p, tval) == f_oop(du0, u0, p, tval)
-            oop_bytes(f_fixed, du0, u0, p, tval)
-            oop_bytes(f_oop, du0, u0, p, tval)
-            @test oop_bytes(f_oop, du0, u0, p, tval) == oop_bytes(f_fixed, du0, u0, p, tval)
-        end
+
+        # `Float64` arguments run exactly the default lowering
+        default_expr = default_branch(oop_expr)
+        @test default_expr !== nothing
+        default_expr === nothing && continue
+        @test !occursin("promoted_zeros", string(default_expr))
+        @test occursin("promoted_zeros", string(oop_expr))
+        f_default = eval_or_rgf(default_expr)
+        r_default = f_default(du0, u0, p, tval)
+        r_oop = @inferred f_oop(du0, u0, p, tval)
+        @test typeof(r_oop) === typeof(r_default)
+        @test r_oop == r_default
+        oop_bytes(f_default, du0, u0, p, tval)
+        oop_bytes(f_oop, du0, u0, p, tval)
+        @test oop_bytes(f_oop, du0, u0, p, tval) == oop_bytes(f_default, du0, u0, p, tval)
     end
 end
 
