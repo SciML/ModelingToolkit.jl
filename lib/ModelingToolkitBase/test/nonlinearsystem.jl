@@ -673,7 +673,7 @@ end
     # initialization system; a guess for them must not become a conflicting
     # initial condition.
     @variables x
-    @parameters p::Int=2 q::Int
+    @parameters p::Int = 2 q::Int
     sys = complete(
         System(
             [x^2 ~ q], [x], [p, q]; name = :int_guess,
