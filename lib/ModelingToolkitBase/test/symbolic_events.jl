@@ -2085,3 +2085,62 @@ end
     @test sol(3.5; idxs = s) ≈ -ones(3)
     @test sol[s] ≈ [ones(3), -ones(3), ones(3), -ones(3)]
 end
+
+@testset "`save_positions` of discrete events" begin
+    @variables x(t) = 1.0
+    @discretes c(t) = 0.0
+    tick = [c ~ Pre(c) + 1]
+    for (name, cond) in (
+            ("period", 0.1), ("clock", SciMLBase.Clock(0.1)),
+            ("preset times", [0.3, 0.7, 1.1]), ("condition", t > 0.45),
+        )
+        events = map(((true, true), (false, false))) do save_positions
+            SymbolicDiscreteCallback(cond, tick; discrete_parameters = [c], save_positions)
+        end
+        sols = map(events) do ev
+            @named inner = System([D(x) ~ -c * x], t, [x], [c]; discrete_events = [ev])
+            # namespaced from a subsystem, so `save_positions` has to survive that too
+            @named outer = System(Equation[], t; systems = [inner])
+            sys = mtkcompile(outer)
+            prob = ODEProblem(sys, [], (0.0, 2.0))
+            solve(prob, Tsit5(); saveat = 0.5, abstol = 1.0e-10, reltol = 1.0e-10), sys
+        end
+        (sol_default, sys), (sol_nosave, _) = sols
+        @test sol_nosave.t == collect(0.0:0.5:2.0)
+        @test length(sol_default.t) > length(sol_nosave.t)
+        @test sol_nosave[sys.inner.x] ≈ [sol_default(ti; idxs = sys.inner.x) for ti in sol_nosave.t]
+        cbs = sol_nosave.prob.kwargs[:callback]
+        cb = cbs isa SciMLBase.CallbackSet ? only(cbs.discrete_callbacks) : cbs
+        @test cb.save_positions == [false, false]
+    end
+    # saving only after the event keeps the timeseries of the discrete
+    ev = SymbolicDiscreteCallback(0.25, tick; discrete_parameters = [c], save_positions = (false, true))
+    @mtkcompile sys = System([D(x) ~ -c * x], t, [x], [c]; discrete_events = [ev])
+    sol = solve(ODEProblem(sys, [], (0.0, 1.0)), Tsit5(); saveat = 0.5)
+    ev_default = SymbolicDiscreteCallback(0.25, tick; discrete_parameters = [c])
+    @mtkcompile sys_default = System([D(x) ~ -c * x], t, [x], [c]; discrete_events = [ev_default])
+    sol_default = solve(ODEProblem(sys_default, [], (0.0, 1.0)), Tsit5(); saveat = 0.5)
+    @test sol.ps[c] == sol_default.ps[c]
+    @test length(sol.ps[c]) > 1
+    @test count(==(0.25), sol.t) == 1
+    @test count(==(0.25), sol_default.t) == 2
+
+    # without the save after the event the discrete has no saved values: its timeseries is
+    # empty, and reading it (or an observed that depends on it) at some time throws
+    @variables z(t)
+    ev = SymbolicDiscreteCallback(0.25, tick; discrete_parameters = [c], save_positions = (false, false))
+    @mtkcompile sys = System([D(x) ~ -c * x, z ~ x + c], t, [x, z], [c]; discrete_events = [ev])
+    sol = solve(ODEProblem(sys, [], (0.0, 1.0)), Tsit5(); saveat = 0.5)
+    @test SciMLBase.successful_retcode(sol)
+    @test isempty(sol.ps[c])
+    @test isempty(sol[c])
+    # the error type depends on the SciMLBase and SymbolicIndexingInterface versions
+    missing_value = Union{BoundsError, ArgumentError, ErrorException}
+    @test_throws missing_value sol(0.6; idxs = c)
+    @test_throws missing_value sol(0.6; idxs = z)
+    @test_throws missing_value sol[z]
+
+    @test_throws ArgumentError SymbolicDiscreteCallback(0.1, tick; save_positions = (true,))
+    @test SymbolicDiscreteCallback(0.1, tick; save_positions = (false, false)) !=
+        SymbolicDiscreteCallback(0.1, tick)
+end

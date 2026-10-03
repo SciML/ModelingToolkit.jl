@@ -1125,7 +1125,8 @@ function respecialize(sys::AbstractSystem, mapping; all = false)
     @set! sys.discrete_events = map(get_discrete_events(sys)) do dev
         SymbolicDiscreteCallback(
             map(substituter, dev.conditions), substituter(dev.affect),
-            substituter(dev.initialize), substituter(dev.finalize), dev.reinitializealg
+            substituter(dev.initialize), substituter(dev.finalize), dev.reinitializealg,
+            dev.initialize_save_discretes, dev.save_positions
         )
     end
     if get_schedule(sys) !== nothing
