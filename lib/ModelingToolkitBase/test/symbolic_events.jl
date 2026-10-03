@@ -2125,6 +2125,21 @@ end
     @test count(==(0.25), sol.t) == 1
     @test count(==(0.25), sol_default.t) == 2
 
+    # without the save after the event the discrete has no saved values: its timeseries is
+    # empty, and reading it (or an observed that depends on it) at some time throws
+    @variables z(t)
+    ev = SymbolicDiscreteCallback(0.25, tick; discrete_parameters = [c], save_positions = (false, false))
+    @mtkcompile sys = System([D(x) ~ -c * x, z ~ x + c], t, [x, z], [c]; discrete_events = [ev])
+    sol = solve(ODEProblem(sys, [], (0.0, 1.0)), Tsit5(); saveat = 0.5)
+    @test SciMLBase.successful_retcode(sol)
+    @test isempty(sol.ps[c])
+    @test isempty(sol[c])
+    # the error type depends on the SciMLBase and SymbolicIndexingInterface versions
+    missing_value = Union{BoundsError, ArgumentError, ErrorException}
+    @test_throws missing_value sol(0.6; idxs = c)
+    @test_throws missing_value sol(0.6; idxs = z)
+    @test_throws missing_value sol[z]
+
     @test_throws ArgumentError SymbolicDiscreteCallback(0.1, tick; save_positions = (true,))
     @test SymbolicDiscreteCallback(0.1, tick; save_positions = (false, false)) !=
         SymbolicDiscreteCallback(0.1, tick)

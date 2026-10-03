@@ -588,10 +588,10 @@ Keyword arguments:
   event, as a pair of `Bool`s (passed to the generated SciMLBase callback). Defaults to
   `(true, true)`. `(false, false)` keeps a frequently firing event (e.g. a fast periodic one)
   from adding saved points beyond `saveat`. The integrator saves the discrete variables an
-  event updates together with the state after it, so with `(_, false)` their timeseries
-  (`sol.ps[...]`) is not saved either, and reading a value that needs one of them at some
-  time (e.g. `sol(t; idxs = z)` for an observed `z` that depends on one) throws an error;
-  `(false, true)` keeps it.
+  event updates together with the state after it, so with `(_, false)` they are not saved
+  either: their timeseries (`sol.ps[c]`, `sol[c]`) is empty, and reading a value that needs
+  one of them at some time (e.g. `sol(t; idxs = c)`, or `sol[z]` and `sol(t; idxs = z)` for
+  an observed `z` that depends on one) throws an error. `(false, true)` keeps them.
 """
 struct SymbolicDiscreteCallback <: AbstractCallback
     conditions::Union{Number, Vector{<:Number}, SymbolicT, SciMLBase.TimeDomain}
