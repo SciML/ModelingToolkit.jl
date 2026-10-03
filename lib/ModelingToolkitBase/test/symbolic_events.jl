@@ -5,7 +5,7 @@ using ModelingToolkitBase: SymbolicContinuousCallback,
     SymbolicDiscreteCallback,
     t_nounits as t,
     D_nounits as D,
-    affects, affect_negs, system, observed, AffectSystem
+    affects, affect_negs, system, observed, AffectSystem, discrete_events
 import DiffEqNoiseProcess
 using Symbolics
 using Symbolics: unwrap
@@ -2123,31 +2123,60 @@ end
     @test sol3(2.0; idxs = z) ≈ 0.5 * exp(-2.0) rtol = 1.0e-5
     @test sol3.ps[k] == [1.0, 3.0]
 
-    # ImplicitAffect on an SVector problem. RHS must be non-zero: under
-    # ModelingToolkit (dummy derivatives) `D(w) ~ 0` tears `w` to observed,
-    # leaving `u0 === nothing` and an Any-eltype OOP writeback.
+    # ImplicitAffect on an SVector problem. `D(w) ~ 0` tears `w` to observed under
+    # ModelingToolkit (`u0 === nothing`); the OOP RHS and writeback must keep a
+    # concrete state eltype (not `Vector{Any}`).
     @variables w(t) = 1.0
     ev4 = SymbolicDiscreteCallback([0.5], [0 ~ w^3 + w - (Pre(w) + 10)])
-    @mtkcompile sys4 = System([D(w) ~ 1.0e-16], t; discrete_events = [ev4])
+    @mtkcompile sys4 = System([D(w) ~ 0], t; discrete_events = [ev4])
+    aff4 = ModelingToolkitBase.compile_equational_affect(
+        affects(only(discrete_events(sys4))), sys4
+    )
+    @test aff4 isa ModelingToolkitBase.ImplicitAffect
     prob4 = ODEProblem{false}(sys4, SA[w => 1.0], (0.0, 1.0))
+    u_probe = prob4.u0 === nothing ? Float64[] : prob4.u0
+    @test eltype(prob4.f(u_probe, prob4.p, 0.0)) !== Any
     sol4 = solve(prob4, Tsit5())
     @test SciMLBase.successful_retcode(sol4)
     w1 = sol4(1.0; idxs = w)
     @test w1^3 + w1 ≈ 11.0 rtol = 1.0e-8
 
-    # ImplicitAffect with a discrete parameter.
+    # Genuinely nonlinear discrete-parameter ImplicitAffect (linear `a ~ 2`
+    # compiles to ExplicitAffect). Keep a live differential so the state is not
+    # torn away; cover mutable and SVector states.
     @variables q(t) = 1.0
     @discretes a(t) = 1.0
-    ev5 = SymbolicDiscreteCallback(
-        [0.5], [0 ~ q - Pre(q) - a, a ~ 2.0]; discrete_parameters = [a]
-    )
-    @mtkcompile sys5 = System([D(q) ~ 1.0e-16], t, [q], [a]; discrete_events = [ev5])
-    prob5 = ODEProblem{false}(sys5, SA[q => 1.0], (0.0, 1.0))
-    sol5 = solve(prob5, Tsit5())
-    @test SciMLBase.successful_retcode(sol5)
-    @test sol5.ps[a][end] ≈ 2.0 rtol = 1.0e-8
-    # Residual uses the post-event discrete `a`, so q = Pre(q) + a = 3.
-    @test sol5(1.0; idxs = q) ≈ 3.0 rtol = 1.0e-8
+    for (iip, u0) in ((true, [q => 1.0]), (false, SA[q => 1.0]))
+        ev_p = SymbolicDiscreteCallback(
+            [0.5], [a^3 + a ~ 10]; discrete_parameters = [a]
+        )
+        @mtkcompile sys_p = System([D(q) ~ -q], t, [q], [a]; discrete_events = [ev_p])
+        aff_p = ModelingToolkitBase.compile_equational_affect(
+            affects(only(discrete_events(sys_p))), sys_p
+        )
+        @test aff_p isa ModelingToolkitBase.ImplicitAffect
+        prob_p = ODEProblem{iip}(sys_p, u0, (0.0, 1.0))
+        sol_p = solve(prob_p, Tsit5())
+        @test SciMLBase.successful_retcode(sol_p)
+        # Real root of a^3 + a - 10 = 0.
+        @test sol_p.ps[a][end]^3 + sol_p.ps[a][end] ≈ 10.0 rtol = 1.0e-8
+
+        ev_m = SymbolicDiscreteCallback(
+            [0.5], [a^3 + a ~ 10, q ~ Pre(q) + a]; discrete_parameters = [a]
+        )
+        @mtkcompile sys_m = System([D(q) ~ -q], t, [q], [a]; discrete_events = [ev_m])
+        aff_m = ModelingToolkitBase.compile_equational_affect(
+            affects(only(discrete_events(sys_m))), sys_m
+        )
+        @test aff_m isa ModelingToolkitBase.ImplicitAffect
+        prob_m = ODEProblem{iip}(sys_m, u0, (0.0, 1.0))
+        sol_m = solve(prob_m, Tsit5())
+        @test SciMLBase.successful_retcode(sol_m)
+        a_end = sol_m.ps[a][end]
+        @test a_end^3 + a_end ≈ 10.0 rtol = 1.0e-8
+        # q(0.5-)=e^{-1/2}, then q ← q+a, then free decay to t=1.
+        @test sol_m(1.0; idxs = q) ≈ (exp(-0.5) + a_end) * exp(-0.5) rtol = 1.0e-5
+    end
 end
 
 @testset "ExplicitAffect on NamedTuple without state_values" begin

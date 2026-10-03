@@ -868,23 +868,51 @@ struct ExplicitAffect{DVS, PS, UF, UOOP, PF, POOP, US, PSOP}
 end
 
 """
-True when the integrator's state container can be updated in-place.
+True when the integrator's state/parameter containers can be updated in-place.
 
-Chooses the branch from the state type rather than `get_sol(integ).prob`, so
-integrator-like value providers without a `sol` (e.g. jump `TestInt`) keep the
-in-place path. Immutable states such as `SVector` take the OOP setters.
-Callers that are not SymbolicIndexingInterface value providers (e.g. Catalyst's
-`(u, p, t)` `NamedTuple`) also keep the in-place path. A missing state buffer
-(`state_values === nothing`, e.g. a fully torn `D(x) ~ 0` system) stays on the
-in-place path so OOP writeback cannot materialize a `Vector{Any}`.
+Preference order:
+1. Non-SII callers (e.g. Catalyst `(u, p, t)` `NamedTuple`) → in-place.
+2. When `get_sol(integ).prob` is available, use `isinplace(prob)` so
+   `ODEProblem{false}` takes OOP setters even if the continuous state was torn
+   to an empty mutable `Vector` while discrete buffers remain immutable
+   `SVector`s.
+3. Otherwise (e.g. jump `TestInt` without a `sol`), fall back to state
+   mutability. A missing state buffer (`u === nothing`) uses the OOP path.
 """
 function _affect_inplace(integ)
-    if applicable(state_values, integ)
-        u = state_values(integ)
-        u === nothing && return true
-        return ArrayInterface.ismutable(u)
+    applicable(state_values, integ) || return true
+    if hasmethod(SciMLBase.get_sol, Tuple{typeof(integ)})
+        try
+            return SciMLBase.isinplace(SciMLBase.get_sol(integ).prob)
+        catch
+        end
     end
-    return true
+    u = state_values(integ)
+    u === nothing && return false
+    return ArrayInterface.ismutable(u)
+end
+
+"""
+Restore a typed state container after an out-of-place affect writeback.
+
+`setsym_oop` can widen to `Vector{Any}` when the parent state is missing
+(`u0 === nothing`) or was torn to observed. Prefer `similar`/`convert` of the
+previous state (or a concrete `eltype`) so DiffEq norms never see `Any`.
+"""
+function _typed_affect_u(integ, new_u)
+    old = applicable(state_values, integ) ? state_values(integ) : nothing
+    if new_u === nothing
+        old === nothing && return new_u
+        return similar(old, 0)
+    end
+    if old !== nothing
+        T = eltype(old)
+        eltype(new_u) === T && return new_u
+        return convert(typeof(old), new_u)
+    end
+    T = eltype(new_u)
+    T === Any && return map(Float64, new_u)
+    return new_u
 end
 
 function (ea::ExplicitAffect)(integ)
@@ -894,7 +922,7 @@ function (ea::ExplicitAffect)(integ)
     else
         if !isempty(ea.dvs_to_update)
             new_u, _ = ea.u_setter_oop(integ, ea.u_up(integ))
-            integ.u = new_u
+            integ.u = _typed_affect_u(integ, new_u)
         end
         if !isempty(ea.ps_to_update)
             integ.p = ea.p_setter_oop(integ, ea.p_up(integ))
@@ -1005,12 +1033,12 @@ function (ia::ImplicitAffect)(integ)
     (check_error(affsol) === ReturnCode.InitialFailure) &&
         throw(UnsolvableCallbackError(all_equations(ia.aff)))
     if _affect_inplace(integ)
-        ia.u_setter!(integ, ia.u_getter(affsol))
-        ia.p_setter!(integ, ia.p_getter(affsol))
+        isempty(ia.dvs_to_update) || ia.u_setter!(integ, ia.u_getter(affsol))
+        isempty(ia.ps_to_update) || ia.p_setter!(integ, ia.p_getter(affsol))
     else
         if !isempty(ia.dvs_to_update)
             new_u, _ = ia.u_setter_oop(integ, ia.u_getter(affsol))
-            integ.u = new_u
+            integ.u = _typed_affect_u(integ, new_u)
         end
         if !isempty(ia.ps_to_update)
             integ.p = ia.p_setter_oop(integ, ia.p_getter(affsol))

@@ -164,6 +164,24 @@ function generate_empty_nonlinear_function(sys::System, opts::GeneratedFunctionO
 end
 
 """
+Out-of-place RHS for a fully torn time-dependent system (no unknowns / equations).
+
+`SymbolicUtils.Code.create_array(typeof(u), nothing, …, Val{(0,)})` loses the element
+type and returns `Any[]`, which then breaks `real(::Type{Any})` in DiffEq norms on
+Julia 1.13. Mirror [`generate_empty_nonlinear_function`](@ref): allocate with
+`similar(u, dims)` (or `zeros(dims)` when `u === nothing`) so the state eltype is kept.
+"""
+function generate_empty_ode_function(sys::System, opts::GeneratedFunctionOptions, dims)
+    (; eval_expression, eval_module, compiler_options) = opts
+    oop = :((u, p, t) -> u === nothing ? zeros($dims) : similar(u, $dims))
+    iip = :((out, u, p, t) -> nothing)
+    return maybe_compile_function(
+        expression_val(opts), wrap_gfw_val(opts), (2, 3, is_split(sys)), (oop, iip);
+        compiler_options, eval_expression, eval_module
+    )
+end
+
+"""
     $(TYPEDSIGNATURES)
 
 Generate the RHS function for the [`equations`](@ref) of a [`System`](@ref).
@@ -199,11 +217,18 @@ function generate_rhs(
     wrap_gfw = wrap_gfw_val(opts)
     dvs = flat_unknowns(sys)
     eqs = equations(sys)
-    # Empty-SCC / fully-eliminated nonlinear residual: skip when scalar,
-    # implicit_dae, or cachesyms would need a different signature/body.
-    if !is_time_dependent(sys) && isempty(dvs) && isempty(eqs) && isempty(extra_args) &&
+    # Empty-SCC / fully-eliminated residual: skip when scalar, implicit_dae, or
+    # cachesyms would need a different signature/body. Time-dependent systems with
+    # every state torn away (e.g. `D(w) ~ 0` under ModelingToolkit) need the same
+    # typed empty allocator — the default `create_array(..., nothing, …)` path
+    # returns `Any[]`.
+    if isempty(dvs) && isempty(eqs) && isempty(extra_args) &&
             !scalar && !implicit_dae && cachesyms === nothing
-        return generate_empty_nonlinear_function(sys, opts, (0,))
+        if !is_time_dependent(sys)
+            return generate_empty_nonlinear_function(sys, opts, (0,))
+        else
+            return generate_empty_ode_function(sys, opts, (0,))
+        end
     end
     obs = observed(sys)
     u = dvs
