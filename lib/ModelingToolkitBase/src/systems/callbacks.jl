@@ -838,7 +838,7 @@ end
 ####################################
 
 """
-    ExplicitAffect{DVS, PS, UF, PF}
+    ExplicitAffect{DVS, PS, UF, UOOP, PF, POOP, US, PSOP}
 
 Callable struct representing a compiled explicit affect (one with no algebraic equations).
 Invokes `u_up!` to update state variables and `p_up!` to update discrete parameters, then
@@ -849,24 +849,108 @@ optionally resets aggregated jumps. Created by [`compile_explicit_affect`](@ref)
 - `ps_to_update`: symbolic discrete parameters modified by this affect
 - `reset_jumps`: if `true`, call `reset_aggregated_jumps!` after the update
 - `u_up!`: compiled in-place function that writes updated state into the integrator
+- `u_up`: compiled out-of-place function that returns updated state component values
 - `p_up!`: compiled in-place function that writes updated parameters into the integrator
+- `p_up`: compiled out-of-place function that returns updated parameter values
+- `u_setter_oop`: `setsym_oop` setter applying OOP state values (or `nothing`)
+- `p_setter_oop`: `setp_oop` setter applying OOP parameter values (or `nothing`)
 """
-struct ExplicitAffect{DVS, PS, UF, PF}
+struct ExplicitAffect{DVS, PS, UF, UOOP, PF, POOP, US, PSOP}
     dvs_to_update::DVS
     ps_to_update::PS
     reset_jumps::Bool
     u_up!::UF
+    u_up::UOOP
     p_up!::PF
+    p_up::POOP
+    u_setter_oop::US
+    p_setter_oop::PSOP
+end
+
+"""
+True when the integrator's state/parameter containers can be updated in-place.
+
+Preference order:
+1. Prefer the integrator's state buffer via `state_values`:
+   - `u === nothing` → out-of-place
+   - immutable `u` (e.g. `SVector`) → out-of-place
+   - mutable `u` → continue
+2. An immutable integrator wrapper (e.g. SciMLSensitivity's `FakeIntegrator`)
+   cannot take `integ.u = …` / `setfield!`, so stay in-place and mutate the
+   wrapped buffers via `set_state!` / `set_parameter!`.
+3. Otherwise, when `get_sol(integ).prob` is available, use `isinplace(prob)` so
+   torn `ODEProblem{false}` systems (empty mutable `Float64[]` state with
+   immutable `SVector` discrete buffers) still take the OOP path.
+4. When `state_values` is not applicable (e.g. Catalyst `(u, p, t)`
+   `NamedTuple`), fall back to `isinplace(get_sol(integ).prob)` if available,
+   otherwise in-place.
+"""
+function _affect_inplace(integ)
+    if !applicable(state_values, integ)
+        if hasmethod(SciMLBase.get_sol, Tuple{typeof(integ)})
+            try
+                return SciMLBase.isinplace(SciMLBase.get_sol(integ).prob)
+            catch
+            end
+        end
+        return true
+    end
+    u = state_values(integ)
+    u === nothing && return false
+    ArrayInterface.ismutable(u) || return false
+    # Immutable wrappers (FakeIntegrator) must mutate buffers in place.
+    !ismutable(integ) && return true
+    if hasmethod(SciMLBase.get_sol, Tuple{typeof(integ)})
+        try
+            return SciMLBase.isinplace(SciMLBase.get_sol(integ).prob)
+        catch
+        end
+    end
+    return true
+end
+
+"""
+Restore a typed state container after an out-of-place affect writeback.
+
+`setsym_oop` can widen to `Vector{Any}` when the parent state is missing
+(`u0 === nothing`) or was torn to observed. Prefer `similar`/`convert` of the
+previous state (or a concrete `eltype`) so DiffEq norms never see `Any`.
+"""
+function _typed_affect_u(integ, new_u)
+    old = applicable(state_values, integ) ? state_values(integ) : nothing
+    if new_u === nothing
+        old === nothing && return new_u
+        return similar(old, 0)
+    end
+    if old !== nothing
+        T = eltype(old)
+        eltype(new_u) === T && return new_u
+        return convert(typeof(old), new_u)
+    end
+    T = eltype(new_u)
+    T === Any && return map(Float64, new_u)
+    return new_u
 end
 
 function (ea::ExplicitAffect)(integ)
-    isempty(ea.dvs_to_update) || ea.u_up!(integ)
-    isempty(ea.ps_to_update) || ea.p_up!(integ)
+    if _affect_inplace(integ)
+        isempty(ea.dvs_to_update) || ea.u_up!(integ)
+        isempty(ea.ps_to_update) || ea.p_up!(integ)
+    else
+        if !isempty(ea.dvs_to_update)
+            new_u, _ = ea.u_setter_oop(integ, ea.u_up(integ))
+            integ.u = _typed_affect_u(integ, new_u)
+        end
+        if !isempty(ea.ps_to_update)
+            integ.p = ea.p_setter_oop(integ, ea.p_up(integ))
+            finalize_parameters_hook!(integ, nothing)
+        end
+    end
     return ea.reset_jumps && reset_aggregated_jumps!(integ)
 end
 
 """
-    ImplicitAffect{DVS, PS, AFFSYS, AFF, UG, AG, AUS, APS, US, PST, UGT, PG, PROB}
+    ImplicitAffect{DVS, PS, AFFSYS, AFF, UG, AG, AUS, APS, US, PST, USOOP, PSOOP, UGT, PG, PROB}
 
 Callable struct representing a compiled implicit affect (one whose equations require solving
 an `ImplicitDiscreteProblem` at each callback invocation). Created by
@@ -887,13 +971,17 @@ arrays directly; `remake` is then called to produce a transient local copy with 
 - `affp_getter`: reads current parent-system parameters into the affect problem's `p`
 - `affu_setter!`: sets the affect problem's unknowns in-place
 - `affp_setter!`: sets the affect problem's parameters in-place
-- `u_setter!`: writes solved unknowns back into the parent integrator
-- `p_setter!`: writes solved parameters back into the parent integrator
+- `u_setter!`: writes solved unknowns back into the parent integrator (in-place)
+- `p_setter!`: writes solved parameters back into the parent integrator (in-place)
+- `u_setter_oop`: `setsym_oop` writer for out-of-place parent state updates (or `nothing`)
+- `p_setter_oop`: `setp_oop` writer for out-of-place parent parameter updates (or `nothing`)
 - `u_getter`: reads solved unknowns from the affect solution
 - `p_getter`: reads solved parameters from the affect solution
 - `affprob`: the pre-built `ImplicitDiscreteProblem` (mutated in-place each call)
 """
-struct ImplicitAffect{DVS, PS, AFFSYS, AFF, UG, AG, AUS, APS, US, PST, UGT, PG, PROB}
+struct ImplicitAffect{
+        DVS, PS, AFFSYS, AFF, UG, AG, AUS, APS, US, PST, USOOP, PSOOP, UGT, PG, PROB,
+    }
     dvs_to_update::DVS
     ps_to_update::PS
     affsys::AFFSYS
@@ -905,6 +993,8 @@ struct ImplicitAffect{DVS, PS, AFFSYS, AFF, UG, AG, AUS, APS, US, PST, UGT, PG, 
     affp_setter!::APS
     u_setter!::US
     p_setter!::PST
+    u_setter_oop::USOOP
+    p_setter_oop::PSOOP
     u_getter::UGT
     p_getter::PG
     affprob::PROB
@@ -959,8 +1049,19 @@ function (ia::ImplicitAffect)(integ)
     )
     (check_error(affsol) === ReturnCode.InitialFailure) &&
         throw(UnsolvableCallbackError(all_equations(ia.aff)))
-    ia.u_setter!(integ, ia.u_getter(affsol))
-    ia.p_setter!(integ, ia.p_getter(affsol))
+    if _affect_inplace(integ)
+        isempty(ia.dvs_to_update) || ia.u_setter!(integ, ia.u_getter(affsol))
+        isempty(ia.ps_to_update) || ia.p_setter!(integ, ia.p_getter(affsol))
+    else
+        if !isempty(ia.dvs_to_update)
+            new_u, _ = ia.u_setter_oop(integ, ia.u_getter(affsol))
+            integ.u = _typed_affect_u(integ, new_u)
+        end
+        if !isempty(ia.ps_to_update)
+            integ.p = ia.p_setter_oop(integ, ia.p_getter(affsol))
+            finalize_parameters_hook!(integ, nothing)
+        end
+    end
     return ia.reset_jumps && reset_aggregated_jumps!(integ)
 end
 
@@ -1539,7 +1640,8 @@ Base.@nospecializeinfer function compile_explicit_affect(
     _ps = reorder_parameters(sys, ps)
     integ = gensym(:MTKIntegrator)
 
-    u_up,
+    # In-place updaters write through `outputidxs` into `integ.u` / `integ.p`.
+    _,
         u_up! = build_function_wrapper(
         sys, (@view rhss[is_u]), [Any[dvs]; _ps; Any[t]],
         BuildFunctionWrapperOptions(;
@@ -1552,7 +1654,7 @@ Base.@nospecializeinfer function compile_explicit_affect(
             )
         )
     )
-    p_up,
+    _,
         p_up! = build_function_wrapper(
         sys, (@view rhss[is_p]), [Any[dvs]; _ps; Any[t]],
         BuildFunctionWrapperOptions(;
@@ -1565,11 +1667,50 @@ Base.@nospecializeinfer function compile_explicit_affect(
             )
         )
     )
+    # Out-of-place updaters return the new component values (no outputidxs); callers apply
+    # them via setsym_oop / setp_oop so immutable `SVector` states/parameters work.
+    u_up,
+        _ = build_function_wrapper(
+        sys, (@view rhss[is_u]), [Any[dvs]; _ps; Any[t]],
+        BuildFunctionWrapperOptions(;
+            u_arg = 1, wrap_mtkparameters,
+            codegen_function_options = setproperties(
+                opts.codegen, (;
+                    wrap_code = add_integrator_header(sys, integ, :u),
+                    iip_config = (true, false),
+                )
+            )
+        )
+    )
+    p_up,
+        _ = build_function_wrapper(
+        sys, (@view rhss[is_p]), [Any[dvs]; _ps; Any[t]],
+        BuildFunctionWrapperOptions(;
+            u_arg = 1, wrap_mtkparameters,
+            codegen_function_options = setproperties(
+                opts.codegen, (;
+                    wrap_code = add_integrator_header(sys, integ, :p),
+                    iip_config = (true, false),
+                )
+            )
+        )
+    )
 
+    u_up = eval_or_rgf(u_up; eval_expression, eval_module)
     u_up! = eval_or_rgf(u_up!; eval_expression, eval_module)
+    p_up = eval_or_rgf(p_up; eval_expression, eval_module)
     p_up! = eval_or_rgf(p_up!; eval_expression, eval_module)
 
-    return ExplicitAffect(dvs_to_update, ps_to_update, reset_jumps, u_up!, p_up!)
+    # OOP setters must use the same symbol order as the generated `*_up` RHS vectors.
+    u_syms = collect(@view lhss[is_u])
+    p_syms = collect(@view lhss[is_p])
+    u_setter_oop = isempty(u_syms) ? nothing : setsym_oop(sys, u_syms)
+    p_setter_oop = isempty(p_syms) ? nothing : setp_oop(sys, p_syms)
+
+    return ExplicitAffect(
+        dvs_to_update, ps_to_update, reset_jumps, u_up!, u_up, p_up!, p_up,
+        u_setter_oop, p_setter_oop
+    )
 end
 
 """
@@ -1601,6 +1742,8 @@ Base.@nospecializeinfer function compile_implicit_affect(
     affp_setter! = setsym(affsys, parameters(affsys))
     u_setter! = setsym(sys, dvs_to_update)
     p_setter! = setsym(sys, ps_to_update)
+    u_setter_oop = isempty(dvs_to_update) ? nothing : setsym_oop(sys, dvs_to_update)
+    p_setter_oop = isempty(ps_to_update) ? nothing : setp_oop(sys, ps_to_update)
     u_getter = getsym(affsys, dvs_to_update)
     p_getter = getsym(affsys, ps_to_update)
 
@@ -1614,7 +1757,7 @@ Base.@nospecializeinfer function compile_implicit_affect(
         dvs_to_update, ps_to_update, affsys, aff,
         reset_jumps,
         affu_getter, affp_getter, affu_setter!, affp_setter!,
-        u_setter!, p_setter!, u_getter, p_getter,
+        u_setter!, p_setter!, u_setter_oop, p_setter_oop, u_getter, p_getter,
         affprob
     )
 end
