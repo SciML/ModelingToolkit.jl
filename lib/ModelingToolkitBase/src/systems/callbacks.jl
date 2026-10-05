@@ -582,6 +582,16 @@ The condition can be one of:
 
 Arguments:
 - iv: The independent variable of the system. This must be specified if the independent variable appears in one of the equations explicitly, as in x ~ t + 1.
+
+Keyword arguments:
+- `save_positions`: whether the solution saves the state just before and just after the
+  event, as a pair of `Bool`s (passed to the generated SciMLBase callback). Defaults to
+  `(true, true)`. `(false, false)` keeps a frequently firing event (e.g. a fast periodic one)
+  from adding saved points beyond `saveat`. The integrator saves the discrete variables an
+  event updates together with the state after it, so with `(_, false)` they are not saved
+  either: their timeseries (`sol.ps[c]`, `sol[c]`) is empty, and reading a value that needs
+  one of them at some time (e.g. `sol(t; idxs = c)`, or `sol[z]` and `sol(t; idxs = z)` for
+  an observed `z` that depends on one) throws an error. `(false, true)` keeps them.
 """
 struct SymbolicDiscreteCallback <: AbstractCallback
     conditions::Union{Number, Vector{<:Number}, SymbolicT, SciMLBase.TimeDomain}
@@ -590,13 +600,18 @@ struct SymbolicDiscreteCallback <: AbstractCallback
     finalize::Union{Affect, SymbolicAffect, Nothing}
     reinitializealg::SciMLBase.DAEInitializationAlgorithm
     initialize_save_discretes::Bool
+    save_positions::Tuple{Bool, Bool}
 end
 
 function SymbolicDiscreteCallback(
         condition::Union{SymbolicT, Number, Vector{<:Number}, SciMLBase.TimeDomain},
         affect = nothing; initialize = nothing, finalize = nothing,
-        reinitializealg = nothing, initialize_save_discretes = true, kwargs...
+        reinitializealg = nothing, initialize_save_discretes = true,
+        save_positions = (true, true), kwargs...
     )
+    if length(save_positions) != 2 || !all(x -> x isa Bool, save_positions)
+        throw(ArgumentError("`save_positions` must be a pair of `Bool`s, got $save_positions."))
+    end
     # Manual error check (to prevent events like `[X < 5.0] => [X ~ Pre(X) + 10.0]` from being created).
     (condition isa Vector) && (eltype(condition) <: Num) &&
         error("Vectors of symbolic conditions are not allowed for `SymbolicDiscreteCallback`.")
@@ -627,7 +642,7 @@ function SymbolicDiscreteCallback(
         c, SymbolicAffect(affect; kwargs...),
         SymbolicAffect(initialize; kwargs...),
         SymbolicAffect(finalize; kwargs...), reinitializealg,
-        initialize_save_discretes
+        initialize_save_discretes, Tuple{Bool, Bool}(save_positions)
     )
 end # Default affect to nothing
 
@@ -649,7 +664,7 @@ function complete(cb::SymbolicDiscreteCallback; kwargs...)
         cb.conditions, make_affect(cb.affect; kwargs...),
         make_affect(cb.initialize; kwargs...),
         make_affect(cb.finalize; kwargs...), cb.reinitializealg,
-        cb.initialize_save_discretes
+        cb.initialize_save_discretes, cb.save_positions
     )
 end
 
@@ -736,7 +751,9 @@ function namespace_callback(cb::SymbolicDiscreteCallback, s)::SymbolicDiscreteCa
         namespace_conditions(conditions(cb), s),
         namespace_affects(affects(cb), s),
         initialize = namespace_affects(initialize_affects(cb), s),
-        finalize = namespace_affects(finalize_affects(cb), s), reinitializealg = cb.reinitializealg
+        finalize = namespace_affects(finalize_affects(cb), s), reinitializealg = cb.reinitializealg,
+        initialize_save_discretes = cb.initialize_save_discretes,
+        save_positions = cb.save_positions
     )
 end
 
@@ -750,6 +767,7 @@ function Base.hash(cb::AbstractCallback, s::UInt)
     !is_discrete(cb) && (s = hash(cb.rootfind, s))
     hash(cb.reinitializealg, s)
     !is_discrete(cb) && (s = hash(cb.zero_crossing_id, s))
+    is_discrete(cb) && (s = hash(cb.save_positions, s))
     return s
 end
 
@@ -797,6 +815,8 @@ function Base.:(==)(e1::AbstractCallback, e2::AbstractCallback)
         isequal(e1.affect_neg, e2.affect_neg) || return false
         isequal(e1.rootfind, e2.rootfind) || return false
         isequal(e1.zero_crossing_id, e2.zero_crossing_id) || return false
+    else
+        e1.save_positions == e2.save_positions || return false
     end
     return true
 end
@@ -1328,6 +1348,7 @@ function generate_callback(cb, sys; tspan = nothing, kwargs...)
             return PresetTimeCallback(
                 trigger, affect; initialize,
                 finalize, initializealg = cb.reinitializealg, saved_clock_partitions,
+                save_positions = cb.save_positions,
                 initialize_save_discretes = cb.initialize_save_discretes
             )
         elseif is_timed && trigger isa SciMLBase.TimeDomain
@@ -1336,17 +1357,20 @@ function generate_callback(cb, sys; tspan = nothing, kwargs...)
                 affect, trigger.dt; phase = trigger.phase, initial_affect = trigger_at_init,
                 initialize, finalize,
                 initializealg = cb.reinitializealg, saved_clock_partitions,
+                save_positions = cb.save_positions,
                 initialize_save_discretes = trigger_at_init
             )
         elseif is_timed
             return PeriodicCallback(
                 affect, trigger; initialize, finalize, initializealg = cb.reinitializealg,
-                saved_clock_partitions, initialize_save_discretes = cb.initialize_save_discretes
+                saved_clock_partitions, save_positions = cb.save_positions,
+                initialize_save_discretes = cb.initialize_save_discretes
             )
         else
             return DiscreteCallback(
                 trigger, affect; initialize,
                 finalize, initializealg = cb.reinitializealg, saved_clock_partitions,
+                save_positions = cb.save_positions,
                 initialize_save_discretes = cb.initialize_save_discretes
             )
         end
