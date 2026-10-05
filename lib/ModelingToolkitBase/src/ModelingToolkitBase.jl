@@ -103,6 +103,11 @@ import AbstractTrees
 using AbstractTrees: TreeIterator, print_tree
 using SciMLBase: StandardODEProblem, StandardNonlinearProblem, TimeDomain,
     Clock, SolverStepClock, AbstractNonlinearProblem
+using SciMLLogging: SciMLLogging, @verbosity_specifier, @SciMLMessage,
+    AbstractVerbositySpecifier, AbstractVerbosityPreset, MessageLevel,
+    Silent, InfoLevel, WarnLevel,
+    None, Minimal, Standard, Detailed, All,
+    verbosity_to_bool
 import Moshi
 import RecursiveArrayTools
 using RecursiveArrayTools: ArrayPartition, DiffEqArray

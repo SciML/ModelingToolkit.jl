@@ -394,7 +394,7 @@ struct System <: IntermediateDeprecationSystem
         end
         @assert iv === nothing || symtype(iv) === Real
         if (checks isa Bool && checks === true || checks isa Int && (checks & CheckComponents) > 0) && iv !== nothing
-            check_independent_variables((iv,))
+            check_independent_variables((iv,), _metadata_verbosity(metadata))
             check_variables(unknowns, iv)
             check_parameters(ps, iv)
             check_equations(eqs, iv)
@@ -532,6 +532,11 @@ instead.
   system to obtain bindings, initial conditions and/or guesses.
 - `checks`: Whether to perform sanity checks on the passed values. Accepts `true`, `false`
   or a bitmask combination of `CheckComponents` and `CheckUnits`.
+- `verbose = nothing`: Controls the diagnostics of the constructor checks. Accepts an
+  [`MTKVerbosity`](@ref), a `SciMLLogging` preset, or a `Bool`. If given, the value is
+  stored in the metadata of the system, and `@connector`, callback affects, and `remake`
+  use it. If `nothing`, the constructor uses the verbosity stored in `metadata`, or the
+  default.
 
 All other keyword arguments are named identically to the corresponding fields in
 [`System`](@ref).
@@ -574,7 +579,7 @@ function System(
         description = "", name = nothing, discover_from_metadata = true,
         initializesystem = nothing, is_initializesystem = false, is_discrete = false,
         irstructure = IRStructure{VartypeT}(), irstructure_tlv = nothing,
-        checks = true, __legacy_defaults__ = nothing
+        checks = true, verbose = nothing, __legacy_defaults__ = nothing
     )
     name === nothing && throw(NoNameError())
 
@@ -726,6 +731,11 @@ function System(
             meta = Base.ImmutableDict(meta, kvp)
         end
         metadata = meta
+    end
+    if verbose !== nothing
+        metadata = Base.ImmutableDict(
+            metadata, MTKVerbosityCtx => _process_verbose_param(verbose)
+        )
     end
     metadata = refreshed_metadata(metadata)
     jumps = Vector{JumpType}(jumps)
@@ -932,8 +942,13 @@ function System(eqs::Vector{Equation}, iv; kwargs...)
         end
     end
 
+    verbose = get(kwargs, :verbose, nothing)
+    verbosity = verbose === nothing ? _metadata_verbosity(get(kwargs, :metadata, ())) :
+        _process_verbose_param(verbose)
     cstrs = Vector{Union{Equation, Inequality}}(get(kwargs, :constraints, []))
-    _cstrunknowns, cstrps = process_constraint_system(cstrs, allunknowns, ps, iv)
+    _cstrunknowns, cstrps = process_constraint_system(
+        cstrs, allunknowns, ps, iv; verbosity
+    )
     cstrunknowns = empty(_cstrunknowns)
     for var in _cstrunknowns
         op, inner = Moshi.Match.@match var begin
@@ -959,7 +974,7 @@ function System(eqs::Vector{Equation}, iv; kwargs...)
 
     costs = get(kwargs, :costs, nothing)
     if costs !== nothing
-        costunknowns, costps = process_costs(costs, allunknowns, ps, iv)
+        costunknowns, costps = process_costs(costs, allunknowns, ps, iv; verbosity)
         union!(allunknowns, costunknowns)
         union!(ps, costps)
     end
@@ -1101,6 +1116,7 @@ Process variables in constraints of the (ODE) System.
 """
 function process_constraint_system(
         constraints::Vector{Union{Equation, Inequality}}, sts, ps, iv; validate = true,
+        verbosity::MTKVerbosity = DEFAULT_MTK_VERBOSE
     )
     isempty(constraints) && return OrderedSet{SymbolicT}(), OrderedSet{SymbolicT}()
 
@@ -1116,7 +1132,7 @@ function process_constraint_system(
 
     # Validate the states.
     if validate
-        validate_vars_and_find_ps!(constraintsts, constraintps, sts, iv)
+        validate_vars_and_find_ps!(constraintsts, constraintps, sts, iv, verbosity)
     end
 
     return constraintsts, constraintps
@@ -1125,14 +1141,16 @@ end
 """
 Process the costs for the constraint system.
 """
-function process_costs(costs::Vector, sts, ps, iv)
+function process_costs(
+        costs::Vector, sts, ps, iv; verbosity::MTKVerbosity = DEFAULT_MTK_VERBOSE
+    )
     coststs = OrderedSet{SymbolicT}()
     costps = OrderedSet{SymbolicT}()
     for cost in costs
         collect_vars!(coststs, costps, cost, iv)
     end
 
-    validate_vars_and_find_ps!(coststs, costps, sts, iv)
+    validate_vars_and_find_ps!(coststs, costps, sts, iv, verbosity)
     return coststs, costps
 end
 
@@ -1145,7 +1163,9 @@ well-formed states or parameters.
 Return the set of additional parameters found in the system, e.g. in x(p) ~ 3 then p should be added as a
 parameter of the system.
 """
-function validate_vars_and_find_ps!(auxvars, auxps, sysvars, iv)
+function validate_vars_and_find_ps!(
+        auxvars, auxps, sysvars, iv, verbosity::MTKVerbosity = DEFAULT_MTK_VERBOSE
+    )
     sts = sysvars
 
     for var in auxvars
@@ -1169,8 +1189,12 @@ function validate_vars_and_find_ps!(auxvars, auxps, sysvars, iv)
 
             isparameter(arg) && !isequal(arg, iv) && push!(auxps, arg)
         else
-            var ∈ sts &&
-                @warn "Variable $var has no argument. It will be interpreted as $var($iv), and the constraint will apply to the entire interval."
+            if var ∈ sts
+                @SciMLMessage(
+                    "Variable $var has no argument. It will be interpreted as $var($iv), and the constraint will apply to the entire interval.",
+                    verbosity, :constraint_variable_without_argument
+                )
+            end
         end
     end
     return

@@ -27,7 +27,7 @@ const GENERATED_ADT_MODULES = (
 )
 
 # The `SciMLLogging.@verbosity_specifier` expansion refers to these names unqualified, so
-# `verbosity.jl` must import them. ExplicitImports does not expand macros and sees no use.
+# ModelingToolkitBase must import them. ExplicitImports does not expand macros and sees no use.
 const MACRO_ONLY_EXPLICIT_IMPORTS = (:AbstractVerbositySpecifier, :Detailed, :All)
 
 # Externally-owned names ModelingToolkitBase imports for which the owning package offers

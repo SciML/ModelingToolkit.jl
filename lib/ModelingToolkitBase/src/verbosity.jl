@@ -1,9 +1,3 @@
-using SciMLLogging: SciMLLogging, @verbosity_specifier, @SciMLMessage,
-    AbstractVerbositySpecifier, AbstractVerbosityPreset, MessageLevel,
-    Silent, InfoLevel, WarnLevel,
-    None, Minimal, Standard, Detailed, All,
-    verbosity_to_bool
-
 @verbosity_specifier MTKVerbosity begin
     sub_specifiers = (:initialization_verbosity,)
 
@@ -17,9 +11,14 @@ using SciMLLogging: SciMLLogging, @verbosity_specifier, @SciMLMessage,
         # problem construction
         :cyclic_dependency, :overdetermined_constraints,
         :missing_scc_schedule, :dynamic_opt_time_grid,
+        :imperative_affect_specification, :parameter_not_in_system,
         # analysis
         :empty_operating_point, :initialization_analysis,
         :no_unbound_inputs, :analysis_point_causality,
+        # system construction
+        :independent_variable_not_parameter, :constraint_variable_without_argument,
+        :unbalanced_connector, :affect_default_independent_variable,
+        :substitute_skips_events,
     )
 
     presets = (
@@ -41,6 +40,13 @@ using SciMLLogging: SciMLLogging, @verbosity_specifier, @SciMLMessage,
             initialization_analysis = Silent,
             no_unbound_inputs = Silent,
             analysis_point_causality = Silent,
+            imperative_affect_specification = Silent,
+            parameter_not_in_system = Silent,
+            independent_variable_not_parameter = Silent,
+            constraint_variable_without_argument = Silent,
+            unbalanced_connector = Silent,
+            affect_default_independent_variable = Silent,
+            substitute_skips_events = Silent,
         ),
         Minimal = (
             initialization_verbosity = Minimal(),
@@ -60,6 +66,13 @@ using SciMLLogging: SciMLLogging, @verbosity_specifier, @SciMLMessage,
             initialization_analysis = InfoLevel,
             no_unbound_inputs = Silent,
             analysis_point_causality = WarnLevel,
+            imperative_affect_specification = WarnLevel,
+            parameter_not_in_system = WarnLevel,
+            independent_variable_not_parameter = Silent,
+            constraint_variable_without_argument = Silent,
+            unbalanced_connector = Silent,
+            affect_default_independent_variable = Silent,
+            substitute_skips_events = WarnLevel,
         ),
         Standard = (
             initialization_verbosity = Minimal(),
@@ -79,6 +92,13 @@ using SciMLLogging: SciMLLogging, @verbosity_specifier, @SciMLMessage,
             initialization_analysis = InfoLevel,
             no_unbound_inputs = WarnLevel,
             analysis_point_causality = WarnLevel,
+            imperative_affect_specification = WarnLevel,
+            parameter_not_in_system = WarnLevel,
+            independent_variable_not_parameter = WarnLevel,
+            constraint_variable_without_argument = WarnLevel,
+            unbalanced_connector = WarnLevel,
+            affect_default_independent_variable = WarnLevel,
+            substitute_skips_events = WarnLevel,
         ),
         Detailed = (
             initialization_verbosity = Minimal(),
@@ -98,6 +118,13 @@ using SciMLLogging: SciMLLogging, @verbosity_specifier, @SciMLMessage,
             initialization_analysis = InfoLevel,
             no_unbound_inputs = WarnLevel,
             analysis_point_causality = WarnLevel,
+            imperative_affect_specification = WarnLevel,
+            parameter_not_in_system = WarnLevel,
+            independent_variable_not_parameter = WarnLevel,
+            constraint_variable_without_argument = WarnLevel,
+            unbalanced_connector = WarnLevel,
+            affect_default_independent_variable = WarnLevel,
+            substitute_skips_events = WarnLevel,
         ),
         All = (
             initialization_verbosity = Minimal(),
@@ -117,6 +144,13 @@ using SciMLLogging: SciMLLogging, @verbosity_specifier, @SciMLMessage,
             initialization_analysis = InfoLevel,
             no_unbound_inputs = WarnLevel,
             analysis_point_causality = WarnLevel,
+            imperative_affect_specification = WarnLevel,
+            parameter_not_in_system = WarnLevel,
+            independent_variable_not_parameter = WarnLevel,
+            constraint_variable_without_argument = WarnLevel,
+            unbalanced_connector = WarnLevel,
+            affect_default_independent_variable = WarnLevel,
+            substitute_skips_events = WarnLevel,
         ),
     )
 
@@ -132,10 +166,16 @@ using SciMLLogging: SciMLLogging, @verbosity_specifier, @SciMLMessage,
         problem_construction = (
             :cyclic_dependency, :overdetermined_constraints,
             :missing_scc_schedule, :dynamic_opt_time_grid,
+            :imperative_affect_specification, :parameter_not_in_system,
         ),
         analysis = (
             :empty_operating_point, :initialization_analysis,
             :no_unbound_inputs, :analysis_point_causality,
+        ),
+        system_construction = (
+            :independent_variable_not_parameter, :constraint_variable_without_argument,
+            :unbalanced_connector, :affect_default_independent_variable,
+            :substitute_skips_events,
         ),
     )
 end
@@ -200,6 +240,11 @@ Problem construction (group `problem_construction`):
   when constructing an `SCCNonlinearProblem`. `WarnLevel` by default.
 - `dynamic_opt_time_grid`: a `dt` or `steps` argument to a dynamic optimization problem
   is ignored for the given time span. `WarnLevel` by default.
+- `imperative_affect_specification`: an `ImperativeAffect` of a callback has a duplicate
+  name, an expression that cannot be modified, or a symbol that is both observed and
+  modified. `WarnLevel` by default.
+- `parameter_not_in_system`: `remake` (or another `remake_buffer` call) got a symbolic
+  variable that is not a parameter of the system, and ignored it. `WarnLevel` by default.
 
 Analysis (group `analysis`):
 
@@ -211,6 +256,29 @@ Analysis (group `analysis`):
   `WarnLevel` by default.
 - `analysis_point_causality`: an analysis-point `connect` looks like it has reversed
   causality (input where an output is expected, or vice versa). `WarnLevel` by default.
+
+System construction (group `system_construction`):
+
+- `independent_variable_not_parameter`: the independent variable of a `System` is not
+  defined with `@independent_variables`. `WarnLevel` by default.
+- `constraint_variable_without_argument`: a constraint or cost uses an unknown with no
+  argument, so it applies to the full time span. `WarnLevel` by default.
+- `unbalanced_connector`: a `@connector` has a different number of flow variables and
+  regular variables. `WarnLevel` by default.
+- `affect_default_independent_variable`: an affect has no independent variable, so it
+  uses `t_nounits`. `WarnLevel` by default.
+- `substitute_skips_events`: `substitute(sys, rules)` changed a system that has events,
+  but it does not change the events. `WarnLevel` by default. Set it with the `verbose`
+  keyword of `substitute`.
+
+# Verbosity stored on a system
+
+Some diagnostics run where no `verbose` keyword is available: the checks in the
+[`System`](@ref) constructor, `@connector`, callback affects, and `remake`. These use the
+verbosity that is stored in the metadata of the system. The `verbose` keyword of `System`
+sets it, and [`mtkcompile`](@ref) stores its own `verbose` value on the system that it
+returns. Functions that have their own `verbose` keyword (problem constructors,
+`mtkcompile`, `substitute`, ...) do not read the stored value.
 
 # Sub-specifiers
 
@@ -247,6 +315,27 @@ mtkcompile(sys; verbose = MTKVerbosity(compilation = InfoLevel))
 
 const DEFAULT_MTK_VERBOSE = MTKVerbosity()
 const SILENT_MTK_VERBOSE = MTKVerbosity(None())
+
+"""
+    $(TYPEDEF)
+
+Metadata key for the [`MTKVerbosity`](@ref) that is stored on a system. The `verbose`
+keyword of `System` and [`mtkcompile`](@ref) set it. Diagnostics that have no `verbose`
+keyword of their own read it with `_system_verbosity`.
+"""
+struct MTKVerbosityCtx end
+
+# The verbosity stored in a metadata collection, or the default. `metadata` is the
+# `ImmutableDict` of a system or a user-supplied collection of pairs. An `ImmutableDict`
+# iterates the newest entry first, so the first match wins.
+function _metadata_verbosity(metadata)
+    for (k, v) in metadata
+        k === MTKVerbosityCtx && return v::MTKVerbosity
+    end
+    return DEFAULT_MTK_VERBOSE
+end
+
+_system_verbosity(sys) = getmetadata(sys, MTKVerbosityCtx, DEFAULT_MTK_VERBOSE)::MTKVerbosity
 
 @inline _process_verbose_param(verbose::MTKVerbosity) = verbose
 @inline _process_verbose_param(preset::AbstractVerbosityPreset) = MTKVerbosity(preset)

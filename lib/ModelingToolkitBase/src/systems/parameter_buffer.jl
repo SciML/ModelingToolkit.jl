@@ -120,11 +120,11 @@ function MTKParameters(
     )
     disc_buffer = Tuple(
         BlockedArray(
-            Vector{subbuffer_sizes[1].type}(
-                undef, sum(x -> x.length, subbuffer_sizes)
-            ),
-            map(x -> x.length, subbuffer_sizes)
-        )
+                Vector{subbuffer_sizes[1].type}(
+                    undef, sum(x -> x.length, subbuffer_sizes)
+                ),
+                map(x -> x.length, subbuffer_sizes)
+            )
             for subbuffer_sizes in ic.discrete_buffer_sizes
     )
     const_buffer = Tuple(
@@ -733,7 +733,9 @@ function __remake_buffer(indp, oldbuf::MTKParameters, idxs, vals; validate = tru
     # If the parameter buffer is an `MTKParameters` object, `indp` must eventually drill
     # down to an `AbstractSystem` using `symbolic_container`. We leverage this to get
     # the index cache.
-    ic = get_index_cache(indp_to_system(indp))
+    sys = indp_to_system(indp)
+    ic = get_index_cache(sys)
+    verbosity = _system_verbosity(sys)
     for (idx, val) in zip(idxs, vals)
         sym = nothing
         if val === missing
@@ -743,7 +745,10 @@ function __remake_buffer(indp, oldbuf::MTKParameters, idxs, vals; validate = tru
             sym = idx
             idx = parameter_index(ic, sym)
             if idx === nothing
-                @warn "Symbolic variable $sym is not a (non-dependent) parameter in the system"
+                @SciMLMessage(
+                    "Symbolic variable $sym is not a (non-dependent) parameter in the system",
+                    verbosity, :parameter_not_in_system
+                )
                 continue
             end
             idx in handled_idxs && continue
@@ -760,7 +765,10 @@ function __remake_buffer(indp, oldbuf::MTKParameters, idxs, vals; validate = tru
                 for (i, vali) in zip(eachindex(sym), eachindex(val))
                     idx = parameter_index(ic, sym[i])
                     if idx === nothing
-                        @warn "Symbolic variable $sym is not a (non-dependent) parameter in the system"
+                        @SciMLMessage(
+                            "Symbolic variable $sym is not a (non-dependent) parameter in the system",
+                            verbosity, :parameter_not_in_system
+                        )
                         continue
                     end
                     # Intentionally don't check handled_idxs here because array variables always take priority
