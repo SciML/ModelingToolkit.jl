@@ -24,7 +24,8 @@ using ModelingToolkitBase: System, AbstractSystem, Differential,
     isdiffeq, isdifferential,
     get_tearing_state, get_iv,
     invalidate_cache!,
-    iscomplete, get_schedule
+    iscomplete, get_schedule,
+    MTKVerbosity, DEFAULT_MTK_VERBOSE
 
 using SymbolicUtils: substitute
 
