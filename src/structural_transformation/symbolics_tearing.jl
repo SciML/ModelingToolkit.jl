@@ -19,8 +19,7 @@ function tearing(
         sys::AbstractSystem, state = TearingState(sys);
         reassemble_alg::ReassembleAlgorithm = DefaultReassembleAlgorithm(),
         fully_determined = true,
-        # Consumed here so it does not leak into external kwargs sinks; hand off to
-        # StateSelection/MTKTearing when those packages adopt SciMLLogging.
+        # Not forwarded: StateSelection and MTKTearing do not accept `verbose`.
         verbose::MTKVerbosity = DEFAULT_MTK_VERBOSE,
         kwargs...
     )
@@ -62,8 +61,7 @@ function dummy_derivative(
         sys, state = TearingState(sys);
         reassemble_alg::ReassembleAlgorithm = DefaultReassembleAlgorithm(),
         fully_determined = true,
-        # Consumed here so it does not leak into external kwargs sinks; hand off to
-        # StateSelection/MTKTearing when those packages adopt SciMLLogging.
+        # Not forwarded: StateSelection and MTKTearing do not accept `verbose`.
         verbose::MTKVerbosity = DEFAULT_MTK_VERBOSE,
         kwargs...
     )

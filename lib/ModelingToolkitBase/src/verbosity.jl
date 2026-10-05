@@ -1,8 +1,8 @@
 using SciMLLogging: SciMLLogging, @verbosity_specifier, @SciMLMessage,
     AbstractVerbositySpecifier, AbstractVerbosityPreset, MessageLevel,
-    Silent, DebugLevel, InfoLevel, WarnLevel, ErrorLevel,
+    Silent, InfoLevel, WarnLevel,
     None, Minimal, Standard, Detailed, All,
-    verbosity_to_int, verbosity_to_bool
+    verbosity_to_bool
 
 @verbosity_specifier MTKVerbosity begin
     sub_specifiers = (:initialization_verbosity,)
@@ -121,14 +121,22 @@ using SciMLLogging: SciMLLogging, @verbosity_specifier, @SciMLMessage,
     )
 
     groups = (
-        compilation = (:state_priority_tie, :underconstrained_variables,
-            :if_lifting_condition_grammar, :observed_equation_cycle),
-        initialization = (:singular_initialization, :overdetermined_initialization,
-            :underdetermined_initialization, :scc_initialization_unavailable),
-        problem_construction = (:cyclic_dependency, :overdetermined_constraints,
-            :missing_scc_schedule, :dynamic_opt_time_grid),
-        analysis = (:empty_operating_point, :initialization_analysis,
-            :no_unbound_inputs, :analysis_point_causality),
+        compilation = (
+            :state_priority_tie, :underconstrained_variables,
+            :if_lifting_condition_grammar, :observed_equation_cycle,
+        ),
+        initialization = (
+            :singular_initialization, :overdetermined_initialization,
+            :underdetermined_initialization, :scc_initialization_unavailable,
+        ),
+        problem_construction = (
+            :cyclic_dependency, :overdetermined_constraints,
+            :missing_scc_schedule, :dynamic_opt_time_grid,
+        ),
+        analysis = (
+            :empty_operating_point, :initialization_analysis,
+            :no_unbound_inputs, :analysis_point_causality,
+        ),
     )
 end
 

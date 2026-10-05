@@ -91,9 +91,9 @@ end
     @parameters τ
     @named sys = System([D(x) ~ (y - x) / τ, y ~ 2x], t)
     for verbose in (
-        Standard(), Detailed(), All(), true, false, MTKVerbosity(),
-        MTKVerbosity(None()),
-    )
+            Standard(), Detailed(), All(), true, false, MTKVerbosity(),
+            MTKVerbosity(None()),
+        )
         @test mtkcompile(sys; verbose) isa System
     end
 end
