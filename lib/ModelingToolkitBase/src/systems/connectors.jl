@@ -167,10 +167,12 @@ function connector_type(sys::AbstractSystem)
         return DomainConnector()
     end
     if n_flow != n_regular && !isframe(sys)
-        @warn "$(nameof(sys)) contains $n_flow flow variables, yet $n_regular regular " *
-            "(non-flow, non-stream, non-input, non-output) variables. " *
-            "This could lead to imbalanced model that are difficult to debug. " *
-            "Consider marking some of the regular variables as input/output variables."
+        @SciMLMessage(_system_verbosity(sys), :unbalanced_connector) do
+            "$(nameof(sys)) contains $n_flow flow variables, yet $n_regular regular " *
+                "(non-flow, non-stream, non-input, non-output) variables. " *
+                "This could lead to imbalanced model that are difficult to debug. " *
+                "Consider marking some of the regular variables as input/output variables."
+        end
     end
     return n_stream > 0 ? StreamConnector() : RegularConnector()
 end

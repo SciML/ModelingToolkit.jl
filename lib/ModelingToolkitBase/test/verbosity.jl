@@ -3,6 +3,7 @@ using ModelingToolkitBase: topsort_equations, t_nounits as t, D_nounits as D, un
     _override_toggle, _route_problem_verbose, _toggle_enabled
 using SciMLLogging: SciMLLogging, Silent, InfoLevel, WarnLevel,
     None, Minimal, Standard, Detailed, All
+using SymbolicIndexingInterface: remake_buffer
 
 @testset "MTKVerbosity construction" begin
     @test MTKVerbosity() isa MTKVerbosity{true}
@@ -167,4 +168,131 @@ end
     @test_logs min_level = Logging.Warn connect(
         vin, :ap, vout; verbose = MTKVerbosity(analysis_point_causality = Silent)
     )
+end
+
+@testset "system_construction group" begin
+    verb = MTKVerbosity(system_construction = Silent)
+    @test verb.independent_variable_not_parameter == Silent
+    @test verb.constraint_variable_without_argument == Silent
+    @test verb.unbalanced_connector == Silent
+    @test verb.affect_default_independent_variable == Silent
+    @test verb.substitute_skips_events == Silent
+    @test verb.imperative_affect_specification == WarnLevel
+end
+
+@testset "System constructor stores verbose" begin
+    @variables τ
+    Dτ = Differential(τ)
+    @variables u(τ)
+    @test_logs (:warn, r"@independent_variables") match_mode = :any System(
+        [Dτ(u) ~ -u], τ; name = :s
+    )
+    quiet = @test_logs min_level = Logging.Warn System(
+        [Dτ(u) ~ -u], τ; name = :s, verbose = false
+    )
+    @test ModelingToolkitBase._system_verbosity(quiet) == MTKVerbosity(None())
+    # a system rebuilt from the metadata keeps the stored value
+    @test_logs min_level = Logging.Warn System(
+        [Dτ(u) ~ -u], τ; name = :s, metadata = ModelingToolkitBase.get_metadata(quiet)
+    )
+    @variables y(t)
+    @named loud = System([D(y) ~ -y], t)
+    @test ModelingToolkitBase._system_verbosity(loud) == MTKVerbosity()
+end
+
+@testset "constraint_variable_without_argument toggle" begin
+    @variables xf(..)
+    z = unwrap(xf())
+    @test_logs (:warn, r"has no argument") match_mode = :any ModelingToolkitBase.validate_vars_and_find_ps!(
+        Set([z]), Set(), Set([z]), unwrap(t)
+    )
+    @test_logs min_level = Logging.Warn ModelingToolkitBase.validate_vars_and_find_ps!(
+        Set([z]), Set(), Set([z]), unwrap(t), MTKVerbosity(None())
+    )
+end
+
+@connector function UnbalancedPin(; name)
+    @variables v(t) w(t) i(t) [connect = Flow]
+    return System(Equation[], t, [v, w, i], []; name)
+end
+
+@connector function QuietUnbalancedPin(; name)
+    @variables v(t) w(t) i(t) [connect = Flow]
+    return System(
+        Equation[], t, [v, w, i], []; name,
+        verbose = MTKVerbosity(unbalanced_connector = Silent)
+    )
+end
+
+@testset "unbalanced_connector toggle" begin
+    @test_logs (:warn, r"flow variables, yet") match_mode = :any UnbalancedPin(; name = :p)
+    @test_logs min_level = Logging.Warn QuietUnbalancedPin(; name = :p)
+end
+
+@testset "affect_default_independent_variable toggle" begin
+    @variables x(t)
+    @parameters p
+    @named loud = System([D(x) ~ -x], t)
+    @named quiet = System([D(x) ~ -x], t; verbose = false)
+    aff = ModelingToolkitBase.SymbolicAffect([x ~ p])
+    @test_logs (:warn, r"Defaulting to t_nounits") match_mode = :any ModelingToolkitBase.AffectSystem(
+        aff; parent_sys = loud
+    )
+    @test_logs min_level = Logging.Warn ModelingToolkitBase.AffectSystem(
+        aff; parent_sys = quiet
+    )
+end
+
+@testset "substitute_skips_events toggle" begin
+    @variables x(t)
+    @parameters p q
+    @named sys = System(
+        [D(x) ~ -p * x], t; continuous_events = [[x ~ 0.5] => [x ~ Pre(x) + 1]]
+    )
+    @test_logs (:warn, r"has events") match_mode = :any substitute(sys, [p => q])
+    @test_logs min_level = Logging.Warn substitute(sys, [p => q]; verbose = false)
+end
+
+@testset "imperative_affect_specification toggle" begin
+    @variables temp(t)
+    @parameters furnace_on::Bool = false
+    cb = ModelingToolkitBase.SymbolicContinuousCallback(
+        [temp ~ 0.7],
+        ModelingToolkitBase.ImperativeAffect(
+            modified = (; furnace_on), observed = (; furnace_on)
+        ) do x, o, c, i
+            return (; furnace_on = false)
+        end
+    )
+    @named sys = System([D(temp) ~ furnace_on - temp], t; continuous_events = [cb])
+    sys = mtkcompile(sys)
+    op = [temp => 0.0, furnace_on => true]
+    @test_logs (:warn, r"both observed and modified") match_mode = :any ODEProblem(
+        sys, op, (0.0, 1.0)
+    )
+    @test_logs min_level = Logging.Warn ODEProblem(
+        sys, op, (0.0, 1.0); verbose = MTKVerbosity(imperative_affect_specification = Silent)
+    )
+    # a preset silences MTK and is still forwarded to the solver
+    prob = @test_logs min_level = Logging.Warn ODEProblem(sys, op, (0.0, 1.0); verbose = None())
+    @test prob.kwargs[:verbose] isa None
+end
+
+@testset "parameter_not_in_system toggle" begin
+    @variables x(t)
+    @parameters p q
+    @named sys = System([D(x) ~ -p * x], t)
+    loud = mtkcompile(sys)
+    quiet = mtkcompile(sys; verbose = false)
+    @test ModelingToolkitBase._system_verbosity(quiet) == MTKVerbosity(None())
+    for (csys, logs) in ((loud, true), (quiet, false))
+        prob = ODEProblem(csys, [x => 1.0, p => 1.0], (0.0, 1.0))
+        if logs
+            @test_logs (:warn, r"not a \(non-dependent\) parameter") match_mode = :any remake_buffer(
+                csys, prob.p, [q], [2.0]
+            )
+        else
+            @test_logs min_level = Logging.Warn remake_buffer(csys, prob.p, [q], [2.0])
+        end
+    end
 end

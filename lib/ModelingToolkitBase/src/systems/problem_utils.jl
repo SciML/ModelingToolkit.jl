@@ -2693,6 +2693,8 @@ function process_kwargs(
         eval_expression = false, eval_module = @__MODULE__,
         _skip_events = false, _skip_tstops = false, tspan = nothing, kwargs...
     )
+    # Read before `filter_kwargs`, which removes an `MTKVerbosity` value.
+    mtk_verbosity = _route_problem_verbose(get(kwargs, :verbose, nothing))
     kwargs = filter_kwargs(kwargs)
     kwargs1 = (;)
 
@@ -2700,7 +2702,8 @@ function process_kwargs(
         if expression == Val{false} && !_skip_events
             cbs = if _has_symbolic_events(sys)
                 @invokelatest process_events(
-                    sys; callback, eval_expression, eval_module, tspan, kwargs...
+                    sys; callback, eval_expression, eval_module, tspan, mtk_verbosity,
+                    kwargs...
                 )
             else
                 callback

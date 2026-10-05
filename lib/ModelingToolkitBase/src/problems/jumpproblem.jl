@@ -122,7 +122,7 @@
     op_processed = operating_point_preprocess(sys, op)
     cbs = process_events(
         sys; callback, eval_expression, eval_module, op = op_processed, reset_jumps = true,
-        tspan
+        tspan, mtk_verbosity = _route_problem_verbose(get(kwargs, :verbose, nothing))
     )
 
     if rng !== nothing
