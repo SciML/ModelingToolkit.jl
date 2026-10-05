@@ -995,7 +995,7 @@ function collect_vars!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{S
             BSImpl.Term(; f, args) && if f isa op end => begin
                 validate_operator(f, args, iv; context = expr)
                 isempty(args) && continue
-                append!(vars, args)
+                union!(vars, args)
             end
             BSImpl.Term(; f, args) && if iv isa SymbolicT && f isa SymbolicT && !isequal(args[1], iv) end => begin
                 # We know this isn't a called function symbolic, since our `is_atomic` filter
