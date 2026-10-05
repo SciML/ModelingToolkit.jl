@@ -174,6 +174,9 @@ function mtkcompile(
     if !homotopy
         newsys = setmetadata(newsys, HomotopyCtx, false)
     end
+    # Diagnostics on the compiled system that have no `verbose` keyword (e.g. `remake`)
+    # read this value.
+    newsys = setmetadata(newsys, MTKVerbosityCtx, verbose)
     # Singular systems may end up with parameter-only equations, which shouldn't error on `complete`
     newsys = complete(newsys; split, allow_parameter_eqs = true)
     return newsys
