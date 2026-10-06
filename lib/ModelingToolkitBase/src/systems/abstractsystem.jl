@@ -313,7 +313,8 @@ for traitT in [
                 push!(ts_idxs, ContinuousTimeseries())
             else
                 if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
-                    if (ts = get(ic.observed_syms_to_timeseries, s, nothing)) !== nothing
+                    parent, _ = split_indexed_var(s)
+                    if (ts = get(ic.observed_syms_to_timeseries, s, get(ic.observed_syms_to_timeseries, parent, nothing))) !== nothing
                         union!(ts_idxs, ts)
                     elseif (ts = get(ic.dependent_pars_to_timeseries, s, nothing)) !==
                             nothing
@@ -3055,14 +3056,14 @@ function component_post_processing(__source__, expr, isconnector)
             # we need to create a closure to escape explicit return in `body`.
             res = (() -> $body)()
             if $isdefined(res, :gui_metadata) && $getfield(res, :gui_metadata) === nothing
-                name = $(Meta.quot(fname))
+                __mtk_gui_name = $(Meta.quot(fname))
                 if $isconnector
                     $Setfield.@set!(res.connector_type = $connector_type(res))
                 end
                 $Setfield.@set!(
                     res.gui_metadata = $GUIMetadata(
                         $GlobalRef(
-                            @__MODULE__, name
+                            @__MODULE__, __mtk_gui_name
                         )
                     )
                 )
