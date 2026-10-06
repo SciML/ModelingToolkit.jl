@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Component-Based Modeling a Spring-Mass System · ModelingToolkit.jl</title><script data-outdated-warner src="../../assets/warner.js"></script><link rel="canonical" href="https://mtk.sciml.ai/stable/tutorials/spring_mass/"/><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.039/juliamono-regular.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.13.11/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script><link href="../../assets/favicon.ico" rel="icon" type="image/x-icon"/></head><body><div id="documenter"><nav class="docs-sidebar"><a class="docs-logo" href="../../"><img src="../../assets/logo.png" alt="ModelingToolkit.jl logo"/></a><div class="docs-package-name"><span class="docs-autofit"><a href="../../">ModelingToolkit.jl</a></span></div><form class="docs-search" action="../../search/"><input class="docs-search-query" id="documenter-search-query" name="q" type="text" placeholder="Search docs"/></form><ul class="docs-menu"><li><a class="tocitem" href="../../">Home</a></li><li><span class="tocitem">Symbolic Modeling Tutorials</span><ul><li><a class="tocitem" href="../ode_modeling/">Composing Ordinary Differential Equations</a></li><li class="is-active"><a class="tocitem" href>Component-Based Modeling a Spring-Mass System</a><ul class="internal"><li><a class="tocitem" href="#Copy-Paste-Example"><span>Copy-Paste Example</span></a></li><li><a class="tocitem" href="#Explanation"><span>Explanation</span></a></li></ul></li><li><a class="tocitem" href="../acausal_components/">Acausal Component-Based Modeling the RC Circuit</a></li><li><a class="tocitem" href="../higher_order/">Automatic Transformation of Nth Order ODEs to 1st Order ODEs</a></li><li><a class="tocitem" href="../tearing_parallelism/">Exposing More Parallelism By Tearing Algebraic Equations in ODESystems</a></li><li><a class="tocitem" href="../nonlinear/">Modeling Nonlinear Systems</a></li><li><a class="tocitem" href="../optimization/">Modeling Optimization Problems</a></li><li><a class="tocitem" href="../stochastic_diffeq/">Modeling with Stochasticity</a></li><li><a class="tocitem" href="../nonlinear_optimal_control/">Nonlinear Optimal Control</a></li></ul></li><li><span class="tocitem">ModelingToolkitize Tutorials</span><ul><li><a class="tocitem" href="../../mtkitize_tutorials/modelingtoolkitize/">Automatically Accelerating ODEProblem Code</a></li><li><a class="tocitem" href="../../mtkitize_tutorials/modelingtoolkitize_index_reduction/">Automated Index Reduction of DAEs</a></li></ul></li><li><span class="tocitem">Basics</span><ul><li><a class="tocitem" href="../../basics/AbstractSystem/">The AbstractSystem Interface</a></li><li><a class="tocitem" href="../../basics/ContextualVariables/">Contextual Variable Types</a></li><li><a class="tocitem" href="../../basics/Composition/">Composing Models and Building Reusable Components</a></li><li><a class="tocitem" href="../../basics/Validation/">Model Validation and Units</a></li><li><a class="tocitem" href="../../basics/DependencyGraphs/">Dependency Graphs</a></li><li><a class="tocitem" href="../../basics/FAQ/">Frequently Asked Questions</a></li></ul></li><li><span class="tocitem">System Types</span><ul><li><a class="tocitem" href="../../systems/ODESystem/">ODESystem</a></li><li><a class="tocitem" href="../../systems/SDESystem/">SDESystem</a></li><li><a class="tocitem" href="../../systems/JumpSystem/">JumpSystem</a></li><li><a class="tocitem" href="../../systems/NonlinearSystem/">NonlinearSystem</a></li><li><a class="tocitem" href="../../systems/OptimizationSystem/">OptimizationSystem</a></li><li><a class="tocitem" href="../../systems/ControlSystem/">ControlSystem</a></li><li><a class="tocitem" href="../../systems/PDESystem/">PDESystem</a></li></ul></li><li><a class="tocitem" href="../../comparison/">Comparison of ModelingToolkit vs Equation-Based Modeling Languages</a></li><li><a class="tocitem" href="../../internals/">Internal Details</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Symbolic Modeling Tutorials</a></li><li class="is-active"><a href>Component-Based Modeling a Spring-Mass System</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Component-Based Modeling a Spring-Mass System</a></li></ul></nav><div class="docs-right"><a class="docs-edit-link" href="https://github.com/SciML/ModelingToolkit.jl/blob/master/docs/src/tutorials/spring_mass.md" title="Edit on GitHub"><span class="docs-icon fab"></span><span class="docs-label is-hidden-touch">Edit on GitHub</span></a><a class="docs-settings-button fas fa-cog" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-sidebar-button fa fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a></div></header><article class="content" id="documenter-page"><h1 id="Component-Based-Modeling-a-Spring-Mass-System"><a class="docs-heading-anchor" href="#Component-Based-Modeling-a-Spring-Mass-System">Component-Based Modeling a Spring-Mass System</a><a id="Component-Based-Modeling-a-Spring-Mass-System-1"></a><a class="docs-heading-anchor-permalink" href="#Component-Based-Modeling-a-Spring-Mass-System" title="Permalink"></a></h1><p>In this tutorial we will build a simple component-based model of a spring-mass system. A spring-mass system consists of one or more masses connected by springs. <a href="https://en.wikipedia.org/wiki/Hooke%27s_law">Hooke&#39;s law</a> gives the force exerted by a spring when it is extended or compressed by a given distance. This specifies a differential-equation system where the acceleration of the masses is specified using the forces acting on them.</p><h2 id="Copy-Paste-Example"><a class="docs-heading-anchor" href="#Copy-Paste-Example">Copy-Paste Example</a><a id="Copy-Paste-Example-1"></a><a class="docs-heading-anchor-permalink" href="#Copy-Paste-Example" title="Permalink"></a></h2><pre><code class="language-julia hljs">using ModelingToolkit, Plots, DifferentialEquations, LinearAlgebra
+
+@variables t
+D = Differential(t)
+
+function Mass(; name, m = 1.0, xy = [0., 0.], u = [0., 0.])
+    ps = @parameters m=m
+    sts = @variables pos[1:2](t)=xy v[1:2](t)=u
+    eqs = collect(D.(pos) .~ v)
+    ODESystem(eqs, t, [pos..., v...], ps; name)
+end
+
+function Spring(; name, k = 1e4, l = 1.)
+    ps = @parameters k=k l=l
+    @variables x(t), dir[1:2](t)
+    ODESystem(Equation[], t, [x, dir...], ps; name)
+end
+
+function connect_spring(spring, a, b)
+    [
+        spring.x ~ norm(collect(a .- b))
+        collect(spring.dir .~ collect(a .- b))
+    ]
+end
+
+spring_force(spring) = -spring.k .* collect(spring.dir) .* (spring.x - spring.l)  ./ spring.x
+
+m = 1.0
+xy = [1., -1.]
+k = 1e4
+l = 1.
+center = [0., 0.]
+g = [0., -9.81]
+@named mass = Mass(m=m, xy=xy)
+@named spring = Spring(k=k, l=l)
+
+eqs = [
+    connect_spring(spring, mass.pos, center)
+    collect(D.(mass.v) .~ spring_force(spring) / mass.m .+ g)
+]
+
+@named _model = ODESystem(eqs, t)
+@named model = compose(_model, mass, spring)
+sys = structural_simplify(model)
+
+prob = ODEProblem(sys, [], (0., 3.))
+sol = solve(prob, Rosenbrock23())
+plot(sol)</code></pre><p><img src="https://user-images.githubusercontent.com/23384717/130322185-52ff1523-4ad8-4b24-94d3-3aa2c4a87082.png" alt="plotsol"/></p><h2 id="Explanation"><a class="docs-heading-anchor" href="#Explanation">Explanation</a><a id="Explanation-1"></a><a class="docs-heading-anchor-permalink" href="#Explanation" title="Permalink"></a></h2><h3 id="Building-the-components"><a class="docs-heading-anchor" href="#Building-the-components">Building the components</a><a id="Building-the-components-1"></a><a class="docs-heading-anchor-permalink" href="#Building-the-components" title="Permalink"></a></h3><p>For each component we use a Julia function that returns an <code>ODESystem</code>. At the top, we define the fundamental properties of a <code>Mass</code>: it has a mass <code>m</code>, a position <code>pos</code> and a velocity <code>v</code>. We also define that the velocity is the rate of change of position with respect to time.</p><pre><code class="language-julia hljs">function Mass(; name, m = 1.0, xy = [0., 0.], u = [0., 0.])
+    ps = @parameters m=m
+    sts = @variables pos[1:2](t)=xy v[1:2](t)=u
+    eqs = collect(D.(pos) .~ v)
+    ODESystem(eqs, t, [pos..., v...], ps; name)
+end</code></pre><p>Note that this is an incompletely specified <code>ODESystem</code>. It cannot be simulated on its own since the equations for the velocity <code>v[1:2](t)</code> are unknown. Notice the addition of a <code>name</code> keyword. This allows us to generate different masses with different names. A <code>Mass</code> can now be constructed as:</p><pre><code class="language-julia hljs">Mass(name = :mass1)</code></pre><p>Or using the <code>@named</code> helper macro</p><pre><code class="language-julia hljs">@named mass1 = Mass()</code></pre><p>Next we build the spring component. It is characterised by the spring constant <code>k</code> and the length <code>l</code> of the spring when no force is applied to it. The state of a spring is defined by its current length and direction.</p><pre><code class="language-julia hljs">function Spring(; name, k = 1e4, l = 1.)
+    ps = @parameters k=k l=l
+    @variables x(t), dir[1:2](t)
+    ODESystem(Equation[], t, [x, dir...], ps; name)
+end</code></pre><p>We now define functions that help construct the equations for a mass-spring system. First, the <code>connect_spring</code> function connects a <code>spring</code> between two positions <code>a</code> and <code>b</code>. Note that <code>a</code> and <code>b</code> can be the <code>pos</code> of a <code>Mass</code>, or just a fixed position such as <code>[0., 0.]</code>. In that sense, the length of the spring <code>x</code> is given by the length of the vector <code>dir</code> joining <code>a</code> and <code>b</code>.</p><pre><code class="language-julia hljs">function connect_spring(spring, a, b)
+    [
+        spring.x ~ norm(collect(a .- b))
+        collect(spring.dir .~ collect(a .- b))
+    ]
+end</code></pre><p>Lastly, we define the <code>spring_force</code> function that takes a <code>spring</code> and returns the force exerted by this spring.</p><pre><code class="language-julia hljs">spring_force(spring) = -spring.k .* collect(spring.dir) .* (spring.x - spring.l)  ./ spring.x</code></pre><p>To create our system, we will first create the components: a mass and a spring. This is done as follows:</p><pre><code class="language-julia hljs">m = 1.0
+xy = [1., -1.]
+k = 1e4
+l = 1.
+center = [0., 0.]
+g = [0., -9.81]
+@named mass = Mass(m=m, xy=xy)
+@named spring = Spring(k=k, l=l)</code></pre><p>We can now create the equations describing this system, by connecting <code>spring</code> to <code>mass</code> and a fixed point.</p><pre><code class="language-julia hljs">eqs = [
+    connect_spring(spring, mass.pos, center)
+    collect(D.(mass.v) .~ spring_force(spring) / mass.m .+ g)
+]</code></pre><p>Finally, we can build the model using these equations and components.</p><pre><code class="language-julia hljs">@named _model = ODESystem(eqs, t)
+@named model = compose(_model, mass, spring)</code></pre><p>We can take a look at the equations in the model using the <code>equations</code> function.</p><pre><code class="language-julia hljs">equations(model)
+
+7-element Vector{Equation}:
+ Differential(t)(mass₊v[1](t)) ~ -spring₊k*spring₊dir[1](t)*(mass₊m^-1)*(spring₊x(t) - spring₊l)*(spring₊x(t)^-1)
+ Differential(t)(mass₊v[2](t)) ~ -9.81 - (spring₊k*spring₊dir[2](t)*(mass₊m^-1)*(spring₊x(t) - spring₊l)*(spring₊x(t)^-1))
+ spring₊x(t) ~ sqrt(abs2(mass₊pos[1](t)) + abs2(mass₊pos[2](t)))
+ spring₊dir[1](t) ~ mass₊pos[1](t)
+ spring₊dir[2](t) ~ mass₊pos[2](t)
+ Differential(t)(mass₊pos[1](t)) ~ mass₊v[1](t)
+ Differential(t)(mass₊pos[2](t)) ~ mass₊v[2](t)</code></pre><p>The states of this model are:</p><pre><code class="language-julia hljs">states(model)
+
+7-element Vector{Term{Real, Base.ImmutableDict{DataType, Any}}}:
+ mass₊v[1](t)
+ mass₊v[2](t)
+ spring₊x(t)
+ mass₊pos[1](t)
+ mass₊pos[2](t)
+ spring₊dir[1](t)
+ spring₊dir[2](t)</code></pre><p>And the parameters of this model are:</p><pre><code class="language-julia hljs">parameters(model)
+
+6-element Vector{Sym{Real, Base.ImmutableDict{DataType, Any}}}:
+ spring₊k
+ mass₊m
+ spring₊l
+ mass₊m
+ spring₊k
+ spring₊l</code></pre><h3 id="Simplifying-and-solving-this-system"><a class="docs-heading-anchor" href="#Simplifying-and-solving-this-system">Simplifying and solving this system</a><a id="Simplifying-and-solving-this-system-1"></a><a class="docs-heading-anchor-permalink" href="#Simplifying-and-solving-this-system" title="Permalink"></a></h3><p>This system can be solved directly as a DAE using <a href="https://diffeq.sciml.ai/stable/solvers/dae_solve/">one of the DAE solvers from DifferentialEquations.jl</a>. However, we can symbolically simplify the system first beforehand. Running <code>structural_simplify</code> eliminates unnecessary variables from the model to give the leanest numerical representation of the system.</p><pre><code class="language-julia hljs">sys = structural_simplify(model)
+equations(sys)
+
+4-element Vector{Equation}:
+ Differential(t)(mass₊v[1](t)) ~ -spring₊k*mass₊pos[1](t)*(mass₊m^-1)*(sqrt(abs2(mass₊pos[1](t)) + abs2(mass₊pos[2](t))) - spring₊l)*(sqrt(abs2(mass₊pos[1](t)) + abs2(mass₊pos[2](t)))^-1)
+ Differential(t)(mass₊v[2](t)) ~ -9.81 - (spring₊k*mass₊pos[2](t)*(mass₊m^-1)*(sqrt(abs2(mass₊pos[1](t)) + abs2(mass₊pos[2](t))) - spring₊l)*(sqrt(abs2(mass₊pos[1](t)) + abs2(mass₊pos[2](t)))^-1))
+ Differential(t)(mass₊pos[1](t)) ~ mass₊v[1](t)
+ Differential(t)(mass₊pos[2](t)) ~ mass₊v[2](t)</code></pre><p>We are left with only 4 equations involving 4 state variables (<code>mass.pos[1]</code>, <code>mass.pos[2]</code>, <code>mass.v[1]</code>, <code>mass.v[2]</code>). We can solve the system by converting it to an <code>ODEProblem</code> in mass matrix form and solving with an <a href="https://diffeq.sciml.ai/stable/solvers/dae_solve/#OrdinaryDiffEq.jl-(Mass-Matrix)"><code>ODEProblem</code> mass matrix solver</a>. This is done as follows:</p><pre><code class="language-julia hljs">prob = ODEProblem(sys, [], (0., 3.))
+sol = solve(prob, Rosenbrock23())
+plot(sol)</code></pre><p>What if we want the timeseries of a different variable? That information is not lost! Instead, <code>structural_simplify</code> simply changes state variables into <code>observed</code> variables.</p><pre><code class="language-julia hljs">observed(sys)
+
+3-element Vector{Equation}:
+ spring₊dir[2](t) ~ mass₊pos[2](t)
+ spring₊dir[1](t) ~ mass₊pos[1](t)
+ spring₊x(t) ~ sqrt(abs2(mass₊pos[1](t)) + abs2(mass₊pos[2](t)))</code></pre><p>These are explicit algebraic equations which can be used to reconstruct the required variables on the fly. This leads to dramatic computational savings since implicitly solving an ODE scales as O(n^3), so fewer states are signficantly better!</p><p>We can access these variables using the solution object. For example, let&#39;s retrieve the x-position of the mass over time:</p><pre><code class="language-julia hljs">sol[mass.pos[1]]</code></pre><p>We can also plot the path of the mass:</p><pre><code class="language-julia hljs">plot(sol, vars = (mass.pos[1], mass.pos[2]))</code></pre><p><img src="https://user-images.githubusercontent.com/23384717/130322197-cff35eb7-0739-471d-a3d9-af83d87f1cc7.png" alt="plotpos"/></p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../ode_modeling/">« Composing Ordinary Differential Equations</a><a class="docs-footer-nextpage" href="../acausal_components/">Acausal Component-Based Modeling the RC Circuit »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.7 on <span class="colophon-date" title="Sunday 10 October 2021 21:29">Sunday 10 October 2021</span>. Using Julia version 1.6.3.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
