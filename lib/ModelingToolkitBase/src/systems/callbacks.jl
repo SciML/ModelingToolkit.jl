@@ -964,6 +964,20 @@ function (ia::ImplicitAffect)(integ)
     return ia.reset_jumps && reset_aggregated_jumps!(integ)
 end
 
+"""
+    EMPTY_AFFECT(integ, args...)
+
+Sentinel affect that does nothing. Used as the default `affect` / `affect_neg` when a
+callback specifies no affect, rather than passing `nothing` to SciMLBase (so continuous
+rootfinding still stops at the event). Clears `derivative_discontinuity` so DiffEqBase
+skips the post-affect re-initialization and trailing duplicate save; the root-time
+re-evaluation from `change_t_via_interpolation!` still runs.
+"""
+function EMPTY_AFFECT(integ, args...)
+    SciMLBase.derivative_discontinuity!(integ, false)
+    return nothing
+end
+
 @static if pkgversion(SciMLBase) < v"3"
     """
         VectorAffect{E2A, AFFS}
@@ -995,7 +1009,7 @@ else
     Callable struct for a `VectorContinuousCallback`. Routes an
     integrator call to the appropriate per-equation affect based on the equation index `idx`.
     Created inside [`generate_callback`](@ref) for vectors of `SymbolicContinuousCallback`s.
-    Skips `nothing` affects.
+    Skips `nothing` / [`EMPTY_AFFECT`](@ref) affects.
 
     # Fields
     - `eq2affect`: maps condition equation index → affect index
@@ -1009,17 +1023,25 @@ else
     end
 
     function (va::VectorAffect)(integ, evts)
+        applied = false
         for (i, evt) in enumerate(evts)
             if evt == 1
                 f = va.affects[va.eq2affect[i]]
-                f === nothing && continue
+                (f === nothing || f === EMPTY_AFFECT) && continue
                 f(integ)
+                applied = true
             elseif evt == -1
                 f = va.affect_negs[va.eq2affect[i]]
-                f === nothing && continue
+                (f === nothing || f === EMPTY_AFFECT) && continue
                 f(integ)
+                applied = true
             end
         end
+        # DiffEqBase assumes a non-`nothing` VectorContinuousCallback affect modifies
+        # the integrator. Clear the flag when every triggered edge had no real affect so
+        # the post-affect re-init / trailing save are skipped (root-time re-eval remains).
+        applied || SciMLBase.derivative_discontinuity!(integ, false)
+        return
     end
 end
 
@@ -1161,14 +1183,6 @@ function generate_discrete_callbacks(
     end
     return result
 end
-
-"""
-    EMPTY_AFFECT(args...)
-
-Sentinel affect that does nothing. Used as the default `affect` and `affect_neg` when a
-callback specifies no affect, rather than passing `nothing` to SciMLBase.
-"""
-EMPTY_AFFECT(args...) = nothing
 
 """
     generate_callback(cbs::Vector{SymbolicContinuousCallback}, sys; kwargs...)
