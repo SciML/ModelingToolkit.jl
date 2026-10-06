@@ -1382,10 +1382,10 @@ function NonlinearSystem(sys::System; bind_iv::Bool = true)
     # below so the same element keys catch them on the second pass.
     subrules = Dict{SymbolicT, SymbolicT}()
     for x in unknowns(sys)
-        subrules[D(x)] = 0.0
+        subrules[D(x)] = Symbolics.COMMON_ZERO
         if SU.is_array_shape(SU.shape(x))
             for i in SU.stable_eachindex(x)
-                subrules[D(x[i])] = 0.0
+                subrules[D(x[i])] = Symbolics.COMMON_ZERO
             end
         end
     end
