@@ -195,12 +195,12 @@ indexed term `k`. Recurses through wrapping [`Operator`](@ref)s.
 function index_substituted_array(res::SymbolicT, k::SymbolicT)
     return Moshi.Match.@match k begin
         BSImpl.Term(; f, args) && if f === getindex end => begin
-            return res[args[2:end]...]
+            return res[args[2:end]...]::SymbolicT
         end
         BSImpl.Term(; f, args) && if f isa Operator && length(args) == 1 end => begin
             # `res` is already the value of `f(arr)`; do not re-apply `f`
             # (mirrors `_get_stable_index`, which discards the operator).
-            return index_substituted_array(res, args[1]::SymbolicT)
+            return index_substituted_array(res, args[1]::SymbolicT)::SymbolicT
         end
         _ => return res
     end
