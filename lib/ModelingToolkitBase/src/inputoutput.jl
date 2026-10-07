@@ -221,6 +221,8 @@ inputs, parameters, and independent variable.
 - `implicit_dae::Bool = false`: Generate residual dynamics for an implicit DAE.
 - `simplify::Bool = false`: Forwarded to `mtkcompile` when `sys` is unscheduled.
 - `split::Bool = true`: Forwarded to `mtkcompile` to select split-system generation.
+- `reassemble_alg = nothing`: Forwarded to `mtkcompile` when `sys` is unscheduled.
+  When `nothing`, `mtkcompile`'s default reassemble algorithm is used.
 - `eval_expression::Bool = false`: Evaluate generated code in `eval_module` instead of
   returning a runtime-generated function.
 - `eval_module::Module = @__MODULE__`: Module used when `eval_expression = true`.
@@ -260,7 +262,8 @@ function generate_control_function(
         disturbance_argument = false,
         implicit_dae = false,
         simplify = false,
-        split = true
+        split = true,
+        reassemble_alg = nothing
     )
     (; eval_expression, eval_module) = opts
     isempty(inputs) && @warn("No unbound inputs were found in system.")
@@ -287,7 +290,14 @@ function generate_control_function(
     )
 
     if !isscheduled(sys)
-        sys = mtkcompile(sys; inputs, disturbance_inputs = all_disturbances, split, simplify)
+        sys = if reassemble_alg === nothing
+            mtkcompile(sys; inputs, disturbance_inputs = all_disturbances, split, simplify)
+        else
+            mtkcompile(
+                sys; inputs, disturbance_inputs = all_disturbances, split, simplify,
+                reassemble_alg
+            )
+        end
     end
 
     # Add all disturbances to inputs for the purposes of io processing
