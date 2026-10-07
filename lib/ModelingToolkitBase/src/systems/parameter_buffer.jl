@@ -120,11 +120,11 @@ function MTKParameters(
     )
     disc_buffer = Tuple(
         BlockedArray(
-                Vector{subbuffer_sizes[1].type}(
-                    undef, sum(x -> x.length, subbuffer_sizes)
-                ),
-                map(x -> x.length, subbuffer_sizes)
-            )
+            Vector{subbuffer_sizes[1].type}(
+                undef, sum(x -> x.length, subbuffer_sizes)
+            ),
+            map(x -> x.length, subbuffer_sizes)
+        )
             for subbuffer_sizes in ic.discrete_buffer_sizes
     )
     const_buffer = Tuple(

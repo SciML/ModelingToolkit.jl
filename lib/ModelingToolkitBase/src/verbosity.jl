@@ -187,7 +187,7 @@ end
 A [SciMLLogging.jl](https://github.com/SciML/SciMLLogging.jl) verbosity specifier
 controlling diagnostic output from ModelingToolkit: the [`mtkcompile`](@ref) pipeline,
 problem construction and initialization, and analysis utilities such as
-[`linearization_function`](@ref) and `analyze_initialization_jacobian`.
+`linearization_function` and `analyze_initialization_jacobian`.
 
 Pass it via the `verbose` keyword. `mtkcompile` and the analysis utilities consume it
 directly. `SciMLBase.*Problem` constructors share the `verbose` keyword with the solver
