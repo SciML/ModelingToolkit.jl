@@ -27,4 +27,6 @@ jobs:
     with:
       coverage-directories: "src,ext,lib/ModelingToolkitBase/src,lib/ModelingToolkitBase/ext"
       cache: false
+    env:
+      JULIA_PKG_PRECOMPILE_AUTO: "0"
     secrets: "inherit"
