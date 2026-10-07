@@ -540,7 +540,7 @@ that names the involved parameter instead of a raw `MethodError`.
 function parameter_equation_to_residual(eq::Equation)
     lhs = eq.lhs
     rhs = eq.rhs
-    if residual_side_subtractable(lhs) && residual_side_subtractable(rhs)
+    if is_variable_numeric(lhs) && is_variable_numeric(rhs)
         return Symbolics.COMMON_ZERO ~ (rhs - lhs)
     end
     pname = parameter_equation_display_name(eq)
@@ -556,13 +556,6 @@ function parameter_equation_to_residual(eq::Equation)
             """
         )
     )
-end
-
-function residual_side_subtractable(x)
-    is_variable_numeric(x) && return true
-    SU.isconst(x) || return false
-    v = unwrap_const(x)
-    return v isa Number || (v isa AbstractArray && eltype(v) <: Number)
 end
 
 function parameter_equation_display_name(eq::Equation)
