@@ -42,14 +42,19 @@ end
 # Bind derivative blocks as views, including their uses in observed expressions and assertions.
 function array_derivative_arguments!(rhss::Vector{SymbolicT}, dvs, D, ir::IRStructure{VartypeT}; extra_expressions = SymbolicT[], reserved_symbols = dvs)
     terms = Set{SymbolicT}()
+    buffer = SU.IRStructureSearchBuffer(ir, terms)
     for expressions in (rhss, extra_expressions), rhs in expressions
-        Symbolics.get_variables!(terms, rhs; is_atomic = array_derivative_is_atomic)
+        Symbolics.get_variables!(buffer, rhs; is_atomic = array_derivative_is_atomic)
     end
+    # Array-valued unknowns have no flat `du` layout to view into, so fall back to the
+    # per-element expansion that `expand_array_derivatives!` already implements.
     if isempty(terms) || any(v -> SU.is_array_shape(SU.shape(v)), dvs)
         expand_array_derivatives!(rhss, ir)
         return map(D, dvs), identity
     end
 
+    # A fixed sentinel keeps the generated Expr hash-stable across processes; reject a
+    # collision so a user symbol cannot silently shadow the `du` argument binding.
     du_name = :__mtk_dae_du
     for v in reserved_symbols
         parent, _ = split_indexed_var(v)
@@ -67,10 +72,16 @@ function array_derivative_arguments!(rhss::Vector{SymbolicT}, dvs, D, ir::IRStru
     arrays = Dict{SymbolicT, SymbolicT}()
     for (parent, positions) in groups
         indices = SU.stable_eachindex(parent)
+        # Contiguous state blocks share one slice of `du`, so a view/reshape preserves the
+        # array shape without emitting one scalar read per element in the residual.
         if length(positions) == length(indices) &&
                 positions == collect(first(positions):last(positions)) &&
                 all(isequal(dvs[i], parent[j]) for (i, j) in zip(positions, indices))
-            arrays[parent] = Symbolics.term(reshape, du[first(positions):last(positions)], size(parent); type = symtype(parent), shape = SU.shape(parent))
+            arrays[parent] = Symbolics.STerm(
+                reshape,
+                Symbolics.SArgsT((du[first(positions):last(positions)], size(parent)));
+                type = symtype(parent), shape = SU.shape(parent)
+            )
         end
     end
     for term in terms
@@ -80,12 +91,13 @@ function array_derivative_arguments!(rhss::Vector{SymbolicT}, dvs, D, ir::IRStru
         if isequal(op, D) && haskey(arrays, parent)
             subs[term] = unwrap(Symbolics.substitute(wrap(arg), Dict(wrap(parent) => wrap(arrays[parent]))))
         else
+            # Noncontiguous or interleaved layouts cannot share a single `du` view.
             expanded = SymbolicT[term]
             expand_array_derivatives!(expanded, ir)
             subs[term] = unwrap(Symbolics.substitute(wrap(only(expanded)), subs))
         end
     end
-    subber = ex -> unwrap(Symbolics.substitute(wrap(ex), subs))
+    subber = SU.IRSubstituter{false}(ir, subs)
     map!(subber, rhss, rhss)
     return du, subber
 end
