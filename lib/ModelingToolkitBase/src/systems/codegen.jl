@@ -46,8 +46,8 @@ function array_derivative_arguments!(rhss::Vector{SymbolicT}, dvs, D, ir::IRStru
     for expressions in (rhss, extra_expressions), rhs in expressions
         Symbolics.get_variables!(buffer, rhs; is_atomic = array_derivative_is_atomic)
     end
-    # Array-valued unknowns have no flat `du` layout to view into, so fall back to the
-    # per-element expansion that `expand_array_derivatives!` already implements.
+    # No array derivatives, or array-valued unknowns with no flat `du` layout: use the
+    # per-element expansion.
     if isempty(terms) || any(v -> SU.is_array_shape(SU.shape(v)), dvs)
         expand_array_derivatives!(rhss, ir)
         return map(D, dvs), identity
