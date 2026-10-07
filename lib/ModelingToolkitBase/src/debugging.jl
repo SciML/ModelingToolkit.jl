@@ -129,6 +129,29 @@ function SciMLBase.diagnose_symbolic_instability(sys::AbstractSystem, u, uprev)
         append!(diagnosis, singularities)
     end
 
+    #check for declared variable-bound violations in the current state
+    bound_violations = String[]
+    for (i, v) in enumerate(unks)
+        hasbounds(v) || continue
+        i <= length(u) || continue
+        val = unwrap(u[i])
+        val isa Number || continue
+        lo, hi = getbounds(v)
+        lo_v, hi_v = unwrap(lo), unwrap(hi)
+        (lo_v isa Number && hi_v isa Number) || continue
+        if val > hi_v
+            push!(bound_violations,
+                "   $v exceeded its upper bound $hi_v by $(@sprintf("%.4g", val - hi_v))")
+        elseif val < lo_v
+            push!(bound_violations,
+                "   $v fell below its lower bound $lo_v by $(@sprintf("%.4g", lo_v - val))")
+        end
+    end
+    if !isempty(bound_violations)
+        push!(diagnosis, "\nDeclared variable bounds violated:")
+        append!(diagnosis, bound_violations)
+    end
+
     return isempty(diagnosis) ? "" : join(diagnosis, "\n")
 end
 
