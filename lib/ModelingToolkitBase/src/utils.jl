@@ -392,9 +392,7 @@ function check_bindings(atomic_ps::AtomicArraySet{Dict{SymbolicT, Nothing}}, bin
                 )
             end
         else
-            # Reject bindings whose known shape disagrees with the parameter. Without this,
-            # wrong-shape array bindings (e.g. a Vector for an n×1 parameter) are accepted
-            # and only fail later with an error that does not name the parameter (#5259).
+            # Known sizes must match; later symbolic substitution errors do not name the parameter.
             psh = SU.shape(p)
             vsh = SU.shape(val)
             if !(psh isa SU.Unknown) && !(vsh isa SU.Unknown)
