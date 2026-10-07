@@ -17,11 +17,14 @@ struct CondRewriter
     is `true`). `expression < 0` is evaluated on an up-crossing and `expression <= 0` is
     evaluated on a down-crossing to get the updated value of the condition variable.
     """
-    conditions::Dict{Any, @NamedTuple{dependency, expression}}
+    conditions::OrderedCollections.OrderedDict{Any, @NamedTuple{dependency, expression}}
 end
 
 function CondRewriter(iv)
-    return CondRewriter(iv, Dict())
+    # Insertion-ordered so that the generated condition variables, callbacks and
+    # parameters are emitted in a deterministic (creation) order rather than the
+    # hash-dependent order of a plain `Dict`.
+    return CondRewriter(iv, OrderedCollections.OrderedDict())
 end
 
 """
@@ -43,8 +46,10 @@ function new_cond_sym(cw::CondRewriter, expr, dep)
         cw.conditions[existing_var] = (dependency = (dep | existing_dep), expression = expr)
         return existing_var
     end
-    # generate a new condition variable
-    cvar = gensym("cond")
+    # generate a new condition variable. Use a deterministic, insertion-order-based name
+    # (rather than `gensym`, whose global counter makes the generated variable names — and
+    # thus the simplified system — differ run-to-run).
+    cvar = Symbol(:ifelse_cond_, length(cw.conditions) + 1)
     st = symtype(expr)
     iv = cw.iv
     cv = unwrap(first(@discretes $(cvar)(iv)::st = true)) # TODO: real init
