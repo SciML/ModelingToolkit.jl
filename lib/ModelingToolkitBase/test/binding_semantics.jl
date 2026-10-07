@@ -112,3 +112,24 @@ end
     @parameters p::Int q::String
     @test_throws "only valid for solvable" System(Equation[], t, [], [q]; bindings = [q => missing], name = :a)
 end
+
+@testset "Binding shape must match array parameter (#5259)" begin
+    @parameters B[1:2, 1:1] L = 2.0
+    @variables x(t)[1:2]
+    eqs = [D(x[i]) ~ B[i, 1] - x[i] for i in 1:2]
+    # Vector bound to 2×1 parameter
+    @test_throws ["binding for", "size (2,)", "size (2, 1)"] System(
+        eqs, t, [x], [B, L]; name = :col, bindings = Dict(B => [0.0, 0.5])
+    )
+    # Symbolic vector (column literal without ;;)
+    @test_throws ["binding for", "size (2,)", "size (2, 1)"] System(
+        eqs, t, [x], [B, L]; name = :col, bindings = Dict(B => [0.0; 1 / L])
+    )
+    # Transposed matrix
+    @test_throws ["binding for", "size (1, 2)", "size (2, 1)"] System(
+        eqs, t, [x], [B, L]; name = :col, bindings = Dict(B => [0.0 1 / L])
+    )
+    # Matching 2×1 shape is accepted
+    sys = System(eqs, t, [x], [B, L]; name = :col, bindings = Dict(B => [0.0; 1 / L;;]))
+    @test size(bindings(sys)[B]) == (2, 1)
+end
