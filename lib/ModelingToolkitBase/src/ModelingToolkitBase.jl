@@ -103,6 +103,11 @@ import AbstractTrees
 using AbstractTrees: TreeIterator, print_tree
 using SciMLBase: StandardODEProblem, StandardNonlinearProblem, TimeDomain,
     Clock, SolverStepClock, AbstractNonlinearProblem
+using SciMLLogging: SciMLLogging, @verbosity_specifier, @SciMLMessage,
+    AbstractVerbositySpecifier, AbstractVerbosityPreset, MessageLevel,
+    Silent, InfoLevel, WarnLevel,
+    None, Minimal, Standard, Detailed, All,
+    verbosity_to_bool
 import Moshi
 import RecursiveArrayTools
 using RecursiveArrayTools: ArrayPartition, DiffEqArray
@@ -290,6 +295,7 @@ const COMMON_FALSE = SU.Const{VartypeT}(false)
 const COMMON_INF = SU.Const{VartypeT}(Inf)
 
 include("utils.jl")
+include("verbosity.jl")
 
 include("systems/index_cache.jl")
 include("systems/parameter_buffer.jl")
@@ -434,6 +440,7 @@ export initialization_equations, guesses, bindings, initial_conditions, hierarch
 export set_defaults
 export state_priorities, irreducibles, maybe_zeros
 export mtkcompile, expand_connections, structural_simplify
+export MTKVerbosity
 export solve
 export Pre
 

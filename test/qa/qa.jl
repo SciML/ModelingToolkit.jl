@@ -145,7 +145,7 @@ const REEXPORTED_API = (
     :liouville_transform, :LocalScope,
     :maybe_zeros, :MiscSystemData, :MissingGuessValue, :ModelingToolkitBase,
     :modelingtoolkitize, :modified_unknowns!, :mtkcompile, :MTKParameters,
-    :MTKVariableTypeCtx, :namespace_equations, :noise_to_brownians, :NonlinearSystem,
+    :MTKVariableTypeCtx, :MTKVerbosity, :namespace_equations, :noise_to_brownians, :NonlinearSystem,
     :observables, :observed, :ODESystem, :open_loop, :OptimizationSystem, :outputs,
     :parameters, :parameters_toplevel, :ParentScope, :PDESystem, :Pre, :ProblemTypeCtx,
     :PyomoCollocation, :PyomoDynamicOptProblem, :renamespace, :reorder_dimension_by_tunables,
@@ -271,6 +271,8 @@ const NONPUBLIC_EXPLICIT_IMPORTS = (
     :filter_kwargs, :get_substitutions, :has_equations, :invalidate_cache!,
     :InvalidSystemException, :isdiffeq, :isdifferential, :lower_varname_with_unit, :Schedule,
     :setio, :shift2term, :simplify_shifts, :VariableShift, :VariableUnshifted,
+    :DEFAULT_MTK_VERBOSE, :_override_toggle, :_process_verbose_param,
+    :_route_problem_verbose, :_toggle_enabled,
     # ModelingToolkitTearing
     :DefaultReassembleAlgorithm, :ReassembleAlgorithm, :SystemStructure, :TearingState,
     # Symbolics

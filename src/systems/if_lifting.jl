@@ -4,7 +4,7 @@
 Callable struct used to transform symbolic conditions into conditions involving discrete
 variables.
 """
-struct CondRewriter
+struct CondRewriter{V <: MTKVerbosity}
     """
     The independent variable which the discrete variables depend on.
     """
@@ -18,10 +18,14 @@ struct CondRewriter
     evaluated on a down-crossing to get the updated value of the condition variable.
     """
     conditions::Dict{Any, @NamedTuple{dependency, expression}}
+    """
+    The verbosity specifier controlling diagnostic output.
+    """
+    verbose::V
 end
 
-function CondRewriter(iv)
-    return CondRewriter(iv, Dict())
+function CondRewriter(iv, verbose::MTKVerbosity = DEFAULT_MTK_VERBOSE)
+    return CondRewriter(iv, Dict{Any, @NamedTuple{dependency, expression}}(), verbose)
 end
 
 """
@@ -84,7 +88,9 @@ function (cw::CondRewriter)(expr, dep)
         BSImpl.Const(; val) && if val isa Bool end => return (expr, expr, !expr)
         BSImpl.Const(; val) && if val isa Int end => return (expr, COMMON_TRUE, COMMON_TRUE)
         if !iscall(expr) end => begin
-            @warn "Automatic conversion of if statements to events requires use of a limited conditional grammar; see the documentation. Skipping due to $expr"
+            @SciMLMessage(cw.verbose, :if_lifting_condition_grammar) do
+                "Automatic conversion of if statements to events requires use of a limited conditional grammar; see the documentation. Skipping due to $expr"
+            end
             return (expr, COMMON_TRUE, COMMON_TRUE) # error case => conservative assumption is that both true and false have to be evaluated
         end
         _ => nothing
@@ -557,11 +563,13 @@ Lifting proceeds through the following process:
     This is an experimental simplification pass. It may have bugs. Please open issues with
     MWEs for any bugs encountered while using this.
 """
-function IfLifting(sys::System)
+IfLifting(sys::System) = IfLifting(sys, DEFAULT_MTK_VERBOSE)
+
+function IfLifting(sys::System, verbose::MTKVerbosity)
     if !is_time_dependent(sys)
         throw(ArgumentError("IfLifting is only supported for time-dependent systems."))
     end
-    cw = CondRewriter(get_iv(sys))
+    cw = CondRewriter(get_iv(sys), verbose)
 
     eqs = copy(equations(sys))
     obs = copy(observed(sys))

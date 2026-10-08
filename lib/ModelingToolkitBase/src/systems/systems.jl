@@ -108,6 +108,12 @@ once — calling `mtkcompile` on an already-compiled system throws
   selects a `SciMLBase.HomotopyProblem`, and the initialization and event affect systems
   derived from the compiled system are compiled the same way. Use this for targets that
   cannot lower to a continuation solver. See [`strip_homotopy`](@ref).
+- `verbose = SciMLLogging.Standard()`: Controls diagnostic output during compilation.
+  Accepts an [`MTKVerbosity`](@ref) specifier, a `SciMLLogging` preset (`None()`,
+  `Minimal()`, `Standard()`, `Detailed()`, `All()`), or a `Bool` (`true` is equivalent
+  to `Standard()`, `false` to `None()`). Functions in `additional_passes` may opt in to
+  receiving the verbosity specifier by accepting `(sys, verbose::MTKVerbosity)`;
+  single-argument passes are called as before.
 
 Remaining keyword arguments are forwarded to the internal compilation passes.
 
@@ -136,8 +142,9 @@ function mtkcompile(
         sys::System; additional_passes = (),
         inputs = SymbolicT[], outputs = SymbolicT[],
         disturbance_inputs = SymbolicT[],
-        split = true, homotopy = true, kwargs...
+        split = true, homotopy = true, verbose = Standard(), kwargs...
     )
+    verbose = _process_verbose_param(verbose)
     isscheduled(sys) && throw(RepeatedStructuralSimplificationError())
     if !homotopy
         sys = strip_homotopy(sys)
@@ -153,11 +160,13 @@ function mtkcompile(
     disturbance_inputs = canonicalize_io(unwrap_vars(disturbance_inputs), "disturbance input")
     newsys = _mtkcompile(
         sys;
-        inputs, outputs, disturbance_inputs, additional_passes,
+        inputs, outputs, disturbance_inputs, additional_passes, verbose,
         kwargs...
     )
     for pass in additional_passes
-        newsys = pass(newsys)
+        # A pass may opt in to receiving the verbosity specifier by accepting
+        # `(sys, verbose::MTKVerbosity)`.
+        newsys = applicable(pass, newsys, verbose) ? pass(newsys, verbose) : pass(newsys)
     end
     @set! newsys.parent = toggle_namespacing(sys, false)
     # Record the choice so systems derived from `newsys` (initialization system, event
@@ -165,6 +174,9 @@ function mtkcompile(
     if !homotopy
         newsys = setmetadata(newsys, HomotopyCtx, false)
     end
+    # Diagnostics on the compiled system that have no `verbose` keyword (e.g. `remake`)
+    # read this value.
+    newsys = setmetadata(newsys, MTKVerbosityCtx, verbose)
     # Singular systems may end up with parameter-only equations, which shouldn't error on `complete`
     newsys = complete(newsys; split, allow_parameter_eqs = true)
     return newsys
@@ -194,7 +206,9 @@ function scalarized_vars(vars)
     return scal
 end
 
-function _mtkcompile(sys::AbstractSystem; kwargs...)
+function _mtkcompile(
+        sys::AbstractSystem; verbose::MTKVerbosity = DEFAULT_MTK_VERBOSE, kwargs...
+    )
     # Extract poissonians to jumps first (before checking for existing jumps)
     if !isempty(poissonians(sys))
         sys = extract_poissonians_to_jumps(sys; kwargs...)
@@ -216,12 +230,12 @@ function _mtkcompile(sys::AbstractSystem; kwargs...)
         sys = noise_to_brownians(sys; names = :αₘₜₖ)
     end
     if !has_some_equations(sys) && !is_time_dependent(sys) && !_iszero(cost(sys))
-        return simplify_optimization_system(sys; kwargs...)::System
+        return simplify_optimization_system(sys; verbose, kwargs...)::System
     end
     if !isempty(brownians(sys))
-        return simplify_sde_system(sys; kwargs...)
+        return simplify_sde_system(sys; verbose, kwargs...)
     end
-    return __mtkcompile(sys; kwargs...)
+    return __mtkcompile(sys; verbose, kwargs...)
 end
 
 function __mtkcompile(
@@ -229,7 +243,7 @@ function __mtkcompile(
         inputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
         outputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
         disturbance_inputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
-        fully_determined = true,
+        fully_determined = true, verbose::MTKVerbosity = DEFAULT_MTK_VERBOSE,
         kwargs...
     )
     sys = expand_connections(sys)
@@ -328,7 +342,7 @@ function __mtkcompile(
         sys = remove_unhack_system_transformation(sys)
         tf = add_array_observed!(obseqs, flat_dvs)
         sys = with_reversible_transformation(sys, tf)
-        obseqs = topsort_equations(sys, obseqs, [eq.lhs for eq in obseqs])
+        obseqs = topsort_equations(sys, obseqs, [eq.lhs for eq in obseqs]; verbose)
         new_ps = [get_ps(sys); collect(inputs)]
         @set! sys.eqs = eqs
         @set! sys.unknowns = flat_dvs
@@ -420,7 +434,7 @@ function __mtkcompile(
             end
         end
 
-        _obseqs = topsort_equations(sys, obseqs, collect(all_dvs); check = false)
+        _obseqs = topsort_equations(sys, obseqs, collect(all_dvs); check = false, verbose)
         _algeqs = setdiff!(obseqs, _obseqs)
         for i in eachindex(_algeqs)
             _algeqs[i] = Symbolics.COMMON_ZERO ~ _algeqs[i].rhs - _algeqs[i].lhs
@@ -909,10 +923,12 @@ function extract_poissonians_to_jumps(sys::AbstractSystem; save_positions = (fal
     return sys
 end
 
-function simplify_sde_system(sys::AbstractSystem; kwargs...)
+function simplify_sde_system(
+        sys::AbstractSystem; verbose::MTKVerbosity = DEFAULT_MTK_VERBOSE, kwargs...
+    )
     brown_vars = brownians(sys)
     @set! sys.brownians = SymbolicT[]
-    sys = __mtkcompile(sys; kwargs...)
+    sys = __mtkcompile(sys; verbose, kwargs...)
 
     new_eqs, noise_eqs = _brownians_to_noise_eqs(equations(sys), brown_vars)
 
@@ -930,7 +946,9 @@ function simplify_sde_system(sys::AbstractSystem; kwargs...)
     return sys
 end
 
-function simplify_optimization_system(sys::System; split = true, kwargs...)
+function simplify_optimization_system(
+        sys::System; split = true, verbose::MTKVerbosity = DEFAULT_MTK_VERBOSE, kwargs...
+    )
     sys = flatten(sys)
     cons = constraints(sys)
     econs = Equation[]
@@ -964,7 +982,7 @@ function simplify_optimization_system(sys::System; split = true, kwargs...)
         econs[i] = subst(econs[i])
     end
     nlsys = System(econs, dvs, parameters(sys); name = :___tmp_nlsystem)
-    snlsys = mtkcompile(nlsys; kwargs..., fully_determined = false)::System
+    snlsys = mtkcompile(nlsys; verbose, kwargs..., fully_determined = false)::System
     obs = observed(snlsys)
     seqs = equations(snlsys)
     trueobs = observed(reverse_all_default_reversible_transformations(snlsys))
@@ -1057,6 +1075,9 @@ end
 """
 Toggle to control whether `topsort_equations` prints the equations in the
 cycle, if present.
+
+Deprecated: use the `observed_equation_cycle` toggle of [`MTKVerbosity`](@ref) instead,
+e.g. `mtkcompile(sys; verbose = MTKVerbosity(observed_equation_cycle = InfoLevel))`.
 """
 TOPSORT_EQS_PRINT_CYCLE::Bool = false
 
@@ -1087,7 +1108,10 @@ julia> ModelingToolkit.topsort_equations(sys, eqs, [x, y, z, k])
  Equation(x(t), y(t) + z(t))
 ```
 """
-function topsort_equations(sys::AbstractSystem, eqs::Vector{Equation}, unknowns::Vector{SymbolicT}; check = true)
+function topsort_equations(
+        sys::AbstractSystem, eqs::Vector{Equation}, unknowns::Vector{SymbolicT};
+        check = true, verbose::MTKVerbosity = DEFAULT_MTK_VERBOSE
+    )
     graph, assigns = observed2graph(sys, eqs, unknowns)
     neqs = length(eqs)
     degrees = zeros(Int, neqs)
@@ -1132,8 +1156,13 @@ function topsort_equations(sys::AbstractSystem, eqs::Vector{Equation}, unknowns:
     end
 
     if check && idx != neqs
-        # Build a directed eq→eq subgraph over unsorted equations, find smallest SCC.
         if TOPSORT_EQS_PRINT_CYCLE
+            # Deprecated escape hatch; use the `observed_equation_cycle` toggle of
+            # `MTKVerbosity` instead.
+            verbose = MTKVerbosity(observed_equation_cycle = InfoLevel)
+        end
+        # Build a directed eq→eq subgraph over unsorted equations, find smallest SCC.
+        @SciMLMessage(verbose, :observed_equation_cycle) do
             unsorted = findall(>(0), degrees)
             unsorted_set = Set(unsorted)
             n_unsorted = length(unsorted)
@@ -1152,13 +1181,14 @@ function topsort_equations(sys::AbstractSystem, eqs::Vector{Equation}, unknowns:
             smallest_new = isempty(nontrivial) ? collect(1:n_unsorted) :
                 nontrivial[argmin(length.(nontrivial))]
 
-            println("=== topsort_equations: CYCLE DETECTED ===")
-            println("Smallest cycle ($(length(smallest_new)) equations):")
+            buf = IOBuffer()
+            println(buf, "topsort_equations: cycle detected. Smallest cycle ($(length(smallest_new)) equations):")
             for new_idx in smallest_new
                 old_idx = unsorted[new_idx]
-                println("  LHS = $(unknowns[assigns[old_idx]])")
-                println("  EQ  = $(eqs[old_idx])")
+                println(buf, "  LHS = $(unknowns[assigns[old_idx]])")
+                println(buf, "  EQ  = $(eqs[old_idx])")
             end
+            String(take!(buf))
         end
         throw(ArgumentError("The equations have at least one cycle."))
     end
@@ -1167,7 +1197,10 @@ function topsort_equations(sys::AbstractSystem, eqs::Vector{Equation}, unknowns:
 end
 
 # Deprecation path
-function topsort_equations(eqs::Vector{Equation}, unknowns::Vector{SymbolicT}; check = true)
+function topsort_equations(
+        eqs::Vector{Equation}, unknowns::Vector{SymbolicT};
+        check = true, verbose::MTKVerbosity = DEFAULT_MTK_VERBOSE
+    )
     @named misc = System(eqs, unknowns, [])
-    return topsort_equations(misc, eqs, unknowns; check)
+    return topsort_equations(misc, eqs, unknowns; check, verbose)
 end
