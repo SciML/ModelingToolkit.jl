@@ -4,6 +4,7 @@ using ModelingToolkitBase: topsort_equations, t_nounits as t, D_nounits as D, un
 using SciMLLogging: SciMLLogging, Silent, InfoLevel, WarnLevel,
     None, Minimal, Standard, Detailed, All
 using SymbolicIndexingInterface: remake_buffer
+using SciMLBase: BVProblem
 
 @testset "MTKVerbosity construction" begin
     @test MTKVerbosity() isa MTKVerbosity{true}
@@ -295,4 +296,32 @@ end
             @test_logs min_level = Logging.Warn remake_buffer(csys, prob.p, [q], [2.0])
         end
     end
+end
+
+@testset "overdetermined_constraints toggle" begin
+    @variables x(..)
+    @parameters k = 1.0
+    @mtkcompile sys = System([D(x(t)) ~ -k * x(t)], t; constraints = [x(0.5) ~ 0.5])
+    # 1 constraint + 1 fixed initial value > 1 unknown
+    op = [x(t) => 1.0]
+    @test_logs (:warn, r"BVProblem is overdetermined") match_mode = :any BVProblem(
+        sys, op, (0.0, 1.0)
+    )
+    @test_logs min_level = Logging.Warn BVProblem(
+        sys, op, (0.0, 1.0); verbose = MTKVerbosity(overdetermined_constraints = Silent)
+    )
+end
+
+@testset "dynamic_opt_time_grid toggle" begin
+    process_tspan = ModelingToolkitBase.process_tspan
+    quiet = MTKVerbosity(dynamic_opt_time_grid = Silent)
+    # fixed time span: `steps` is ignored
+    @test_logs (:warn, r"number of steps") match_mode = :any process_tspan(
+        (0.0, 1.0), 0.1, 10
+    )
+    @test_logs min_level = Logging.Warn process_tspan((0.0, 1.0), 0.1, 10, quiet)
+    # free final time: `dt` is ignored
+    @parameters tf
+    @test_logs (:warn, r"Specified dt") match_mode = :any process_tspan((0.0, tf), 0.1, 10)
+    @test_logs min_level = Logging.Warn process_tspan((0.0, tf), 0.1, 10, quiet)
 end
