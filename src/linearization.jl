@@ -168,6 +168,7 @@ The `simplified_sys` has undergone [`ModelingToolkitBase.mtkcompile`](@ref) and 
   - `initialize`: If true, a check is performed to ensure that the operating point is consistent (satisfies algebraic equations). If the op is not consistent, initialization is performed.
   - `initialization_solver_alg`: A NonlinearSolve algorithm to use for solving for a feasible set of state and algebraic variables that satisfies the specified operating point.
   - `autodiff`: An `ADType` supported by DifferentiationInterface.jl to use for calculating the necessary jacobians. Defaults to using `AutoForwardDiff()`
+  - `op`: The operating point, a dictionary or a [`LinearizationOpPoint`](@ref). A `LinearizationOpPoint` determines the operating point and `t` from its solution at its first time point, and implies `ignore_system_initial_conditions = true`, as in [`linearize`](@ref). This allows passing a `LinearizationOpPoint` to the functions that build on `linearization_function`, such as [`get_sensitivity`](@ref).
   - `ignore_system_initial_conditions`: Whether to ignore `initial_conditions(sys)` and only use `op`.
   - `kwargs`: Are passed on to `find_solvables!`
 
@@ -195,6 +196,12 @@ function linearization_function(
         loop_opening_params = SymbolicT[],
         kwargs...
     )
+    if op isa LinearizationOpPoint
+        # As in `linearize`, the function is built at the first time point of `op`
+        t = first(op.t)
+        op = _build_op_from_solution(LinearizationOpPoint(op.sol, t, op.op))
+        ignore_system_initial_conditions = true
+    end
     op = Dict(op)
     if isempty(op) && warn_empty_op
         @warn "An empty operating point was passed to `linearization_function`. An operating point containing the variables that will be changed in `linearize` should be provided. Disable this warning by passing `warn_empty_op = false`."
