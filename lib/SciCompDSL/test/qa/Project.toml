@@ -1,0 +1,15 @@
+[deps]
+Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
+DynamicQuantities = "06fc5a27-2a28-4c7c-a15d-362465fb6821"
+SciCompDSL = "91a8cdf1-4ca6-467b-a780-87fda3fff15e"
+SciMLTesting = "09d9d899-5365-40a9-917a-5f67fddea283"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[sources]
+SciCompDSL = {path = "/home/crackauc/sandbox/goals/qa-hygiene/jobs/scd-qa/repo/lib/SciCompDSL"}
+
+[compat]
+Aqua = "0.8"
+DynamicQuantities = "1"
+SciMLTesting = "2.10"
+Test = "1"
