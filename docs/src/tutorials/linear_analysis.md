@@ -154,14 +154,22 @@ nyquistplot(P)
 
 ## Operating Point of Unconnected Inputs After Loop Openings
 When a connection is broken via `loop_openings`, the downstream input variable(s) that were previously driven by the connection become free. The value assigned to these inputs determines the operating point at which the linearization is computed, which is significant for nonlinear systems where the Jacobian depends on the operating point.
-Semantics: The variable introduced by a loop opening is treated as a parameter of the system, not as an additional input to the linearization. It does not appear as an extra column in the $B$ or $D$ matrices of the linearized state-space model. No default value is automatically propagated from the output side of the broken connection — the user is expected to provide the value explicitly via the operating point (e.g., `op = [u => value`]).
-For initialization, variables that become free due to loop openings are treated as solvable parameters: the initialization system always considers them as unknowns. If the user provides a value in the operating point, that value is used. If no value is provided, the initialization system will attempt to determine a consistent value, but the system may be underdetermined and a warning will be issued.
+Semantics: The variable introduced by a loop opening is treated as a parameter of the system, not as an additional input to the linearization. It does not appear as an extra column in the $B$ or $D$ matrices of the linearized state-space model. No value is automatically propagated from the output side of the broken connection. The value of the opened variable is instead determined by
+
+- its entry in the operating point, e.g., `op = Dict(u => value)`, or, if the operating point has no entry for it,
+- the initial condition of the variable in the system, e.g., `@variables u(t) = value`.
+
+If neither provides a value, `linearize` throws an error. A guess value of the variable does not provide one. The following entries in the operating point determine the value in other ways:
+
+- The value `missing` makes the initialization solve for the opened variable. This requires additional conditions in the operating point that determine it, for example a steady-state condition `D(x) => 0` for a differential state variable `x`.
+- When linearizing around a solution with [`LinearizationOpPoint`](@ref), the initial conditions of the system are ignored, and a symbolic value is evaluated from the solution. `LinearizationOpPoint(sol, t; op = Dict(u => u))` linearizes around the value that the opened variable has in the loop-closed solution `sol`.
+
 Motivation: This design reflects a series of tradeoffs discovered through iteration:
 
 - Defaulting free inputs to zero (the original behavior) is incorrect for nonlinear systems because it changes the linearization point relative to the equilibrium, potentially yielding meaningless results.
 - Automatically propagating the output value of the broken connection preserves the correct operating point in some cases, makes it impossible to disconnect input sources (e.g., a Step signal). It also silently determines the operating point in a way that is difficult for the user to inspect or override.
 - Making the variable a parameter (rather than a linearization input) prevents it from appearing as an extra input dimension in the linearized system. The user requested a linearization from specific inputs to specific outputs; the broken connection's input is not one of them.
-- Requiring the user to explicitly provide the operating point for broken connections makes the linearization well-defined and inspectable. If the user wants the value that would have been present with the loop closed, they can determine this from a simulation or an initialization solution and pass it explicitly.
+- Requiring the user to provide the operating point for broken connections, in the operating point or as initial conditions of the opened variables, makes the linearization well-defined and inspectable. If the user wants the value that would have been present with the loop closed, they can linearize around a simulation with `LinearizationOpPoint`, or determine the value from a simulation or an initialization solution and pass it explicitly.
 
 ## Index
 
