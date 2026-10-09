@@ -36,7 +36,9 @@ end
         end
     end
 
-    if GROUP == "All" || GROUP == "QA"
+    # QA is never part of All: DowngradeSublibraries runs with the default GROUP
+    # (All) and must not pull in Aqua/ExplicitImports.
+    if GROUP == "QA"
         activate_qa_env()
         @safetestset "Aqua Tests" include("qa/aqua.jl")
     end

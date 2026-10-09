@@ -18,19 +18,17 @@ const INTENTIONAL_EXTERNAL_GENERIC_EXTENSIONS = (
     ModelingToolkitBase.__mtkmodel_connector,
 )
 
-# Extension / parent seams that have no public spelling yet. Declaring them
-# public would advertise internal extension contracts; ignore until the owners
-# promote them.
+# Names with no public spelling at their owner; declaring them public would
+# advertise internal extension / parent seams.
 #
-#   SciCompDSL. Extension methods for DynamicQuantities unit conversion and the
-#   unit-aware variable constructor. These are the package's own extension hooks,
-#   not end-user API.
+#   SciCompDSL. Extension hooks for DynamicQuantities unit conversion and the
+#   unit-aware variable constructor — package-internal, not end-user API.
 #
 #   DynamicQuantities.SymbolicUnits. `as_quantity` is the conversion entry point
 #   the extension needs; DynamicQuantities does not declare it public.
 #
 #   ModelingToolkitBase. `__mtkmodel_connector` is the `@connector` hook this
-#   package implements; it is intentionally internal to the MTKBase/SciCompDSL pair.
+#   package implements; internal to the MTKBase/SciCompDSL pair.
 #
 #   Base / Core. `@nospecializeinfer` and `eval` have no public spelling.
 const NONPUBLIC_EXPLICIT_IMPORTS = (
@@ -49,8 +47,8 @@ const NONPUBLIC_QUALIFIED_ACCESSES = (
     Symbol("@nospecializeinfer"), :eval,
 )
 
-# `@mtkmodel` is the deprecated DSL surface left alone in this PR; it is covered
-# narratively in docs/src/basics/MTKLanguage.md rather than a `@docs` block.
+# `@mtkmodel` is documented narratively in docs/src/basics/MTKLanguage.md rather
+# than via a `@docs` block.
 const API_DOCS_IGNORE = (
     Symbol("@mtkmodel"),
 )
