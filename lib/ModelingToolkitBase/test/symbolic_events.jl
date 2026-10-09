@@ -2204,3 +2204,12 @@ end
         @test sol.ps[d] == ref.ps[d]
     end
 end
+
+@testset "Discretes updated alongside unknowns read the pre-event state" begin
+    @variables x(t)
+    @discretes q(t) = 0.0
+    cb = SymbolicDiscreteCallback([1.0] => [x ~ -Pre(x), q ~ x]; discrete_parameters = [q])
+    @mtkcompile sys = System([D(x) ~ -1.0], t, [x], [q]; discrete_events = [cb])
+    sol = solve(ODEProblem(sys, [x => 0.5], (0.0, 2.0)), Tsit5(); abstol = 1.0e-10, reltol = 1.0e-10)
+    @test sol(1.5; idxs = q) ≈ 0.5
+end
