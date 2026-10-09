@@ -1154,7 +1154,7 @@ function linearize(
     prob = LinearizationProblem(lin_fun, t)
     op = as_atomic_dict_with_defaults(Dict{SymbolicT, SymbolicT}(op), COMMON_NOTHING)
     evaluate_varmap!(op, keys(op))
-    _check_loop_opening_op(lin_fun.loop_opening_params, op)
+    _check_loop_opening_op(lin_fun.loop_opening_params, op, initial_conditions(sys))
     for (k, v) in op
         isequal(v, COMMON_NOTHING) && continue
         v === COMMON_MISSING && continue
@@ -1189,14 +1189,16 @@ function _resolve_op_value(prob, v)
 end
 
 # Variables turned into parameters by `loop_openings` have no operating-point value implied
-# by the rest of the system, so they must be supplied explicitly in `op`. Error (rather than
-# silently using a stale/default value) if any of them is missing.
-function _check_loop_opening_op(loop_opening_params, op)
+# by the rest of the system. Their value is taken from `op` or, if `op` has no entry, from
+# the initial condition of the opened variable in the system, `ics`. Error (rather than
+# silently using an arbitrary value) if neither provides one.
+function _check_loop_opening_op(loop_opening_params, op, ics = Dict{SymbolicT, SymbolicT}())
     isempty(loop_opening_params) && return nothing
     missing_params = SymbolicT[]
     for p in loop_opening_params
-        v = get(op, p, COMMON_NOTHING)
-        isequal(v, COMMON_NOTHING) && push!(missing_params, p)
+        isequal(get(op, p, COMMON_NOTHING), COMMON_NOTHING) || continue
+        isequal(get(ics, p, COMMON_NOTHING), COMMON_NOTHING) || continue
+        push!(missing_params, p)
     end
     isempty(missing_params) && return nothing
     params_str = join(string.(missing_params), ", ")
@@ -1205,12 +1207,15 @@ function _check_loop_opening_op(loop_opening_params, op)
         The operating point does not provide values for the loop-opening parameter(s): \
         $(params_str). When `loop_openings` is used, the opened signals become \
         parameters whose operating-point values are not implied by the rest of the \
-        system, so they must be provided explicitly in `op` (e.g. set to zero). When \
-        linearizing along a trajectory with `LinearizationOpPoint`, pass them via its \
-        `op` keyword argument: `LinearizationOpPoint(sol, t; op = Dict(signal => value))`, \
-        where the value may also be a symbolic expression evaluated from the solution at \
-        each time point, e.g. `Dict(opened_signal => driving_signal)` to linearize around \
-        the value the opened signal has in the loop-closed solution.
+        system, so they must be provided explicitly in `op` (e.g. set to zero), or as \
+        initial conditions of the opened variables in the system. A value of `missing` \
+        makes the initialization solve for the opened signal, which requires additional \
+        conditions that determine it. When linearizing along a trajectory with \
+        `LinearizationOpPoint`, pass them via its `op` keyword argument: \
+        `LinearizationOpPoint(sol, t; op = Dict(signal => value))`, where the value may \
+        also be a symbolic expression evaluated from the solution at each time point, e.g. \
+        `Dict(opened_signal => driving_signal)` to linearize around the value the opened \
+        signal has in the loop-closed solution.
         """
     )
 end
@@ -1230,7 +1235,7 @@ function __linearize_multiple_op_barrier(ssys, lin_fun; ops, ts, allow_input_der
     op1 = as_atomic_dict_with_defaults(Dict{SymbolicT, SymbolicT}(ops[1]), COMMON_NOTHING)
     evaluate_varmap!(op1, keys(op1))
     # The op keys are identical across time points, so checking the first one suffices.
-    _check_loop_opening_op(lin_fun.loop_opening_params, op1)
+    _check_loop_opening_op(lin_fun.loop_opening_params, op1, initial_conditions(ssys))
     op_keys = collect(keys(op1))
     setters = map(op_keys) do k
         is_parameter(prob, Initial(k)) ? setu(prob, Initial(k)) : setu(prob, k)
