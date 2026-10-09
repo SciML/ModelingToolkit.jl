@@ -162,7 +162,8 @@ perturbation to the output of `ap`.
 
 - `loop_openings`: connections to open before linearization.
 - `system_modifier`: transformation applied before linearization.
-- `op`: operating-point values passed to [`linearize`](@ref).
+- `op`: operating-point values passed to [`linearize`](@ref), a dictionary or a
+  [`LinearizationOpPoint`](@ref).
 - `allow_input_derivatives`: allow derivatives of input variables in the linearization.
 - `t`: time at which to evaluate the linearization.
 - `kwargs...`: forwarded to [`get_sensitivity_function`](@ref).
