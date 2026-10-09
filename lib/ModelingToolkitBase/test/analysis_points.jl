@@ -307,6 +307,65 @@ if @isdefined(ModelingToolkit)
         @test length(mats_lo) == length(ts)
     end
 
+    @testset "Initial conditions of loop-opening variables" begin
+        # The controller state equation is nonlinear in the controller input, so the
+        # entry A = -(1 + u^2) of the controller state reveals the value of the opened input.
+        @component function ICPlant(; name)
+            @variables begin
+                u(t), [input = true]
+                x(t) = 1.0
+                y(t), [output = true]
+            end
+            System([D(x) ~ -x^3 + u, y ~ x], t; name)
+        end
+        @component function ICCtrl(; name, k = -2.0, with_ic = true)
+            u = with_ic ? only(@variables u(t) = 0.5 [input = true]) :
+                only(@variables u(t) [input = true])
+            @variables begin
+                x(t) = 0.0
+                y(t), [output = true]
+            end
+            @parameters k = k
+            System([D(x) ~ -(1 + u^2) * x + k * u, y ~ x], t; name)
+        end
+        function ic_loop(; with_ic)
+            @named icP = ICPlant()
+            @named icC = ICCtrl(; with_ic)
+            eqs = [connect(icP.y, :plant_output, icC.u), connect(icC.y, :ctrl_output, icP.u)]
+            return System(eqs, t; systems = [icP, icC], name = :icsys)
+        end
+        icx(ssys) = findfirst(v -> occursin("icC₊x", string(v)), unknowns(ssys))
+
+        # The initial condition of the opened variable provides its operating-point value
+        icsys = ic_loop(; with_ic = true)
+        mats, ssys, _ = linearize(
+            icsys, :ctrl_output, :plant_output; loop_openings = [:plant_output]
+        )
+        @test mats.A[icx(ssys), icx(ssys)] ≈ -(1 + 0.5^2)
+
+        # An entry in the operating point takes precedence over the initial condition
+        csys = complete(icsys)
+        mats, ssys, _ = linearize(
+            icsys, :ctrl_output, :plant_output; loop_openings = [:plant_output],
+            op = Dict(csys.icC.u => 1.0)
+        )
+        @test mats.A[icx(ssys), icx(ssys)] ≈ -2.0
+
+        # `missing` makes the initialization solve for the opened variable, here from the
+        # steady-state condition of the controller state, k * u = 0 at x = 0
+        mats, ssys, _ = linearize(
+            icsys, :ctrl_output, :plant_output; loop_openings = [:plant_output],
+            op = Dict(csys.icC.u => missing, D(csys.icC.x) => 0.0)
+        )
+        @test mats.A[icx(ssys), icx(ssys)] ≈ -1.0 atol = 1.0e-8
+
+        # Without an initial condition, a value must be provided in the operating point
+        @test_throws ErrorException linearize(
+            ic_loop(; with_ic = false), :ctrl_output, :plant_output;
+            loop_openings = [:plant_output]
+        )
+    end
+
     @testset "Symbolic loop-opening op values resolve from the solution" begin
         # A symbolic operating-point value (`opened_signal => driving_signal`) is
         # evaluated from the solution at each time point, so the opened signal is
