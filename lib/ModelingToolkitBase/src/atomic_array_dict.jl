@@ -74,10 +74,13 @@ parameter buffer.
 """
 function record_key_root(k::SymbolicT)::Tuple{SymbolicT, Bool}
     x = k
-    while iscall(x)
-        f = operation(x)
-        f isa Symbolics.SymbolicGetproperty || f === getindex || break
-        x = arguments(x)[1]::SymbolicT
+    while true
+        @match x begin
+            BSImpl.Term(; f, args) && if f isa Symbolics.SymbolicGetProperty || f === getindex end => begin
+                x = args[1]
+            end
+            _ => break
+        end
     end
     return x, Symbolics.issymstruct(x)
 end
