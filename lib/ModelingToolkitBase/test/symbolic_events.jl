@@ -624,11 +624,11 @@ end
 @testset "JumpSystem Discrete Callbacks" begin
     function testsol(
             jsys, u0, p, tspan; tstops = Float64[], paramtotest = nothing,
-            N = 40000, kwargs...
+            N = 40000, rng, kwargs...
         )
         jsys = complete(jsys)
         jprob = JumpProblem(jsys, [u0; p], tspan; aggregator = Direct(), kwargs...)
-        sol = solve(jprob, SSAStepper(); tstops = tstops)
+        sol = solve(jprob, SSAStepper(); tstops = tstops, rng)
         @test SciMLBase.successful_retcode(sol)
         @test (sol(1.000000000001)[1] - sol(0.99999999999)[1]) == 1
         paramtotest === nothing || (@test sol.ps[paramtotest] == [0.0, 1.0])

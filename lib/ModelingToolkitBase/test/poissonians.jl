@@ -694,7 +694,7 @@ end
         # SSAStepper accepts seed kwarg for reproducibility (not save_everystep!)
         jprob = JumpProblem(
             compiled_sys, [N => 0.0, λ => λ_val], (0.0, T);
-            aggregator = Direct(), save_positions = (false, false), rng
+            aggregator = Direct(), save_positions = (false, false)
         )
 
         seed = 1111
@@ -742,7 +742,7 @@ end
         # VariableRateJumps require ODE solver
         jprob_sym = JumpProblem(
             compiled_sys, [X => X0, b => b_val, d => d_val], (0.0, T);
-            save_positions = (false, false), rng
+            save_positions = (false, false)
         )
 
         seed = 2222
@@ -792,7 +792,7 @@ end
         jprob_sym = JumpProblem(
             compiled_sys,
             [S => S0, I => I0, R => R0, β => β_val, γ => γ_val], (0.0, T);
-            save_positions = (false, false), rng
+            save_positions = (false, false)
         )
 
         seed = 3333
@@ -821,8 +821,7 @@ end
         end
         j2 = VariableRateJump(r2, a2!)
         jprob_direct = JumpProblem(
-            oprob_direct, Direct(), j1, j2;
-            rng, save_positions = (false, false)
+            oprob_direct, Direct(), j1, j2; save_positions = (false, false)
         )
 
         seed = 3333
@@ -868,7 +867,7 @@ end
         jprob_sym = JumpProblem(
             compiled_sys,
             [X => 0.0, σ => σ_val, λ => λ_val, δ => δ_val], (0.0, T);
-            save_positions = (false, false), rng
+            save_positions = (false, false)
         )
 
         seed = 4444
@@ -915,7 +914,7 @@ end
         # Has ODE part, so needs ODE solver
         jprob = JumpProblem(
             compiled_sys, [X => X0, a => a_val, λ => λ_val], (0.0, T);
-            save_positions = (false, false), rng
+            save_positions = (false, false)
         )
 
         seed = 5555
@@ -963,7 +962,7 @@ end
         # Pure jump system with CRJ → can use SSAStepper
         jprob = JumpProblem(
             compiled_sys, [X => X0, λ => λ_val, δ => δ_val], (0.0, T);
-            aggregator = Direct(), save_positions = (false, false), rng
+            aggregator = Direct(), save_positions = (false, false)
         )
 
         seed = 6666
@@ -1001,7 +1000,7 @@ end
         # Symbolic version
         jprob_sym = JumpProblem(
             compiled_sys, [X => X0, λ => λ_val, δ => δ_val], (0.0, T);
-            aggregator = Direct(), save_positions = (false, false), rng
+            aggregator = Direct(), save_positions = (false, false)
         )
 
         seed = 7777
@@ -1020,7 +1019,7 @@ end
             integ.u[1] -= integ.p[2] * integ.u[1]  # X -= δ*X
         end
         crj_direct = ConstantRateJump(rate_direct, affect_direct!)
-        jprob_direct = JumpProblem(dprob, Direct(), crj_direct; rng)
+        jprob_direct = JumpProblem(dprob, Direct(), crj_direct)
 
         seed = 7777
         Xfinal_direct = zeros(Nsims)
