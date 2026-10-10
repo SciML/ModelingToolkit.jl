@@ -877,6 +877,25 @@ end
 """
     $(TYPEDSIGNATURES)
 
+Push the connection equation `lhs ~ rhs` onto `eqs`, expanding it into one equation per
+leaf if the connected variable is a symbolic struct. A record has no arithmetic, so the
+whole-record equation would fail to canonicalize into residual form downstream. This is
+the same reason the `Flow` branch below emits scalar equations rather than array ones.
+"""
+function push_connection_equation!(eqs::Vector{Equation}, lhs::SymbolicT, rhs::SymbolicT)
+    if Symbolics.issymstruct(lhs)
+        for leaf in record_leaves(lhs)
+            push!(eqs, leaf ~ record_leaf_entry(leaf, lhs, rhs))
+        end
+    else
+        push!(eqs, lhs ~ rhs)
+    end
+    return eqs
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
 Generate connection equations for the connection sets given by `csets`. This does not
 handle stream connections. Return the generated equations and the stream connection sets.
 """
@@ -928,7 +947,8 @@ function generate_connection_equations_and_stream_connections(
             root_var = variable_from_vertex(sys, root_vert)::SymbolicT
             for cvert in cset
                 isequal(cvert, root_vert) && continue
-                push!(eqs, variable_from_vertex(sys, cvert)::SymbolicT ~ root_var)
+                push_connection_equation!(
+                    eqs, variable_from_vertex(sys, cvert)::SymbolicT, root_var)
             end
         elseif vtype === Stream
             push!(stream_connections, cset)
@@ -965,13 +985,13 @@ function generate_connection_equations_and_stream_connections(
                 root_var = vars[root_vert_i]
                 for (i, var) in enumerate(vars)
                     i == root_vert_i && continue
-                    push!(eqs, var ~ root_var)
+                    push_connection_equation!(eqs, var, root_var)
                 end
             else
                 base = vars[1]
                 for i in 2:length(cset)
                     v = vars[i]
-                    push!(eqs, base ~ v)
+                    push_connection_equation!(eqs, base, v)
                 end
             end
         end

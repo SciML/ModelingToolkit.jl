@@ -2809,6 +2809,56 @@ function _unwrap_nospecialize(arg)
     return arg
 end
 
+struct RecordFieldKeyError <: Exception
+    key::SymbolicT
+    root::SymbolicT
+end
+
+function Base.showerror(io::IO, err::RecordFieldKeyError)
+    T = SU.symtype(err.root)
+    fields = join(string.(fieldnames(T)), ", ")
+    println(io, "`", err.key, "` is not a valid key in a map of values: a record is ",
+        "given its value as a whole.")
+    println(io)
+    println(io, "Give `", err.root, "` the record it should hold, destructuring the ",
+        "fields you want to control into symbolics of their own:")
+    println(io)
+    println(io, "    @parameters ", join(string.(fieldnames(T)), " "))
+    println(io, "    ... ", err.root, " => ", nameof(T), "(", fields, ")")
+    println(io)
+    return print(io, "Each field is then a symbolic in its own right, which may carry a ",
+        "default, be overridden, or be left for initialization to solve for. Fields are ",
+        "still read individually - `sol[", err.key, "]` is unaffected, as is writing ",
+        "equations in terms of fields.")
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Check that `op` gives records their values whole, and throw otherwise.
+
+A record is written as one entry and read per field. Equations, initialization equations
+and indexing all address a field directly, and must - the dynamics are per component. It
+is only in a map of values that a field is not addressable, because a partially written
+record says nothing the whole-record spelling cannot say more clearly.
+
+Called from the public problem constructors, where `op` is still exactly what the caller
+passed. The maps built further in are keyed on the system's own variables, which after
+compilation *are* field accesses, so this must not be applied to them.
+"""
+function validate_whole_record_keys(@nospecialize(op))
+    op isa AbstractDict || op isa AbstractArray || return nothing
+    for kv in op
+        kv isa Pair || continue
+        k = unwrap(first(kv))
+        k isa SymbolicT || continue
+        root, isrec = record_key_root(k)
+        isrec && !isequal(root, k) || continue
+        throw(RecordFieldKeyError(k, root))
+    end
+    return nothing
+end
+
 macro fallback_iip_specialize(ex)
     @assert Meta.isexpr(ex, :function)
     # fnname is ODEProblem{iip, spec}(args...) where {iip, spec}
@@ -2894,6 +2944,17 @@ macro fallback_iip_specialize(ex)
     # The StaticArray-specific fallback is no longer needed: `Both` defers the
     # iip decision to the body of the fully-parameterized method.
     fn_sarr = nothing
+
+    # The generated forwarders are the public entry points, and see `op` exactly as the
+    # caller wrote it - the maps assembled further in are keyed on the system's own
+    # variables and must not be checked. Adding it here rather than at each constructor
+    # means a new problem type is covered by being written like the others.
+    if any(a -> (Meta.isexpr(a, :(::)) ? a.args[1] : a) === :op, sig_args)
+        check = :($(validate_whole_record_keys)(op))
+        fn_base = Expr(:function, fncall_base, Expr(:block, check, callexpr_base))
+        fn_iip = Expr(:function, fnwhere_iip, Expr(:block, check, callexpr_iip))
+    end
+
     return quote
         $fn_base
         $fn_sarr
