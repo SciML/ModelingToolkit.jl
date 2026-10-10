@@ -56,12 +56,14 @@ end
 @testset "flat record integrates" begin
     @variables s(t)::Pair2
     # s.x' = -s.x, s.y' = s.x  =>  s.x = e^-t, s.y = 1 - e^-t
-    sys = mtkcompile(System([D(s.x) ~ -s.x, D(s.y) ~ s.x], t, [s], []; name = :flat))
+    @parameters sx0 = 1.0 sy0 = 0.0
+    sys = mtkcompile(System([D(s.x) ~ -s.x, D(s.y) ~ s.x], t, [s], [sx0, sy0]; name = :flat))
 
     # The record is one unknown before compilation; its leaves are the states after.
     @test issetequal(unknowns(sys), Symbolics.unwrap.([s.x, s.y]))
 
-    prob = ODEProblem(sys, [s.x => 1.0, s.y => 0.0], (0.0, 1.0))
+    # A record is given its value whole, with the fields destructured into parameters.
+    prob = ODEProblem(sys, [s => Pair2(sx0, sy0)], (0.0, 1.0))
     # No algebraic equations, so this must stay a plain ODE.
     @test prob.f.mass_matrix === I
 
@@ -79,11 +81,12 @@ end
     eqs = [D(n.x) ~ n.x + t
            D(n.f.x) ~ n.x + n.f.x + 1
            D(n.f.y) ~ n.f.y]
-    sys = mtkcompile(System(eqs, t, [n], []; name = :nested))
+    @parameters nx0 = 1.0 nfx0 = 2.0 nfy0 = 3.0
+    sys = mtkcompile(System(eqs, t, [n], [nx0, nfx0, nfy0]; name = :nested))
 
     @test issetequal(unknowns(sys), Symbolics.unwrap.([n.x, n.f.x, n.f.y]))
 
-    prob = ODEProblem(sys, [n.x => 1.0, n.f.x => 2.0, n.f.y => 3.0], (0.0, 1.0))
+    prob = ODEProblem(sys, [n => Nested(nx0, Pair2(nfx0, nfy0))], (0.0, 1.0))
     sol = solve(prob, Tsit5())
     @test SciMLBase.successful_retcode(sol)
     @test sol[n.x][end]≈2exp(1) - 2 rtol=1e-5
@@ -111,16 +114,20 @@ end
     @test whole.u0[idx(n.f.x)] == 2
     @test whole.u0[idx(n.f.y)] == 3
 
-    # Leaf-wise entries are equivalent.
-    leafwise = ODEProblem(
+    # A record is written whole, so a field is not a key a value map accepts - neither on
+    # its own nor alongside the record it belongs to.
+    @test_throws ModelingToolkitBase.RecordFieldKeyError ODEProblem(
         sys, [n.x => 1.0, n.f.x => 2.0, n.f.y => 3.0], (0.0, 1.0))
-    @test leafwise.u0 == whole.u0
-
-    # An explicit leaf entry overrides the record it came from.
-    override = ODEProblem(
+    @test_throws ModelingToolkitBase.RecordFieldKeyError ODEProblem(
         sys, [n => Nested(1, Pair2(2, 3)), n.f.y => 99.0], (0.0, 1.0))
-    @test override.u0[idx(n.f.y)] == 99
-    @test override.u0[idx(n.x)] == 1
+
+    # Controlling one field is done by destructuring it, not by addressing it.
+    @parameters nx1 = 1.0 nfx1 = 2.0 fy0 = 99.0
+    sys2 = mtkcompile(System(eqs, t, [n], [nx1, nfx1, fy0]; name = :nested2))
+    override = ODEProblem(sys2, [n => Nested(nx1, Pair2(nfx1, fy0))], (0.0, 1.0))
+    idx2 = v -> only(ModelingToolkitBase.variable_index.((sys2,), [v]))
+    @test override.u0[idx2(n.f.y)] == 99
+    @test override.u0[idx2(n.x)] == 1
 end
 
 @testset "initial conditions for a numeric-array field" begin
@@ -134,23 +141,27 @@ end
 
     @test issetequal(unknowns(sys), Symbolics.unwrap.([av.v[1], av.v[2], av.w]))
 
-    # Every way of naming the same initial condition agrees: whole record, whole field,
-    # and individual elements.
+    # The record is given its value whole, array field and all.
     whole = ODEProblem(sys, [av => ArrField([1.0, 2.0], 3.0)], (0.0, 1.0))
-    fieldwise = ODEProblem(sys, [av.v => [1.0, 2.0], av.w => 3.0], (0.0, 1.0))
-    elementwise = ODEProblem(
-        sys, [av.v[1] => 1.0, av.v[2] => 2.0, av.w => 3.0], (0.0, 1.0))
-    @test whole.u0 == fieldwise.u0 == elementwise.u0
     @test whole.u0[idx(av.v[1])] == 1.0
     @test whole.u0[idx(av.v[2])] == 2.0
     @test whole.u0[idx(av.w)] == 3.0
 
-    # Precedence is by specificity, not by the order entries happen to be iterated in:
-    # an element beats the field it belongs to, which beats the whole record.
-    override = ODEProblem(
+    # A field is not a key, whether it names the array or one of its elements.
+    @test_throws ModelingToolkitBase.RecordFieldKeyError ODEProblem(
+        sys, [av.v => [1.0, 2.0], av.w => 3.0], (0.0, 1.0))
+    @test_throws ModelingToolkitBase.RecordFieldKeyError ODEProblem(
+        sys, [av.v[1] => 1.0, av.v[2] => 2.0, av.w => 3.0], (0.0, 1.0))
+    @test_throws ModelingToolkitBase.RecordFieldKeyError ODEProblem(
         sys, [av => ArrField([1.0, 2.0], 3.0), av.v[2] => 99.0], (0.0, 1.0))
-    @test override.u0[idx(av.v[1])] == 1.0
-    @test override.u0[idx(av.v[2])] == 99.0
+
+    # Controlling one element means destructuring it, as for any other field.
+    @parameters e2 = 99.0
+    sys2 = mtkcompile(System(eqs, t, [av], [e2]; name = :arrfield2))
+    idx2 = Base.Fix1(variable_index, sys2)
+    override = ODEProblem(sys2, [av => ArrField([1.0, e2], 3.0)], (0.0, 1.0))
+    @test override.u0[idx2(av.v[1])] == 1.0
+    @test override.u0[idx2(av.v[2])] == 99.0
     @test override.u0[idx(av.w)] == 3.0
 
     sol = solve(whole, Tsit5())
@@ -178,8 +189,12 @@ end
 
 @testset "symbolic indexing" begin
     @variables n(t)::Nested
-    sys = mtkcompile(System([D(n.x) ~ -n.x, D(n.f.x) ~ n.x, D(n.f.y) ~ n.f.y], t, [n], []; name = :sii))
-    prob = ODEProblem(sys, [n.x => 1.0, n.f.x => 2.0, n.f.y => 3.0], (0.0, 1.0))
+    @parameters ix = 1.0 ifx = 2.0 ify = 3.0
+    sys = mtkcompile(System(
+        [D(n.x) ~ -n.x, D(n.f.x) ~ n.x, D(n.f.y) ~ n.f.y], t, [n], [ix, ifx, ify];
+        name = :sii))
+    # Written whole; fields are still what you index by.
+    prob = ODEProblem(sys, [n => Nested(ix, Pair2(ifx, ify))], (0.0, 1.0))
 
     for (leaf, val) in ((n.x, 1.0), (n.f.x, 2.0), (n.f.y, 3.0))
         @test is_variable(sys, leaf)
@@ -254,16 +269,16 @@ end
     @variables h(t)::Holder
     eqs = [D(h.x[1].y) ~ -h.x[1].y, D(h.x[1].z) ~ h.x[1].y,
            D(h.x[2].y) ~ -h.x[2].y, D(h.x[2].z) ~ h.x[2].y]
-    sys = mtkcompile(System(eqs, t, [h], []; name = :holder))
+    @parameters y1 = 1.0 z1 = 0.0 y2 = 2.0 z2 = 0.0
+    sys = mtkcompile(System(eqs, t, [h], [y1, z1, y2, z2]; name = :holder))
     @test issetequal(
         unknowns(sys),
         Symbolics.unwrap.([h.x[1].y, h.x[1].z, h.x[2].y, h.x[2].z])
     )
 
+    # Written whole, through the array of records it holds.
     prob = ODEProblem(
-        sys,
-        [h.x[1].y => 1.0, h.x[1].z => 0.0, h.x[2].y => 2.0, h.x[2].z => 0.0],
-        (0.0, 1.0)
+        sys, [h => Holder([Leaf(y1, z1), Leaf(y2, z2)])], (0.0, 1.0)
     )
     sol = solve(prob, Tsit5())
     @test SciMLBase.successful_retcode(sol)

@@ -242,6 +242,7 @@ function SciMLBase.OptimizationProblem{iip}(
         multiobjective::Bool = false,
         kwargs...
     ) where {iip}
+    validate_whole_record_keys(op)
     check_complete(sys, OptimizationProblem)
     check_compatibility && check_compatible_system(OptimizationProblem, sys)
 

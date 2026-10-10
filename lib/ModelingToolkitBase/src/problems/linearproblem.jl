@@ -99,6 +99,7 @@ function SciMLBase.LinearProblem{iip}(
         eval_module = @__MODULE__, u0_constructor = identity, u0_eltype = nothing,
         kwargs...
     ) where {iip}
+    validate_whole_record_keys(op)
     check_complete(sys, LinearProblem)
     check_compatibility && check_compatible_system(LinearProblem, sys)
 
