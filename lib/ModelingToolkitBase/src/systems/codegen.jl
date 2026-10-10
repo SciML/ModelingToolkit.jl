@@ -42,6 +42,86 @@ end
 """
     $(TYPEDSIGNATURES)
 
+Bind contiguous array derivatives to reshaped `view`s of the implicit-DAE `du`
+argument, in place, and return `(du_symbol, substituter)`.
+
+Unlike [`expand_array_derivatives!`](@ref), which rebuilds each array derivative as an
+`array_literal` of scalar `D(uᵢ)` terms, this keeps a contiguous block of `du` as one
+expression so residual codegen size stays independent of the block length. Observed
+expressions and assertions that mention the same derivatives are included via
+`extra_expressions` / `reserved_symbols`. Noncontiguous layouts fall back to the
+scalar expansion.
+"""
+function array_derivative_arguments!(rhss::Vector{SymbolicT}, dvs, D, ir::IRStructure{VartypeT}; extra_expressions = SymbolicT[], reserved_symbols = dvs)
+    terms = Set{SymbolicT}()
+    buffer = SU.IRStructureSearchBuffer(ir, terms)
+    for expressions in (rhss, extra_expressions), rhs in expressions
+        Symbolics.get_variables!(buffer, rhs; is_atomic = array_derivative_is_atomic)
+    end
+    # No array derivatives in the residuals / extras: keep the scalar `du` binding path.
+    if isempty(terms)
+        expand_array_derivatives!(rhss, ir)
+        return map(D, dvs), identity
+    end
+
+    # A fixed sentinel keeps the generated Expr hash-stable across processes; reject a
+    # collision so a user symbol cannot silently shadow the `du` argument binding.
+    du_name = :__mtk_dae_du
+    for v in reserved_symbols
+        parent, _ = split_indexed_var(v)
+        if hasname(parent) && getname(parent) === du_name
+            throw(ArgumentError("the array derivative sentinel `$du_name` collides with a symbol of the system; this name is reserved for internal use."))
+        end
+    end
+    du = unwrap(only(@variables $du_name[1:length(dvs)]))
+    subs = Dict{SymbolicT, SymbolicT}(D(v) => du[i] for (i, v) in enumerate(dvs))
+    groups = Dict{SymbolicT, Vector{Int}}()
+    for (i, v) in enumerate(dvs)
+        parent, indexed = split_indexed_var(v)
+        indexed && push!(get!(groups, parent, Int[]), i)
+    end
+    arrays = Dict{SymbolicT, SymbolicT}()
+    for (parent, positions) in groups
+        indices = SU.stable_eachindex(parent)
+        # Contiguous state blocks share one segment of `du`; a view+reshape keeps the
+        # parent shape without copying or emitting one scalar read per element.
+        if length(positions) == length(indices) &&
+                positions == collect(first(positions):last(positions)) &&
+                all(isequal(dvs[i], parent[j]) for (i, j) in zip(positions, indices))
+            a, b = first(positions), last(positions)
+            du_view = Symbolics.STerm(
+                view,
+                Symbolics.SArgsT((du, a:b));
+                type = Any, shape = SU.ShapeVecT([1:(b - a + 1)])
+            )
+            arrays[parent] = Symbolics.STerm(
+                reshape,
+                Symbolics.SArgsT((du_view, size(parent)));
+                type = symtype(parent), shape = SU.shape(parent)
+            )
+        end
+    end
+    for term in terms
+        op = operation(term)
+        arg = only(arguments(term))
+        parent, _ = split_indexed_var(arg)
+        if isequal(op, D) && haskey(arrays, parent)
+            subs[term] = unwrap(Symbolics.substitute(wrap(arg), Dict(wrap(parent) => wrap(arrays[parent]))))
+        else
+            # Noncontiguous or interleaved layouts cannot share a single `du` view.
+            expanded = SymbolicT[term]
+            expand_array_derivatives!(expanded, ir)
+            subs[term] = unwrap(Symbolics.substitute(wrap(only(expanded)), subs))
+        end
+    end
+    subber = SU.IRSubstituter{false}(ir, subs)
+    map!(subber, rhss, rhss)
+    return du, subber
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
 Assemble residuals into a single array expression, where each residual writes to a
 contiguous region of the output. An array-valued residual stands for one output row per
 element, and writing it as a region keeps the array computation intact instead of
@@ -216,6 +296,8 @@ function generate_rhs(
     ddvs = nothing
     extra_assignments = Assignment[]
     assemble_residuals = false
+    derivative_subber = identity
+    assertion_expr = isempty(assertions(sys)) ? nothing : unwrap(get_assertions_expr(sys))
 
     # used for DAEProblem and ImplicitDiscreteProblem
     if implicit_dae
@@ -243,9 +325,13 @@ function generate_rhs(
             D = Differential(t)
             ddvs = map(D, dvs)
             rhss = SymbolicT[_iszero(eq.lhs) ? eq.rhs : eq.rhs - eq.lhs for eq in eqs]
-            # Rewrite array derivatives to the scalar ones bound to the `du` argument.
-            # Assembly into a single array happens below, after assertions.
-            expand_array_derivatives!(rhss, get_irstructure(sys))
+            extra_expressions = SymbolicT[unwrap(eq.rhs) for eq in obs]
+            assertion_expr === nothing || push!(extra_expressions, assertion_expr)
+            reserved_symbols = Iterators.flatten((dvs, parameters(sys; initial_parameters = true), (eq.lhs for eq in obs)))
+            ddvs, derivative_subber = array_derivative_arguments!(rhss, dvs, D, get_irstructure(sys); extra_expressions, reserved_symbols)
+            if derivative_subber !== identity && !isempty(obs)
+                @set! sys.observed = [eq.lhs ~ derivative_subber(unwrap(eq.rhs)) for eq in obs]
+            end
             assemble_residuals = true
         end
     elseif !is_time_dependent(sys)
@@ -264,7 +350,7 @@ function generate_rhs(
     end
 
     if !isempty(assertions(sys)) && !isempty(rhss)
-        assertion_expr = unwrap(get_assertions_expr(sys))
+        assertion_expr = derivative_subber(assertion_expr)
         # An array-valued residual stands for several output rows, and `+` is not defined
         # between a symbolic array and a scalar, so add the assertion to each of its rows.
         rhss[end] = if SU.is_array_shape(SU.shape(rhss[end]))
