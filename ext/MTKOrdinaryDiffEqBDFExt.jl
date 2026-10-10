@@ -10,6 +10,8 @@ using PrecompileTools: @compile_workload, @setup_workload
     @compile_workload begin
         solve(odeprob, FBDF())
         solve(daeprob, FBDF())
+        solve(odeprob, FBDF(); abstol = 1.0e-6, reltol = 1.0e-6)
+        solve(daeprob, FBDF(); abstol = 1.0e-6, reltol = 1.0e-6)
     end
 end
 
