@@ -5,6 +5,9 @@ using Symbolics
 using SciMLBase
 using OrdinaryDiffEqBDF: DFBDF
 using DiffEqBase: BrownFullBasicInit
+using ModelingToolkitBase: generate_rhs, eval_or_rgf
+using SciMLStructures: replace, Tunable
+using ForwardDiff
 
 # A system whose interior is written as one array equation over slices, as produced by a
 # finite-difference PDE discretization that does not scalarize.
@@ -208,4 +211,89 @@ end
     )
     @test SciMLBase.successful_retcode(sol)
     @test maximum(abs, sol.u[end] .- [exp(-pi^2 * 0.1) * sinpi(x) for x in xs]) < 1.0e-2
+end
+
+oop_bytes(f, du, u, p, t) = @allocated f(du, u, p, t)
+
+# The `Float64` branch of a generated OOP residual, i.e. the default lowering.
+function default_branch(ex::Expr)
+    body = ex.args[2]
+    Meta.isexpr(body, :block) && length(body.args) == 1 &&
+        Meta.isexpr(body.args[1], :if) || return nothing
+    return Expr(:function, ex.args[1], body.args[1].args[2])
+end
+
+@testset "OOP DAE residual promotes Dual inputs" begin
+    @independent_variables t
+    @parameters k
+    D = Differential(t)
+    tval = 0.3
+    # sizes around the length at which SymbolicUtils switches residual containers
+    for n in (4, 5, 8, 16, 17, 20), split in (true, false)
+        @variables u(t)[1:n]
+        lap = u[1:(n - 2)] .- 2 .* u[2:(n - 1)] .+ u[3:n]
+        eqs = [
+            broadcast(-, D(u[2:(n - 1)]), k .* lap) ~ zeros(n - 2),
+            u[1] ~ sin(t), u[n] ~ 0.0,
+        ]
+        op = vcat(
+            [u[i] => (0.1 * i)^2 for i in 1:n], [D(u[i]) => 0.01 * i for i in 1:n],
+            [k => 2.0]
+        )
+        sys = complete(System(eqs, t, collect(u), [k]; name = :sys); split)
+        prob = DAEProblem{false}(sys, op, (0.0, 1.0); build_initializeprob = false)
+        du0, u0, p = prob.du0, prob.u0, prob.p
+        f = prob.f
+        resid = @inferred f(du0, u0, p, tval)
+        @test eltype(resid) === Float64
+        @test length(resid) == n
+
+        Ju = ForwardDiff.jacobian(x -> f(du0, x, p, tval), u0)
+        @test Ju[1, 1:3] ≈ [2.0, -4.0, 2.0]
+        Jdu = ForwardDiff.jacobian(x -> f(x, u0, p, tval), du0)
+        @test Jdu ≈ [j == i + 1 && i <= n - 2 ? -1.0 : 0.0 for i in 1:n, j in 1:n]
+        Jt = ForwardDiff.derivative(x -> f(du0, u0, p, x), tval)
+        @test Jt[n - 1] ≈ cos(tval)
+        @test count(!iszero, Jt) == 1
+
+        withk = split ? (θ -> replace(Tunable(), p, θ)) : identity
+        Jp = ForwardDiff.jacobian(θ -> f(du0, u0, withk(θ), tval), [2.0])
+        @test Jp[1:(n - 2), 1] ≈ fill(0.02, n - 2)
+        @test all(iszero, Jp[(n - 1):n, 1])
+
+        oop_expr, _ = generate_rhs(sys; implicit_dae = true, expression = Val{true})
+        f_oop = eval_or_rgf(oop_expr)
+        @test ForwardDiff.jacobian(x -> f_oop(du0, x, p, tval), u0) ≈ Ju
+
+        # `Float64` arguments run exactly the default lowering
+        default_expr = default_branch(oop_expr)
+        @test default_expr !== nothing
+        default_expr === nothing && continue
+        @test !occursin("promoted_zeros", string(default_expr))
+        @test occursin("promoted_zeros", string(oop_expr))
+        f_default = eval_or_rgf(default_expr)
+        r_default = f_default(du0, u0, p, tval)
+        r_oop = @inferred f_oop(du0, u0, p, tval)
+        @test typeof(r_oop) === typeof(r_default)
+        @test r_oop == r_default
+        oop_bytes(f_default, du0, u0, p, tval)
+        oop_bytes(f_oop, du0, u0, p, tval)
+        @test oop_bytes(f_oop, du0, u0, p, tval) == oop_bytes(f_default, du0, u0, p, tval)
+    end
+end
+
+@testset "OOP DAE residual ignores callable parameters" begin
+    n = 20
+    @independent_variables t
+    @variables u(t)[1:n]
+    @parameters (gain::Function)(..)
+    D = Differential(t)
+    sys = complete(
+        System([D(u) ~ gain(t) .* u], t, [u], [gain]; name = :sys); split = false
+    )
+    oop_expr, _ = generate_rhs(sys; implicit_dae = true, expression = Val{true})
+    f_oop = eval_or_rgf(oop_expr)
+    resid = @inferred f_oop(zeros(n), ones(n), [sin], 0.3)
+    @test resid isa Vector{Float64}
+    @test resid ≈ fill(sin(0.3), n)
 end
