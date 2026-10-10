@@ -63,6 +63,7 @@ end
             @safetestset "Change of variables" include("changeofvariables.jl")
             @safetestset "Symbolic Event Test" include("symbolic_events.jl")
             @safetestset "Stream Connect Test" include("stream_connectors.jl")
+            @safetestset "Array Flow Connections" include("array_flow_connections.jl")
             @safetestset "Domain Connect Test" include("domain_connectors.jl")
             @safetestset "Dependency Graph Test" include("dep_graphs.jl")
             @safetestset "Function Registration Test" include("function_registration.jl")
