@@ -91,7 +91,7 @@ end
 
 The leaf-wise value buffer stored for a record key.
 """
-record_buffer(stored::SymbolicT) = Vector{SymbolicT}(collect(stored))
+record_buffer(stored::SymbolicT) = collect(Iterators.map(Base.Fix1(getindex, stored), SU.stable_eachindex(stored)))
 
 Base.copy(dd::AtomicArrayDict) = AtomicArrayDict(copy(dd.dict); __check = false)
 function Base.empty(dd::AtomicArrayDict, ::Type{K}, ::Type{V}) where {K, V}
