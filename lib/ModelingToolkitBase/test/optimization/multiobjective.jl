@@ -1,8 +1,11 @@
 using ModelingToolkitBase, Test
 using ModelingToolkitBase: costs, cost, accepts_array_equations
 using SciMLBase
+using OptimizationEvolutionary
 using Symbolics
 using LinearAlgebra
+using StableRNGs
+using OptimizationOptimJL: Optim
 
 function moo_system()
     @variables x y
@@ -119,6 +122,85 @@ end
     @test_throws ArgumentError MultiObjectiveOptimizationFunction{false}(
         sys; weights = [1.0, 1.0]
     )
+end
+
+@testset "array unknowns and weighted sums" begin
+    @variables w[1:2]
+    @parameters a
+    sys = complete(
+        System(
+            Equation[], [w], [a];
+            costs = [sum(abs2, w .- a), sum(abs2, w .+ a)], name = :array_moo
+        )
+    )
+    @test length(unknowns(sys)) == 1
+    op = [w => [1.0, 2.0], a => 3.0]
+    multi = OptimizationProblem(sys, op; multiobjective = true, jac = true)
+    @test multi.u0 == [1.0, 2.0]
+    @test multi.f.f(multi.u0, multi.p) ≈ [5.0, 41.0]
+    # rows are costs, columns are flattened unknowns: ∂/∂w of each cost at w=[1,2], a=3
+    @test multi.f.jac(multi.u0, multi.p) ≈ [-4.0 -2.0; 8.0 10.0]
+
+    weights = [0.25, 0.75]
+    weighted = OptimizationProblem(sys, op; weights)
+    @test weighted.f(weighted.u0, weighted.p) ≈ dot(weights, multi.f.f(multi.u0, multi.p))
+end
+
+@testset "weighted and multi-objective agree on a discretized Poisson problem" begin
+    # -u'' = 1 on (0, 1), u(0) = u(1) = 0 as D * u = h^2 * 1, with costs [misfit, Tikhonov]
+    N = 8
+    h = 1 / (N + 1)
+    D = Matrix(SymTridiagonal(fill(2.0, N), fill(-1.0, N - 1)))
+    @variables u[1:N]
+    @parameters src[1:N]
+    sys = complete(
+        System(
+            Equation[], [u], [src];
+            costs = [sum(abs2, D * u - src), sum(abs2, u)], name = :poisson_moo
+        )
+    )
+    @test length(unknowns(sys)) == 1
+    u0 = collect(range(0.1, 0.8; length = N))
+    s0 = fill(h^2, N)
+    op = [u => u0, src => s0]
+
+    multi = OptimizationProblem(sys, op; multiobjective = true, jac = true)
+    @test multi.f.f(multi.u0, multi.p) ≈ [sum(abs2, D * u0 - s0), sum(abs2, u0)]
+    @test multi.f.jac(multi.u0, multi.p) ≈ [2 * (D' * (D * u0 - s0))'; 2 * u0']
+
+    weights = [1.0, 1.0e-3]
+    weighted = OptimizationProblem(sys, op; weights, grad = true)
+    @test weighted.f(weighted.u0, weighted.p) ≈ dot(weights, multi.f.f(multi.u0, multi.p))
+
+    sol = solve(weighted, Optim.LBFGS(); g_tol = 1.0e-12)
+    ustar = (weights[1] * D' * D + weights[2] * I) \ (weights[1] * D' * s0)
+    @test sol.u ≈ ustar rtol = 1.0e-6
+    # the weighted-sum minimizer is a stationary point of the scalarized cost vector
+    @test norm(weights' * multi.f.jac(sol.u, multi.p)) < 1.0e-8
+end
+
+@testset "multi-objective NSGA-II consumes generated costs" begin
+    # No Pareto-front assertion: across seeds NSGA-II leaves points up to ~0.35 outside
+    # the analytic front [0, 2] even at population 100 and 200 iterations.
+    @variables x
+    sys = complete(
+        System(
+            Equation[], [x], []; costs = [x^2, (x - 2)^2], name = :pareto
+        )
+    )
+    # bounds make the initial population random instead of copies of u0
+    prob = OptimizationProblem(
+        sys, [x => 5.0]; multiobjective = true, lb = [-10.0], ub = [10.0]
+    )
+    sol = solve(
+        prob, OptimizationEvolutionary.NSGA2(); maxiters = 40, rng = StableRNG(1234)
+    )
+
+    @test !isempty(sol.u)
+    for u in sol.u
+        objectives = prob.f.f(u, prob.p)
+        @test objectives ≈ [u[1]^2, (u[1] - 2)^2]
+    end
 end
 
 @testset "equations are still rejected" begin
