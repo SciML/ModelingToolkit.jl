@@ -467,7 +467,7 @@ medium_gain(m::AbstractMedium, x) = m.k * x
     @test_throws ["does not exist"] respecialize(sys, [foo => Bar()])
 
     # After respecialize, leaving the pre-respecialize parameter symbol in the
-    # operating point must raise a named ArgumentError (not a raw MethodError).
+    # operating point must raise a named ArgumentError.
     MED = Medium(2.0)
     MED2 = Medium(3.0)
     @variables vx vy vz
@@ -483,12 +483,33 @@ medium_gain(m::AbstractMedium, x) = m.k * x
     prob_default = NonlinearProblem(nlsys_r, u0)
     @test length(prob_default.p.nonnumeric) == 1
     @test only(prob_default.p.nonnumeric[1]) == MED
-    @test_throws ["md", "operating point", "parameters(sys)"] NonlinearProblem(
-        nlsys_r, [u0; md => MED]
+    err = @test_throws ArgumentError NonlinearProblem(nlsys_r, [u0; md => MED])
+    msg = sprint(showerror, err.value)
+    @test occursin("md", msg)
+    @test occursin("operating point", msg)
+    @test occursin("parameters(sys)", msg)
+    err = @test_throws ArgumentError remake(prob_default; p = [md => MED2])
+    msg = sprint(showerror, err.value)
+    @test occursin("md", msg)
+    @test occursin("operating point", msg)
+    @test occursin("parameters(sys)", msg)
+
+    # Non-operating-point non-numeric parameter equations get a neutral message.
+    @parameters mdn::AbstractMedium = MED mdn2::AbstractMedium = MED2
+    @variables vn = 1.0
+    nlsys_n = mtkcompile(
+        System(
+            [0 ~ medium_gain(mdn, vn) - medium_gain(mdn2, vn)],
+            [vn], [mdn, mdn2];
+            initialization_eqs = [mdn ~ mdn2],
+            name = :neutral_nn
+        )
     )
-    @test_throws ["md", "operating point", "parameters(sys)"] remake(
-        prob_default; p = [md => MED2]
-    )
+    err = @test_throws ArgumentError NonlinearProblem(nlsys_n, [vn => 1.0])
+    msg = sprint(showerror, err.value)
+    @test occursin("mdn", msg)
+    @test occursin("initialization equations", msg)
+    @test !occursin("operating point", msg)
 end
 
 @testset "`truncate_constant_floats`" begin

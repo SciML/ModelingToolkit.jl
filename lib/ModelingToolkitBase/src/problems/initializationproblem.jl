@@ -535,7 +535,7 @@ struct LinearInitializationProblem{iip} end
 Convert a parameter-only initialization equation to residual form `0 ~ rhs - lhs`.
 Non-numeric sides cannot be subtracted (SymbolicUtils leaves `-(::BasicSymbolic,
 ::BasicSymbolic)` unimplemented for non-numeric symtypes); throw an `ArgumentError`
-that names the involved parameter instead of a raw `MethodError`.
+that names the involved parameter when possible.
 """
 function parameter_equation_to_residual(eq::Equation)
     lhs = eq.lhs
@@ -543,19 +543,59 @@ function parameter_equation_to_residual(eq::Equation)
     if is_variable_numeric(lhs) && is_variable_numeric(rhs)
         return Symbolics.COMMON_ZERO ~ (rhs - lhs)
     end
+    throw(ArgumentError(nonnumeric_parameter_equation_message(eq)))
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+True when `eq` has the operating-point shape `p ~ Initial(p)` (either orientation).
+"""
+function is_operating_point_parameter_equation(eq::Equation)
+    return is_initial_of(eq.lhs, eq.rhs) || is_initial_of(eq.rhs, eq.lhs)
+end
+
+function is_initial_of(maybe_init, other)
+    iscall(maybe_init) || return false
+    operation(maybe_init) isa Initial || return false
+    args = arguments(maybe_init)
+    length(args) == 1 || return false
+    return isequal(args[1], other)
+end
+
+function nonnumeric_parameter_equation_message(eq::Equation)
     pname = parameter_equation_display_name(eq)
-    throw(
-        ArgumentError(
-            """
+    if is_operating_point_parameter_equation(eq)
+        if pname === nothing
+            return """
             Cannot enforce non-numeric parameter equation `$eq` during initialization \
-            because symbolic subtraction is not defined for this type. Parameter \
-            `$pname` cannot be supplied this way in the operating point. Remove it \
-            from the operating point to use the default, or look the parameter up by \
-            name in `parameters(sys)` and use that symbol as the key (property access \
-            such as `sys.$pname` may still return a pre-respecialize symbol).
+            because symbolic subtraction is not defined for this type. Non-numeric \
+            parameters cannot be supplied this way in the operating point. Remove the \
+            entry from the operating point to use the default, or look the parameter up \
+            by name in `parameters(sys)` and use that symbol as the key.
             """
-        )
-    )
+        end
+        return """
+        Cannot enforce non-numeric parameter equation `$eq` during initialization \
+        because symbolic subtraction is not defined for this type. Parameter \
+        `$pname` cannot be supplied this way in the operating point. Remove it \
+        from the operating point to use the default, or look the parameter up by \
+        name in `parameters(sys)` and use that symbol as the key (property access \
+        such as `sys.$pname` may still return a pre-respecialize symbol).
+        """
+    end
+    if pname === nothing
+        return """
+        Cannot enforce non-numeric parameter equation `$eq` during initialization \
+        because symbolic subtraction is not defined for this type. Non-numeric \
+        parameters cannot appear in initialization equations.
+        """
+    end
+    return """
+    Cannot enforce non-numeric parameter equation `$eq` during initialization \
+    because symbolic subtraction is not defined for this type. Non-numeric \
+    parameter `$pname` cannot appear in initialization equations.
+    """
 end
 
 function parameter_equation_display_name(eq::Equation)
@@ -567,7 +607,7 @@ function parameter_equation_display_name(eq::Equation)
             hasname(arr) && return getname(arr)
         end
     end
-    return eq
+    return nothing
 end
 
 function LinearInitializationProblem{iip}(
