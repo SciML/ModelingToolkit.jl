@@ -1939,10 +1939,12 @@ indices.
 function is_record_descendant(x::SymbolicT, node::SymbolicT)
     while true
         isequal(x, node) && return true
-        iscall(x) || return false
-        f = operation(x)
-        f isa Symbolics.SymbolicGetproperty || f === getindex || return false
-        x = arguments(x)[1]::SymbolicT
+        Moshi.Match.@match x begin
+            BSImpl.Term(; f, args) && if f isa Symbolics.SymbolicGetproperty || f === getindex end => begin
+                x = args[1]::SymbolicT
+            end
+            _ => return false
+        end
     end
 end
 
@@ -1991,7 +1993,9 @@ function record_node_value(root::SymbolicT, node::SymbolicT, buffer::AbstractVec
     # reach a literal for narrow structs, via the constructor methods `@symstruct`
     # registers, but not for wide ones, where none are generated.
     if any(_contains_symbolic, fieldvals)
-        return Symbolics.record_literal(T, fieldvals)
+        # Unwrapped: this assembles a value for internal buffers, which hold terms rather
+        # than the wrapper `record_literal` returns for user-facing use.
+        return unwrap(Symbolics.record_literal(T, fieldvals))
     end
     return T(fieldvals...)
 end

@@ -75,9 +75,9 @@ parameter buffer.
 function record_key_root(k::SymbolicT)::Tuple{SymbolicT, Bool}
     x = k
     while true
-        @match x begin
-            BSImpl.Term(; f, args) && if f isa Symbolics.SymbolicGetProperty || f === getindex end => begin
-                x = args[1]
+        Moshi.Match.@match x begin
+            BSImpl.Term(; f, args) && if f isa Symbolics.SymbolicGetproperty || f === getindex end => begin
+                x = args[1]::SymbolicT
             end
             _ => break
         end
