@@ -1542,6 +1542,29 @@ end
     @test integ.ps[q] ≈ cbrt(2) rtol = 1.0e-6
 end
 
+@testset "symbolic guesses for partial array unknowns reach initialization" begin
+    @variables review_z(t)[1:3]
+    @parameters review_a
+    # `review_z[1]` appears nonlinearly in every equation, so tearing keeps it an
+    # iteration variable of the initialization problem and its guess picks the root.
+    @named review_sys = System(
+        [D(review_z) ~ -review_z .^ 3], t, [review_z], [review_a];
+        initialization_eqs = [review_z[1]^2 ~ review_a, review_z[2] ~ review_a + review_z[1]^2]
+    )
+    review_sys = mtkcompile(review_sys)
+    prob = ODEProblem(
+        review_sys, [review_z[3] => 1.0, review_a => 4.0], (0.0, 1.0);
+        guesses = [review_z[1] => -2review_a]
+    )
+    initprob = prob.f.initialization_data.initializeprob
+    @test initprob[review_z[1]] == -8.0
+
+    init_sol = solve(initprob)
+    @test SciMLBase.successful_retcode(init_sol)
+    @test init_sol[review_z[1]] ≈ -2.0
+    @test init_sol[review_z[2]] ≈ 8.0
+end
+
 @testset "Guesses provided to `ODEProblem` are used in `remake`" begin
     @variables x(t) y(t)
     @parameters p q = missing

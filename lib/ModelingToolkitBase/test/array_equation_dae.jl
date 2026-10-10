@@ -64,6 +64,129 @@ end
     @test length(prob.u0) == n
 end
 
+@testset "array-keyed DAE operating points preserve element order" begin
+    n = 4
+    @independent_variables t
+    @variables u(t)[1:n, 1:n]
+    D = Differential(t)
+    @named sys = System([D(u) ~ zeros(n, n)], t, [u], [])
+    sys = complete(sys)
+    uval = reshape(Float64.(1:(n * n)), n, n)
+    duval = reshape(Float64.((n * n + 1):(2 * n * n)), n, n)
+
+    prob = DAEProblem(
+        sys, [u => uval, D(u) => duval], (0.0, 1.0); build_initializeprob = false
+    )
+
+    @test prob.u0 == vec(uval)
+    @test prob.du0 == vec(duval)
+end
+
+@testset "array operating points substitute specified symbolic elements" begin
+    @independent_variables t
+    @variables x(t)[1:3] y(t)
+    @parameters p q
+    D = Differential(t)
+    @named sys = System([D(x) ~ -x, D(y) ~ -y], t, [x, y], [p, q])
+    sys = complete(sys)
+    ir = ModelingToolkitBase.get_irstructure(sys)
+    dvs = Symbolics.unwrap.([x[1], x[2], x[3], y])
+
+    constant_filled = ModelingToolkitBase.varmap_to_vars(
+        Dict(x[1] => 2p, p => 3.0, y => 1.0), dvs; ir,
+        missing_values = ModelingToolkitBase.MissingGuessValue.Constant(0.0)
+    )
+    @test constant_filled == [6.0, 0.0, 0.0, 1.0]
+
+    hashed_filled = ModelingToolkitBase.varmap_to_vars(
+        Dict(x[1] => 2p, x[3] => y, p => 3.0, y => 1.0), dvs; ir,
+        missing_values = ModelingToolkitBase.MissingGuessValue.HashedRandom()
+    )
+    @test hashed_filled[[1, 3, 4]] == [6.0, 1.0, 1.0]
+
+    for options in ((; ir), (;))
+        fully_specified = ModelingToolkitBase.varmap_to_vars(
+            Dict(x[1] => 2p, x[2] => y + 1, x[3] => x[1] + q, p => 3.0, q => 10.0, y => 1.0),
+            dvs; options...
+        )
+        @test fully_specified == [6.0, 2.0, 16.0, 1.0]
+    end
+
+    # `vars` may mix a whole-array key with element keys of the same array
+    for (whole_idx, mixed_vars) in ((1, [x, x[1]]), (2, [x[1], x]))
+        mixed = ModelingToolkitBase.varmap_to_vars(
+            Dict(x => [p, 2p, 3p], p => 3.0), Symbolics.unwrap.(mixed_vars);
+            ir, allow_symbolic = true
+        )
+        @test mixed[whole_idx] == [3.0, 6.0, 9.0]
+        @test mixed[3 - whole_idx] == 3.0
+    end
+
+    @variables u(t)[1:2, 1:2]
+    @parameters r
+    @named sys2 = System([D(u) ~ -u], t, [u], [r])
+    sys2 = complete(sys2)
+    ir2 = ModelingToolkitBase.get_irstructure(sys2)
+    dvs2 = Symbolics.unwrap.([u[1, 1], u[2, 1], u[1, 2], u[2, 2]])
+    twod = ModelingToolkitBase.varmap_to_vars(
+        Dict(u[1, 1] => r, u[2, 2] => 4r, r => 1.5), dvs2; ir = ir2,
+        missing_values = ModelingToolkitBase.MissingGuessValue.Constant(0.0)
+    )
+    @test twod == [1.5, 0.0, 0.0, 6.0]
+end
+
+@testset "array operating points resolve dependencies in any visitation order" begin
+    @independent_variables t
+    @variables x(t)[1:110] a(t)[1:2] b(t)[1:110]
+    D = Differential(t)
+    # chains longer than `substitution_limit`, visited in increasing, decreasing and
+    # interleaved order
+    increasing = Dict{Any, Any}(x[i] => x[i - 1] + 1 for i in 2:110)
+    increasing[x[1]] = 1.0
+    decreasing = Dict{Any, Any}(x[i] => x[i + 1] - 1 for i in 1:109)
+    decreasing[x[110]] = 110.0
+    interleaved = Dict{Any, Any}(b[i] => b[i - 1] + 1 for i in 2:110)
+    merge!(interleaved, Dict(a[1] => 1.0, b[1] => a[1] + 1, a[2] => b[110] + 1))
+    cases = [
+        ("increasing", collect(x), increasing, collect(1.0:110.0)),
+        ("decreasing", reverse(collect(x)), decreasing, collect(110.0:-1:1)),
+        ("interleaved", vcat([a[1]], collect(b), [a[2]]), interleaved, collect(1.0:112.0)),
+    ]
+    for (label, vars, op, expected) in cases
+        @testset "$label" begin
+            sys = complete(System([D(v) ~ -v for v in vars], t, vars, []; name = Symbol(label)))
+            ir = ModelingToolkitBase.get_irstructure(sys)
+            for options in ((; ir), (;))
+                values = ModelingToolkitBase.varmap_to_vars(
+                    op, Symbolics.unwrap.(vars); options...,
+                    missing_values = ModelingToolkitBase.MissingGuessValue.Constant(-999.0)
+                )
+                @test values == expected
+            end
+            prob = ODEProblem(sys, op, (0.0, 1.0); build_initializeprob = false)
+            @test prob.u0 == expected
+        end
+    end
+end
+
+@testset "symbolic values of unknown-size array parameters are substituted" begin
+    @independent_variables t
+    @variables x(t)
+    @parameters p::Vector{Float64} q
+    D = Differential(t)
+    @named sys = System([D(x) ~ p[1] - p[2] * x], t, [x], [p, q])
+    sys = complete(sys)
+    ir = ModelingToolkitBase.get_irstructure(sys)
+    for options in ((; ir), (;))
+        values = ModelingToolkitBase.varmap_to_vars(
+            Dict(p => [q, 2q], q => 3.0), [unwrap(p)]; options..., allow_symbolic = true
+        )
+        @test values[1] == [3.0, 6.0]
+    end
+    prob = ODEProblem(sys, [x => 1.0, p => [q, 2q], q => 3.0], (0.0, 1.0); build_initializeprob = false)
+    @test prob.ps[p] == [3.0, 6.0]
+end
+
 @testset "array-equation DAE solves to the analytic solution" begin
     n = 21
     sys, u, t, D = heat_array_system(n)
