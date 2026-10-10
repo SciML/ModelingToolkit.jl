@@ -172,7 +172,7 @@ When `k` has non-constant (symbolic) indices and `arr` is present:
   (possibly under unary [`Operator`](@ref)s), return the symbolic `getindex` of
   the substituted array value so a fixpoint substituter can resolve the indices
   next. Slice / `ArrayOp` keys are not handled here and fall through to
-  [`get_stable_index`](@ref) (same as before this path existed).
+  [`get_stable_index`](@ref).
 """
 function get_possibly_indexed(
         dd::AtomicArrayDict, k::SymbolicT, default; allow_symbolic_indices::Bool = false
@@ -187,8 +187,8 @@ function get_possibly_indexed(
         elseif !allow_symbolic_indices
             return default
         end
-        # Slice / ArrayOp / other non-getindex indexed forms: preserve the old
-        # `get_stable_index` error rather than returning the unindexed array.
+        # Slice / ArrayOp / other non-getindex forms go through `get_stable_index`,
+        # which throws.
     end
     idx = get_stable_index(k)
     return res[idx]

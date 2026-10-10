@@ -306,8 +306,8 @@ end
     init_a = value(Init()(a))
     @test check_op(init_a, init_a[iu]) == 2.0
 
-    # Slice / ArrayOp keys must not silently return the full array (master threw
-    # from `get_stable_index`; the symbolic-index path only applies to getindex).
+    # Slice / ArrayOp keys are rejected; only scalar getindex uses the
+    # symbolic-index substitution path.
     for slice in (au[2:3], au[1:2], au[1:2:3])
         @test_throws ArgumentError get(wrapper, slice, nothing)
         @test_throws ArgumentError subber(slice)

@@ -2103,7 +2103,7 @@ end
         scc = only(ModelingToolkitBase.continuous_events(sys))
         aff = ModelingToolkitBase.affects(scc)
         @test aff isa ModelingToolkitBase.AffectSystem
-        # Pin the symbolic `table[k]` lookup that previously threw in discover_maybe_zeros.
+        # Pin the compiled affect's observed `c ~ table[...]` lookup.
         c_eq = only(filter(eq -> isequal(eq.lhs, unwrap(c)), observed(system(aff))))
         @test Symbolics.operation(unwrap(c_eq.rhs)) === getindex
         @test isequal(Symbolics.arguments(unwrap(c_eq.rhs))[1], unwrap(table))
