@@ -630,6 +630,69 @@ end
     @test mtkcompile(nlrc) isa System
 end
 
+abstract type AbstractNonlinearMedium end
+struct NonlinearMedium <: AbstractNonlinearMedium
+    k::Float64
+end
+medium_gain(m::AbstractNonlinearMedium, x) = m.k * x
+@register_symbolic medium_gain(m::AbstractNonlinearMedium, x)
+
+@testset "NonlinearSystem conversion: nonnumeric bound parameters" begin
+    # https://github.com/SciML/ModelingToolkit.jl/issues/5066
+    # Subsystem parameters bound to a parent-level nonnumeric parameter must
+    # stay bound through conversion so `NonlinearProblem` can evaluate them.
+    @independent_variables t
+    D = Differential(t)
+    function Source5066(; name, medium)
+        @parameters med::AbstractNonlinearMedium = medium
+        @variables u(t)
+        System([D(u) ~ 4.0 - medium_gain(med, u)], t, [u], [med]; name)
+    end
+    function Load5066(; name, medium)
+        @parameters med::AbstractNonlinearMedium = medium
+        @variables v(t) w(t)
+        System([D(v) ~ w - medium_gain(med, v)], t, [v, w], [med]; name)
+    end
+    @parameters mC::AbstractNonlinearMedium = NonlinearMedium(2.0)
+    @named src = Source5066(medium = mC)
+    @named ld = Load5066(medium = mC)
+    sys = mtkcompile(
+        System([ld.w ~ src.u^2], t, [], [mC]; systems = [src, ld], name = :top)
+    )
+    nlsys = NonlinearSystem(sys)
+    prob = NonlinearProblem(nlsys, [src.u => 1.0, ld.v => 1.0])
+    sol = solve(prob)
+    @test SciMLBase.successful_retcode(sol)
+    @test sol[src.u] ≈ 2.0
+    @test sol[ld.v] ≈ 2.0
+    @test sol.ps[mC] == NonlinearMedium(2.0)
+end
+
+@testset "bound parameters with guesses" begin
+    # Bound non-floating-point parameters keep their binding in the
+    # initialization system; a guess for them must not become a conflicting
+    # initial condition.
+    @variables x
+    @parameters p::Int = 2 q::Int
+    sys = complete(
+        System(
+            [x^2 ~ q], [x], [p, q]; name = :int_guess,
+            bindings = [q => 2p], guesses = [q => 999]
+        )
+    )
+    sol = solve(NonlinearProblem(sys, [x => 0.75]))
+    @test SciMLBase.successful_retcode(sol)
+    @test sol[x] ≈ 2.0
+    @test sol.ps[p] == 2
+    @test sol.ps[q] == 4
+
+    sol2 = solve(NonlinearProblem(sys, [x => 0.75]; guesses = [q => 999]))
+    @test SciMLBase.successful_retcode(sol2)
+    @test sol2[x] ≈ 2.0
+    @test sol2.ps[p] == 2
+    @test sol2.ps[q] == 4
+end
+
 @testset "oop `NonlinearLeastSquaresProblem` with `u0 === nothing`" begin
     @variables x y
     @named sys = System([0 ~ x - y], [], []; observed = [x ~ 1.0, y ~ 1.0])
