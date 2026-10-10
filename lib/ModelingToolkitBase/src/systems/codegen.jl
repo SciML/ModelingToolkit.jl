@@ -39,16 +39,27 @@ function expand_array_derivatives!(rhss::Union{Vector{SymbolicT}, Vector{Equatio
     return rhss
 end
 
-# Bind derivative blocks as views, including their uses in observed expressions and assertions.
+"""
+    $(TYPEDSIGNATURES)
+
+Bind contiguous array derivatives to reshaped `view`s of the implicit-DAE `du`
+argument, in place, and return `(du_symbol, substituter)`.
+
+Unlike [`expand_array_derivatives!`](@ref), which rebuilds each array derivative as an
+`array_literal` of scalar `D(uᵢ)` terms, this keeps a contiguous block of `du` as one
+expression so residual codegen size stays independent of the block length. Observed
+expressions and assertions that mention the same derivatives are included via
+`extra_expressions` / `reserved_symbols`. Noncontiguous layouts fall back to the
+scalar expansion.
+"""
 function array_derivative_arguments!(rhss::Vector{SymbolicT}, dvs, D, ir::IRStructure{VartypeT}; extra_expressions = SymbolicT[], reserved_symbols = dvs)
     terms = Set{SymbolicT}()
     buffer = SU.IRStructureSearchBuffer(ir, terms)
     for expressions in (rhss, extra_expressions), rhs in expressions
         Symbolics.get_variables!(buffer, rhs; is_atomic = array_derivative_is_atomic)
     end
-    # No array derivatives, or array-valued unknowns with no flat `du` layout: use the
-    # per-element expansion.
-    if isempty(terms) || any(v -> SU.is_array_shape(SU.shape(v)), dvs)
+    # No array derivatives in the residuals / extras: keep the scalar `du` binding path.
+    if isempty(terms)
         expand_array_derivatives!(rhss, ir)
         return map(D, dvs), identity
     end
@@ -72,14 +83,20 @@ function array_derivative_arguments!(rhss::Vector{SymbolicT}, dvs, D, ir::IRStru
     arrays = Dict{SymbolicT, SymbolicT}()
     for (parent, positions) in groups
         indices = SU.stable_eachindex(parent)
-        # Contiguous state blocks share one slice of `du`, so a view/reshape preserves the
-        # array shape without emitting one scalar read per element in the residual.
+        # Contiguous state blocks share one segment of `du`; a view+reshape keeps the
+        # parent shape without copying or emitting one scalar read per element.
         if length(positions) == length(indices) &&
                 positions == collect(first(positions):last(positions)) &&
                 all(isequal(dvs[i], parent[j]) for (i, j) in zip(positions, indices))
+            a, b = first(positions), last(positions)
+            du_view = Symbolics.STerm(
+                view,
+                Symbolics.SArgsT((du, a:b));
+                type = Any, shape = SU.ShapeVecT([1:(b - a + 1)])
+            )
             arrays[parent] = Symbolics.STerm(
                 reshape,
-                Symbolics.SArgsT((du[first(positions):last(positions)], size(parent)));
+                Symbolics.SArgsT((du_view, size(parent)));
                 type = symtype(parent), shape = SU.shape(parent)
             )
         end
