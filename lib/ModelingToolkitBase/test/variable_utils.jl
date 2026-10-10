@@ -306,9 +306,13 @@ end
     init_a = value(Init()(a))
     @test check_op(init_a, init_a[iu]) == 2.0
 
-    # Slice / ArrayOp keys are rejected; only scalar getindex uses the
-    # symbolic-index substitution path.
+    # Slice / ArrayOp keys are rejected on both membership and substitution paths;
+    # only scalar getindex uses the symbolic-index branch.
     for slice in (au[2:3], au[1:2], au[1:2:3])
+        @test_throws ArgumentError ModelingToolkitBase.get_possibly_indexed(
+            dd, slice, ModelingToolkitBase.COMMON_NOTHING
+        )
+        @test_throws ArgumentError ModelingToolkitBase.missingvars(dd, [slice])
         @test_throws ArgumentError get(wrapper, slice, nothing)
         @test_throws ArgumentError subber(slice)
     end

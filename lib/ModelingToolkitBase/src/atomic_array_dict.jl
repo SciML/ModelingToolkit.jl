@@ -165,14 +165,15 @@ Equivalent to `get(dd, k, default)`. If `k` is an indexed array, then return
 `dd[arr][idxs...]` for the corresponding array `arr` and indices, or `default`
 if `arr` does not exist.
 
-When `k` has non-constant (symbolic) indices and `arr` is present:
+When `k` is a scalar `getindex` term (possibly under unary [`Operator`](@ref)s)
+with non-constant indices and `arr` is present:
 - if `allow_symbolic_indices` is `false` (default), return `default` so
   membership-style callers treat the entry as missing until indices are concrete;
-- if `allow_symbolic_indices` is `true` and `k` is a scalar `getindex` term
-  (possibly under unary [`Operator`](@ref)s), return the symbolic `getindex` of
-  the substituted array value so a fixpoint substituter can resolve the indices
-  next. Slice / `ArrayOp` keys are not handled here and fall through to
-  [`get_stable_index`](@ref).
+- if `allow_symbolic_indices` is `true`, return the symbolic `getindex` of the
+  substituted array value so a fixpoint substituter can resolve the indices next.
+
+Slice / `ArrayOp` and other non-`getindex` forms always go through
+[`get_stable_index`](@ref), which throws.
 """
 function get_possibly_indexed(
         dd::AtomicArrayDict, k::SymbolicT, default; allow_symbolic_indices::Bool = false
@@ -181,14 +182,9 @@ function get_possibly_indexed(
     res = get(dd, arr, default)
     isarr || return res
     res === default && return default
-    if !has_const_int_indices(k)
-        if allow_symbolic_indices && is_getindex_indexed(k)
-            return index_substituted_array(res, k)
-        elseif !allow_symbolic_indices
-            return default
-        end
-        # Slice / ArrayOp / other non-getindex forms go through `get_stable_index`,
-        # which throws.
+    if !has_const_int_indices(k) && is_getindex_indexed(k)
+        allow_symbolic_indices || return default
+        return index_substituted_array(res, k)
     end
     idx = get_stable_index(k)
     return res[idx]
