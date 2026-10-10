@@ -305,23 +305,23 @@ end
 
 #positivemax(m, ::Any; tol=nothing)= max(m, something(tol, 1e-8))
 #_positivemax(m, tol) = ifelse((-tol <= m) & (m <= tol), ((3 * tol - m) * (tol + m)^3)/(16 * tol^3) + tol, max(m, tol))
+const STREAM_EPS = 1.0e-4
+function _stream_alpha(si)
+    return ifelse(si > STREAM_EPS, 1, ifelse(si > 0, (si / STREAM_EPS)^2 * (3 - 2 * si / STREAM_EPS), 0))
+end
 function _positivemax(m, si)
-    T = typeof(m)
-    relativeTolerance = 1.0e-4
-    nominal = one(T)
-    eps = relativeTolerance * nominal
-    alpha = if si > eps
-        one(T)
-    else
-        if si > 0
-            (si / eps)^2 * (3 - 2 * si / eps)
-        else
-            zero(T)
-        end
-    end
-    return alpha * max(m, 0) + (1 - alpha) * eps
+    alpha = _stream_alpha(si)
+    return alpha * max(m, 0) + (1 - alpha) * STREAM_EPS
 end
 @register_symbolic _positivemax(m, tol)
+# At a positive-part kink, use the inactive branch's derivative.
+Symbolics.@register_derivative _positivemax(m, si) 1 Symbolics.SConst(
+    _stream_alpha(si) * ifelse(m > 0, 1, 0)
+)
+Symbolics.@register_derivative _positivemax(m, si) 2 Symbolics.SConst(
+    ifelse((si > 0) & (si < STREAM_EPS), 6 * si / STREAM_EPS^2 * (1 - si / STREAM_EPS), 0) *
+        (max(m, 0) - STREAM_EPS)
+)
 positivemax(m, ::Any; tol = nothing) = _positivemax(m, tol)
 mydiv(num, den) =
 if den == 0
@@ -1385,4 +1385,40 @@ end
 SymbolicUtils.promote_symtype(::typeof(instream_rt), _::SU.TypeT...) = Real
 function SymbolicUtils.promote_shape(::typeof(instream_rt), @nospecialize(_::SU.ShapeT...))
     return SU.ShapeVecT()
+end
+
+Symbolics.@register_derivative instream_rt(args...) I _instream_derivative(
+    SU.unwrap_const(args[1]), SU.unwrap_const(args[2]), args, I
+)
+
+function _instream_derivative(::Val{ni}, ::Val{no}, args, idx) where {ni, no}
+    idx <= 2 && return Symbolics.SConst(0)
+    flow_indices = [3:(2 + ni); (3 + 2 * ni):(2 + 2 * ni + no)]
+    stream_indices = [(3 + ni):(2 + 2 * ni); (3 + 2 * ni + no):length(args)]
+    si = Symbolics.SConst(0)
+    dsi = Symbolics.SConst(0)
+    for (j, fi) in enumerate(flow_indices)
+        flow = j <= ni ? -args[fi] : args[fi]
+        si += max(flow, 0)
+        if fi == idx
+            dsi = ifelse(flow > 0, j <= ni ? -1 : 1, 0)
+        end
+    end
+    num = den = dnum = dden = Symbolics.SConst(0)
+    for (fi, hi) in zip(flow_indices, stream_indices)
+        flow, stream = -args[fi], args[hi]
+        weight = _positivemax(flow, si)
+        dweight = (Symbolics.@derivative_rule _positivemax(flow, si) 2) * dsi
+        if fi == idx
+            dweight -= Symbolics.@derivative_rule _positivemax(flow, si) 1
+        end
+        num += weight * stream
+        den += weight
+        dnum += dweight * stream
+        if hi == idx
+            dnum += weight
+        end
+        dden += dweight
+    end
+    return Symbolics.SConst((dnum - num / den * dden) / den)
 end
