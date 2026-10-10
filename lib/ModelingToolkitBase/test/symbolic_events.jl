@@ -2100,7 +2100,13 @@ end
     if @isdefined(ModelingToolkit)
         # ModelingToolkit.__mtkcompile calls discover_maybe_zeros; MTKBase's mtkcompile does not.
         sys = @test_nowarn mtkcompile(sys)
-        @test !isempty(ModelingToolkitBase.continuous_events(sys))
+        scc = only(ModelingToolkitBase.continuous_events(sys))
+        aff = ModelingToolkitBase.affects(scc)
+        @test aff isa ModelingToolkitBase.AffectSystem
+        # Pin the symbolic `table[k]` lookup that previously threw in discover_maybe_zeros.
+        c_eq = only(filter(eq -> isequal(eq.lhs, unwrap(c)), observed(system(aff))))
+        @test Symbolics.operation(unwrap(c_eq.rhs)) === getindex
+        @test isequal(Symbolics.arguments(unwrap(c_eq.rhs))[1], unwrap(table))
     else
         tk = unwrap(table[k])
         @named raw = System(

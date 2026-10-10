@@ -305,6 +305,13 @@ end
     # because `Initial(a[i])` itself errors when `i` is symbolic.
     init_a = value(Init()(a))
     @test check_op(init_a, init_a[iu]) == 2.0
+
+    # Slice / ArrayOp keys must not silently return the full array (master threw
+    # from `get_stable_index`; the symbolic-index path only applies to getindex).
+    for slice in (au[2:3], au[1:2], au[1:2:3])
+        @test_throws ArgumentError get(wrapper, slice, nothing)
+        @test_throws ArgumentError subber(slice)
+    end
 end
 
 @testset "`shift2term` on an already-shifted array variable" begin
