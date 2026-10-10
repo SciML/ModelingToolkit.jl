@@ -1978,7 +1978,7 @@ function record_node_value(root::SymbolicT, node::SymbolicT, buffer::AbstractVec
         end
         return reshape(vec(vals), size(node))
     end
-    T = SU.symtype(node)::DataType
+    T = SU.symtype(node)::SU.TypeT
     Symbolics.issymstruct(node) || error(
         lazy"Cannot assemble a value for $node of type $T from the leaves of $root."
     )
