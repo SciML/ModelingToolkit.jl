@@ -58,10 +58,13 @@ OrdinaryDiffEqTsit5 = "b1df2697-797e-41e3-8120-5422d3b24e4a"
 ModelingToolkitBase = {path = "lib/ModelingToolkitBase"}
 SciCompDSL = {path = "lib/SciCompDSL"}
 # Temporary: test against the JumpProcesses 10 branches (SciML/JumpProcesses.jl#680 and
-# SciML/OrdinaryDiffEq.jl#4836). Remove, with the StochasticDiffEqCore test extra, once
-# JumpProcesses 10 and that StochasticDiffEqCore release are registered.
+# SciML/OrdinaryDiffEq.jl#4836). StochasticDiffEqImplicit and StochasticDiffEqLeaping are
+# pinned too, since their registered versions do not admit JumpProcesses 10. Remove, with
+# the StochasticDiffEq* test extras, once those releases are registered.
 JumpProcesses = {url = "https://github.com/isaacsas/DiffEqJump.jl.git", rev = "integration/v10-master-2026-09-22"}
 StochasticDiffEqCore = {url = "https://github.com/isaacsas/OrdinaryDiffEq.jl.git", rev = "sdecore/jumpprocesses-v10", subdir = "lib/StochasticDiffEqCore"}
+StochasticDiffEqImplicit = {url = "https://github.com/isaacsas/OrdinaryDiffEq.jl.git", rev = "sdecore/jumpprocesses-v10", subdir = "lib/StochasticDiffEqImplicit"}
+StochasticDiffEqLeaping = {url = "https://github.com/isaacsas/OrdinaryDiffEq.jl.git", rev = "sdecore/jumpprocesses-v10", subdir = "lib/StochasticDiffEqLeaping"}
 
 [extensions]
 MTKFMIExt = "FMIImport"
@@ -133,6 +136,8 @@ StateSelection = "1.10.5"
 StaticArrays = "1.9.14"
 StochasticDiffEq = "7"
 StochasticDiffEqCore = "2.2.3"
+StochasticDiffEqImplicit = "2.2.1"
+StochasticDiffEqLeaping = "2.1.0"
 SymbolicIndexingInterface = "0.3.47"
 SymbolicUtils = "4.31"
 Symbolics = "7.41.1"
@@ -207,10 +212,12 @@ Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 SteadyStateDiffEq = "9672c7b4-1e72-59bd-8a11-6ac3964bc41f"
 StochasticDiffEq = "789caeaf-c7a9-5a7d-9973-96adeb23e2a0"
 StochasticDiffEqCore = "19c5a474-6cd1-4a5f-be79-46dc34e54d7f"
+StochasticDiffEqImplicit = "5080b986-4c76-4669-b5dc-373a41579d5b"
+StochasticDiffEqLeaping = "aefaaa88-39f2-4e89-b162-d61b7e8cc81b"
 Sundials = "c3572dad-4567-51f8-b174-8c6c989267f4"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 TestEnv = "1e6cf692-eddd-4d53-88a5-2d735e33781b"
 URIs = "5c2747f8-b7ea-4ff2-ba2e-563bfd36b1d4"
 
 [targets]
-test = ["BenchmarkTools", "BoundaryValueDiffEqMIRK", "BoundaryValueDiffEqAscher", "ControlSystemsBase", "DataInterpolations", "DelayDiffEq", "NonlinearSolve", "NonlinearSolveBase", "ForwardDiff", "ModelingToolkitStandardLibrary", "Optimization", "OptimizationOptimJL", "OrdinaryDiffEq", "OrdinaryDiffEqCore", "OrdinaryDiffEqDefault", "REPL", "Random", "ReferenceTests", "SafeTestsets", "SciMLTesting", "StableRNGs", "Statistics", "SteadyStateDiffEq", "Test", "StochasticDiffEq", "StochasticDiffEqCore", "Sundials", "OrdinaryDiffEqNonlinearSolve", "Logging", "OptimizationBase", "LinearSolve", "Latexify", "Distributed", "DiffEqNoiseProcess", "DynamicQuantities", "DiffEqCallbacks", "URIs", "JumpProcesses", "RecursiveArrayTools", "SpecialFunctions", "SciCompDSL", "OrdinaryDiffEqRosenbrock", "OrdinaryDiffEqSDIRK", "OrdinaryDiffEqBDF", "OrdinaryDiffEqFunctionMap", "OrdinaryDiffEqFIRK"]
+test = ["BenchmarkTools", "BoundaryValueDiffEqMIRK", "BoundaryValueDiffEqAscher", "ControlSystemsBase", "DataInterpolations", "DelayDiffEq", "NonlinearSolve", "NonlinearSolveBase", "ForwardDiff", "ModelingToolkitStandardLibrary", "Optimization", "OptimizationOptimJL", "OrdinaryDiffEq", "OrdinaryDiffEqCore", "OrdinaryDiffEqDefault", "REPL", "Random", "ReferenceTests", "SafeTestsets", "SciMLTesting", "StableRNGs", "Statistics", "SteadyStateDiffEq", "Test", "StochasticDiffEq", "StochasticDiffEqCore", "StochasticDiffEqImplicit", "StochasticDiffEqLeaping", "Sundials", "OrdinaryDiffEqNonlinearSolve", "Logging", "OptimizationBase", "LinearSolve", "Latexify", "Distributed", "DiffEqNoiseProcess", "DynamicQuantities", "DiffEqCallbacks", "URIs", "JumpProcesses", "RecursiveArrayTools", "SpecialFunctions", "SciCompDSL", "OrdinaryDiffEqRosenbrock", "OrdinaryDiffEqSDIRK", "OrdinaryDiffEqBDF", "OrdinaryDiffEqFunctionMap", "OrdinaryDiffEqFIRK"]
