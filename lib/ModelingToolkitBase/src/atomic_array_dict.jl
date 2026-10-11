@@ -164,14 +164,66 @@ end
 Equivalent to `get(dd, k, default)`. If `k` is an indexed array, then return
 `dd[arr][idxs...]` for the corresponding array `arr` and indices, or `default`
 if `arr` does not exist.
+
+When `k` is a scalar `getindex` term (possibly under unary [`Operator`](@ref)s)
+with non-constant indices and `arr` is present:
+- if `allow_symbolic_indices` is `false` (default), return `default` so
+  membership-style callers treat the entry as missing until indices are concrete;
+- if `allow_symbolic_indices` is `true`, return the symbolic `getindex` of the
+  substituted array value so a fixpoint substituter can resolve the indices next.
+
+Slice / `ArrayOp` and other non-`getindex` forms always go through
+[`get_stable_index`](@ref), which throws.
 """
-function get_possibly_indexed(dd::AtomicArrayDict, k::SymbolicT, default)
+function get_possibly_indexed(
+        dd::AtomicArrayDict, k::SymbolicT, default; allow_symbolic_indices::Bool = false
+    )
     arr, isarr = split_indexed_var(k)
     res = get(dd, arr, default)
     isarr || return res
     res === default && return default
+    if !has_const_int_indices(k) && is_getindex_indexed(k)
+        allow_symbolic_indices || return default
+        return index_substituted_array(res, k)
+    end
     idx = get_stable_index(k)
     return res[idx]
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Return `true` if `k` is a scalar `getindex` term, possibly under unary
+[`Operator`](@ref) wrappers. Slice / [`ArrayOp`](@ref) forms return `false`.
+"""
+function is_getindex_indexed(k::SymbolicT)
+    return Moshi.Match.@match k begin
+        BSImpl.Term(; f, args) && if f === getindex end => true
+        BSImpl.Term(; f, args) && if f isa Operator && length(args) == 1 end => begin
+            return is_getindex_indexed(args[1]::SymbolicT)
+        end
+        _ => return false
+    end
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Build `getindex(res, idxs...)` using the (possibly symbolic) indices of the
+indexed term `k`. Recurses through wrapping [`Operator`](@ref)s.
+"""
+function index_substituted_array(res::SymbolicT, k::SymbolicT)
+    return Moshi.Match.@match k begin
+        BSImpl.Term(; f, args) && if f === getindex end => begin
+            return res[args[2:end]...]::SymbolicT
+        end
+        BSImpl.Term(; f, args) && if f isa Operator && length(args) == 1 end => begin
+            # `res` is already the value of `f(arr)`; do not re-apply `f`
+            # (mirrors `_get_stable_index`, which discards the operator).
+            return index_substituted_array(res, args[1]::SymbolicT)::SymbolicT
+        end
+        _ => throw(ArgumentError(lazy"Invalid variable $k for `index_substituted_array`."))
+    end
 end
 
 struct AtomicArraySet{D <: AbstractDict{SymbolicT, Nothing}} <: AbstractSet{SymbolicT}
@@ -247,6 +299,13 @@ it will return the indexed array. For example, if the wrapped `dict` has
 `k[1]`, it will return `k[1]` instead of `default`. This is useful since `default`
 is used to represent missing values. Substituting something like `sin(k[1])` will
 then not attempt to perform `sin(default)` but instead return `sin(k[1])`.
+
+Limitation: when the stored array value uses `COMMON_NOTHING` holes (e.g.
+`Union{Nothing,Float64}[1.0, nothing, 3.0]`), looking up a *symbolic* index such
+as `a[i]` is not supported — constructing the intermediate symbolic `getindex`
+of that heterogeneous array currently errors. Concrete integer indices still
+honour the hole contract above. Prefer leaving those slots unset in the map
+until indices are concrete, or fill holes before substitution.
 """
 struct AtomicArrayDictSubstitutionWrapper{D} <: AbstractDict{SymbolicT, SymbolicT}
     dict::AtomicArrayDict{SymbolicT, D}
@@ -261,7 +320,7 @@ const AADSubWrapper{D} = AtomicArrayDictSubstitutionWrapper{D}
 
 Base.get(def::Base.Callable, dd::AADSubWrapper, k) = def()
 function Base.get(def::Base.Callable, dd::AADSubWrapper, k::SymbolicT)
-    res = get_possibly_indexed(dd.dict, k, dd.default)
+    res = get_possibly_indexed(dd.dict, k, dd.default; allow_symbolic_indices = true)
     if res === dd.default
         arr, isarr = split_indexed_var(k)
         isarr && haskey(dd.dict, arr) && return k

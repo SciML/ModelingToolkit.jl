@@ -2087,6 +2087,36 @@ end
     @test sol[s] ≈ [ones(3), -ones(3), ones(3), -ones(3)]
 end
 
+@testset "Symbolic array index in affect (issue #5078)" begin
+    @variables x(t) y(t)
+    @discretes k(t)::Int = 1 c(t) = 1.0
+    @parameters table[1:3] = [1.0, 2.0, 3.0]
+    eqs = [D(x) ~ -c * x, 0 ~ y - x^2]
+    event = SymbolicContinuousCallback(
+        [x ~ 0.5] => [k ~ Pre(k) + 1, c ~ table[k]],
+        discrete_parameters = [k, c],
+    )
+    @named sys = System(eqs, t, [x, y], [k, c, table]; continuous_events = [event])
+    if @isdefined(ModelingToolkit)
+        # ModelingToolkit.__mtkcompile calls discover_maybe_zeros; MTKBase's mtkcompile does not.
+        sys = @test_nowarn mtkcompile(sys)
+        scc = only(ModelingToolkitBase.continuous_events(sys))
+        aff = ModelingToolkitBase.affects(scc)
+        @test aff isa ModelingToolkitBase.AffectSystem
+        # Pin the compiled affect's observed `c ~ table[...]` lookup.
+        c_eq = only(filter(eq -> isequal(eq.lhs, unwrap(c)), observed(system(aff))))
+        @test Symbolics.operation(unwrap(c_eq.rhs)) === getindex
+        @test isequal(Symbolics.arguments(unwrap(c_eq.rhs))[1], unwrap(table))
+    else
+        tk = unwrap(table[k])
+        @named raw = System(
+            [k ~ Pre(k) + 1, c ~ table[k], 0 ~ y - x^2],
+            t, [x, y, k, c], [tk, Pre(k)]; is_discrete = true
+        )
+        @test_nowarn ModelingToolkitBase.discover_maybe_zeros(raw)
+    end
+end
+
 @testset "Issue#5077: nothing affect edges drop duplicate save and post-affect reinit" begin
     @variables x(t) y(t)
     @parameters k = 1.0
