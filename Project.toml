@@ -57,11 +57,10 @@ OrdinaryDiffEqTsit5 = "b1df2697-797e-41e3-8120-5422d3b24e4a"
 [sources]
 ModelingToolkitBase = {path = "lib/ModelingToolkitBase"}
 SciCompDSL = {path = "lib/SciCompDSL"}
-# Temporary: test against the JumpProcesses 10 branches (SciML/JumpProcesses.jl#680 and
-# SciML/OrdinaryDiffEq.jl#4836). StochasticDiffEqImplicit and StochasticDiffEqLeaping are
-# pinned too, since their registered versions do not admit JumpProcesses 10. Remove, with
-# the StochasticDiffEq* test extras, once those releases are registered.
-JumpProcesses = {url = "https://github.com/isaacsas/DiffEqJump.jl.git", rev = "integration/v10-master-2026-09-22"}
+# Temporary: test against the StochasticDiffEq branch for JumpProcesses 10
+# (SciML/OrdinaryDiffEq.jl#4836), since registered StochasticDiffEqCore,
+# StochasticDiffEqImplicit, and StochasticDiffEqLeaping do not admit JumpProcesses 10.
+# Remove, with the StochasticDiffEq* test extras, once those releases are registered.
 StochasticDiffEqCore = {url = "https://github.com/isaacsas/OrdinaryDiffEq.jl.git", rev = "sdecore/jumpprocesses-v10", subdir = "lib/StochasticDiffEqCore"}
 StochasticDiffEqImplicit = {url = "https://github.com/isaacsas/OrdinaryDiffEq.jl.git", rev = "sdecore/jumpprocesses-v10", subdir = "lib/StochasticDiffEqImplicit"}
 StochasticDiffEqLeaping = {url = "https://github.com/isaacsas/OrdinaryDiffEq.jl.git", rev = "sdecore/jumpprocesses-v10", subdir = "lib/StochasticDiffEqLeaping"}
@@ -149,7 +148,7 @@ ControlSystemsBase = "1"
 DiffEqCallbacks = "4, 5, 6"
 Distributed = "1"
 DynamicQuantities = "1"
-JumpProcesses = "9.28, 10"
+JumpProcesses = "10"
 Latexify = "0.16"
 Random = "1"
 RecursiveArrayTools = "4"
