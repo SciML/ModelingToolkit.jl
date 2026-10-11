@@ -160,9 +160,10 @@ function variable_dependencies(
         variablestoids
 
     deps = Set()
+    sts = Set(keys(vtois))
     badjlist = Vector{Vector{Int}}(undef, length(eqs))
     for (eidx, eq) in enumerate(eqs)
-        modified_unknowns!(deps, eq, variables)
+        modified_unknowns!(deps, eq, sts)
         badjlist[eidx] = sort!([vtois[var] for var in deps])
         empty!(deps)
     end

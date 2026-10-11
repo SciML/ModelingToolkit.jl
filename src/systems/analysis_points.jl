@@ -17,7 +17,15 @@ end
 
 const DOC_LOOP_OPENINGS = """
 - `loop_openings`: A list of analysis points whose connections should be removed and
-  the outputs set to the input as a part of the linear analysis.
+  the outputs set to the input as a part of the linear analysis. Each entry is an
+  analysis point of the unsimplified, uncompleted system, obtained as `sys.ap_name`.
+"""
+
+const DOC_APS = """
+- `aps`: An analysis point of the unsimplified, uncompleted system `sys`, obtained as
+  `sys.ap_name`, or a vector of such points. A point belonging to a subsystem is reached
+  through the hierarchy, `sys.inner.ap_name`. Passing the `Symbol` name of a point is the
+  old style and will be deprecated.
 """
 
 const DOC_SYS_MODIFIER = """
@@ -33,6 +41,10 @@ Utility function for linear analyses that apply a transformation `transform`, wh
 returns the added variables `(du, u)`, to each of the analysis points in `aps` and then
 calls `linearization_function` with all the `du`s as inputs and `u`s as outputs. Returns
 the linearization function and modified, simplified system.
+
+# Arguments
+
+$DOC_APS
 
 # Keyword arguments
 
@@ -71,6 +83,10 @@ end
 Return the sensitivity function for the analysis point(s) `aps`, and the modified system
 simplified with the appropriate inputs and outputs.
 
+# Arguments
+
+$DOC_APS
+
 # Keyword Arguments
 
 $DOC_LOOP_OPENINGS
@@ -88,6 +104,10 @@ end
 Return the complementary sensitivity function for the analysis point(s) `aps`, and the
 modified system simplified with the appropriate inputs and outputs.
 
+# Arguments
+
+$DOC_APS
+
 # Keyword Arguments
 
 $DOC_LOOP_OPENINGS
@@ -104,6 +124,10 @@ end
 
 Return the loop-transfer function for the analysis point(s) `aps`, and the modified
 system simplified with the appropriate inputs and outputs.
+
+# Arguments
+
+$DOC_APS
 
 # Keyword Arguments
 
@@ -126,8 +150,13 @@ perturbation to the output of `ap`.
 
 # Arguments
 
-- `sys`: system containing the analysis point.
-- `ap`: an [`AnalysisPoint`](@ref) or its symbolic name.
+- `sys`: The unsimplified, uncompleted system containing the analysis point. Both
+  `mtkcompile` and `complete` remove the analysis points, so neither may have been
+  applied to `sys`.
+- `ap`: An [`AnalysisPoint`](@ref), obtained by property access on `sys`, as in
+  `get_sensitivity(sys, sys.plant_input)`. A point belonging to a subsystem is reached
+  through the hierarchy, `sys.inner.plant_input`. Passing the `Symbol` name of the point,
+  `get_sensitivity(sys, :plant_input)`, is the old style and will be deprecated.
 
 # Keyword Arguments
 
@@ -160,8 +189,8 @@ Compute the complementary-sensitivity transfer matrices at analysis point `ap` a
 at the output of `ap`, linearizes the system, and computes the transfer function from the
 perturbation to the input of `ap`.
 
-Keyword arguments match [`get_sensitivity`](@ref), with `kwargs...` forwarded to
-[`get_comp_sensitivity_function`](@ref).
+Arguments and keyword arguments match [`get_sensitivity`](@ref), with `kwargs...`
+forwarded to [`get_comp_sensitivity_function`](@ref).
 
 See also [`get_sensitivity`](@ref) and [`get_looptransfer`](@ref).
 """
@@ -183,8 +212,8 @@ end
 Compute the loop-transfer matrices at analysis point `ap` and return
 `(matrices, simplified_system, extras)`. The transfer is from `ap.out` to `ap.in`.
 
-Keyword arguments match [`get_sensitivity`](@ref), with `kwargs...` forwarded to
-[`get_looptransfer_function`](@ref).
+Arguments and keyword arguments match [`get_sensitivity`](@ref), with `kwargs...`
+forwarded to [`get_looptransfer_function`](@ref).
 
 !!! info "Negative feedback"
 
@@ -209,6 +238,10 @@ end
     sys, input_vars, output_vars = $(TYPEDSIGNATURES)
 
 Apply analysis-point transformations to prepare a system for linearization.
+
+`inputs`, `outputs` and `loop_openings` are analysis points of the unsimplified,
+uncompleted system `sys`, obtained as `sys.ap_name`, or vectors of such points. Passing
+the `Symbol` names of the points is the old style and will be deprecated.
 
 Returns
 - `sys`: The transformed system.
@@ -273,6 +306,12 @@ analysis points `input_aps` and the output analysis points `output_aps`. The ret
 `sys` contains only the subsystems between the boundary analysis points at every level
 of the hierarchy; all upstream and downstream components, and all equations involving
 them, are removed.
+
+The boundary points are obtained as `sys.ap_name`, or `sys.inner.ap_name` for a point
+belonging to a subsystem, and each argument accepts a single point or a vector of points.
+Passing the `Symbol` names of the points is the old style and will be deprecated. `sys`
+must not have been passed through `mtkcompile` or `complete`, both of which remove the
+analysis points.
 
 Boundary analysis points may reside at any level of the hierarchy and in different
 branches of the subsystem tree.

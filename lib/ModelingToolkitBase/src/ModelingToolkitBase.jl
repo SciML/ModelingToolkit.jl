@@ -484,7 +484,7 @@ export MTKParameters, reorder_dimension_by_tunables!, reorder_dimension_by_tunab
 
 export HomotopyContinuationProblem
 
-export AnalysisPoint, open_loop
+export AnalysisPoint, open_loop, ap_var
 
 include("systems/optimal_control_interface.jl")
 
@@ -520,6 +520,7 @@ const set_scalar_metadata = setmetadata
 @public convert_bindings_for_time_independent_system, get_w
 @public Both
 @public SymbolicADDisallowed, check_symbolic_ad_allowed
+@public canonical_constraints, constraint_residual
 @public tobrownian, toparam, tovar
 @public ProblemTypeCtx
 @public HomotopyCtx, homotopy_enabled, strip_homotopy
