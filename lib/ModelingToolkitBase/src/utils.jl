@@ -1788,6 +1788,29 @@ end
 """
     $TYPEDSIGNATURES
 
+Return `true` if `x` is an indexed array symbolic whose indices are all constant
+integers (suitable for [`get_stable_index`](@ref)). Symbolic or non-integer
+indices return `false`.
+"""
+function has_const_int_indices(x::SymbolicT)
+    return Moshi.Match.@match x begin
+        BSImpl.Term(; f, args) && if f === getindex end => begin
+            for i in 2:length(args)
+                idx = unwrap_const(args[i])
+                idx isa Integer || return false
+            end
+            return true
+        end
+        BSImpl.Term(; f, args) && if f isa Operator && length(args) == 1 end => begin
+            return has_const_int_indices(args[1]::SymbolicT)
+        end
+        _ => return false
+    end
+end
+
+"""
+    $TYPEDSIGNATURES
+
 One step of an access path into a composite symbolic: a field name, or the index of an
 element. See [`get_struct_access`](@ref).
 """
@@ -1884,9 +1907,15 @@ end
 
 The leaves of the struct symbolic `root`, in canonical linear order. This is the order
 used to lay out a record's value in [`AtomicArrayDict`](@ref).
+
+The result is cached and shared between callers, so it is returned read-only: mutating it
+would corrupt the cache for everyone who asks for the same root afterwards. Copy it if you
+need something to modify.
 """
-SU.@cache limit = 500_000 function record_leaves(root::SymbolicT)::Vector{SymbolicT}
-    return _record_leaves(root)
+SU.@cache limit = 500_000 function record_leaves(
+        root::SymbolicT
+    )::ReadOnlyVector{SymbolicT, Vector{SymbolicT}}
+    return ReadOnlyVector(_record_leaves(root))
 end
 
 function _record_leaves(root::SymbolicT)

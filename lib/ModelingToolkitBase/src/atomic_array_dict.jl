@@ -320,13 +320,32 @@ with non-constant indices and `arr` is present:
 Slice / `ArrayOp` and other non-`getindex` forms always go through
 [`get_stable_index`](@ref), which throws.
 """
-function get_possibly_indexed(dd::AtomicArrayDict, k::SymbolicT, default)
-    haskey(dd, k) && return dd[k]
+function get_possibly_indexed(
+        dd::AtomicArrayDict, k::SymbolicT, default; allow_symbolic_indices::Bool = false
+    )
     arr, isarr = split_indexed_var(k)
-    if isarr
-        res = get(dd, arr, default)
-        res === default || return res[get_stable_index(k)]
+    res = get(dd, arr, default)
+    if !isarr
+        res === default || return res
+        return record_ancestor_value(dd, k, default)
     end
+    res === default && return record_ancestor_value(dd, k, default)
+    if !has_const_int_indices(k) && is_getindex_indexed(k)
+        allow_symbolic_indices || return default
+        return index_substituted_array(res, k)
+    end
+    idx = get_stable_index(k)
+    return res[idx]
+end
+
+"""
+    $TYPEDSIGNATURES
+
+The value `k` projects out of whichever ancestor of it `dd` holds, or `default` if it
+holds none. A record key is lowered to the nodes beneath it, so a projection of one is
+found under an ancestor rather than under itself.
+"""
+function record_ancestor_value(dd::AtomicArrayDict, k::SymbolicT, default)
     anc = nearest_present_ancestor(dd, k)
     anc === nothing && return default
     return record_leaf_entry(k, anc, dd[anc])
