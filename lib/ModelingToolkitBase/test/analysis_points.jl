@@ -266,10 +266,10 @@ if @isdefined(ModelingToolkit)
         end
     end
 
-    @testset "loop_openings require an operating point" begin
-        # Opening a loop turns the opened signal into a parameter whose operating-point
-        # value is not implied by the solution. It must be provided explicitly, otherwise
-        # `linearize` errors instead of silently using a stale/default value.
+    @testset "Signals disconnected by loop openings keep their values along a solution" begin
+        # Opening a loop turns the opened signal into a parameter. Without an entry in the
+        # operating point, it is held at the value of the signal that drove it, which along
+        # a solution is the value the signal has in the loop-closed solution.
         # Linearize plant_input -> P.output.u while opening the `plant_output` analysis
         # point (so the opened AP is neither the input nor the output).
 
@@ -279,25 +279,37 @@ if @isdefined(ModelingToolkit)
         sol = solve(prob, Rodas5())
         ts = [0.0, 0.5, 1.0]
 
-        lf_lo, _ = linearization_function(
+        lf_lo, ssys_lo = linearization_function(
             sys, sys.plant_input, P.output.u; loop_openings = [sys.plant_output]
         )
         lops = lf_lo.loop_opening_params
         @test !isempty(lops)
 
-        # Not providing the loop-opening parameter errors (both vector and scalar paths).
-        @test_throws Exception linearize(
+        # Both the vector and the scalar path hold the opened signal at its value in the
+        # solution, which equals the explicit symbolic mapping to the driving signal.
+        mats_vec, _, _ = linearize(
             sys, sys.plant_input, P.output.u;
             op = ModelingToolkit.LinearizationOpPoint(sol, ts),
             loop_openings = [sys.plant_output]
         )
-        @test_throws Exception linearize(
+        mats_sym, _, _ = linearize(
             sys, sys.plant_input, P.output.u;
-            op = ModelingToolkit.LinearizationOpPoint(sol, 0.0),
+            op = ModelingToolkit.LinearizationOpPoint(sol, ts; op = Dict(p => P.output.u for p in lops)),
             loop_openings = [sys.plant_output]
         )
+        @test length(mats_vec) == length(ts)
+        for (m, msym) in zip(mats_vec, mats_sym)
+            @test m.A ≈ msym.A
+            @test m.B ≈ msym.B
+        end
+        mats_scalar, _, _ = linearize(
+            sys, sys.plant_input, P.output.u;
+            op = ModelingToolkit.LinearizationOpPoint(sol, 0.5),
+            loop_openings = [sys.plant_output]
+        )
+        @test mats_scalar.A ≈ mats_vec[2].A
 
-        # Providing it via the `op` keyword of `LinearizationOpPoint` works.
+        # An entry in the `op` of the `LinearizationOpPoint` takes precedence.
         op_lo = Dict(p => 0.0 for p in lops)
         mats_lo, _, _ = linearize(
             sys, sys.plant_input, P.output.u;
@@ -305,9 +317,13 @@ if @isdefined(ModelingToolkit)
             loop_openings = [sys.plant_output]
         )
         @test length(mats_lo) == length(ts)
+
+        # The initialization equation of a held signal is fixed when the linearization
+        # function is built, so a value for it at `linearize` time is rejected.
+        @test_throws ErrorException linearize(ssys_lo, lf_lo; op = op_lo)
     end
 
-    @testset "Initial conditions of loop-opening variables" begin
+    @testset "Operating point of signals disconnected by loop openings" begin
         # The controller state equation is nonlinear in the controller input, so the
         # entry A = -(1 + u^2) of the controller state reveals the value of the opened input.
         @component function ICPlant(; name)
@@ -359,11 +375,32 @@ if @isdefined(ModelingToolkit)
         )
         @test mats.A[icx(ssys), icx(ssys)] ≈ -1.0 atol = 1.0e-8
 
-        # Without an initial condition, a value must be provided in the operating point
-        @test_throws ErrorException linearize(
-            ic_loop(; with_ic = false), :ctrl_output, :plant_output;
-            loop_openings = [:plant_output]
+        # Without an entry in the operating point or an initial condition, the opened
+        # variable is held at the value of the plant output at the operating point of the
+        # loop-closed system, x = 1 from the initial condition of the plant state
+        nosys = ic_loop(; with_ic = false)
+        mats, ssys, _ = linearize(
+            nosys, :ctrl_output, :plant_output; loop_openings = [:plant_output]
         )
+        @test mats.A[icx(ssys), icx(ssys)] ≈ -(1 + 1.0^2)
+        ncsys = complete(nosys)
+        mats, ssys, _ = linearize(
+            nosys, :ctrl_output, :plant_output; loop_openings = [:plant_output],
+            op = Dict(ncsys.icP.x => 0.3)
+        )
+        @test mats.A[icx(ssys), icx(ssys)] ≈ -(1 + 0.3^2)
+
+        # The same holds for the input that replaces the broken connection in
+        # `get_looptransfer`, and for an input analysis point that is also a loop opening
+        mats, ssys = get_looptransfer(
+            nosys, :plant_output; op = Dict(ncsys.icP.x => 0.3)
+        )
+        @test mats.A[icx(ssys), icx(ssys)] ≈ -(1 + 0.3^2)
+        mats, ssys, _ = linearize(
+            nosys, :plant_output, :ctrl_output; loop_openings = [:plant_output],
+            op = Dict(ncsys.icP.x => 0.3)
+        )
+        @test mats.A[icx(ssys), icx(ssys)] ≈ -(1 + 0.3^2)
     end
 
     @testset "Symbolic loop-opening op values resolve from the solution" begin
@@ -416,6 +453,14 @@ if @isdefined(ModelingToolkit)
             op = ModelingToolkit.LinearizationOpPoint(nlsol, 2.5; op = sym_op)
         )
         @test mats_1.A[iC, iC] ≈ -(1 + nlsol(2.5, idxs = ncsys.nlP.y)^2) rtol = 1.0e-6
+
+        # Without an entry in the operating point, the opened signal is held at the value
+        # it has in the solution, the same as with the explicit symbolic mapping.
+        mats_def, _, _ = linearize(
+            nlsys, :ctrl_output, :plant_output; loop_openings = [:plant_output],
+            op = ModelingToolkit.LinearizationOpPoint(nlsol, nlts)
+        )
+        @test [m.A[iC, iC] for m in mats_def] ≈ truth rtol = 1.0e-6
 
         # `missing` passes through the trajectory path without error.
         mats_miss, _, _ = linearize(
