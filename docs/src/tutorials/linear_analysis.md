@@ -152,24 +152,22 @@ margin(P)
 nyquistplot(P)
 ```
 
-## Operating Point of Unconnected Inputs After Loop Openings
-When a connection is broken via `loop_openings`, the downstream input variable(s) that were previously driven by the connection become free. The value assigned to these inputs determines the operating point at which the linearization is computed, which is significant for nonlinear systems where the Jacobian depends on the operating point.
-Semantics: The variable introduced by a loop opening is treated as a parameter of the system, not as an additional input to the linearization. It does not appear as an extra column in the $B$ or $D$ matrices of the linearized state-space model. No value is automatically propagated from the output side of the broken connection. The value of the opened variable is instead determined by
+## Operating Point of Signals Disconnected by Loop Openings
+When a connection is broken via `loop_openings`, the input variables that were driven by the connection are disconnected. Their values are part of the operating point at which the linearization is computed, which is significant for systems that are nonlinear in these variables.
 
-- its entry in the operating point, e.g., `op = Dict(u => value)`, or, if the operating point has no entry for it,
-- the initial condition of the variable in the system, e.g., `@variables u(t) = value`.
+Semantics: A loop opening changes the input-output structure of the linearization, not the operating point. A disconnected variable becomes a parameter of the system, not an additional input of the linearization, so it does not appear as an extra column of the $B$ or $D$ matrices. Its value is determined by, in order of precedence,
 
-If neither provides a value, `linearize` throws an error. A guess value of the variable does not provide one. The following entries in the operating point determine the value in other ways:
+ 1. its entry in the operating point: a value, e.g., `op = Dict(u => value)`; the value `missing`, which makes the initialization solve for the variable from additional conditions in the operating point, for example a steady-state condition `D(x) => 0` for a differential state variable `x`; or an expression,
+ 2. its initial condition in the system, e.g., `@variables u(t) = value`, unless the linearization is performed around a solution with [`LinearizationOpPoint`](@ref), which ignores the initial conditions of the system,
+ 3. otherwise, the value of the signal that drove it before the connection was broken, at the operating point of the loop-closed system. The initialization includes the equation `u ~ driver` in place of the broken connection, so it solves the same problem as the initialization of the loop-closed system. With a [`LinearizationOpPoint`](@ref), this is the value the signal has in the solution at each time point.
 
-- The value `missing` makes the initialization solve for the opened variable. This requires additional conditions in the operating point that determine it, for example a steady-state condition `D(x) => 0` for a differential state variable `x`.
-- When linearizing around a solution with [`LinearizationOpPoint`](@ref), the initial conditions of the system are ignored, and a symbolic value is evaluated from the solution. `LinearizationOpPoint(sol, t; op = Dict(u => u))` linearizes around the value that the opened variable has in the loop-closed solution `sol`.
+A guess value of the variable does not determine its value. The same rules apply to the input that replaces the broken connection in [`get_looptransfer`](@ref), and to an input analysis point that is also listed in `loop_openings`. The value of a disconnected signal is fixed when the linearization function is built, so it must be given in the operating point passed to [`linearization_function`](@ref) or to the analysis function that builds it; `linearize(sys, lin_fun; op)` rejects values for signals that the linearization function holds at the value of their driver.
 
-Motivation: This design reflects a series of tradeoffs discovered through iteration:
+Motivation:
 
-- Defaulting free inputs to zero (the original behavior) is incorrect for nonlinear systems because it changes the linearization point relative to the equilibrium, potentially yielding meaningless results.
-- Automatically propagating the output value of the broken connection preserves the correct operating point in some cases, makes it impossible to disconnect input sources (e.g., a Step signal). It also silently determines the operating point in a way that is difficult for the user to inspect or override.
-- Making the variable a parameter (rather than a linearization input) prevents it from appearing as an extra input dimension in the linearized system. The user requested a linearization from specific inputs to specific outputs; the broken connection's input is not one of them.
-- Requiring the user to provide the operating point for broken connections, in the operating point or as initial conditions of the opened variables, makes the linearization well-defined and inspectable. If the user wants the value that would have been present with the loop closed, they can linearize around a simulation with `LinearizationOpPoint`, or determine the value from a simulation or an initialization solution and pass it explicitly.
+  - Loop openings are mostly used to extract a part of a feedback system at the operating point of the closed loop, e.g., the plant, the controller, or a loop-transfer function for the computation of stability margins. The linearizations of the parts combine into the linearization of the closed loop only if all parts are linearized at the same operating point. Holding the disconnected signals at their loop-closed values ensures this without any entries in the operating point, both at a single operating point and along a solution.
+  - Setting disconnected signals to zero changes the operating point of the components that are nonlinear in them, and can yield linearizations at points the system never attains.
+  - A loop opening can also be used to disconnect a signal in order to linearize at a different operating point, for example to remove a reference step that saturates a controller at the initial time. The new value of the signal is then a choice of the user, and it is given in the operating point or as an initial condition of the disconnected variable.
 
 ## Index
 
