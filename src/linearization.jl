@@ -17,10 +17,10 @@ extras.
 # Keywords
 
 - `op::AbstractDict = Dict()`: Additional operating-point values that override values from
-  `sol`, such as parameters introduced by `loop_openings`. Values may be numbers or symbolic
-  expressions; the latter are evaluated from `sol` at each time point. Mapping an opened
-  signal to the expression that drives it, e.g. `Dict(opened_signal => driving_signal)`,
-  linearizes around the value the opened signal has in the loop-closed solution.
+  `sol`. Values may be numbers or symbolic expressions; the latter are evaluated from `sol`
+  at each time point. Signals disconnected by `loop_openings` are held at the values they
+  have in the loop-closed solution unless `op` specifies them, e.g.,
+  `Dict(opened_signal => 0.0)` holds an opened signal at zero.
 
 # Returns
 
@@ -194,6 +194,7 @@ function linearization_function(
         t = 0.0,
         ignore_system_initial_conditions = false,
         loop_opening_params = SymbolicT[],
+        loop_opening_drivers = SymbolicT[],
         kwargs...
     )
     if op isa LinearizationOpPoint
@@ -214,6 +215,9 @@ function linearization_function(
         filter!(Base.Fix2(SU.hasmetadata, MTKBase.AnalysisVariable) ∘ first, ics)
         @set! ssys.initial_conditions = ics
     end
+    op, held_params = _hold_opened_signals(
+        op, loop_opening_params, loop_opening_drivers, initial_conditions(ssys)
+    )
     diff_idxs, alge_idxs = eq_idxs(ssys)
     if zero_dummy_der
         dummyder = setdiff(unknowns(ssys), unknowns(sys))
@@ -333,9 +337,31 @@ function linearization_function(
         diff_idxs, alge_idxs, input_getter, length(inputs), length(unknowns(sys)),
         prob, h, u0 === nothing ? nothing : similar(u0, T), uf_jac, h_jac, pf_jac,
         hp_jac, initializealg, initialization_kwargs, initial_idxs_for_unknowns,
-        collect(SymbolicT, loop_opening_params)
+        held_params
     )
     return lin_fun, sys
+end
+
+# Signals disconnected by loop openings keep the value they have at the operating point of
+# the loop-closed system, i.e., the value of the signal that drove them. Each opened
+# variable is a solvable parameter, so the operating-point entry `opened => driver` becomes
+# the initialization equation `opened ~ driver`, which replaces the broken connection in
+# the initialization system. An entry in `op` (a value, `missing`, or an expression) or an
+# initial condition of the opened variable in `ics` takes precedence. Returns the operating
+# point and the opened variables that are held at the value of their driver.
+function _hold_opened_signals(op, loop_opening_params, loop_opening_drivers, ics)
+    held = SymbolicT[]
+    isempty(loop_opening_params) && return op, held
+    op_keys = Set{SymbolicT}(unwrap(k) for k in keys(op))
+    defaults = Dict{SymbolicT, SymbolicT}()
+    for (p, driver) in zip(loop_opening_params, loop_opening_drivers)
+        p in op_keys && continue
+        isequal(get(ics, p, COMMON_NOTHING), COMMON_NOTHING) || continue
+        defaults[p] = driver
+        push!(held, p)
+    end
+    isempty(defaults) && return op, held
+    return merge(anydict(op), defaults), held
 end
 
 struct HPFun{F, S}
@@ -504,9 +530,11 @@ mutable struct LinearizationFunction{
     """
     const initial_idxs_for_unknowns::Vector{ParameterIndex{SciMLStructures.Initials, Int}}
     """
-    Variables turned into parameters by `loop_openings`. Their operating-point values are
-    not implied by the rest of the system, so they must be provided explicitly in the `op`
-    passed to `linearize`; otherwise an error is thrown.
+    Signals disconnected by loop openings that are held at the value of the signal that
+    drove them before the connection was broken, because neither the operating point passed
+    to [`linearization_function`](@ref) nor an initial condition specified their value. The
+    initialization equation for each of them is fixed when the function is built, so
+    [`linearize`](@ref) rejects operating-point values for them.
     """
     const loop_opening_params::Vector{SymbolicT}
 end
@@ -1154,7 +1182,7 @@ function linearize(
     prob = LinearizationProblem(lin_fun, t)
     op = as_atomic_dict_with_defaults(Dict{SymbolicT, SymbolicT}(op), COMMON_NOTHING)
     evaluate_varmap!(op, keys(op))
-    _check_loop_opening_op(lin_fun.loop_opening_params, op, initial_conditions(sys))
+    _check_held_signals(lin_fun.loop_opening_params, op)
     for (k, v) in op
         isequal(v, COMMON_NOTHING) && continue
         v === COMMON_MISSING && continue
@@ -1188,34 +1216,24 @@ function _resolve_op_value(prob, v)
     end
 end
 
-# Variables turned into parameters by `loop_openings` have no operating-point value implied
-# by the rest of the system. Their value is taken from `op` or, if `op` has no entry, from
-# the initial condition of the opened variable in the system, `ics`. Error (rather than
-# silently using an arbitrary value) if neither provides one.
-function _check_loop_opening_op(loop_opening_params, op, ics = Dict{SymbolicT, SymbolicT}())
-    isempty(loop_opening_params) && return nothing
-    missing_params = SymbolicT[]
-    for p in loop_opening_params
-        isequal(get(op, p, COMMON_NOTHING), COMMON_NOTHING) || continue
-        isequal(get(ics, p, COMMON_NOTHING), COMMON_NOTHING) || continue
-        push!(missing_params, p)
+# The opened signals in `held_params` are held at the value of their driver by an
+# initialization equation that was fixed when the linearization function was built, so a
+# value for them at this stage would be ignored. Error instead.
+function _check_held_signals(held_params, op)
+    isempty(held_params) && return nothing
+    given = filter(held_params) do p
+        !isequal(get(op, p, COMMON_NOTHING), COMMON_NOTHING)
     end
-    isempty(missing_params) && return nothing
-    params_str = join(string.(missing_params), ", ")
+    isempty(given) && return nothing
+    params_str = join(string.(given), ", ")
     error(
         """
-        The operating point does not provide values for the loop-opening parameter(s): \
-        $(params_str). When `loop_openings` is used, the opened signals become \
-        parameters whose operating-point values are not implied by the rest of the \
-        system, so they must be provided explicitly in `op` (e.g. set to zero), or as \
-        initial conditions of the opened variables in the system. A value of `missing` \
-        makes the initialization solve for the opened signal, which requires additional \
-        conditions that determine it. When linearizing along a trajectory with \
-        `LinearizationOpPoint`, pass them via its `op` keyword argument: \
-        `LinearizationOpPoint(sol, t; op = Dict(signal => value))`, where the value may \
-        also be a symbolic expression evaluated from the solution at each time point, e.g. \
-        `Dict(opened_signal => driving_signal)` to linearize around the value the opened \
-        signal has in the loop-closed solution.
+        The operating point provides values for the signal(s) $(params_str), which are \
+        disconnected by loop openings. The linearization function was built with an \
+        operating point that did not specify these signals, so they are held at the value \
+        of the signals that drive them in the loop-closed system. Pass the values in the \
+        operating point given to `linearization_function` (or to the analysis function that \
+        builds it) instead.
         """
     )
 end
@@ -1235,7 +1253,7 @@ function __linearize_multiple_op_barrier(ssys, lin_fun; ops, ts, allow_input_der
     op1 = as_atomic_dict_with_defaults(Dict{SymbolicT, SymbolicT}(ops[1]), COMMON_NOTHING)
     evaluate_varmap!(op1, keys(op1))
     # The op keys are identical across time points, so checking the first one suffices.
-    _check_loop_opening_op(lin_fun.loop_opening_params, op1, initial_conditions(ssys))
+    _check_held_signals(lin_fun.loop_opening_params, op1)
     op_keys = collect(keys(op1))
     setters = map(op_keys) do k
         is_parameter(prob, Initial(k)) ? setu(prob, Initial(k)) : setu(prob, k)
