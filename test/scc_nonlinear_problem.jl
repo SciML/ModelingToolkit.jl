@@ -552,6 +552,16 @@ end
 end
 
 @testset "SteadyStateProblem SCC lowering regressions" begin
+    @parameters a = 1.0 b = 1.0 c = 1.0 d = 2.0
+    @variables p(t) = 0.0 h(t) = 0.0
+    @mtkcompile sys = System(
+        [a * D(p) + b * D(h) ~ p - 1, c * D(p) + d * D(h) ~ h - 2], t
+    )
+    sol = solve(SteadyStateProblem(sys, []), TrustRegion())
+    @test SciMLBase.successful_retcode(sol)
+    @test sol[p] ≈ 1.0 atol = 1.0e-8
+    @test sol[h] ≈ 2.0 atol = 1.0e-8
+
     # https://github.com/SciML/ModelingToolkit.jl/issues/5162
     @parameters α = 1.3 β = 0.9 γ = 0.8 δ = 1.8
     @variables x(t) = 3.1 y(t) = 1.5
