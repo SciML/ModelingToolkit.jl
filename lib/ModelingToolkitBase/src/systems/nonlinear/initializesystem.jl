@@ -21,8 +21,9 @@ only solve for solvable parameters of the system.
 - `guesses`: Additional guesses to use apart from those in `guesses(sys)`.
 - `default_dd_guess`: Default guess for dummy derivative variables in time-dependent
   initialization.
-- `algebraic_only`: If `false`, does not use initialization equations (provided via the
-  keyword or part of the system) to construct initialization.
+- `algebraic_only`: If `true`, does not use the initialization equations of the system
+  to construct initialization. Equations passed via the `initialization_eqs` keyword are
+  used regardless.
 - `name`: The name of the initialization system.
 
 All other keyword arguments are forwarded to the [`System`](@ref) constructor.
@@ -239,13 +240,14 @@ function generate_initializesystem_timevarying(
     end
     timevaring_initsys_process_op!(subber, init_vars_set, init_ps, eqs_ics, op, der_subber, guesses)
 
-    # process explicitly provided initialization equations
+    # process explicitly provided initialization equations. `algebraic_only` ignores the
+    # initialization equations of the system, but not those passed as a keyword argument.
     if !algebraic_only
         initialization_eqs = [get_initialization_eqs(sys); initialization_eqs]
-        for eq in initialization_eqs
-            eq = subber(der_subber(eq))
-            push!(eqs_ics, eq)
-        end
+    end
+    for eq in initialization_eqs
+        eq = subber(der_subber(eq))
+        push!(eqs_ics, eq)
     end
     # TODO
     # 8) use observed equations for guesses of observed variables if not provided

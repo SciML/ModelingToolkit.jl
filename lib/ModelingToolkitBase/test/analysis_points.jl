@@ -401,6 +401,34 @@ if @isdefined(ModelingToolkit)
             op = Dict(ncsys.icP.x => 0.3)
         )
         @test mats.A[icx(ssys), icx(ssys)] ≈ -(1 + 0.3^2)
+
+        # The driver may depend on a state variable without a value, which the
+        # initialization determines together with the opened variable
+        @component function ICIntegratingPlant(; name)
+            @variables begin
+                u(t), [input = true]
+                phi(t)
+                w(t) = 0.0
+                y(t), [output = true]
+            end
+            System([D(phi) ~ w, D(w) ~ -w + u, y ~ phi], t; name)
+        end
+        @named icP = ICIntegratingPlant()
+        @named icC = ICCtrl(; with_ic = false)
+        intsys = System(
+            [connect(icP.y, :plant_output, icC.u), connect(icC.y, :ctrl_output, icP.u)], t;
+            systems = [icP, icC], name = :icsys
+        )
+        mats, ssys, extras = linearize(
+            intsys, :ctrl_output, :plant_output; loop_openings = [:plant_output]
+        )
+        iphi = findfirst(v -> occursin("icP₊phi", string(v)), unknowns(ssys))
+        @test mats.A[icx(ssys), icx(ssys)] ≈ -(1 + extras.x[iphi]^2)
+        mats, ssys, _ = linearize(
+            intsys, :ctrl_output, :plant_output; loop_openings = [:plant_output],
+            op = Dict(complete(intsys).icP.phi => 0.5)
+        )
+        @test mats.A[icx(ssys), icx(ssys)] ≈ -(1 + 0.5^2)
     end
 
     @testset "Symbolic loop-opening op values resolve from the solution" begin
