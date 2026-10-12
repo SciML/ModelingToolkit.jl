@@ -215,7 +215,7 @@ function linearization_function(
         filter!(Base.Fix2(SU.hasmetadata, MTKBase.AnalysisVariable) ∘ first, ics)
         @set! ssys.initial_conditions = ics
     end
-    op, held_params = _hold_opened_signals(
+    op, held_params, held_eqs = _hold_opened_signals(
         op, loop_opening_params, loop_opening_drivers, initial_conditions(ssys)
     )
     diff_idxs, alge_idxs = eq_idxs(ssys)
@@ -253,7 +253,7 @@ function linearization_function(
 
     prob = ODEProblem{true}(
         sys, merge(op, anydict(p)), (t, t); allow_incomplete = true,
-        algebraic_only = true, guesses, missing_guess_value
+        algebraic_only = true, guesses, missing_guess_value, initialization_eqs = held_eqs
     )
     initial_idxs_for_unknowns = ParameterIndex{SciMLStructures.Initials, Int}[]
     for v in unknowns(sys)
@@ -347,24 +347,29 @@ end
 
 # Signals disconnected by loop openings keep the value they have at the operating point of
 # the loop-closed system, i.e., the value of the signal that drove them. Each opened
-# variable is a solvable parameter, so the operating-point entry `opened => driver` becomes
-# the initialization equation `opened ~ driver`, which replaces the broken connection in
-# the initialization system. An entry in `op` (a value, `missing`, or an expression) or an
-# initial condition of the opened variable in `ics` takes precedence. Returns the operating
-# point and the opened variables that are held at the value of their driver.
+# variable is a solvable parameter, and the initialization equation `opened ~ driver`
+# replaces the broken connection in the initialization system. The operating-point entry
+# `opened => missing` makes the initialization solve for the opened variable; an entry
+# `opened => driver` instead would require the value of the driver before initialization,
+# which is not available when the driver depends on unknowns without values. An entry in
+# `op` (a value, `missing`, or an expression) or an initial condition of the opened variable
+# in `ics` takes precedence. Returns the operating point, the opened variables that are held
+# at the value of their driver, and the corresponding initialization equations.
 function _hold_opened_signals(op, loop_opening_params, loop_opening_drivers, ics)
     held = SymbolicT[]
-    isempty(loop_opening_params) && return op, held
+    eqs = Equation[]
+    isempty(loop_opening_params) && return op, held, eqs
     op_keys = Set{SymbolicT}(unwrap(k) for k in keys(op))
     defaults = Dict{SymbolicT, SymbolicT}()
     for (p, driver) in zip(loop_opening_params, loop_opening_drivers)
         p in op_keys && continue
         isequal(get(ics, p, COMMON_NOTHING), COMMON_NOTHING) || continue
-        defaults[p] = driver
+        defaults[p] = COMMON_MISSING
+        push!(eqs, p ~ driver)
         push!(held, p)
     end
-    isempty(defaults) && return op, held
-    return merge(anydict(op), defaults), held
+    isempty(defaults) && return op, held, eqs
+    return merge(anydict(op), defaults), held, eqs
 end
 
 struct HPFun{F, S}
