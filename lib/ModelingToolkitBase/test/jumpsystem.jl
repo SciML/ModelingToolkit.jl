@@ -456,7 +456,6 @@ end
 # PDMP test
 @testset "PDMP test" begin
     seed = 1111
-    Random.seed!(rng, seed)
     @variables X(t) Y(t)
     @parameters k1 k2
     vrj1 = VariableRateJump(k1 * X, [X ~ Pre(X) - 1]; save_positions = (false, false))
@@ -478,7 +477,7 @@ end
     Xv = zeros(length(times))
     Yv = zeros(length(times))
     for n in 1:Nsims
-        sol = solve(jprob, Tsit5(); saveat = times, seed)
+        sol = solve(jprob, Tsit5(); saveat = times, rng = StableRNG(seed))
         Xv .+= sol[1, :]
         Yv .+= sol[2, :]
         seed += 1
@@ -497,7 +496,6 @@ end
 # that mixes ODEs and jump types, and then contin events
 @testset "ODEs + Jumps + Continuous events" begin
     seed = 1111
-    Random.seed!(rng, seed)
     @variables X(t) Y(t)
     @parameters α β
     vrj = VariableRateJump(β * X, [X ~ Pre(X) - 1]; save_positions = (false, false))
@@ -516,7 +514,7 @@ end
     Xv = zeros(length(times))
     Yv = zeros(length(times))
     for n in 1:Nsims
-        sol = solve(jprob, Tsit5(); saveat = times, seed)
+        sol = solve(jprob, Tsit5(); saveat = times, rng = StableRNG(seed))
         Xv .+= sol[1, :]
         Yv .+= sol[2, :]
         seed += 1
@@ -554,7 +552,7 @@ end
     Xsamp = 0.0
     Nsims = 4000
     for n in 1:Nsims
-        sol = solve(jprob, Tsit5(); saveat = tspan[2], seed)
+        sol = solve(jprob, Tsit5(); saveat = tspan[2], rng = StableRNG(seed))
         @test sol.retcode == ReturnCode.Terminated
         Xsamp += sol[1, end]
         seed += 1
@@ -997,7 +995,7 @@ end
         seed = 1111
         Xfinal = zeros(Nsims)
         for i in 1:Nsims
-            sol = solve(jprob, SOSRI(); save_everystep = false, seed)
+            sol = solve(jprob, SOSRI(); save_everystep = false, rng = StableRNG(seed))
             Xfinal[i] = sol[X, end]
             seed += 1
         end
@@ -1042,7 +1040,7 @@ end
         seed = 2222
         Xfinal_sym = zeros(Nsims)
         for i in 1:Nsims
-            sol = solve(jprob_sym, SOSRI(); save_everystep = false, seed)
+            sol = solve(jprob_sym, SOSRI(); save_everystep = false, rng = StableRNG(seed))
             Xfinal_sym[i] = sol[X, end]
             seed += 1
         end
@@ -1060,7 +1058,7 @@ end
         seed = 2222  # Use same seeds for comparison
         Xfinal_direct = zeros(Nsims)
         for i in 1:Nsims
-            sol = solve(jprob_direct, SOSRI(); save_everystep = false, seed)
+            sol = solve(jprob_direct, SOSRI(); save_everystep = false, rng = StableRNG(seed))
             Xfinal_direct[i] = sol[end][1]
             seed += 1
         end
@@ -1111,7 +1109,7 @@ end
         seed = 3333
         Xfinal = zeros(Nsims)
         for i in 1:Nsims
-            sol = solve(jprob, SOSRI(); save_everystep = false, seed)
+            sol = solve(jprob, SOSRI(); save_everystep = false, rng = StableRNG(seed))
             Xfinal[i] = sol[X, end]
             seed += 1
         end
@@ -1735,24 +1733,27 @@ end
 
     # sequential solves of one problem
     for seed in 1:3
-        sol = solve(jprob, SSAStepper(); saveat, seed)
+        sol = solve(jprob, SSAStepper(); saveat, rng = StableRNG(seed))
         @test SciMLBase.successful_retcode(sol)
-        @test same_paths(sol, solve(reference(v1), SSAStepper(); saveat, seed))
+        ref = solve(reference(v1), SSAStepper(); saveat, rng = StableRNG(seed))
+        @test same_paths(sol, ref)
     end
 
     # parameters set in place take effect at the next solve
     setp(jprob, [k1, k2, k3, k4])(jprob, v2)
     @test working_rates(jprob) == scaled_rates(v2)
-    sol = solve(jprob, SSAStepper(); saveat, seed = 4)
-    @test same_paths(sol, solve(reference(v2), SSAStepper(); saveat, seed = 4))
+    sol = solve(jprob, SSAStepper(); saveat, rng = StableRNG(4))
+    ref = solve(reference(v2), SSAStepper(); saveat, rng = StableRNG(4))
+    @test same_paths(sol, ref)
 
     # a remade problem is initialized from its own parameters. It shares the original's
     # jump state, so re-initializing the original refills the shared rates from the
     # original's parameters.
     jprob1 = remake(jprob; p = params(v1))
     @test working_rates(jprob1) == scaled_rates(v1)
-    sol = solve(jprob1, SSAStepper(); saveat, seed = 5)
-    @test same_paths(sol, solve(reference(v1), SSAStepper(); saveat, seed = 5))
+    sol = solve(jprob1, SSAStepper(); saveat, rng = StableRNG(5))
+    ref = solve(reference(v1), SSAStepper(); saveat, rng = StableRNG(5))
+    @test same_paths(sol, ref)
     @test working_rates(jprob) == scaled_rates(v2)
 
     # ensembles, serial and threaded
@@ -1762,12 +1763,18 @@ end
     ref_varying = EnsembleProblem(
         reference(v1); prob_func = (prob, ctx) -> reference(vs[ctx.sim_id])
     )
+    # per-trajectory StableRNGs, seeded from the ensemble's master StableRNG
+    rng_func = ctx -> StableRNG(ctx.sim_seed)
     for alg in (EnsembleSerial(), EnsembleThreads())
         # the default `prob_func` reuses the problem, or one copy per task
         sols = solve(
-            EnsembleProblem(jprob), SSAStepper(), alg; trajectories, saveat, seed = 6
+            EnsembleProblem(jprob), SSAStepper(), alg; trajectories, saveat,
+            rng = StableRNG(6), rng_func
         )
-        refs = solve(ref_default, SSAStepper(), EnsembleSerial(); trajectories, saveat, seed = 6)
+        refs = solve(
+            ref_default, SSAStepper(), EnsembleSerial(); trajectories, saveat,
+            rng = StableRNG(6), rng_func
+        )
         @test all(SciMLBase.successful_retcode, sols.u)
         @test all(map(same_paths, sols.u, refs.u))
 
@@ -1775,8 +1782,13 @@ end
         eprob = EnsembleProblem(
             jprob; prob_func = (prob, ctx) -> remake(prob; p = params(vs[ctx.sim_id]))
         )
-        sols = solve(eprob, SSAStepper(), alg; trajectories, saveat, seed = 7)
-        refs = solve(ref_varying, SSAStepper(), EnsembleSerial(); trajectories, saveat, seed = 7)
+        sols = solve(
+            eprob, SSAStepper(), alg; trajectories, saveat, rng = StableRNG(7), rng_func
+        )
+        refs = solve(
+            ref_varying, SSAStepper(), EnsembleSerial(); trajectories, saveat,
+            rng = StableRNG(7), rng_func
+        )
         @test all(SciMLBase.successful_retcode, sols.u)
         @test all(map(same_paths, sols.u, refs.u))
     end

@@ -667,8 +667,6 @@ end
 # ============================================================================
 
 @testset "Poissonian Mathematical Correctness" begin
-    rng = StableRNG(12345)
-
     @testset "Pure Poisson counter: E[N(t)] = λt, Var[N(t)] = λt" begin
         # Simple counting process: dN = dN(λ)
         # N(t) ~ Poisson(λt), so E[N(t)] = λt, Var[N(t)] = λt
@@ -691,7 +689,7 @@ end
         Nsims = 2000
 
         # Pure jump system with ConstantRateJump → use SSAStepper
-        # SSAStepper accepts seed kwarg for reproducibility (not save_everystep!)
+        # SSAStepper accepts an rng kwarg for reproducibility (not save_everystep!)
         jprob = JumpProblem(
             compiled_sys, [N => 0.0, λ => λ_val], (0.0, T);
             aggregator = Direct(), save_positions = (false, false)
@@ -700,7 +698,7 @@ end
         seed = 1111
         Nfinal = zeros(Nsims)
         for i in 1:Nsims
-            sol = solve(jprob, SSAStepper(); seed)
+            sol = solve(jprob, SSAStepper(); rng = StableRNG(seed))
             Nfinal[i] = sol[N, end]
             seed += 1
         end
@@ -748,7 +746,7 @@ end
         seed = 2222
         Xfinal_sym = zeros(Nsims)
         for i in 1:Nsims
-            sol = solve(jprob_sym, Tsit5(); save_everystep = false, seed)
+            sol = solve(jprob_sym, Tsit5(); save_everystep = false, rng = StableRNG(seed))
             Xfinal_sym[i] = sol[X, end]
             seed += 1
         end
@@ -798,7 +796,7 @@ end
         seed = 3333
         R_sym = zeros(Nsims, Ntimes)
         for i in 1:Nsims
-            sol = solve(jprob_sym, Tsit5(); seed)
+            sol = solve(jprob_sym, Tsit5(); rng = StableRNG(seed))
             for (k, t_) in enumerate(save_times)
                 R_sym[i, k] = sol(t_; idxs = R)
             end
@@ -827,7 +825,7 @@ end
         seed = 3333
         R_direct = zeros(Nsims, Ntimes)
         for i in 1:Nsims
-            sol = solve(jprob_direct, Tsit5(); seed)
+            sol = solve(jprob_direct, Tsit5(); rng = StableRNG(seed))
             for (k, t_) in enumerate(save_times)
                 R_direct[i, k] = sol(t_)[3]
             end
@@ -873,7 +871,7 @@ end
         seed = 4444
         Xfinal_sym = zeros(Nsims)
         for i in 1:Nsims
-            sol = solve(jprob_sym, SOSRI(); save_everystep = false, seed)
+            sol = solve(jprob_sym, SOSRI(); save_everystep = false, rng = StableRNG(seed))
             Xfinal_sym[i] = sol[X, end]
             seed += 1
         end
@@ -920,7 +918,7 @@ end
         seed = 5555
         Xfinal = zeros(Nsims)
         for i in 1:Nsims
-            sol = solve(jprob, Tsit5(); save_everystep = false, seed)
+            sol = solve(jprob, Tsit5(); save_everystep = false, rng = StableRNG(seed))
             Xfinal[i] = sol[X, end]
             seed += 1
         end
@@ -968,7 +966,7 @@ end
         seed = 6666
         Xfinal = zeros(Nsims)
         for i in 1:Nsims
-            sol = solve(jprob, SSAStepper(); seed)
+            sol = solve(jprob, SSAStepper(); rng = StableRNG(seed))
             Xfinal[i] = sol[X, end]
             seed += 1
         end
@@ -1006,7 +1004,7 @@ end
         seed = 7777
         Xfinal_sym = zeros(Nsims)
         for i in 1:Nsims
-            sol = solve(jprob_sym, SSAStepper(); seed)
+            sol = solve(jprob_sym, SSAStepper(); rng = StableRNG(seed))
             Xfinal_sym[i] = sol[X, end]
             seed += 1
         end
@@ -1024,7 +1022,7 @@ end
         seed = 7777
         Xfinal_direct = zeros(Nsims)
         for i in 1:Nsims
-            sol = solve(jprob_direct, SSAStepper(); seed)
+            sol = solve(jprob_direct, SSAStepper(); rng = StableRNG(seed))
             Xfinal_direct[i] = sol[end][1]
             seed += 1
         end
