@@ -313,9 +313,11 @@ function generate_rhs(
             (; wrap_code = (wrap_oop_similar_for_residual ∘ oop_wrap, iip_wrap))
         )
     end
-    if implicit_dae && assemble_residuals
+    if implicit_dae && assemble_residuals &&
+            hasfield(typeof(codegen_opts), :scalarize_single_element_regions)
         # Write a one-element slice equation through a view of the output rather than
         # scalarizing it, so the residual works on arrays that disallow scalar indexing.
+        # Older Symbolics versions lack the option and keep the scalarized form.
         codegen_opts = setproperties(codegen_opts, (; scalarize_single_element_regions = false))
     end
     res = build_function_wrapper(

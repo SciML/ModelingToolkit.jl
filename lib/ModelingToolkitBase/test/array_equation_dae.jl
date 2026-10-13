@@ -226,8 +226,12 @@ end
     )
     # A one-element slice equation is written through a view of the output, which arrays
     # that disallow scalar indexing (such as GPU arrays) need; a scalar equation is not.
-    @test !occursin("batched_setindex!", iip_code(D(u[1:1]) ~ -u[1:1]))
-    @test !occursin("batched_setindex!", iip_code(u[1:1] ~ zeros(1)))
+    # That needs Symbolics' `scalarize_single_element_regions` option and a SymbolicUtils
+    # that honours it (newer than 4.50.0); otherwise the scalarized form is kept.
+    view_writes = hasfield(Symbolics.CodegenFunctionOptions, :scalarize_single_element_regions) &&
+        pkgversion(Symbolics.SymbolicUtils) > v"4.50.0"
+    @test occursin("batched_setindex!", iip_code(D(u[1:1]) ~ -u[1:1])) == !view_writes
+    @test occursin("batched_setindex!", iip_code(u[1:1] ~ zeros(1))) == !view_writes
     @test occursin("batched_setindex!", iip_code(0 ~ u[1]))
 
     @named sys = System([interior, D(u[1:1]) ~ -u[1:1]], t, collect(u), [])
