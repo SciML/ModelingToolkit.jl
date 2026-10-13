@@ -12,6 +12,7 @@ using Symbolics: unwrap
 
 using StableRNGs
 import SciMLBase
+import DiffEqBase
 using SymbolicIndexingInterface
 using Setfield
 using LinearAlgebra
@@ -2054,5 +2055,182 @@ end
         @test isequal(only(observed(newaff.system)).rhs, unwrap(q))
         @test isequal(parameters(newaff.system), [unwrap(q)])
         @test isequal(newaff.parameters, [unwrap(q)])
+    end
+end
+
+@testset "Issue#5220: array-valued continuous event conditions saving discretes" begin
+    @variables x(t)[1:3]
+    @discretes s(t)[1:3]
+    flip = ModelingToolkitBase.ImperativeAffect(; modified = (; s)) do m, o, c, integ
+        (; s = -m.s)
+    end
+    up = SymbolicContinuousCallback(
+        [x .- [1.0, 2.0, 3.0] ~ zeros(3)], flip; affect_neg = nothing
+    )
+    down = SymbolicContinuousCallback(
+        [x .+ [1.0, 2.0, 3.0] ~ zeros(3)], nothing; affect_neg = flip
+    )
+    @mtkcompile sys = System(
+        [D(x) ~ [1.0, 1.0, -1.0]], t, [x], [s]; continuous_events = [up, down],
+        initial_conditions = [x => zeros(3), s => ones(3)]
+    )
+    prob = ODEProblem(sys, [], (0.0, 4.0))
+    vcb = get_callback(prob)
+    @test vcb.len == 6
+    @test length(vcb.saved_clock_partitions) == vcb.len
+    sol = solve(prob, Tsit5())
+    @test SciMLBase.successful_retcode(sol)
+    @test sol(0.5; idxs = s) ≈ ones(3)
+    @test sol(1.5; idxs = s) ≈ -ones(3)
+    @test sol(2.5; idxs = s) ≈ ones(3)
+    @test sol(3.5; idxs = s) ≈ -ones(3)
+    @test sol[s] ≈ [ones(3), -ones(3), ones(3), -ones(3)]
+end
+
+@testset "Symbolic array index in affect (issue #5078)" begin
+    @variables x(t) y(t)
+    @discretes k(t)::Int = 1 c(t) = 1.0
+    @parameters table[1:3] = [1.0, 2.0, 3.0]
+    eqs = [D(x) ~ -c * x, 0 ~ y - x^2]
+    event = SymbolicContinuousCallback(
+        [x ~ 0.5] => [k ~ Pre(k) + 1, c ~ table[k]],
+        discrete_parameters = [k, c],
+    )
+    @named sys = System(eqs, t, [x, y], [k, c, table]; continuous_events = [event])
+    if @isdefined(ModelingToolkit)
+        # ModelingToolkit.__mtkcompile calls discover_maybe_zeros; MTKBase's mtkcompile does not.
+        sys = @test_nowarn mtkcompile(sys)
+        scc = only(ModelingToolkitBase.continuous_events(sys))
+        aff = ModelingToolkitBase.affects(scc)
+        @test aff isa ModelingToolkitBase.AffectSystem
+        # Pin the compiled affect's observed `c ~ table[...]` lookup.
+        c_eq = only(filter(eq -> isequal(eq.lhs, unwrap(c)), observed(system(aff))))
+        @test Symbolics.operation(unwrap(c_eq.rhs)) === getindex
+        @test isequal(Symbolics.arguments(unwrap(c_eq.rhs))[1], unwrap(table))
+    else
+        tk = unwrap(table[k])
+        @named raw = System(
+            [k ~ Pre(k) + 1, c ~ table[k], 0 ~ y - x^2],
+            t, [x, y, k, c], [tk, Pre(k)]; is_discrete = true
+        )
+        @test_nowarn ModelingToolkitBase.discover_maybe_zeros(raw)
+    end
+end
+
+@testset "Issue#5077: nothing affect edges drop duplicate save and post-affect reinit" begin
+    @variables x(t) y(t)
+    @parameters k = 1.0
+    eqs = [D(x) ~ -k, 0 ~ y - x^2]
+    neg_hits = Ref(0)
+    affect_neg = ModelingToolkitBase.ImperativeAffect(; modified = (;), observed = (;)) do m, o, ctx, integ
+        neg_hits[] += 1
+        nothing
+    end
+
+    # Negative crossing with affect_neg = nothing (issue reproducer)
+    cb = SymbolicContinuousCallback(
+        [x ~ 0], nothing; affect_neg = nothing,
+        reinitializealg = DiffEqBase.BrownFullBasicInit()
+    )
+    @named sys = System(eqs, t, [x, y], [k]; continuous_events = [cb])
+    sys = mtkcompile(sys)
+    prob = ODEProblem(sys, [x => 1.0], (0.0, 2.0))
+    sol = solve(prob, FBDF(); saveat = 0.5)
+    @test SciMLBase.successful_retcode(sol)
+    @test allunique(sol.t)
+    @test minimum(t -> abs(t - 1), sol.t) < 1.0e-10
+
+    # Symmetric: positive crossing with affect = nothing
+    neg_hits[] = 0
+    cb2 = SymbolicContinuousCallback(
+        [x ~ 0], nothing; affect_neg = affect_neg,
+        reinitializealg = DiffEqBase.BrownFullBasicInit()
+    )
+    @named sys2 = System(eqs, t, [x, y], [k]; continuous_events = [cb2])
+    sys2 = mtkcompile(sys2)
+    # x increases through 0
+    prob2 = ODEProblem(sys2, [x => -1.0, k => -1.0], (0.0, 2.0))
+    sol2 = solve(prob2, FBDF(); saveat = 0.5)
+    @test SciMLBase.successful_retcode(sol2)
+    @test neg_hits[] == 0
+    @test allunique(sol2.t)
+    @test minimum(t -> abs(t - 1), sol2.t) < 1.0e-10
+
+    # VectorContinuousCallback: two conditions, ignored negative edges
+    @variables z(t)
+    eqs3 = [D(x) ~ -k, D(z) ~ -k, 0 ~ y - x^2]
+    cb_a = SymbolicContinuousCallback(
+        [x ~ 0], nothing; affect_neg = nothing,
+        reinitializealg = DiffEqBase.BrownFullBasicInit()
+    )
+    cb_b = SymbolicContinuousCallback(
+        [z ~ 0], nothing; affect_neg = nothing,
+        reinitializealg = DiffEqBase.BrownFullBasicInit()
+    )
+    @named sys3 = System(eqs3, t, [x, y, z], [k]; continuous_events = [cb_a, cb_b])
+    sys3 = mtkcompile(sys3)
+    prob3 = ODEProblem(sys3, [x => 1.0, z => 1.5], (0.0, 2.0))
+    sol3 = solve(prob3, FBDF(); saveat = 0.5)
+    @test SciMLBase.successful_retcode(sol3)
+    @test allunique(sol3.t)
+    @test minimum(t -> abs(t - 1), sol3.t) < 1.0e-10
+    @test minimum(t -> abs(t - 1.5), sol3.t) < 1.0e-6
+end
+
+@testset "Issue#5077: affect-less discrete and periodic events still solve" begin
+    @variables x(t) y(t)
+    @parameters k = 1.0
+    eqs = [D(x) ~ -k, 0 ~ y - x^2]
+
+    # Preset-time tick with no affect: still solves; saves include the tick.
+    cb_preset = SymbolicDiscreteCallback([1.0], nothing)
+    @named sys_p = System(eqs, t, [x, y], [k]; discrete_events = [cb_preset])
+    sys_p = mtkcompile(sys_p)
+    sol_p = solve(ODEProblem(sys_p, [x => 1.0], (0.0, 2.0)), FBDF(); saveat = 0.5)
+    @test SciMLBase.successful_retcode(sol_p)
+    @test all(t -> minimum(s -> abs(s - t), sol_p.t) < 1.0e-10, 0.5:0.5:2)
+    @test any(t -> isapprox(t, 1.0; atol = 1.0e-10), sol_p.t)
+
+    # Periodic tick with no affect: ticks at 0.5, 1.0, 1.5 (and possibly endpoints via save_positions).
+    cb_per = SymbolicDiscreteCallback(0.5, nothing)
+    @named sys_per = System(eqs, t, [x, y], [k]; discrete_events = [cb_per])
+    sys_per = mtkcompile(sys_per)
+    sol_per = solve(ODEProblem(sys_per, [x => 1.0], (0.0, 2.0)), FBDF())
+    @test SciMLBase.successful_retcode(sol_per)
+    @test sol_per.t[end] ≈ 2.0
+    @test all(t -> minimum(s -> abs(s - t), sol_per.t) < 1.0e-8, 0.5:0.5:1.5)
+
+    # Boolean discrete condition with no affect.
+    cb_cond = SymbolicDiscreteCallback(x < 0.3, nothing)
+    @named sys_c = System(eqs, t, [x, y], [k]; discrete_events = [cb_cond])
+    sys_c = mtkcompile(sys_c)
+    sol_c = solve(ODEProblem(sys_c, [x => 1.0], (0.0, 2.0)), FBDF(); saveat = 0.5)
+    @test SciMLBase.successful_retcode(sol_c)
+    @test all(t -> minimum(s -> abs(s - t), sol_c.t) < 1.0e-10, 0.5:0.5:2)
+end
+
+@testset "User `callback` with discrete events" begin
+    @variables x(t) = 1.0
+    @parameters k = 1.0
+    @discretes d(t) = 0.0
+    tick = SymbolicDiscreteCallback(0.1, [d ~ Pre(d) + 1]; discrete_parameters = [d])
+    bump = SymbolicContinuousCallback([x ~ 0.2], [d ~ Pre(d) + 0.5]; discrete_parameters = [d])
+    kick(integ) = (integ.u[1] += 1.0)
+    for continuous_events in ([], [bump])
+        @mtkcompile sys = System(
+            [D(x) ~ -k * x + 0.01 * d], t, [x], [k, d];
+            discrete_events = [tick], continuous_events
+        )
+        ref = solve(
+            ODEProblem(sys, [], (0.0, 1.0)), Tsit5(); tstops = [0.5], abstol = 1.0e-10, reltol = 1.0e-10
+        )
+        user = DiscreteCallback((u, t, integ) -> t == 0.5, kick)
+        prob = ODEProblem(sys, [], (0.0, 1.0); callback = user)
+        @test user in get_callback(prob).discrete_callbacks
+        sol = solve(prob, Tsit5(); tstops = [0.5], abstol = 1.0e-10, reltol = 1.0e-10)
+        @test SciMLBase.successful_retcode(sol)
+        # the kick decays like the homogeneous solution: the events depend only on time
+        @test sol(1.0; idxs = x) - ref(1.0; idxs = x) ≈ exp(-0.5) rtol = 1.0e-6
+        @test sol.ps[d] == ref.ps[d]
     end
 end

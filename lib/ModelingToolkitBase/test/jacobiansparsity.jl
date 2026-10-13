@@ -174,6 +174,23 @@ if @isdefined(ModelingToolkit)
         @test J ≈ prob.f.jac(prob.u0, prob.p, 1.0)
     end
 
+    @testset "Sparse Jacobian of array unknowns fits the prototype" begin
+        t = ModelingToolkitBase.t_nounits
+        D = ModelingToolkitBase.D_nounits
+        N = 25
+        @variables x(t)[1:N]
+        eqs = [D(x[i]) ~ prod(x[j] for j in 1:N if (i + j) % 3 == 0) for i in 1:N]
+        @mtkcompile sys = System(eqs, t)
+        prob = ODEProblem(sys, collect(x .=> 1.0), (0.0, 1.0); jac = true, sparse = true)
+        # the in-place Jacobian writes one value per stored entry of its own pattern
+        # into `jac_prototype`, out of bounds if that pattern is larger
+        @test findnz(calculate_jacobian(sys; sparse = true))[1:2] ==
+            findnz(prob.f.jac_prototype)[1:2]
+        J = similar(prob.f.jac_prototype)
+        prob.f.jac(J, prob.u0, prob.p, 0.0)
+        @test J == prob.f.jac(prob.u0, prob.p, 0.0)
+    end
+
     # https://github.com/SciML/ModelingToolkit.jl/issues/3871
     @testset "Issue#3871: Sparsity with observed derivatives" begin
         t = ModelingToolkitBase.t_nounits
