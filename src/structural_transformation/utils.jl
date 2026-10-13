@@ -18,8 +18,16 @@ function sorted_incidence_matrix(sys::AbstractSystem)
 
     ts = get_tearing_state(sys)
     imat = Graphs.incidence_matrix(ts.structure.graph)
+    # `var_sccs` only lists matched variables; append unmatched columns so `q`
+    # is a full column permutation. Row permutation length must match `size(imat, 1)`.
+    q = Int[]
+    sizehint!(q, size(imat, 2))
+    for scc in var_sccs
+        append!(q, scc)
+    end
+    append!(q, setdiff(axes(imat, 2), q))
     buffer = similar(imat)
-    permute!(buffer, imat, 1:size(imat, 2), reduce(vcat, var_sccs))
+    permute!(buffer, imat, axes(imat, 1), q)
     return buffer
 end
 
