@@ -258,6 +258,28 @@ end
 function MTK._validate(conn::Connection; info::String = "")
     valid = true
     syss = MTK.get_systems(conn)
+    # Causal variable `connect(a.y, b.u)` stores `Vector{SymbolicT}`, not systems.
+    if MTK.is_causal_variable_connection(conn)
+        first_unit = nothing
+        first_var = nothing
+        for (i, var) in enumerate(syss)
+            u = safe_get_unit(var, info * string(var) * "#$i")
+            if u === nothing
+                valid = false
+            elseif first_unit === nothing
+                first_unit = u
+                first_var = var
+            elseif !equivalent(first_unit, u)
+                valid = false
+                str = "$info: connected variables $first_var ($first_unit) and $var ($u) have mismatched units."
+                if oneunit(first_unit) == oneunit(u)
+                    str *= " If there are non-SI units in the system, please use symbolic units like `us\"ms\"`"
+                end
+                @warn(str)
+            end
+        end
+        return valid
+    end
     sys = first(syss)
     st = unknowns(sys)
     for i in 2:length(syss)
