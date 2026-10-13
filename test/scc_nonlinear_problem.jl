@@ -8,6 +8,7 @@ using SymbolicIndexingInterface: getu, getp
 using StaticArrays
 using LinearAlgebra, Test
 using SymbolicUtils
+using Graphs
 import ModelingToolkitBase
 using Symbolics: SymbolicT, VartypeT, unwrap
 using ModelingToolkit: t_nounits as t, D_nounits as D
@@ -53,6 +54,26 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 
     # Test BLT sorted
     @test istril(StructuralTransformations.sorted_incidence_matrix(model), 2)
+end
+
+@testset "sorted_incidence_matrix column permutation" begin
+    # Non-square incidence with distinct columns and unmatched dummy derivatives:
+    # `var_sccs` alone is an incomplete column permutation (the #4961 failure mode).
+    @variables x(t) y(t)
+    @named sys = System([D(x) ~ -x, D(y) ~ -x - y], t)
+    compiled = mtkcompile(sys)
+    @test ModelingToolkit.get_schedule(compiled) !== nothing
+    ts = ModelingToolkit.get_tearing_state(compiled)
+    imat = Graphs.incidence_matrix(ts.structure.graph)
+    var_sccs = ModelingToolkit.get_schedule(compiled).var_sccs
+    matched = reduce(vcat, var_sccs)
+    q = vcat(matched, setdiff(axes(imat, 2), matched))
+    @test length(matched) < size(imat, 2)
+    @test length(q) == size(imat, 2)
+    @test !all(imat[:, i] == imat[:, 1] for i in axes(imat, 2))
+    @test Matrix(imat[:, q]) != Matrix(imat[:, reverse(q)])
+    M = StructuralTransformations.sorted_incidence_matrix(compiled)
+    @test M == imat[axes(imat, 1), q]
 end
 
 @testset "With parameters" begin
@@ -613,6 +634,40 @@ end
     @test SciMLBase.successful_retcode(sol)
     @test sol[x3] ≈ 1.3 atol = 1.0e-8
     @test sol[y3] ≈ 2.2 atol = 1.0e-8
+
+    # https://github.com/SciML/ModelingToolkit.jl/issues/5177
+    # The residual of a reaction network with conservation laws is structurally
+    # singular (`s1s2` appears in none of the right-hand sides), so it has no SCC
+    # lowering: the builder falls back to the unlowered residual instead of
+    # throwing from `mtkcompile`, and `DynamicSS` integrates the ODE, keeping the
+    # conserved quantities of the initial condition.
+    @parameters k1 = 1.0 c1 = 2.0
+    @variables s1(t) = 2.0 s1s2(t) = 2.0 s2(t) = 2.0
+    eqs = [
+        D(s1) ~ -0.25 * c1 * k1 * s1 * s2,
+        D(s1s2) ~ 0.25 * c1 * k1 * s1 * s2,
+        D(s2) ~ -0.25 * c1 * k1 * s1 * s2,
+    ]
+    for sys in (
+            complete(System(eqs, t; name = :reactionsystem)),
+            mtkcompile(System(eqs, t; name = :reactionsystem)),
+        )
+        prob = SteadyStateProblem(sys, [c1 => 3.0])
+        @test prob.lowered_problem !== nothing
+        for _ in 1:2 # the fallback is memoized
+            lowered = SCCNonlinearProblem(prob)
+            @test lowered isa NonlinearProblem
+            @test lowered.u0 == prob.u0
+            @test lowered.p === prob.p
+        end
+        sol = solve(prob, DynamicSS(Tsit5()))
+        @test SciMLBase.successful_retcode(sol)
+        @test sol.prob isa SteadyStateProblem
+        @test sol[s1] + sol[s1s2] ≈ 4 atol = 1.0e-6
+        @test sol[s2] + sol[s1s2] ≈ 4 atol = 1.0e-6
+        @test sol[s1] < 1.0e-2
+        @test SciMLBase.successful_retcode(solve(prob, NewtonRaphson()))
+    end
 end
 
 @testset "SteadyStateProblem SCC lowering: connectors, array unknowns and `Initial` values" begin
@@ -712,3 +767,6 @@ end
     @test sol[u3]^2 + sol[u3] ≈ sol[u2] atol = 1.0e-8
     @test sol[u4] ≈ sin(sol[u3]) + sol[u1] atol = 1.0e-8
 end
+
+include("scc_zero_state_regression.jl")
+include("scc_array_cache_regression.jl")
