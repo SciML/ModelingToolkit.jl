@@ -1,5 +1,6 @@
 using ModelingToolkitBase
 using SymbolicIndexingInterface: SymbolicIndexingInterface as SII
+import REPL
 using Test
 MT = ModelingToolkitBase
 
@@ -79,4 +80,31 @@ end
     @named sys2 = System([y ~ 2x], t)
     @test issetequal(MT.get_constraints(extend(sys2, sys1)), [x ~ p])
     @test issetequal(MT.get_constraints(extend(sys1, sys2)), [x ~ p])
+end
+
+@testset "`propertynames` skips unknowns and observed without names" begin
+    # https://github.com/SciML/ModelingToolkit.jl/issues/923
+    @variables x(t)
+    sys = System([D(x) ~ x + 1], t, [x, D(x)], []; name = :sys)
+    for s in (sys, complete(sys))
+        names = propertynames(s)
+        @test :x in names && :t in names
+        for n in names
+            @test_nowarn getproperty(s, n)
+        end
+    end
+
+    sys_obs = System([D(x) ~ x], t; observed = [D(x) ~ 2x], name = :sys_obs)
+    names = propertynames(sys_obs)
+    @test :x in names && :t in names
+    for n in names
+        @test_nowarn getproperty(sys_obs, n)
+    end
+
+    # REPL tab completion calls `propertynames` on the value before the dot.
+    Core.eval(@__MODULE__, :(issue923_sys = $sys))
+    completions = REPL.REPLCompletions.completions(
+        "issue923_sys.", length("issue923_sys."), @__MODULE__
+    )[1]
+    @test "x" in REPL.REPLCompletions.completion_text.(completions)
 end

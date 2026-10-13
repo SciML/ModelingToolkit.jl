@@ -26,7 +26,7 @@ Takes every residual at once, and works in the system's `ir`, so the search and
 substitution caches are shared and the rewritten residuals are already populated for
 codegen.
 """
-function expand_array_derivatives!(rhss::Vector{SymbolicT}, ir::IRStructure{VartypeT})
+function expand_array_derivatives!(rhss::Union{Vector{SymbolicT}, Vector{Equation}}, ir::IRStructure{VartypeT})
     terms = Set{SymbolicT}()
     buffer = SU.IRStructureSearchBuffer(ir, terms)
     for rhs in rhss
@@ -104,7 +104,11 @@ function similar_for_residual(prototype, extras...)
     for x in extras
         T = promote_type(T, residual_eltype(x))
     end
-    return sz -> similar(prototype, T, sz)
+    return let prototype = prototype, T = T
+        function __similar_for_residual(sz)
+            return similar(prototype, T, sz)
+        end
+    end
 end
 
 function residual_allocator_arg(arg)
@@ -120,7 +124,7 @@ end
 
 function residual_allocator_term(args)
     return STerm(
-        similar_for_residual, SArgsT((map(residual_allocator_arg, args)...,));
+        similar_for_residual, map(residual_allocator_arg, args);
         type = SU.FnType{Tuple, Any, Any},
         shape = SU.ShapeVecT(),
     )
@@ -133,13 +137,7 @@ function inject_similar_for_residual(body, alloc_term)
             body.let_block
         )
     elseif body isa SymbolicT && Code.supports_with_allocator(body)
-        # The public helper would wrap the symbolic allocator in `Const`.
-        return STerm(
-            Code.with_allocator,
-            SArgsT((alloc_term, body));
-            type = SU.symtype(body),
-            shape = SU.shape(body),
-        )
+        return Code.with_allocator(alloc_term, body)
     else
         return body
     end
@@ -152,6 +150,16 @@ function wrap_oop_similar_for_residual(fn)
     return Func(
         fn.args, fn.kwargs, inject_similar_for_residual(fn.body, alloc_term),
         fn.pre
+    )
+end
+
+function generate_empty_nonlinear_function(sys::System, opts::GeneratedFunctionOptions, dims)
+    (; eval_expression, eval_module, compiler_options) = opts
+    oop = :((u, p) -> u === nothing ? zeros($dims) : similar(u, $dims))
+    iip = :((out, u, p) -> nothing)
+    return maybe_compile_function(
+        expression_val(opts), wrap_gfw_val(opts), (2, 2, is_split(sys)), (oop, iip);
+        compiler_options, eval_expression, eval_module
     )
 end
 
@@ -191,6 +199,12 @@ function generate_rhs(
     wrap_gfw = wrap_gfw_val(opts)
     dvs = flat_unknowns(sys)
     eqs = equations(sys)
+    # Empty-SCC / fully-eliminated nonlinear residual: skip when scalar,
+    # implicit_dae, or cachesyms would need a different signature/body.
+    if !is_time_dependent(sys) && isempty(dvs) && isempty(eqs) && isempty(extra_args) &&
+            !scalar && !implicit_dae && cachesyms === nothing
+        return generate_empty_nonlinear_function(sys, opts, (0,))
+    end
     obs = observed(sys)
     u = dvs
     p = reorder_parameters(sys) # 1 arg to use the cached version
@@ -405,11 +419,15 @@ function calculate_jacobian(
             # Add nonzeros of W as non-structural zeros of the Jacobian
             # (to ensure equal results for oop and iip Jacobian)
             JIs, JJs, JVs = findnz(jac)
+            # The iip Jacobian writes into `jac_prototype.nzval` (the pattern of `W_sparsity`),
+            # so drop stored zeros that could push this pattern past it.
+            keep = findall(v -> !_iszero(unwrap(v)), JVs)
+            JIs, JJs, JVs = JIs[keep], JJs[keep], JVs[keep]
             WIs, WJs, _ = findnz(W_sparsity(sys))
             append!(JIs, WIs) # explicitly put all W's indices also in J,
             append!(JJs, WJs) # even if it duplicates some indices
             append!(JVs, zeros(eltype(JVs), length(WIs))) # add zero
-            jac = SparseArrays.sparse(JIs, JJs, JVs) # values at duplicate indices are summed; not overwritten
+            jac = SparseArrays.sparse(JIs, JJs, JVs, size(jac)...) # values at duplicate indices are summed; not overwritten
         end
     else
         jac = jacobian(rhs, dvs; simplify)
@@ -440,6 +458,10 @@ function generate_jacobian(
     expression = expression_val(opts)
     wrap_gfw = wrap_gfw_val(opts)
     dvs = flat_unknowns(sys)
+    # Empty-SCC / fully-eliminated dense Jacobian; sparse needs the normal path.
+    if !is_time_dependent(sys) && isempty(dvs) && isempty(equations(sys)) && !sparse
+        return generate_empty_nonlinear_function(sys, opts, (0, 0))
+    end
     jac = calculate_jacobian(sys; simplify, sparse, dvs)
     p = reorder_parameters(sys)
     t = get_iv(sys)

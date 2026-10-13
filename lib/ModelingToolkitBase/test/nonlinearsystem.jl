@@ -564,6 +564,72 @@ end
     @test !haskey(ModelingToolkitBase.bindings(nlsys), z)
 end
 
+@testset "NonlinearSystem conversion: connectors" begin
+    @independent_variables t
+    D = Differential(t)
+    @connector function Pin(; name)
+        vars = @variables v(t) [guess = 0.0] i(t) [connect = Flow, guess = 0.0]
+        System(Equation[], t, vars, []; name)
+    end
+    function Resistor(; name)
+        @named p = Pin()
+        @named n = Pin()
+        @parameters R = 1.0
+        System([0 ~ p.i + n.i, p.v - n.v ~ R * p.i], t, [], [R]; systems = [p, n], name)
+    end
+    function Capacitor(; name)
+        @named p = Pin()
+        @named n = Pin()
+        @variables vc(t) = 0.0
+        @parameters C = 1.0
+        System(
+            [0 ~ p.i + n.i, vc ~ p.v - n.v, C * D(vc) ~ p.i], t, [vc], [C];
+            systems = [p, n], name
+        )
+    end
+    function Source(; name)
+        @named p = Pin()
+        @named n = Pin()
+        @parameters V = 1.0
+        System([0 ~ p.i + n.i, p.v - n.v ~ V], t, [], [V]; systems = [p, n], name)
+    end
+    function Ground(; name)
+        @named g = Pin()
+        System([g.v ~ 0], t, [], []; systems = [g], name)
+    end
+    # The pins of `WrappedResistor` are outer connectors of its inner resistor.
+    function WrappedResistor(; name)
+        @named p = Pin()
+        @named n = Pin()
+        @named r = Resistor()
+        System(
+            [connect(p, r.p), connect(r.n, n)], t, [], [];
+            systems = [p, n, r], name, description = "wrapped resistor"
+        )
+    end
+    @named w = WrappedResistor()
+    @named c = Capacitor()
+    @named s = Source()
+    @named gnd = Ground()
+    @named rc = System(
+        [connect(s.p, w.p), connect(w.n, c.p), connect(c.n, s.n, gnd.g)], t;
+        systems = [w, c, s, gnd]
+    )
+
+    nlrc = NonlinearSystem(rc)
+    nlw = only(filter(sub -> nameof(sub) == :w, ModelingToolkitBase.get_systems(nlrc)))
+    for (sub, nlsub) in zip(ModelingToolkitBase.get_systems(w), ModelingToolkitBase.get_systems(nlw))
+        @test ModelingToolkitBase.get_connector_type(nlsub) ==
+            ModelingToolkitBase.get_connector_type(sub)
+    end
+    @test ModelingToolkitBase.get_connector_type(ModelingToolkitBase.get_systems(nlw)[1]) isa
+        ModelingToolkitBase.RegularConnector
+    @test ModelingToolkitBase.get_description(nlw) == "wrapped resistor"
+    # Connections are expanded after the conversion; without connector types the outer
+    # connectors are not recognized and the system is unbalanced.
+    @test mtkcompile(nlrc) isa System
+end
+
 @testset "oop `NonlinearLeastSquaresProblem` with `u0 === nothing`" begin
     @variables x y
     @named sys = System([0 ~ x - y], [], []; observed = [x ~ 1.0, y ~ 1.0])
