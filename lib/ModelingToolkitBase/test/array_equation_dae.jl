@@ -209,3 +209,34 @@ end
     @test SciMLBase.successful_retcode(sol)
     @test maximum(abs, sol.u[end] .- [exp(-pi^2 * 0.1) * sinpi(x) for x in xs]) < 1.0e-2
 end
+
+@testset "one-element slice equations are written without scalar indexing" begin
+    # Longer than SymbolicUtils' `FILL_ARR_LIMIT`, so the residual is written region by
+    # region rather than scalarized as a whole.
+    n = 32
+    @independent_variables t
+    @variables u(t)[1:n]
+    D = Differential(t)
+    interior = D(u[2:n]) ~ u[1:(n - 1)] .- u[2:n]
+    iip_code(boundary) = string(
+        ModelingToolkitBase.generate_rhs(
+            complete(System([interior, boundary], t, collect(u), []; name = :sys));
+            implicit_dae = true, expression = Val{true}
+        )[2]
+    )
+    # A one-element slice equation is written through a view of the output, which arrays
+    # that disallow scalar indexing (such as GPU arrays) need; a scalar equation is not.
+    @test !occursin("batched_setindex!", iip_code(D(u[1:1]) ~ -u[1:1]))
+    @test !occursin("batched_setindex!", iip_code(u[1:1] ~ zeros(1)))
+    @test occursin("batched_setindex!", iip_code(0 ~ u[1]))
+
+    @named sys = System([interior, D(u[1:1]) ~ -u[1:1]], t, collect(u), [])
+    sys = complete(sys)
+    op = vcat([u[i] => 0.0 for i in 1:n], [D(u[i]) => 0.0 for i in 1:n])
+    prob = DAEProblem(sys, op, (0.0, 1.0); build_initializeprob = false)
+    uv = collect(range(1.0, 2.0; length = n))
+    duv = collect(range(0.1, 0.8; length = n))
+    out = zeros(n)
+    prob.f(out, duv, uv, prob.p, 0.0)
+    @test out ≈ [uv[1:(n - 1)] .- uv[2:n] .- duv[2:n]; -uv[1] - duv[1]]
+end
