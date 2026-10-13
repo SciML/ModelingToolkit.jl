@@ -176,3 +176,48 @@ end
     eq_sdeps = [[x, y], [y], [y, z]]
     @test all(i -> isequal(Set(deps[i]), Set(value.(eq_sdeps[i]))), 1:length(deps))
 end
+
+struct CountedSet{T} <: AbstractSet{T}
+    data::Set{T}
+    count::Base.RefValue{Int}
+end
+CountedSet(s::Set) = CountedSet(s, Ref(0))
+Base.in(x, s::CountedSet) = x in s.data
+Base.length(s::CountedSet) = length(s.data)
+Base.iterate(s::CountedSet, state...) = (s.count[] += 1; iterate(s.data, state...))
+
+struct CountedVector{T} <: AbstractVector{T}
+    data::Vector{T}
+    count::Base.RefValue{Int}
+end
+CountedVector(v::Vector) = CountedVector(v, Ref(0))
+Base.size(v::CountedVector) = size(v.data)
+Base.getindex(v::CountedVector, i::Int) = (v.count[] += 1; v.data[i])
+
+@testset "Dependency construction uses set lookup" begin
+    @parameters k1 k2
+    @variables S(t), I(t), R(t)
+    maj = SymbolicMassActionJump(k2, [S => 1, I => 1], [S => -1, I => 1])
+    crj = ConstantRateJump(k1 * I, [R ~ R + 1])
+    vrj = VariableRateJump(k1 * k2 / (1 + t) * S, [S ~ S - 1, R ~ R + 1])
+    @named js = JumpSystem([maj, crj, vrj], t, [S, I, R], [k1, k2])
+
+    dvs = value.([S, I, R])
+    counted = CountedSet(Set(dvs))
+
+    for j in jumps(js)
+        vec_res = ModelingToolkitBase.modified_unknowns!(Set(), j, dvs)
+        tup_res = ModelingToolkitBase.modified_unknowns!(Set(), j, Tuple(dvs))
+        set_res = ModelingToolkitBase.modified_unknowns!(Set(), j, counted)
+
+        @test isequal(vec_res, set_res)
+        @test isequal(tup_res, set_res)
+    end
+    @test counted.count[] == 0
+
+    vtois = Dict(v => i for (i, v) in enumerate(dvs))
+    cvars = CountedVector(dvs)
+    g = variable_dependencies(js; variables = cvars, variablestoids = vtois, eqs = jumps(js))
+    @test cvars.count[] == 0
+    @test g.badjlist == variable_dependencies(js; eqs = jumps(js)).badjlist
+end

@@ -217,3 +217,20 @@ end
         @test SU.unwrap_const(initial_conditions(outer2)[inner.x])::Float64 == 1.0
     end
 end
+
+@testset "@component does not rebind `name` after the body (issue #5082)" begin
+    SEEN_5082 = Ref{Symbol}(:unset)
+    CALLBACK_5082 = Ref{Any}(nothing)
+
+    @component function NameCaptureWidget(; name)
+        @variables x(t) = 0.0
+        CALLBACK_5082[] = () -> (SEEN_5082[] = name)
+        return System([D(x) ~ 1], t, [x], []; name)
+    end
+
+    @named w = NameCaptureWidget()
+    CALLBACK_5082[]()
+    @test nameof(w) === :w
+    @test SEEN_5082[] === :w
+    @test ModelingToolkitBase.get_component_type(w).name === :NameCaptureWidget
+end
