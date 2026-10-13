@@ -295,7 +295,7 @@ end
     @parameters p[1:3, 1:3]
     @mtkcompile sys = System([D(x) ~ x, p * y ~ x], t) reassemble_alg = reassemble_alg
     prob = ODEProblem(sys, [x => [1.0, 2.3, 5.7], p => rand(3, 3)], (0.0, 10.0))
-    @assert prob.p.nonnumeric[1] isa
+    @assert prob.p.caches[1] isa
         Vector{ModelingToolkitBase.DiffCacheAllocatorAPIWrapper{Float64}}
     @assert SciMLBase.has_initializeprob(prob.f)
 

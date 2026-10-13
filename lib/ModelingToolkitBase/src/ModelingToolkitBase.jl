@@ -33,7 +33,8 @@ using SciMLBase: BVPFunction, BVProblem, CallbackSet, ContinuousCallback, DAEFun
     DAEProblem, DDEFunction, DDEProblem, DiscreteCallback, DiscreteFunction,
     DiscreteProblem, HomotopyNonlinearFunction, ImplicitDiscreteFunction,
     ImplicitDiscreteProblem, IntervalNonlinearFunction, IntervalNonlinearProblem,
-    LinearProblem, NonlinearFunction, NonlinearLeastSquaresProblem, NonlinearProblem,
+    LinearProblem, MultiObjectiveOptimizationFunction, NonlinearFunction,
+    NonlinearLeastSquaresProblem, NonlinearProblem,
     ODEFunction, ODEInputFunction, ODEProblem, ODESolution, OptimizationFunction,
     OptimizationProblem, ReturnCode, SCCNonlinearProblem, SDDEFunction, SDDEProblem,
     SDEFunction, SDEProblem, SteadyStateProblem, VectorContinuousCallback, check_error,
@@ -428,7 +429,7 @@ export Differential, expand_derivatives, @derivatives
 export Equation
 export Term
 export SymScope, LocalScope, ParentScope, GlobalScope
-export independent_variable, equations, observed, full_equations, jumps, cost,
+export independent_variable, equations, observed, full_equations, jumps, cost, costs,
     brownians
 export initialization_equations, guesses, bindings, initial_conditions, hierarchy
 export set_defaults
@@ -445,6 +446,9 @@ export calculate_tgrad, generate_tgrad
 export generate_cost, calculate_cost_gradient, generate_cost_gradient
 export generate_trajectory
 export calculate_cost_hessian, generate_cost_hessian
+export generate_multiobjective_cost, calculate_multiobjective_jacobian,
+    generate_multiobjective_jacobian, calculate_multiobjective_hessian,
+    generate_multiobjective_hessian
 export calculate_massmatrix, generate_diffusion_function
 export generate_control_function, build_explicit_observed_function
 export stochastic_integral_transform
@@ -481,7 +485,7 @@ export MTKParameters, reorder_dimension_by_tunables!, reorder_dimension_by_tunab
 
 export HomotopyContinuationProblem
 
-export AnalysisPoint, open_loop
+export AnalysisPoint, open_loop, ap_var
 
 include("systems/optimal_control_interface.jl")
 
@@ -517,6 +521,7 @@ const set_scalar_metadata = setmetadata
 @public convert_bindings_for_time_independent_system, get_w
 @public Both
 @public SymbolicADDisallowed, check_symbolic_ad_allowed
+@public canonical_constraints, constraint_residual
 @public tobrownian, toparam, tovar
 @public ProblemTypeCtx
 @public HomotopyCtx, homotopy_enabled, strip_homotopy

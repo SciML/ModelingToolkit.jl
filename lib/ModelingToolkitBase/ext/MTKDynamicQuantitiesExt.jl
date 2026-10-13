@@ -260,9 +260,32 @@ function MTK._validate(conn::Connection; info::String = "")
     if syss isa ConnectionNetwork
         valid = true
         for (i, (src, dst)) in enumerate(MTK.network_edge_ports(syss))
-            # variable ports are not unit-checked; pairwise `connect` of variables is not either
+            # variable-port edges of a network are not unit-checked
             src isa MTK.AbstractSystem || continue
             valid &= _validate_connected(System[src, dst]; info = "$info edge $i")
+        end
+        return valid
+    end
+    # Causal variable `connect(a.y, b.u)` stores `Vector{SymbolicT}`, not systems.
+    if MTK.is_causal_variable_connection(conn)
+        valid = true
+        first_unit = nothing
+        first_var = nothing
+        for (i, var) in enumerate(syss)
+            u = safe_get_unit(var, info * string(var) * "#$i")
+            if u === nothing
+                valid = false
+            elseif first_unit === nothing
+                first_unit = u
+                first_var = var
+            elseif !equivalent(first_unit, u)
+                valid = false
+                str = "$info: connected variables $first_var ($first_unit) and $var ($u) have mismatched units."
+                if oneunit(first_unit) == oneunit(u)
+                    str *= " If there are non-SI units in the system, please use symbolic units like `us\"ms\"`"
+                end
+                @warn(str)
+            end
         end
         return valid
     end

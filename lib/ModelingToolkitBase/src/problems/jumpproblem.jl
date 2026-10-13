@@ -77,7 +77,7 @@
         sys, GeneratedFunctionOptions(; expression = Val{false}, eval_expression, eval_module)
     )
 
-    dvs = unknowns(sys)
+    dvs = flat_unknowns(sys)
     unknowntoid = Dict(value(unknown) => i for (i, unknown) in enumerate(dvs))
     js = jumps(sys)
     invttype = prob.tspan[1] === nothing ? Float64 : typeof(1 / prob.tspan[2])
@@ -293,14 +293,17 @@ the system. Return the modified `munknowns`.
 function modified_unknowns!(munknowns, jump::Union{ConstantRateJump, VariableRateJump}, sts)
     for eq in jump.affect!
         st = eq.lhs
-        any(isequal(st), sts) && push!(munknowns, st)
+        isin(sts, st) && push!(munknowns, st)
     end
     return munknowns
 end
 
 function modified_unknowns!(munknowns, jump::MassActionJump, sts)
     for (unknown, stoich) in jump.net_stoch
-        any(isequal(unknown), sts) && push!(munknowns, unknown)
+        isin(sts, unknown) && push!(munknowns, unknown)
     end
     return munknowns
 end
+
+isin(sts, st) = any(isequal(st), sts)
+isin(sts::AbstractSet, st) = st in sts
