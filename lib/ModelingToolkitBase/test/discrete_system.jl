@@ -352,3 +352,25 @@ end
     @test err isa ModelingToolkitBase.InvalidSystemException
     @test occursin("difference variable", sprint(showerror, err))
 end
+
+import ModelingToolkitBase as MTKBase
+import SymbolicUtils as SU
+
+# An operator defined outside ModelingToolkitBase, such as a clock change of another package.
+# Its term denotes the value at the current tick and is not entered by shifts.
+struct LatestValue <: MTKBase.Operator end
+(op::LatestValue)(x) = MTKBase.STerm(op, MTKBase.SArgsT((x,)); type = SU.symtype(x), shape = SU.shape(x))
+SU.promote_symtype(::LatestValue, ::Type{T}) where {T} = T
+SU.promote_shape(::LatestValue, @nospecialize(x::SU.ShapeT)) = x
+Base.nameof(::LatestValue) = :LatestValue
+SU.isbinop(::LatestValue) = false
+
+@testset "Shifts are not distributed into operators other than `Shift` and `Differential`" begin
+    @variables x(t) y(t)
+    k = ShiftIndex(t)
+    term = LatestValue()(x)
+    @test isequal(MTKBase.distribute_shift(Shift(t, -1)(y + term)), y(k - 1) + term)
+    @test isequal(MTKBase.distribute_shift(Shift(t, -1)(Sample(Clock(0.1))(x) + Hold(y))), Sample(Clock(0.1))(x) + Hold(y))
+    @test isequal(MTKBase.distribute_shift(Shift(t, -1)(Shift(t, 1)(x))), x)
+    @test isequal(MTKBase.distribute_shift(Shift(t, -1)(Differential(t)(x))), Differential(t)(Shift(t, -1)(x)))
+end
