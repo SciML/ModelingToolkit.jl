@@ -4,7 +4,9 @@ using ModelingToolkitBase: topsort_equations, t_nounits as t, D_nounits as D, un
 using SciMLLogging: SciMLLogging, Silent, InfoLevel, WarnLevel,
     None, Minimal, Standard, Detailed, All
 using SymbolicIndexingInterface: remake_buffer
-using SciMLBase: BVProblem
+using SciMLBase: SciMLBase, BVProblem
+using DiffEqBase: DEVerbosity
+using JumpProcesses: Direct
 
 @testset "MTKVerbosity construction" begin
     @test MTKVerbosity() isa MTKVerbosity{true}
@@ -78,9 +80,11 @@ end
     @mtkcompile sys = System([D(x) ~ (y - x) / τ, y ~ 2x], t)
     op = [x => 1.0]
     tspan = (0.0, 1.0)
-    # MTKVerbosity is consumed and never lands in prob.kwargs
+    # MTKVerbosity forwards its solver sub-specifier for the problem type
     prob = ODEProblem(sys, op, tspan; verbose = MTKVerbosity())
-    @test !haskey(prob.kwargs, :verbose)
+    @test prob.kwargs[:verbose] isa Standard
+    prob = ODEProblem(sys, op, tspan; verbose = MTKVerbosity(de_verbosity = None()))
+    @test prob.kwargs[:verbose] isa None
     # Bool and preset are forwarded to prob.kwargs (solver-facing) as before
     prob = ODEProblem(sys, op, tspan; verbose = false)
     @test prob.kwargs[:verbose] === false
@@ -324,4 +328,56 @@ end
     @parameters tf
     @test_logs (:warn, r"Specified dt") match_mode = :any process_tspan((0.0, tf), 0.1, 10)
     @test_logs min_level = Logging.Warn process_tspan((0.0, tf), 0.1, 10, quiet)
+end
+
+@testset "solver sub-specifiers" begin
+    field = ModelingToolkitBase._solver_verbosity_field
+    @test field(SciMLBase.ODEProblem) === :de_verbosity
+    @test field(SciMLBase.SDEProblem) === :de_verbosity
+    @test field(SciMLBase.DiscreteProblem) === :de_verbosity
+    @test field(JumpProblem) === :de_verbosity
+    @test field(BVProblem) === :bvp_verbosity
+    @test field(SciMLBase.NonlinearProblem) === :nonlinear_verbosity
+    @test field(SciMLBase.SteadyStateProblem) === :nonlinear_verbosity
+    @test field(SciMLBase.IntervalNonlinearProblem) === :nonlinear_verbosity
+    @test field(SciMLBase.LinearProblem) === :linear_verbosity
+    @test field(SciMLBase.OptimizationProblem) === :optimization_verbosity
+    @test field(Int) === nothing
+    # presets set every solver sub-specifier to the same preset
+    @test MTKVerbosity().de_verbosity isa Standard
+    @test MTKVerbosity(None()).de_verbosity isa None
+    @test MTKVerbosity(Detailed()).nonlinear_verbosity isa Detailed
+
+    @variables x(t)
+    @parameters k = 1.0
+    @mtkcompile sys = System([D(x) ~ -k * x], t)
+    # a nested solver specifier gets to the solver unchanged
+    de = DEVerbosity(linear_verbosity = None())
+    prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0); verbose = MTKVerbosity(de_verbosity = de))
+    @test prob.kwargs[:verbose] === de
+
+    @variables a b
+    @parameters c = 4.0
+    @mtkcompile nsys = System([0 ~ a^2 - c, 0 ~ b - a])
+    prob = NonlinearProblem(
+        nsys, [a => 1.0, b => 1.0]; verbose = MTKVerbosity(nonlinear_verbosity = Detailed())
+    )
+    @test prob.kwargs[:verbose] isa Detailed
+
+    @variables y(..)
+    @mtkcompile bsys = System([D(y(t)) ~ -k * y(t)], t; constraints = [y(0.5) ~ 0.5])
+    prob = BVProblem(
+        bsys, [y(t) => 1.0], (0.0, 1.0); verbose = MTKVerbosity(bvp_verbosity = None())
+    )
+    @test prob.kwargs[:verbose] isa None
+
+    @parameters β = 0.1
+    @variables S(t) = 10
+    jsys = complete(JumpSystem([SymbolicMassActionJump(β, [S => 1], [S => -1])], t, [S], [β]; name = :jsys))
+    jprob = JumpProblem(
+        jsys, [S => 10], (0.0, 1.0); aggregator = Direct(),
+        verbose = MTKVerbosity(de_verbosity = None())
+    )
+    # `solve` gets the keywords of the inner problem
+    @test jprob.prob.kwargs[:verbose] isa None
 end

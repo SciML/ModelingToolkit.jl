@@ -74,7 +74,9 @@ coupled to an ODE, and the others run much slower. Passing a specialization othe
             )
             f = (du, u, p, t) -> (du .= 0; nothing)
             df = ODEFunction{true, spec}(f; sys, observed = observedfun)
-            prob = ODEProblem{true}(df, u0, tspan, p; filter_kwargs(kwargs)...)
+            prob = ODEProblem{true}(
+                df, u0, tspan, p; _solver_kwargs(ODEProblem, filter_kwargs(kwargs))...
+            )
         end
     else
         _f, u0,
@@ -92,7 +94,9 @@ coupled to an ODE, and the others run much slower. Passing a specialization othe
             f; sys = sys, observed = observedfun,
             initialization_data = get(_f.kwargs, :initialization_data, nothing)
         )
-        prob = DiscreteProblem(df, u0, tspan, p; filter_kwargs(kwargs)...)
+        prob = DiscreteProblem(
+            df, u0, tspan, p; _solver_kwargs(DiscreteProblem, filter_kwargs(kwargs))...
+        )
     end
 
     # Create SymbolicTstops for all paths and forward via JumpProblem kwargs.
@@ -151,7 +155,7 @@ coupled to an ODE, and the others run much slower. Passing a specialization othe
     return JumpProblem(
         prob, aggregator, jset; dep_graph = jtoj, vartojumps_map = vtoj,
         jumptovars_map = jtov, nocopy = true,
-        callback = cbs, save_positions, kwargs...
+        callback = cbs, save_positions, _solver_kwargs(JumpProblem, kwargs)...
     )
 end
 
