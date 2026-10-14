@@ -21,7 +21,7 @@ ModelingToolkitBase = {path = "../../lib/ModelingToolkitBase"}
 Aqua = "0.8"
 FMIImport = "1"
 JET = "0.9,0.10,0.11"
-ModelingToolkitBase = "1.57"
+ModelingToolkitBase = "2"
 ModelingToolkitTearing = "1.19.2"
 OrdinaryDiffEqBDF = "1, 2"
 OrdinaryDiffEqDefault = "1.2, 2"
