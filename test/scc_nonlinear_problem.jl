@@ -4,9 +4,9 @@ using OrdinaryDiffEq
 using OrdinaryDiffEqBDF
 using SteadyStateDiffEq
 using SciMLBase, Symbolics
-using SymbolicIndexingInterface: getu, getp, state_values, variable_index
+using SymbolicIndexingInterface: getu, getp, state_values, variable_index, parameter_values
 using StaticArrays
-using LinearAlgebra, Test
+using LinearAlgebra, SparseArrays, Test
 using SymbolicUtils
 using Graphs
 import ModelingToolkitBase
@@ -773,3 +773,95 @@ end
 
 include("scc_zero_state_regression.jl")
 include("scc_array_cache_regression.jl")
+
+@testset "SCCSteadyStateProblem constructor options" begin
+    # Single-block residual: one scalar nonlinear SCC.
+    @variables x(t)
+    @parameters k
+    sys = mtkcompile(System([D(x) ~ k - x^3], t; name = :s))
+    op = [x => 0.1, k => 2.0]
+
+    prob = SCCSteadyStateProblem(sys, op; u0_eltype = Float32)
+    @test eltype(state_values(prob)) == Float32
+    for block in prob.probs
+        @test eltype(state_values(block)) == Float32
+    end
+
+    prob = SCCSteadyStateProblem(sys, op; jac = true, sparse = true)
+    for block in prob.probs
+        @test block.f.jac !== nothing
+        @test block.f.jac_prototype isa SparseArrays.SparseMatrixCSC
+    end
+    prob = SCCSteadyStateProblem(sys, op)
+    for block in prob.probs
+        block isa NonlinearProblem || continue
+        @test block.f.jac === nothing
+    end
+
+    prob = SCCSteadyStateProblem(sys, op; maxiters = 1)
+    @test prob.probs[1].kwargs[:maxiters] == 1
+    @test solve(prob, NewtonRaphson()).retcode == SciMLBase.ReturnCode.MaxIters
+    @test solve(SCCSteadyStateProblem(sys, op), NewtonRaphson()).retcode ==
+        SciMLBase.ReturnCode.Success
+
+    @test_throws ArgumentError SCCSteadyStateProblem(sys, op; expression = Val{true})
+
+    sprob = SCCSteadyStateProblem{false}(sys, SA[op...])
+    @test state_values(sprob) isa SVector
+    for block in sprob.probs
+        @test state_values(block) isa SVector
+        @test !SciMLBase.isinplace(block)
+    end
+    @test parameter_values(sprob).tunable isa SVector
+    ssol = solve(sprob, NewtonRaphson())
+    @test SciMLBase.successful_retcode(ssol)
+    @test ssol[x] ≈ cbrt(2) atol = 1.0e-8
+end
+
+@testset "SCC problem constructor options on multi-block systems" begin
+    # Linear {a, b} SCC followed by a nonlinear {x} SCC whose cubic residual
+    # needs more than one Newton iteration.
+    @variables a(t) = 1.0 b(t) = 1.0 x(t) = 1.0 [irreducible = true]
+    @mtkcompile sys = System(
+        [D(a) ~ 5 - 3a - b, D(b) ~ 5 - a - 2b, D(x) ~ a + b - x^3], t
+    )
+    nlsys = mtkcompile(NonlinearSystem(sys))
+    for (ctor, csys, cop) in (
+            (SCCSteadyStateProblem, sys, Dict(a => 0.8, b => 1.8, x => 0.8)),
+            (SCCNonlinearProblem, nlsys, Dict(a => 0.8, b => 1.8, x => 0.8)),
+        )
+        prob = ctor(csys, cop; maxiters = 1)
+        @test length(prob.probs) > 1
+        for block in prob.probs
+            block isa NonlinearProblem || continue
+            @test block.kwargs[:maxiters] == 1
+        end
+        @test !SciMLBase.successful_retcode(solve(prob, NewtonRaphson()))
+
+        prob = ctor(csys, cop; jac = true)
+        for block in prob.probs
+            block isa NonlinearProblem || continue
+            @test block.f.jac !== nothing
+        end
+
+        prob = ctor(csys, cop; u0_eltype = Float32)
+        @test eltype(state_values(prob)) == Float32
+        for block in prob.probs
+            u = state_values(block)
+            u === nothing && continue
+            @test eltype(u) == Float32
+        end
+    end
+
+    # A residual reduced entirely to `observed` assignments lowers to a single
+    # stateless block; an explicit `jac` keyword must not collide with the
+    # default `jac = true` that branch passes.
+    @parameters α = 1.3 β = 0.9
+    @variables x3(t) y3(t)
+    @mtkcompile sys = System(
+        [D(x3) ~ α - x3, D(y3) ~ β + x3 - y3], t, [x3, y3], [α, β]
+    )
+    prob = SCCSteadyStateProblem(sys, []; jac = true)
+    @test isempty(state_values(prob))
+    @test SciMLBase.successful_retcode(solve(prob))
+end

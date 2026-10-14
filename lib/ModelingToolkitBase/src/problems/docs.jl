@@ -105,20 +105,23 @@ function problem_ctors(prob, istd, tspan_default = istd)
     end
 end
 
-function prob_fun_common_kwargs(T, istd)
+function prob_fun_common_kwargs(T, istd; expression = true)
     return """
     - `check_compatibility`: Whether to check if the given system `sys` contains all the
       information necessary to create a `$T` and no more. If disabled, assumes that `sys`
       at least contains the necessary information.
-    - `expression`: `Val{true}` to return an `Expr` that constructs the corresponding
+    $(expression ?
+      """- `expression`: `Val{true}` to return an `Expr` that constructs the corresponding
       problem instead of the problem itself. `Val{false}` otherwise.
-      $(istd ? " Constructing the expression does not support callbacks" : "")
+      $(istd ? " Constructing the expression does not support callbacks" : "")""" :
+      "")
     """
 end
 
 function problem_docstring(
         prob, func, istd; init = true, extra_body = "",
-        extra_kwargs = "", extra_kwargs_desc = "", tspan_default = istd
+        extra_kwargs = "", extra_kwargs_desc = "", tspan_default = istd,
+        expression = true
     )
     if func isa DataType
         func = "`$func`"
@@ -144,7 +147,7 @@ function problem_docstring(
 
     $PROBLEM_KWARGS
     $(istd ? TIME_DEPENDENT_PROBLEM_KWARGS : "")
-    $(prob_fun_common_kwargs(prob, istd))
+    $(prob_fun_common_kwargs(prob, istd; expression))
     $(extra_kwargs)
     All other keyword arguments are forwarded to the $func constructor.
     $(extra_kwargs_desc)

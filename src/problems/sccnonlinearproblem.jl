@@ -475,7 +475,8 @@ struct SCCNonlinearFunction{iip} end
 function SCCNonlinearFunction{iip}(
         decomposition::SCCDecomposition, i::Int, cachesyms, op;
         specialize = SciMLBase.AutoSpecialize, eval_expression = false,
-        eval_module = @__MODULE__, kwargs...
+        eval_module = @__MODULE__, jac = false, sparse = false, u0_eltype = Float64,
+        kwargs...
     ) where {iip}
     subsys = decomposition.subsystems[i]
     islin = decomposition.islinear[i]
@@ -502,15 +503,17 @@ function SCCNonlinearFunction{iip}(
         return NonlinearFunction{iip, specialize}(hf; sys = subsys)
     end
 
-    f = generate_rhs(
-        subsys,
-        GeneratedFunctionOptions(;
-            expression = Val{false}, wrap_gfw = Val{true}, eval_expression, eval_module
-        );
-        cachesyms
+    gfwopts = GeneratedFunctionOptions(;
+        expression = Val{false}, wrap_gfw = Val{true}, eval_expression, eval_module
     )
+    f = generate_rhs(subsys, gfwopts; cachesyms)
+    _jac = jac ? generate_jacobian(subsys, gfwopts; sparse, cachesyms) : nothing
+    jac_prototype = sparse ?
+        similar(calculate_jacobian(subsys; sparse = true), u0_eltype) : nothing
 
-    return NonlinearFunction{iip, specialize}(f; sys = subsys)
+    return NonlinearFunction{iip, specialize}(
+        f; sys = subsys, jac = _jac, jac_prototype
+    )
 end
 
 """$(MTKBase.problem_docstring(SciMLBase.SCCNonlinearProblem, NonlinearFunction, false; init = false))"""
@@ -529,6 +532,7 @@ end
 function SciMLBase.SCCNonlinearProblem{iip, specialize}(
         sys::System, op; eval_expression = false,
         eval_module = @__MODULE__, u0_constructor = identity,
+        p_constructor = identity,
         missing_guess_value = default_missing_guess_value(), combine_sccs = true, kwargs...
     ) where {iip, specialize}
     if !iscomplete(sys) || get_tearing_state(sys) === nothing
@@ -571,8 +575,8 @@ function SciMLBase.SCCNonlinearProblem{iip, specialize}(
         # for a stateless system, which solvers reject.
         TProb = MTKBase.get_nonlinear_problem_type(sys)
         prob = TProb{iip, specialize}(
-            sys, op; eval_expression, eval_module, u0_constructor, missing_guess_value,
-            jac = true, kwargs...
+            sys, op; eval_expression, eval_module, u0_constructor, p_constructor,
+            missing_guess_value, (; jac = true, kwargs...)...
         )
         state_values(prob) === nothing && return remake(prob; u0 = Float64[])
         return prob
@@ -582,7 +586,7 @@ function SciMLBase.SCCNonlinearProblem{iip, specialize}(
         if calculate_A_b(sys; throw = false) !== nothing
             linprob = LinearProblem{iip}(
                 sys, op; eval_expression, eval_module,
-                u0_constructor, kwargs...
+                u0_constructor, p_constructor, kwargs...
             )
             # Required for filling missing parameter values when this is an initialization
             # problem
@@ -601,7 +605,7 @@ function SciMLBase.SCCNonlinearProblem{iip, specialize}(
             # `NonlinearProblem` would drop the λ-sweep and Newton-solve the target directly.
             TProb = MTKBase.get_nonlinear_problem_type(sys)
             return TProb{iip, specialize}(
-                sys, op; eval_expression, eval_module, u0_constructor, missing_guess_value, kwargs...
+                sys, op; eval_expression, eval_module, u0_constructor, p_constructor, missing_guess_value, kwargs...
             )
         end
     end
@@ -612,13 +616,31 @@ function SciMLBase.SCCNonlinearProblem{iip, specialize}(
 
     _, u0, p = process_SciMLProblem(
         EmptySciMLFunction{iip}, sys, op; eval_expression, eval_module, symbolic_u0 = true,
-        missing_guess_value, kwargs...
+        missing_guess_value, u0_constructor, p_constructor, kwargs...
     )
     op = calculate_op_from_u0_p(sys, u0, p)
+
+    # A user-provided `u0_eltype` is honored at block level: the symbolic `u0`
+    # buffer keeps whatever `varmap_to_vars` produced, and each block's state is
+    # converted below.
+    u0_eltype = something(get(kwargs, :u0_eltype, nothing), Union{})
+    if u0_eltype === Union{}
+        for x in u0
+            symbolic_type(x) == NotSymbolic() || continue
+            u0_eltype = typeof(x)
+            break
+        end
+        if u0_eltype === Union{} || u0_eltype === Nothing
+            u0_eltype = Float64
+        end
+        u0_eltype = float(u0_eltype)
+    end
 
     explicitfuns = Union{Returns{Nothing}, CacheWriter{Any}, typeof(__explicitfun_copy_states)}[]
     nlfuns = []
     decomposition = SCCDecomposition(sys, var_sccs, eq_sccs; combine_sccs)
+    # Problem keywords (`maxiters`, tolerances, ...) stored on every nonlinear block.
+    probkw = process_kwargs(sys; kwargs...)
 
 
     # Invalidate the SCC information - `decomposition` is the source of truth now
@@ -677,21 +699,10 @@ function SciMLBase.SCCNonlinearProblem{iip, specialize}(
         end
         f = SCCNonlinearFunction{iip}(
             decomposition, i, cachebufsyms, op;
-            specialize, eval_expression, eval_module, kwargs...
+            specialize, eval_expression, eval_module, (; kwargs..., u0_eltype)...
         )
         push!(nlfuns, f)
     end
-
-    u0_eltype = Union{}
-    for x in u0
-        symbolic_type(x) == NotSymbolic() || continue
-        u0_eltype = typeof(x)
-        break
-    end
-    if u0_eltype === Union{} || u0_eltype === Nothing
-        u0_eltype = Float64
-    end
-    u0_eltype = float(u0_eltype)
 
     if !isempty(decomposition.cachetypes)
         templates = map(decomposition.cachetypes, decomposition.cachesizes) do T, n
@@ -775,9 +786,9 @@ function SciMLBase.SCCNonlinearProblem{iip, specialize}(
                 # solving the block sweeps λ from the `simplified` form to `actual`. Blocks
                 # are solved in dependency order, so each one reaches `λ = 1` before the
                 # next begins.
-                SciMLBase.HomotopyProblem(f, _u0, p; λspan = (0.0, 1.0))
+                SciMLBase.HomotopyProblem(f, _u0, p; λspan = (0.0, 1.0), probkw...)
             else
-                NonlinearProblem(f, _u0, p)
+                NonlinearProblem(f, _u0, p; probkw...)
             end
         end
         push!(subprobs, prob)
@@ -834,7 +845,7 @@ function calculate_op_from_u0_p(sys::System, u0::Union{Nothing, AbstractVector},
 end
 
 """
-$(MTKBase.problem_docstring(SciMLBase.SCCSteadyStateProblem, NonlinearFunction, false; init = false))
+$(MTKBase.problem_docstring(SciMLBase.SCCSteadyStateProblem, NonlinearFunction, false; init = false, expression = false))
 
 The steady-state residual of the uncompiled model — the `NonlinearSystem` of the
 root of `sys`'s parent chain — is `mtkcompile`d and decomposed into SCCs, and `op`
@@ -845,6 +856,16 @@ and `sol[x]` resolves eliminated variables as observed. A structurally singular
 residual (e.g. a conservation law) has no SCC form and `mtkcompile` throws; use
 `SteadyStateProblem` for those systems. `combine_sccs` and `missing_guess_value`
 behave as for `SCCNonlinearProblem`.
+
+The initialization keywords (`guesses`, `initialization_eqs`, `fully_determined`,
+`use_scc`, `warn_initialize_determined`, `check_initialization_units`,
+`initsys_mtkcompile_kwargs`, `time_dependent_init`, `algebraic_only`,
+`allow_incomplete`, `init_compiler_options`, `return_operating_point`) apply to
+processing `op` against the time-dependent system. All other keywords are also
+forwarded to the residual `SCCNonlinearProblem`, so function options (`jac`,
+`sparse`, `u0_eltype`, ...) apply to every block and problem keywords
+(`maxiters`, `abstol`, ...) are stored on every nonlinear block.
+`expression = Val{true}` is not supported.
 """
 function SciMLBase.SCCSteadyStateProblem(sys::System, op; kwargs...)
     return SCCSteadyStateProblem{true}(sys, op; kwargs...)
@@ -858,13 +879,30 @@ function SciMLBase.SCCSteadyStateProblem{iip}(sys::System, op; kwargs...) where 
     return SCCSteadyStateProblem{iip, specialize}(sys, op; forwarded_kwargs...)
 end
 
+# Keywords consumed while processing `op` against the time-dependent system;
+# everything else is forwarded to the residual `SCCNonlinearProblem`.
+const SCC_SSPROB_INIT_KWARGS = (
+    :guesses, :initialization_eqs, :fully_determined, :use_scc,
+    :warn_initialize_determined, :check_initialization_units,
+    :initsys_mtkcompile_kwargs, :time_dependent_init, :algebraic_only,
+    :allow_incomplete, :init_compiler_options, :return_operating_point,
+)
+
 function SciMLBase.SCCSteadyStateProblem{iip, specialize}(
         sys::System, op; eval_expression = false,
         eval_module = @__MODULE__, u0_constructor = identity,
+        p_constructor = identity, expression = Val{false},
         missing_guess_value = default_missing_guess_value(), combine_sccs = true, kwargs...
     ) where {iip, specialize}
+    expression === Val{false} || throw(
+        ArgumentError(
+            "`SCCSteadyStateProblem` does not support `expression = $expression`; " *
+                "the residual system is always compiled to callable functions."
+        )
+    )
     ssprob = SteadyStateProblem{iip, specialize}(
-        sys, op; eval_expression, eval_module, u0_constructor, kwargs...
+        sys, op; eval_expression, eval_module, expression,
+        u0_constructor, p_constructor, kwargs...
     )
     ssys = sys
     while MTKBase.has_parent(ssys)
@@ -881,9 +919,19 @@ function SciMLBase.SCCSteadyStateProblem{iip, specialize}(
     # only the `Initial` values it has; its initialization system would treat the others
     # as solvable and add identities `Initial(x) ~ Initial(x)`.
     filter!(kv -> !MTKBase.isinitial(first(kv)) || is_parameter(rsys, first(kv)), nlop)
+    # `nlop` is a `Dict`, so the residual problem cannot infer static containers from
+    # it; derive the constructors from the user's `op` container type instead.
+    u0s = state_values(ssprob)
+    floatT = u0s === nothing ? Float64 : eltype(u0s)
+    u0_constructor = get_u0_constructor(u0_constructor, typeof(op), floatT, false)
+    p_constructor = get_p_constructor(p_constructor, typeof(op), floatT)
+    residual_kwargs = (;
+        (name => value for (name, value) in pairs(kwargs) if !(name in SCC_SSPROB_INIT_KWARGS))...
+    )
     lowered = SCCNonlinearProblem{iip, specialize}(
         rsys, nlop; eval_expression, eval_module,
-        u0_constructor, missing_guess_value, combine_sccs
+        u0_constructor, p_constructor, missing_guess_value, combine_sccs,
+        residual_kwargs...
     )
     lowered isa SCCNonlinearProblem && return SCCSteadyStateProblem(lowered)
     return SCCSteadyStateProblem(
