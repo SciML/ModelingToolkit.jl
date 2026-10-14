@@ -1873,8 +1873,10 @@ function calculate_float_type(varmap, u0Type::Type, floatT = Bool)
 end
 
 # Strip `Nothing` from a buffer eltype: buffers can hold `nothing` placeholders.
+# An all-placeholder buffer maps to `Union{}` so that `promote_type(Union{}, T) == T`.
 tunable_real_eltype(T::Type) = T
-tunable_real_eltype(::Type{Union{Nothing, T}}) where {T} = T
+tunable_real_eltype(::Type{Nothing}) = Union{}
+tunable_real_eltype(T::Union) = Union{tunable_real_eltype(T.a), tunable_real_eltype(T.b)}
 
 """
     $(TYPEDSIGNATURES)

@@ -13,6 +13,15 @@ using Symbolics
     [x => Union{Nothing, Float32}[nothing]]
 ) == Float32
 
+@testset "tunable_real_eltype" for (T, expected) in (
+        Nothing => Union{},
+        Union{Nothing, Float64} => Float64,
+        Float64 => Float64,
+        Union{Nothing, Float32, Int} => Union{Float32, Int},
+    )
+    @test ModelingToolkitBase.tunable_real_eltype(T) == expected
+end
+
 @parameters α β δ
 expr = (((1 / β - 1) + δ) / α)^(1 / (α - 1))
 ref = sort([β, δ, α], lt = <ₑ)
