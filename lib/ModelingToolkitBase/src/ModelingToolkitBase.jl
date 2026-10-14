@@ -18,7 +18,7 @@ using Reexport: Reexport, @reexport
     using ImplicitDiscreteSolve: IDSolve
     import JumpProcesses
     using JumpProcesses: ConstantRateJump, JumpProblem, JumpSet, MassActionJump,
-        VariableRateJump, get_num_majumps, needs_depgraph, needs_vartojumps_map,
+        VariableRateJump, needs_depgraph, needs_vartojumps_map,
         reset_aggregated_jumps!
     # ONLY here for the invalidations
     import REPL
