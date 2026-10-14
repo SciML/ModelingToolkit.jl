@@ -2731,10 +2731,8 @@ function filter_kwargs(kwargs)
     for key in keys(kwargs)
         key in SciMLBase.allowedkeywords || delete!(kwargs, key)
     end
-    # An `MTKVerbosity` is consumed by problem construction; it is not a solver
-    # verbosity and must not end up in `prob.kwargs`. Presets, `Bool`s, and solver
-    # specifiers pass through to `solve` as before.
-    get(kwargs, :verbose, nothing) isa MTKVerbosity && delete!(kwargs, :verbose)
+    # An `MTKVerbosity` stays: `maybe_codegen_scimlproblem` replaces it by the solver
+    # sub-specifier for the problem type (see `_solver_kwargs`).
     return pairs(NamedTuple(kwargs))
 end
 
@@ -3014,7 +3012,7 @@ Return an expression constructing SciMLProblem `T` with positional arguments `ar
 and keywords `kwargs`.
 """
 function maybe_codegen_scimlproblem(::Type{Val{true}}, T, args::NamedTuple; kwargs...)
-    return build_scimlproblem_expr(T, args; kwargs...)
+    return build_scimlproblem_expr(T, args; _solver_kwargs(T, kwargs)...)
 end
 
 """
@@ -3026,7 +3024,7 @@ function maybe_codegen_scimlproblem(::Type{Val{false}}, ::Type{T}, args::NamedTu
     @nospecialize args kwargs
     # Call `remake` so it runs initialization if it is trivial
     # Use `@invokelatest` to avoid world-age issues with `eval_expression = true`
-    return @invokelatest remake(T(args...; kwargs...))
+    return @invokelatest remake(T(args...; _solver_kwargs(T, kwargs)...))
 end
 
 """

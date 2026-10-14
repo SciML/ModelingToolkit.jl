@@ -593,6 +593,6 @@ function HomotopyContinuationProblem{iip, spec}(
         HomotopyNonlinearFunction{iip, spec}, sys, op; kwargs...
     )
 
-    kwargs = filter_kwargs(kwargs)
+    kwargs = _solver_kwargs(NonlinearProblem, filter_kwargs(kwargs))
     return NonlinearProblem{iip}(f, u0, p; kwargs...)
 end

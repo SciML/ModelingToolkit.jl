@@ -123,13 +123,29 @@ The available toggles are documented on [`MTKVerbosity`](@ref):
 ### Problem constructors
 
 `SciMLBase.*Problem` constructors share the `verbose` keyword with the solver, since
-problem keyword arguments are forwarded to `solve`. The value is routed by type: an
-`MTKVerbosity` is consumed by ModelingToolkit and *not* placed in `prob.kwargs`; a
-preset or `Bool` applies to ModelingToolkit *and* is forwarded to the solver; a solver
-verbosity specifier (e.g. `DEVerbosity`) is forwarded untouched. The
-`initialization_verbosity` sub-specifier of `MTKVerbosity` controls the verbosity of the
-initialization problem's solve (default `Minimal()`), and accepts a preset or a
-`NonlinearVerbosity`.
+problem keyword arguments are forwarded to `solve`. The value is routed by type:
+
+  - an `MTKVerbosity` applies to ModelingToolkit, and its solver sub-specifier for the
+    problem type is forwarded to the solver (`de_verbosity` for an `ODEProblem`,
+    `nonlinear_verbosity` for a `NonlinearProblem`, ...);
+  - a preset or `Bool` applies to ModelingToolkit *and* is forwarded to the solver;
+  - a solver verbosity specifier (e.g. `DEVerbosity`) is forwarded untouched.
+
+Thus, one `MTKVerbosity` can control ModelingToolkit and the solver together:
+
+```julia
+verb = MTKVerbosity(
+    initialization = Silent,
+    de_verbosity = DEVerbosity(linear_verbosity = SciMLLogging.None()),
+)
+prob = ODEProblem(sys, op, tspan; verbose = verb)
+solve(prob, Rodas5P())  # the solver gets `verb.de_verbosity`
+```
+
+The `initialization_verbosity` sub-specifier of `MTKVerbosity` controls the verbosity of
+the initialization problem's solve (default `Minimal()`), and accepts a preset or a
+`NonlinearVerbosity`. The [`MTKVerbosity`](@ref) docstring lists the solver
+sub-specifiers for each problem family.
 
 The boolean keywords `warn_initialize_determined`, `warn_cyclic_dependency`, and
 `warn_empty_op` are deprecated in favor of `verbose`; when explicitly passed they

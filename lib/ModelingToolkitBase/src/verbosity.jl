@@ -1,5 +1,8 @@
 @verbosity_specifier MTKVerbosity begin
-    sub_specifiers = (:initialization_verbosity,)
+    sub_specifiers = (
+        :initialization_verbosity, :de_verbosity, :nonlinear_verbosity,
+        :linear_verbosity, :optimization_verbosity, :bvp_verbosity,
+    )
 
     toggles = (
         # compilation
@@ -24,6 +27,11 @@
     presets = (
         None = (
             initialization_verbosity = None(),
+            de_verbosity = None(),
+            nonlinear_verbosity = None(),
+            linear_verbosity = None(),
+            optimization_verbosity = None(),
+            bvp_verbosity = None(),
             state_priority_tie = Silent,
             underconstrained_variables = Silent,
             if_lifting_condition_grammar = Silent,
@@ -50,6 +58,11 @@
         ),
         Minimal = (
             initialization_verbosity = Minimal(),
+            de_verbosity = Minimal(),
+            nonlinear_verbosity = Minimal(),
+            linear_verbosity = Minimal(),
+            optimization_verbosity = Minimal(),
+            bvp_verbosity = Minimal(),
             state_priority_tie = WarnLevel,
             underconstrained_variables = Silent,
             if_lifting_condition_grammar = WarnLevel,
@@ -76,6 +89,11 @@
         ),
         Standard = (
             initialization_verbosity = Minimal(),
+            de_verbosity = Standard(),
+            nonlinear_verbosity = Standard(),
+            linear_verbosity = Standard(),
+            optimization_verbosity = Standard(),
+            bvp_verbosity = Standard(),
             state_priority_tie = WarnLevel,
             underconstrained_variables = Silent,
             if_lifting_condition_grammar = WarnLevel,
@@ -102,6 +120,11 @@
         ),
         Detailed = (
             initialization_verbosity = Minimal(),
+            de_verbosity = Detailed(),
+            nonlinear_verbosity = Detailed(),
+            linear_verbosity = Detailed(),
+            optimization_verbosity = Detailed(),
+            bvp_verbosity = Detailed(),
             state_priority_tie = WarnLevel,
             underconstrained_variables = InfoLevel,
             if_lifting_condition_grammar = WarnLevel,
@@ -128,6 +151,11 @@
         ),
         All = (
             initialization_verbosity = Minimal(),
+            de_verbosity = All(),
+            nonlinear_verbosity = All(),
+            linear_verbosity = All(),
+            optimization_verbosity = All(),
+            bvp_verbosity = All(),
             state_priority_tie = WarnLevel,
             underconstrained_variables = InfoLevel,
             if_lifting_condition_grammar = WarnLevel,
@@ -193,7 +221,9 @@ Pass it via the `verbose` keyword. `mtkcompile` and the analysis utilities consu
 directly. `SciMLBase.*Problem` constructors share the `verbose` keyword with the solver
 (problem keyword arguments are forwarded to `solve`), routed by type:
 
-- an `MTKVerbosity` is consumed by ModelingToolkit and **not** placed in `prob.kwargs`;
+- an `MTKVerbosity` sets ModelingToolkit's verbosity, and its solver sub-specifier for
+  the problem type (see below) is placed in `prob.kwargs`. For example, an `ODEProblem`
+  gets `verbose = v.de_verbosity`;
 - a `SciMLLogging` preset (`None()`, `Minimal()`, `Standard()`, `Detailed()`, `All()`)
   sets ModelingToolkit's verbosity **and** is forwarded to the solver, which accepts
   presets for its own verbosity specifier;
@@ -288,6 +318,28 @@ returns. Functions that have their own `verbose` keyword (problem constructors,
   `Minimal()` (`None()` under the `None` preset), so inner linear-solver chatter stays
   off during initialization.
 
+The other sub-specifiers hold the verbosity of the solver for each problem family. A
+problem constructor that gets an `MTKVerbosity` forwards the matching field to `solve`.
+Each field accepts a `SciMLLogging` preset or the solver's own specifier, and each preset
+of `MTKVerbosity` sets them to the same preset (for example, `MTKVerbosity(None())` has
+`de_verbosity = None()`).
+
+| Field | Problem types | Solver specifier |
+|:--- |:--- |:--- |
+| `de_verbosity` | `ODEProblem`, `DAEProblem`, `SDEProblem`, `DDEProblem`, `SDDEProblem`, `DiscreteProblem`, `ImplicitDiscreteProblem`, `JumpProblem` | `DEVerbosity` (DiffEqBase) |
+| `nonlinear_verbosity` | `NonlinearProblem`, `NonlinearLeastSquaresProblem`, `IntervalNonlinearProblem`, `SteadyStateProblem`, `HomotopyProblem` | `NonlinearVerbosity` (NonlinearSolveBase) |
+| `linear_verbosity` | `LinearProblem` | `LinearVerbosity` (LinearSolve) |
+| `optimization_verbosity` | `OptimizationProblem` | `OptimizationVerbosity` (OptimizationBase) |
+| `bvp_verbosity` | `BVProblem` | `BVPVerbosity` (BoundaryValueDiffEqCore) |
+
+The solver specifiers have their own sub-specifiers. For example, the linear solves
+inside an ODE solve are controlled by the `linear_verbosity` of the `DEVerbosity`, not by
+the `linear_verbosity` field of `MTKVerbosity`:
+
+```julia
+MTKVerbosity(de_verbosity = DEVerbosity(linear_verbosity = SciMLLogging.None()))
+```
+
 # Deprecated keyword equivalents
 
 These boolean keywords remain accepted and, when explicitly passed, override the
@@ -344,9 +396,10 @@ _system_verbosity(sys) = getmetadata(sys, MTKVerbosityCtx, DEFAULT_MTK_VERBOSE):
 end
 
 # Type-routed problem-constructor `verbose` (shared kwarg with the solver):
-#   MTKVerbosity -> consumed by MTK; `filter_kwargs` drops it from `prob.kwargs`
-#   preset       -> consumed (`MTKVerbosity(preset)`) AND forwarded to `prob.kwargs`
-#   Bool         -> consumed (Standard/None) AND forwarded (long-standing behavior)
+#   MTKVerbosity -> used by MTK; `_solver_kwargs` puts its solver sub-specifier for the
+#                   problem type (e.g. `de_verbosity`) in `prob.kwargs`
+#   preset       -> used as `MTKVerbosity(preset)` AND forwarded to `prob.kwargs`
+#   Bool         -> used as Standard/None AND forwarded (long-standing behavior)
 #   anything else (`nothing`, `DEVerbosity`, ...) -> MTK default; forwarded untouched
 @inline function _route_problem_verbose(
         v::Union{MTKVerbosity, AbstractVerbosityPreset, Bool}
@@ -354,6 +407,30 @@ end
     return _process_verbose_param(v)
 end
 @inline _route_problem_verbose(::Any) = DEFAULT_MTK_VERBOSE
+
+# The `MTKVerbosity` sub-specifier that holds the solver verbosity for problem type `T`.
+# `AbstractBVProblem <: AbstractODEProblem`, so it needs its own method.
+_solver_verbosity_field(::Type) = nothing
+_solver_verbosity_field(::Type{<:SciMLBase.AbstractDEProblem}) = :de_verbosity
+_solver_verbosity_field(::Type{<:SciMLBase.AbstractBVProblem}) = :bvp_verbosity
+_solver_verbosity_field(::Type{<:SciMLBase.AbstractNonlinearProblem}) = :nonlinear_verbosity
+_solver_verbosity_field(::Type{<:SciMLBase.AbstractLinearProblem}) = :linear_verbosity
+function _solver_verbosity_field(::Type{<:SciMLBase.AbstractOptimizationProblem})
+    return :optimization_verbosity
+end
+
+# Replace an `MTKVerbosity` in the keywords of a problem of type `T` by the solver
+# sub-specifier for `T`, so that `solve` gets a value it accepts. Other values of
+# `verbose` are not changed.
+function _solver_kwargs(::Type{T}, kwargs) where {T}
+    verbose = get(kwargs, :verbose, nothing)
+    verbose isa MTKVerbosity || return kwargs
+    nt = NamedTuple(kwargs)
+    rest = NamedTuple{filter(!=(:verbose), keys(nt))}(nt)
+    field = _solver_verbosity_field(T)
+    field === nothing && return rest
+    return merge(rest, (; verbose = getfield(verbose, field)))
+end
 
 # Whether a toggle can emit at all — used to guard work that only serves the message
 # (e.g. substitution-cycle searches or printed reports).
