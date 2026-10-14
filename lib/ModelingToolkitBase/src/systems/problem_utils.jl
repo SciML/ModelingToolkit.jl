@@ -1872,6 +1872,10 @@ function calculate_float_type(varmap, u0Type::Type, floatT = Bool)
     end
 end
 
+# Strip `Nothing` from a buffer eltype: buffers can hold `nothing` placeholders.
+tunable_real_eltype(T::Type) = T
+tunable_real_eltype(::Type{Union{Nothing, T}}) where {T} = T
+
 """
     $(TYPEDSIGNATURES)
 
@@ -1882,7 +1886,9 @@ function calculate_resid_prototype(N::Int, u0, p)
     u0ElType = u0 === nothing ? Float64 : eltype(u0)
     if SciMLStructures.isscimlstructure(p)
         u0ElType = promote_type(
-            eltype(SciMLStructures.canonicalize(SciMLStructures.Tunable(), p)[1]),
+            tunable_real_eltype(
+                eltype(SciMLStructures.canonicalize(SciMLStructures.Tunable(), p)[1])
+            ),
             u0ElType
         )
     end

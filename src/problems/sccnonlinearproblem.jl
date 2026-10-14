@@ -834,75 +834,59 @@ function calculate_op_from_u0_p(sys::System, u0::Union{Nothing, AbstractVector},
 end
 
 """
-    $(TYPEDSIGNATURES)
+$(MTKBase.problem_docstring(SciMLBase.SCCSteadyStateProblem, NonlinearFunction, false; init = false))
 
-Whether `err`, thrown by `mtkcompile`, reports a structurally unbalanced or singular
-system. See `ModelingToolkitBase.UNBALANCED_SYSTEM_EXCEPTIONS`.
+The steady-state residual of the uncompiled model — the `NonlinearSystem` of the
+root of `sys`'s parent chain — is `mtkcompile`d and decomposed into SCCs, and `op`
+is processed as for `SteadyStateProblem`. The result is always an
+`SCCSteadyStateProblem`: a single block when the residual is a single SCC or has
+no unknowns. Its states are those of the compiled residual system in SCC order,
+and `sol[x]` resolves eliminated variables as observed. A structurally singular
+residual (e.g. a conservation law) has no SCC form and `mtkcompile` throws; use
+`SteadyStateProblem` for those systems. `combine_sccs` and `missing_guess_value`
+behave as for `SCCNonlinearProblem`.
 """
-function is_structurally_unbalanced_error(err)
-    T = typeof(err)
-    kind = nameof(T)
-    kind in MTKBase.UNBALANCED_SYSTEM_EXCEPTIONS || return false
-    kind === :InvalidSystemException || return true
-    # `InvalidSystemException` also reports problems unrelated to the structure.
-    return fieldcount(T) == 1 && fieldtype(T, 1) <: AbstractString &&
-        occursin("singular", getfield(err, 1))
+function SciMLBase.SCCSteadyStateProblem(sys::System, op; kwargs...)
+    return SCCSteadyStateProblem{true}(sys, op; kwargs...)
 end
 
-"""
-    $(TYPEDSIGNATURES)
+function SciMLBase.SCCSteadyStateProblem{iip}(sys::System, op; kwargs...) where {iip}
+    specialize = get(kwargs, :specialize, SciMLBase.AutoSpecialize)
+    forwarded_kwargs = (;
+        (key => value for (key, value) in kwargs if key !== :specialize)...,
+    )
+    return SCCSteadyStateProblem{iip, specialize}(sys, op; forwarded_kwargs...)
+end
 
-Return a `prob -> problem` callable producing the `SCCNonlinearProblem` that a
-`SteadyStateProblem` built on `sys` lowers to: the `NonlinearSystem`
-steady-state residual of the original (uncompiled) model is `mtkcompile`d and
-decomposed into SCCs. The compiled residual system is memoized, while the
-operating point is rebuilt from the queried problem's `u0`/`p` on every call so
-that a `remake`d `SteadyStateProblem` yields a matching lowering. The lowering
-is deferred because building it requires a full `mtkcompile` of the residual
-system, which most `SteadyStateProblem` consumers never need.
-
-The steady-state residual can be structurally unbalanced or singular even when
-the ODE is not, e.g. for a reaction network with a conservation law, where the
-residual determines the steady state only up to the conserved quantities that
-the initial condition fixes. Such a residual has no SCC lowering, so the
-callable then returns the steady-state residual wrapped as a plain
-`NonlinearProblem`, i.e. what `SciMLBase.NonlinearProblem(prob)` builds for a
-`SteadyStateProblem` without a lowering. Pseudo-transient solvers such as
-`DynamicSS` then integrate the ODE as usual.
-"""
-function MTKBase.steady_state_sccprob(sys::System, op; kwargs...)
-    # `nothing`: not compiled yet, `missing`: the residual has no SCC lowering.
-    ref = Ref{Any}(nothing)
-    return function _sccprob(prob)
-        if ref[] === nothing
-            ssys = sys
-            while MTKBase.has_parent(ssys)
-                parent = MTKBase.get_parent(ssys)
-                (parent === nothing || parent === ssys) && break
-                ssys = parent
-            end
-            ref[] = try
-                mtkcompile(NonlinearSystem(ssys))
-            catch err
-                is_structurally_unbalanced_error(err) || rethrow()
-                @debug "The steady-state residual of $(nameof(sys)) cannot be lowered \
-                    to an `SCCNonlinearProblem`; solving the unlowered residual." err
-                missing
-            end
-        end
-        if ref[] === missing
-            return NonlinearProblem{SciMLBase.isinplace(prob)}(
-                prob.f, state_values(prob), parameter_values(prob)
-            )
-        end
-        op = calculate_op_from_u0_p(
-            prob.f.sys, state_values(prob), parameter_values(prob)
-        )
-        # `Initial` parameters are generated per system: `prob.f.sys` also has `Initial(D(x))`
-        # for its derivatives, which the time-independent residual system does not. Transfer
-        # only the `Initial` values it has; its initialization system would treat the others
-        # as solvable and add identities `Initial(x) ~ Initial(x)`.
-        filter!(kv -> !MTKBase.isinitial(first(kv)) || is_parameter(ref[], first(kv)), op)
-        return SCCNonlinearProblem(ref[], op)
+function SciMLBase.SCCSteadyStateProblem{iip, specialize}(
+        sys::System, op; eval_expression = false,
+        eval_module = @__MODULE__, u0_constructor = identity,
+        missing_guess_value = default_missing_guess_value(), combine_sccs = true, kwargs...
+    ) where {iip, specialize}
+    ssprob = SteadyStateProblem{iip, specialize}(
+        sys, op; eval_expression, eval_module, u0_constructor, kwargs...
+    )
+    ssys = sys
+    while MTKBase.has_parent(ssys)
+        parent = MTKBase.get_parent(ssys)
+        (parent === nothing || parent === ssys) && break
+        ssys = parent
     end
+    rsys = mtkcompile(NonlinearSystem(ssys))
+    nlop = calculate_op_from_u0_p(
+        ssprob.f.sys, state_values(ssprob), parameter_values(ssprob)
+    )
+    # `Initial` parameters are generated per system: `ssprob.f.sys` also has `Initial(D(x))`
+    # for its derivatives, which the time-independent residual system does not. Transfer
+    # only the `Initial` values it has; its initialization system would treat the others
+    # as solvable and add identities `Initial(x) ~ Initial(x)`.
+    filter!(kv -> !MTKBase.isinitial(first(kv)) || is_parameter(rsys, first(kv)), nlop)
+    lowered = SCCNonlinearProblem{iip, specialize}(
+        rsys, nlop; eval_expression, eval_module,
+        u0_constructor, missing_guess_value, combine_sccs
+    )
+    lowered isa SCCNonlinearProblem && return SCCSteadyStateProblem(lowered)
+    return SCCSteadyStateProblem(
+        (lowered,), (Returns(nothing),), parameter_values(lowered), true; sys = rsys
+    )
 end

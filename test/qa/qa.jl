@@ -315,7 +315,7 @@ const NONPUBLIC_QUALIFIED_ACCESSES = (
     :__mtkcompile,
     :ParameterArrayAssignments, :problem_docstring, :ReorderedDefaultParameters,
     :reverse_all_default_reversible_transformations, :simplify_sde_system, :simplify_shifts,
-    :singular_check, :steady_state_sccprob, :topsort_equations,
+    :singular_check, :topsort_equations,
     :torn_system_jacobian_sparsity, :Type, :UNBALANCED_SYSTEM_EXCEPTIONS,
     :wrap_symbolic_linear_interface,
     # ModelingToolkitTearing

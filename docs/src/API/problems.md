@@ -53,6 +53,7 @@ SciMLBase.HomotopyProblem
 SciMLBase.SCCNonlinearProblem
 SciMLBase.NonlinearLeastSquaresProblem
 SciMLBase.SteadyStateProblem
+SciMLBase.SCCSteadyStateProblem
 SciMLBase.IntervalNonlinearFunction
 SciMLBase.IntervalNonlinearProblem
 ModelingToolkit.HomotopyContinuationProblem
