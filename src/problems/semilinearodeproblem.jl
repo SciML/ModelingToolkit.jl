@@ -119,10 +119,7 @@ end
         linear_matrix_param = nothing
     end
     if B !== nothing
-        quadratic_forms = [
-            unwrap(getproperty(sys, get_quadratic_form_name(i)))
-                for i in 1:length(eqs)
-        ]
+        quadratic_forms = get_quadratic_form_params_from_sys(sys, B)
         diffcache_par = unwrap(getproperty(sys, DIFFCACHE_PARAM_NAME))
     else
         quadratic_forms = diffcache_par = nothing
@@ -140,6 +137,8 @@ end
     end
     if B !== nothing
         for (par, mat) in zip(quadratic_forms, B)
+            par === nothing && continue
+            mat === nothing && continue
             guess[par] = fill(NaN, size(mat))
             defs[par] = mat
         end

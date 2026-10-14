@@ -200,6 +200,57 @@ function MTKParameters(
             end
         end
         if !SU.isconst(val)
+            # Array-valued constants (e.g. semilinear `A`/`B` matrices built from
+            # `array_literal`) are `Term`s, not `Const`, so `isconst` is false even
+            # when every element is constant. Fold them elementwise so the check
+            # below (and `unwrap_const`/`symconvert`) sees a `Const` array.
+            folded = try
+                if SU.is_array_shape(SU.shape(val))
+                    idxs = SU.stable_eachindex(val)
+                    all_const = all(idxs) do i
+                        el = try
+                            val[i]
+                        catch
+                            return false
+                        end
+                        el isa Number || SU.isconst(el)
+                    end
+                    if all_const
+                        els = map(idxs) do i
+                            el = val[i]
+                            el isa Number ? el : unwrap_const(el)
+                        end
+                        # `map` over indices is flat; restore the array shape so
+                        # the constant buffer gets a `Matrix` (not `Vector`).
+                        sz = try
+                            size(val)
+                        catch
+                            nothing
+                        end
+                        if sz !== nothing && length(els) == prod(sz)
+                            try
+                                els = reshape(els, sz)
+                            catch
+                            end
+                        end
+                        BSImpl.Const{VartypeT}(els)
+                    else
+                        throw(ErrorException("not const"))
+                    end
+                else
+                    throw(ErrorException("not array"))
+                end
+            catch
+                nothing
+            end
+            if folded !== nothing
+                val = folded
+            elseif val isa AbstractArray &&
+                    all(el -> el isa Number || SU.isconst(el), val)
+                val = BSImpl.Const{VartypeT}(map(el -> el isa Number ? el : unwrap_const(el), val))
+            end
+        end
+        if !SU.isconst(val)
             error(lazy"Could not evaluate value of parameter $sym. Missing values for variables in expression $val.")
         end
         if ctype <: FnType
