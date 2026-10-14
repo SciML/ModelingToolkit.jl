@@ -844,6 +844,16 @@ end
             @test block.f.jac !== nothing
         end
 
+        prob = ctor(csys, cop; jac = true, sparse = true)
+        for block in prob.probs
+            if block isa LinearProblem
+                @test block.A isa SparseMatrixCSC
+            else
+                @test block.f.jac !== nothing
+                @test block.f.jac_prototype isa SparseMatrixCSC
+            end
+        end
+
         prob = ctor(csys, cop; u0_eltype = Float32)
         @test eltype(state_values(prob)) == Float32
         for block in prob.probs

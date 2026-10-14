@@ -484,7 +484,7 @@ function SCCNonlinearFunction{iip}(
     if islin
         return LinearFunction{iip}(
             subsys; eval_expression, eval_module, cachesyms,
-            structural_hint = decomposition.hints[i], kwargs...
+            structural_hint = decomposition.hints[i], jac, sparse, kwargs...
         )
     end
     rps = reorder_parameters(subsys)

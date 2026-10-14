@@ -447,6 +447,7 @@ $GENERATE_X_KWARGS
 - `simplify`, `sparse`: Forwarded to [`calculate_jacobian`](@ref).
 - `checkbounds`: Whether to check correctness of indices at runtime if `sparse`.
   Also forwarded to `build_function_wrapper`.
+- `cachesyms`: Symbols supplied as cache arguments to the generated function.
 
 All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 """
