@@ -902,7 +902,7 @@ function SciMLBase.SCCSteadyStateProblem{iip, specialize}(
     )
     ssprob = SteadyStateProblem{iip, specialize}(
         sys, op; eval_expression, eval_module, expression,
-        u0_constructor, p_constructor, kwargs...
+        u0_constructor, p_constructor, missing_guess_value, kwargs...
     )
     ssys = sys
     while MTKBase.has_parent(ssys)

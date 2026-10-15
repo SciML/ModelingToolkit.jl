@@ -875,3 +875,20 @@ end
     @test isempty(state_values(prob))
     @test SciMLBase.successful_retcode(solve(prob))
 end
+
+@testset "SCCSteadyStateProblem `missing_guess_value`" begin
+    @variables a(t) b(t)
+    @mtkcompile sys = System([D(a) ~ 2 - a^3, D(b) ~ a - b^3], t)
+    prob = SCCSteadyStateProblem(
+        sys, Dict(); missing_guess_value = MissingGuessValue.Constant(0.2)
+    )
+    @test state_values(prob) == [0.2, 0.2]
+    direct = SCCNonlinearProblem(
+        mtkcompile(NonlinearSystem(sys)), Dict();
+        missing_guess_value = MissingGuessValue.Constant(0.2)
+    )
+    @test state_values(prob) == state_values(direct)
+    @test_throws ModelingToolkit.MissingGuessError SCCSteadyStateProblem(
+        sys, Dict(); missing_guess_value = MissingGuessValue.Error()
+    )
+end
