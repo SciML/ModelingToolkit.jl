@@ -857,9 +857,11 @@ no unknowns. Its states are those of the compiled residual system in SCC order,
 and `sol[x]` resolves eliminated variables as observed. A structurally singular
 residual (e.g. a conservation law) has no SCC form and `mtkcompile` throws; use
 `SteadyStateProblem` for those systems. `combine_sccs` behaves as for
-`SCCNonlinearProblem`. Unknowns that neither `op`, the guesses nor the
-initialization equations determine receive the `missing_guess_value` fallback
-directly, as in `SCCNonlinearProblem`.
+`SCCNonlinearProblem`. `op`, the guesses and the initialization equations
+determine the states as for `SteadyStateProblem`, except that derivatives without
+a guess are not taken to be zero: unknowns that only the differential equations
+determine receive the `missing_guess_value` fallback directly, as in
+`SCCNonlinearProblem`.
 
 The initialization keywords (`guesses`, `initialization_eqs`, `fully_determined`,
 `use_scc`, `warn_initialize_determined`, `check_initialization_units`,
@@ -886,7 +888,7 @@ end
 # Keywords consumed while processing `op` against the time-dependent system;
 # everything else is forwarded to the residual `SCCNonlinearProblem`.
 const SCC_SSPROB_INIT_KWARGS = (
-    :guesses, :initialization_eqs, :fully_determined, :use_scc,
+    :initialization_eqs, :fully_determined, :use_scc,
     :warn_initialize_determined, :check_initialization_units,
     :initsys_mtkcompile_kwargs, :time_dependent_init, :algebraic_only,
     :allow_incomplete, :init_compiler_options, :return_operating_point,
@@ -907,10 +909,37 @@ function fallback_guess(var, missing_guess_value)
     end
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+`user_guesses` as a vector of pairs, extended with a `NaN` guess for every derivative of
+`sys` that neither `user_guesses` nor `guesses(sys)` specifies. The steady-state
+initialization system otherwise guesses such derivatives as zero, which makes the states
+that the differential equations tie to them look determined.
+"""
+function nan_derivative_guesses(sys::System, user_guesses)
+    derivs = SymbolicT[eq.lhs for eq in equations(sys) if isdiffeq(eq)]
+    if has_schedule(sys) && (sched = get_schedule(sys)) isa Schedule
+        append!(derivs, keys(sched.dummy_sub))
+    end
+    guessed = Set{Any}(keys(guesses(sys)))
+    result = Pair[]
+    for (k, v) in user_guesses
+        push!(guessed, unwrap(k))
+        push!(result, k => v)
+    end
+    for d in derivs
+        (d in guessed || default_toterm(d) in guessed) && continue
+        push!(guessed, d)
+        push!(result, d => NaN)
+    end
+    return result
+end
+
 function SciMLBase.SCCSteadyStateProblem{iip, specialize}(
         sys::System, op; eval_expression = false,
         eval_module = @__MODULE__, u0_constructor = identity,
-        p_constructor = identity, expression = Val{false},
+        p_constructor = identity, expression = Val{false}, guesses = [],
         missing_guess_value = default_missing_guess_value(), combine_sccs = true, kwargs...
     ) where {iip, specialize}
     expression === Val{false} || throw(
@@ -919,16 +948,12 @@ function SciMLBase.SCCSteadyStateProblem{iip, specialize}(
                 "the residual system is always compiled to callable functions."
         )
     )
-    # The NaN sentinel marks the states the steady-state processing could only fill
-    # from the fallback guess; the tearing of its initialization system decides which
-    # unknowns those are, so they are replaced with the real fallback below.
-    ss_missing_guess_value = Moshi.Data.isa_variant(
-            missing_guess_value, MissingGuessValue.Error
-        ) ? missing_guess_value : MissingGuessValue.Constant(NaN)
+    # Derivatives without a guess are NaN, so the states that only the differential
+    # equations determine are NaN and receive the fallback below.
     ssprob = SteadyStateProblem{iip, specialize}(
         sys, op; eval_expression, eval_module, expression,
         u0_constructor, p_constructor,
-        missing_guess_value = ss_missing_guess_value, kwargs...
+        missing_guess_value, guesses = nan_derivative_guesses(sys, guesses), kwargs...
     )
     ssys = sys
     while MTKBase.has_parent(ssys)

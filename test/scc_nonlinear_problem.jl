@@ -904,6 +904,33 @@ end
             @test state_values(p) isa SVector{2, Float64}
             @test getu(p, [a, b])(p) == [1.0, 0.2]
         end
+        for (ieq, check) in (
+                (a + b ~ 1, u -> u[1] + u[2] ≈ 1 && 0.2 in u),
+                (a ~ ifelse(b > 0, b, 0.7), u -> u == [0.2, 0.2]),
+            )
+            @mtkcompile isys = System(eqs, t; initialization_eqs = [ieq])
+            plain = SteadyStateProblem(isys, Dict(); missing_guess_value = C)
+            scc = SCCSteadyStateProblem(isys, Dict(); missing_guess_value = C)
+            @test getu(scc, [a, b])(scc) == getu(plain, [a, b])(plain)
+            @test check(getu(scc, [a, b])(scc))
+        end
+    end
+end
+
+@testset "SCCSteadyStateProblem keeps initialization equations in its guess" begin
+    @variables a(t) b(t)
+    @mtkcompile sys = System(
+        [D(a) ~ a - a^3, D(b) ~ b - b^3], t; initialization_eqs = [a + b ~ 1]
+    )
+    C = MissingGuessValue.Constant(0.2)
+    plain = SteadyStateProblem(sys, Dict(); missing_guess_value = C)
+    scc = SCCSteadyStateProblem(sys, Dict(); missing_guess_value = C)
+    @test getu(scc, [a, b])(scc) == getu(plain, [a, b])(plain)
+    @test sort(getu(scc, [a, b])(scc)) ≈ [0.2, 0.8]
+    for prob in (plain, scc)
+        sol = solve(prob, NewtonRaphson())
+        @test SciMLBase.successful_retcode(sol)
+        @test sort(sol[[a, b]]) ≈ [0.0, 1.0] atol = 1.0e-8
     end
 end
 
