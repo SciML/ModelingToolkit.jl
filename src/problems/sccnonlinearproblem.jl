@@ -926,7 +926,7 @@ function SciMLBase.SCCSteadyStateProblem{iip, specialize}(
     u0_constructor = get_u0_constructor(u0_constructor, typeof(op), floatT, false)
     p_constructor = get_p_constructor(p_constructor, typeof(op), floatT)
     residual_kwargs = (;
-        (name => value for (name, value) in pairs(kwargs) if !(name in SCC_SSPROB_INIT_KWARGS))...
+        (name => value for (name, value) in pairs(kwargs) if !(name in SCC_SSPROB_INIT_KWARGS))...,
     )
     lowered = SCCNonlinearProblem{iip, specialize}(
         rsys, nlop; eval_expression, eval_module,

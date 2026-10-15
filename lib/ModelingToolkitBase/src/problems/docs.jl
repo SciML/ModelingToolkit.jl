@@ -110,11 +110,13 @@ function prob_fun_common_kwargs(T, istd; expression = true)
     - `check_compatibility`: Whether to check if the given system `sys` contains all the
       information necessary to create a `$T` and no more. If disabled, assumes that `sys`
       at least contains the necessary information.
-    $(expression ?
-      """- `expression`: `Val{true}` to return an `Expr` that constructs the corresponding
-      problem instead of the problem itself. `Val{false}` otherwise.
-      $(istd ? " Constructing the expression does not support callbacks" : "")""" :
-      "")
+    $(
+        expression ?
+            """- `expression`: `Val{true}` to return an `Expr` that constructs the corresponding
+            problem instead of the problem itself. `Val{false}` otherwise.
+            $(istd ? " Constructing the expression does not support callbacks" : "")""" :
+            ""
+    )
     """
 end
 
