@@ -542,7 +542,7 @@ function SciMLBase.SCCNonlinearProblem{iip, specialize}(
     ts = get_tearing_state(sys)
     sched = get_schedule(sys)
     if sched === nothing
-        verbosity = _route_problem_verbose(get(kwargs, :verbose, nothing))
+        verbosity = _problem_verbosity(kwargs)
         @SciMLMessage(
             "System is simplified but does not have a schedule. This should not happen.",
             verbosity, :missing_scc_schedule
@@ -713,6 +713,10 @@ function SciMLBase.SCCNonlinearProblem{iip, specialize}(
     # yes, `get_p_constructor` since this is only used for `LinearProblem` and
     # will retain the shape of `A`
     u0_constructor = get_p_constructor(u0_constructor, typeof(u0), u0_eltype)
+    # `SCCNonlinearProblem` has no `kwargs` of its own: the SCC solve merges the
+    # `kwargs` of each block, so the solve-time `verbose` goes on the nonlinear blocks.
+    subprob_kwargs = haskey(kwargs, :verbose) ?
+        _solver_kwargs(NonlinearProblem, (; verbose = kwargs[:verbose])) : (;)
     subprobs = []
     subber = Symbolics.FixpointSubstituter{true}(AtomicArrayDictSubstitutionWrapper(op))
     for (i, (f, vscc)) in enumerate(zip(nlfuns, decomposition.var_sccs))
@@ -779,9 +783,9 @@ function SciMLBase.SCCNonlinearProblem{iip, specialize}(
                 # solving the block sweeps λ from the `simplified` form to `actual`. Blocks
                 # are solved in dependency order, so each one reaches `λ = 1` before the
                 # next begins.
-                SciMLBase.HomotopyProblem(f, _u0, p; λspan = (0.0, 1.0))
+                SciMLBase.HomotopyProblem(f, _u0, p; λspan = (0.0, 1.0), subprob_kwargs...)
             else
-                NonlinearProblem(f, _u0, p)
+                NonlinearProblem(f, _u0, p; subprob_kwargs...)
             end
         end
         push!(subprobs, prob)

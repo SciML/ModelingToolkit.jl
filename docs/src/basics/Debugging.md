@@ -116,7 +116,7 @@ The available toggles are documented on [`MTKVerbosity`](@ref):
 | `parameter_not_in_system`         | `WarnLevel` | `remake` with a symbol that is not a parameter of the system           |
 | `independent_variable_not_parameter` | `WarnLevel` | Independent variable not defined with `@independent_variables`       |
 | `constraint_variable_without_argument` | `WarnLevel` | Constraint or cost with an unknown that has no argument          |
-| `unbalanced_connector`            | `WarnLevel` | `@connector` with different numbers of flow and regular variables      |
+| `unbalanced_connector`            | `WarnLevel` | `mtkcompile`: a connector with different numbers of flow and regular variables |
 | `affect_default_independent_variable` | `WarnLevel` | Affect with no independent variable, so it uses `t_nounits`       |
 | `substitute_skips_events`         | `WarnLevel` | `substitute` on a system with events, which it does not change         |
 
@@ -144,18 +144,23 @@ solve(prob, Rodas5P())  # the solver gets `verb.de_verbosity`
 
 The `initialization_verbosity` sub-specifier of `MTKVerbosity` controls the verbosity of
 the initialization problem's solve (default `Minimal()`), and accepts a preset or a
-`NonlinearVerbosity`. The [`MTKVerbosity`](@ref) docstring lists the solver
-sub-specifiers for each problem family.
+`NonlinearVerbosity`. A linear initialization problem uses a preset, but not a
+`NonlinearVerbosity`; then it uses `linear_verbosity`. The ModelingToolkit diagnostics of
+the initialization problem use the toggles of the outer `MTKVerbosity`. The
+[`MTKVerbosity`](@ref) docstring lists the solver sub-specifiers for each problem family.
 
-The boolean keywords `warn_initialize_determined`, `warn_cyclic_dependency`, and
-`warn_empty_op` are deprecated in favor of `verbose`; when explicitly passed they
-override the corresponding toggles.
+The boolean keywords `warn_initialize_determined`, `warn_cyclic_dependency`,
+`warn_empty_op`, and `print_underconstrained_variables` (of `mtkcompile`) are deprecated
+in favor of `verbose`. When explicitly passed they emit a
+deprecation warning and override the corresponding toggles.
 
 ### Verbosity stored on a system
 
 Some diagnostics run where no `verbose` keyword is available: the checks in the `System`
-constructor, `@connector`, callback affects, and `remake`. These use the verbosity that
-is stored in the metadata of the system. Set it with the `verbose` keyword of `System`:
+constructor, callback affects, and `remake`. These use the verbosity that is stored in
+the metadata of the system. Set it with the `verbose` keyword of `System`. The author of
+a connector can also silence the `unbalanced_connector` check, which `mtkcompile` does
+once for each connector type, for that connector:
 
 ```julia
 @connector function Pin(; name)
@@ -166,8 +171,9 @@ end
 ```
 
 `mtkcompile` stores its own `verbose` value on the system that it returns, so
-`remake` on a problem of `mtkcompile(sys; verbose = false)` is also quiet. Functions that
-have their own `verbose` keyword, such as problem constructors, `mtkcompile`, and
+`remake` on a problem of `mtkcompile(sys; verbose = false)` is also quiet. If
+`mtkcompile` gets no `verbose`, it uses the value stored on its input system. Other
+functions that have their own `verbose` keyword, such as problem constructors and
 `substitute`, do not read the stored value.
 
 ```@docs; canonical = false

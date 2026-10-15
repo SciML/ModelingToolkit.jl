@@ -4,9 +4,18 @@ using ModelingToolkitBase: topsort_equations, t_nounits as t, D_nounits as D, un
 using SciMLLogging: SciMLLogging, Silent, InfoLevel, WarnLevel,
     None, Minimal, Standard, Detailed, All
 using SymbolicIndexingInterface: remake_buffer
-using SciMLBase: SciMLBase, BVProblem
+using SciMLBase: SciMLBase, BVProblem, remake
 using DiffEqBase: DEVerbosity
 using JumpProcesses: Direct
+using NonlinearSolve: NonlinearVerbosity
+using SteadyStateDiffEq: DynamicSS
+using OrdinaryDiffEqRosenbrock: Rodas5P
+
+# The warnings of `f()` other than deprecation warnings.
+function nondeprecation_warnings(f)
+    logs, _ = Test.collect_test_logs(f; min_level = Logging.Warn)
+    return filter(log -> log.group !== :depwarn, logs)
+end
 
 @testset "MTKVerbosity construction" begin
     @test MTKVerbosity() isa MTKVerbosity{true}
@@ -108,6 +117,31 @@ end
         sys, [a => 1.0], tspan; verbose = MTKVerbosity(initialization_verbosity = None())
     )
     @test getinit(prob) isa None
+
+    # the inner problem keeps the outer toggles, and gets `initialization_verbosity` as
+    # its solver verbosity
+    initverb = ModelingToolkitBase._initialization_problem_verbosity
+    inner = initverb(
+        MTKVerbosity(problem_construction = Silent, initialization_verbosity = None())
+    )
+    @test inner.parameter_not_in_system == Silent
+    @test inner.nonlinear_verbosity isa None
+    @test inner.linear_verbosity isa None
+    nlverb = NonlinearVerbosity()
+    inner = initverb(MTKVerbosity(initialization_verbosity = nlverb))
+    @test inner.parameter_not_in_system == MTKVerbosity().parameter_not_in_system
+    @test inner.nonlinear_verbosity === nlverb
+    @test inner.linear_verbosity === MTKVerbosity().linear_verbosity
+
+    # a linear initialization problem does not get a `NonlinearVerbosity`
+    prob = ODEProblem(
+        sys, [b => 2.0], tspan; guesses = [a => 1.0],
+        verbose = MTKVerbosity(initialization_verbosity = nlverb)
+    )
+    # `LinearInitializationProblem` wraps the `LinearProblem` in an `SCCNonlinearProblem`
+    linprob = only(prob.f.initialization_data.initializeprob.probs)
+    @test linprob isa SciMLBase.LinearProblem
+    @test linprob.kwargs[:verbose] === MTKVerbosity().linear_verbosity
 end
 
 @testset "cyclic_dependency toggle" begin
@@ -130,6 +164,13 @@ end
     @test_logs (:warn, r"Cycles in unknowns") match_mode = :any make(
         :warn_cyclic_dependency => true
     )
+    @test_deprecated r"warn_cyclic_dependency" make(:warn_cyclic_dependency => true)
+    # with the toggle on, MTK passes `warn_cyclic_dependency` to the inner initialization
+    # problem itself, which is not a deprecated use
+    logs, _ = Test.collect_test_logs(min_level = Logging.Warn) do
+        ODEProblem(sys, [x => 1.0, y => 1.0], tspan; verbose = MTKVerbosity(Detailed()))
+    end
+    @test !any(log -> log.group === :depwarn, logs)
 end
 
 @testset "determinacy toggles and deprecated override" begin
@@ -143,13 +184,51 @@ end
     @test_logs min_level = Logging.Warn ODEProblem(
         sys, [], tspan; guesses, verbose = MTKVerbosity(overdetermined_initialization = Silent)
     )
-    @test_logs min_level = Logging.Warn ODEProblem(
+    @test isempty(
+        nondeprecation_warnings() do
+            ODEProblem(sys, [], tspan; guesses, warn_initialize_determined = false)
+        end
+    )
+    @test_deprecated r"warn_initialize_determined" ODEProblem(
         sys, [], tspan; guesses, warn_initialize_determined = false
     )
     # explicit deprecated `true` overrides even a `None()` specifier
     @test_logs (:warn, r"overdetermined") match_mode = :any ODEProblem(
         sys, [], tspan; guesses, verbose = MTKVerbosity(None()),
         warn_initialize_determined = true
+    )
+end
+
+@testset "_problem_verbosity applies the deprecated keywords" begin
+    problem_verbosity = ModelingToolkitBase._problem_verbosity
+    @test problem_verbosity((;)) == MTKVerbosity()
+    @test problem_verbosity((; verbose = false)) == MTKVerbosity(None())
+    verb = problem_verbosity(
+        (;
+            verbose = MTKVerbosity(None()), warn_initialize_determined = true,
+            warn_cyclic_dependency = true,
+        )
+    )
+    @test verb.overdetermined_initialization == WarnLevel
+    @test verb.singular_initialization == WarnLevel
+    @test verb.cyclic_dependency == WarnLevel
+    @test verb.parameter_not_in_system == Silent
+end
+
+@testset "get_initialization_problem_type deprecated keyword" begin
+    @variables x(t)
+    @mtkcompile sys = System([D(x) ~ -x], t; initialization_eqs = [x ~ 1, x^2 ~ 1])
+    prob = ODEProblem(sys, [], (0.0, 1.0); guesses = [x => 1.0], verbose = false)
+    isys = prob.f.initialization_data.initializeprob.f.sys
+    probtype = ModelingToolkitBase.get_initialization_problem_type
+    @test_logs (:warn, r"overdetermined") match_mode = :any probtype(sys, isys)
+    @test_logs min_level = Logging.Warn probtype(sys, isys; verbose = false)
+    @test_deprecated r"warn_initialize_determined" probtype(
+        sys, isys; warn_initialize_determined = false
+    )
+    # the deprecated keyword still overrides the toggles
+    @test_logs (:warn, r"overdetermined") match_mode = :any probtype(
+        sys, isys; verbose = false, warn_initialize_determined = true
     )
 end
 
@@ -205,6 +284,29 @@ end
     @test ModelingToolkitBase._system_verbosity(loud) == MTKVerbosity()
 end
 
+@testset "mtkcompile keeps the verbosity stored on the system" begin
+    @variables y(t)
+    @named quiet = System([D(y) ~ -y], t; verbose = false)
+    @test ModelingToolkitBase._system_verbosity(mtkcompile(quiet)) == MTKVerbosity(None())
+    # an explicit `verbose` wins
+    csys = mtkcompile(quiet; verbose = true)
+    @test ModelingToolkitBase._system_verbosity(csys) == MTKVerbosity()
+    @named loud = System([D(y) ~ -y], t)
+    @test ModelingToolkitBase._system_verbosity(mtkcompile(loud)) == MTKVerbosity()
+    # the compiled system stores the verbosity once
+    n_stored(sys) = count(
+        entry -> first(entry) === ModelingToolkitBase.MTKVerbosityCtx,
+        ModelingToolkitBase.get_metadata(sys)
+    )
+    @test n_stored(mtkcompile(quiet)) == 1
+    @test n_stored(mtkcompile(loud)) == 1
+end
+
+@testset "SciMLLogging is exported for the MTKVerbosity levels" begin
+    @test Base.isexported(ModelingToolkitBase, :SciMLLogging)
+    @test ModelingToolkitBase.SciMLLogging.Silent isa SciMLLogging.MessageLevel
+end
+
 @testset "constraint_variable_without_argument toggle" begin
     @variables xf(..)
     z = unwrap(xf())
@@ -230,8 +332,35 @@ end
 end
 
 @testset "unbalanced_connector toggle" begin
-    @test_logs (:warn, r"flow variables, yet") match_mode = :any UnbalancedPin(; name = :p)
-    @test_logs min_level = Logging.Warn QuietUnbalancedPin(; name = :p)
+    # creating a connector does not warn
+    @test_logs min_level = Logging.Warn UnbalancedPin(; name = :p)
+    @variables x(t)
+    function compile(pin; kws...)
+        model = System(
+            [D(x) ~ -x], t; name = :model,
+            systems = [pin(; name = :p), pin(; name = :q)]
+        )
+        try
+            mtkcompile(model; kws...)
+        catch
+            nothing # the unconnected pins make the model unbalanced; only the logs matter
+        end
+        return nothing
+    end
+    function n_unbalanced_warnings(pin; kws...)
+        logs, _ = Test.collect_test_logs(min_level = Logging.Warn) do
+            compile(pin; kws...)
+        end
+        return count(log -> occursin("flow variables, yet", string(log.message)), logs)
+    end
+    # `mtkcompile` warns once for each connector type
+    @test n_unbalanced_warnings(UnbalancedPin) == 1
+    @test n_unbalanced_warnings(UnbalancedPin; verbose = false) == 0
+    @test n_unbalanced_warnings(
+        UnbalancedPin; verbose = MTKVerbosity(unbalanced_connector = Silent)
+    ) == 0
+    # the author of a connector can silence it
+    @test n_unbalanced_warnings(QuietUnbalancedPin) == 0
 end
 
 @testset "affect_default_independent_variable toggle" begin
@@ -302,6 +431,31 @@ end
     end
 end
 
+@testset "initialization system stores the problem verbosity" begin
+    @variables x(t) y(t)
+    @named sys = System([D(x) ~ -x, y ~ 2x], t; guesses = [x => 1.0])
+    sys = mtkcompile(sys)
+    initsys(prob) = prob.f.initialization_data.initializeprob.f.sys
+    verb = MTKVerbosity(None())
+    prob = ODEProblem(sys, [y => 4.0], (0.0, 1.0); verbose = verb)
+    @test ModelingToolkitBase._system_verbosity(initsys(prob)) == verb
+    prob = ODEProblem(sys, [y => 4.0], (0.0, 1.0))
+    @test ModelingToolkitBase._system_verbosity(initsys(prob)) == MTKVerbosity()
+end
+
+@testset "remake rebuilds initialization with the system verbosity" begin
+    @variables x(t) y(t)
+    # a nonlinear initialization without SCCs gives a plain `NonlinearProblem`
+    @named sys = System([D(x) ~ -x, y ~ x^3 + x], t; guesses = [x => 1.0])
+    sys = mtkcompile(sys; verbose = false)
+    prob = ODEProblem(sys, [y => 2.0], (0.0, 1.0); verbose = false, use_scc = false)
+    # a symbolic `u0` makes `remake` rebuild the initialization problem
+    iprob = remake(prob; u0 = [y => 10.0]).f.initialization_data.initializeprob
+    @test iprob isa NonlinearProblem
+    @test iprob.kwargs[:verbose] == None()
+    @test ModelingToolkitBase._system_verbosity(iprob.f.sys) == MTKVerbosity(None())
+end
+
 @testset "overdetermined_constraints toggle" begin
     @variables x(..)
     @parameters k = 1.0
@@ -343,6 +497,11 @@ end
     @test field(SciMLBase.LinearProblem) === :linear_verbosity
     @test field(SciMLBase.OptimizationProblem) === :optimization_verbosity
     @test field(Int) === nothing
+    # the dynamic optimization `solve` methods take their own `verbose::Bool`
+    @test field(SciMLBase.AbstractDynamicOptProblem) === nothing
+    @test ModelingToolkitBase._solver_kwargs(
+        SciMLBase.AbstractDynamicOptProblem, (; verbose = MTKVerbosity(), a = 1)
+    ) == (; a = 1)
     # presets set every solver sub-specifier to the same preset
     @test MTKVerbosity().de_verbosity isa Standard
     @test MTKVerbosity(None()).de_verbosity isa None
@@ -351,6 +510,17 @@ end
     @variables x(t)
     @parameters k = 1.0
     @mtkcompile sys = System([D(x) ~ -k * x], t)
+
+    # a `SteadyStateProblem` gets `nonlinear_verbosity`; `DynamicSS` does not give it to
+    # its ODE solve
+    @mtkcompile sssys = System([D(x) ~ k * (1 - x)], t)
+    ssprob = SteadyStateProblem(
+        sssys, [x => 0.5];
+        verbose = MTKVerbosity(nonlinear_verbosity = NonlinearVerbosity())
+    )
+    @test ssprob.kwargs[:verbose] isa NonlinearVerbosity
+    @test SciMLBase.successful_retcode(solve(ssprob, DynamicSS(Rodas5P())))
+
     # a nested solver specifier gets to the solver unchanged
     de = DEVerbosity(linear_verbosity = None())
     prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0); verbose = MTKVerbosity(de_verbosity = de))

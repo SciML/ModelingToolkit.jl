@@ -117,8 +117,10 @@ function InitializationProblem{iip, specialize}(
     pareqs, resteqs = find_all_parameter_equations(isys)
     @set! isys.eqs = resteqs
     if simplify_system
+        # The compiled system stores `verbose`, so `remake` of the initialization problem
+        # also uses it. An explicit `verbose` in `initsys_mtkcompile_kwargs` wins.
         isys = mtkcompile_initialization_system(
-            isys, sys; fully_determined, initsys_mtkcompile_kwargs...
+            isys, sys; fully_determined, verbose = verbosity, initsys_mtkcompile_kwargs...
         )
     end
     for i in eachindex(pareqs)
@@ -139,8 +141,7 @@ function InitializationProblem{iip, specialize}(
             Note that the identification of problematic variables is a best-effort heuristic.
 
             To suppress this warning, pass \
-            `verbose = MTKVerbosity(singular_initialization = SciMLLogging.Silent)` \
-            (the deprecated `warn_initialize_determined = false` also works).
+            `verbose = MTKVerbosity(singular_initialization = SciMLLogging.Silent)`.
             """
         end
     end
@@ -189,11 +190,11 @@ function InitializationProblem{iip, specialize}(
         isys, op; kwargs..., problem_kwargs..., check_length_kw...,
         u0_constructor, p_constructor, missing_guess_value,
         eval_expression, eval_module,
-        # The `initialization_verbosity` sub-specifier becomes the initialization
-        # problem's solve-time `verbose`: it rides through `filter_kwargs` into
-        # `initializeprob.kwargs`, which `solve` merges at integrator initialization.
-        verbose = verbosity.initialization_verbosity,
-        warn_cyclic_dependency = _cyclic_flag_for_initialization(verbosity),
+        # The inner problem uses the toggles of `verbosity` for its own diagnostics. Its
+        # problem constructor puts the `initialization_verbosity` sub-specifier in
+        # `initializeprob.kwargs` (see `_solver_kwargs`), which `solve` merges at
+        # integrator initialization.
+        verbose = _initialization_problem_verbosity(verbosity),
         circular_dependency_max_cycle_length, circular_dependency_max_cycles,
         compiler_options = init_compiler_options,
         build_initializeprob = false, is_initializeprob = true
@@ -457,9 +458,8 @@ function overdetermined_initialization_message(neqs::Integer, nunknown::Integer,
     equations are redundant (and which unknowns, if any, remain underdetermined).
 
     To suppress this warning, silence the corresponding `MTKVerbosity` toggle, e.g. \
-    `verbose = MTKVerbosity(initialization = SciMLLogging.Silent)` (the deprecated \
-    `warn_initialize_determined = false` also works). To turn this warning into an \
-    error, pass `fully_determined = true`.
+    `verbose = MTKVerbosity(initialization = SciMLLogging.Silent)`. To turn this \
+    warning into an error, pass `fully_determined = true`.
     """
 end
 
@@ -472,10 +472,20 @@ function underdetermined_initialization_message(neqs::Integer, nunknown::Integer
     unknowns are underdetermined (and which equations, if any, are redundant).
 
     To suppress this warning, silence the corresponding `MTKVerbosity` toggle, e.g. \
-    `verbose = MTKVerbosity(initialization = SciMLLogging.Silent)` (the deprecated \
-    `warn_initialize_determined = false` also works). To turn this warning into an \
-    error, pass `fully_determined = true`.
+    `verbose = MTKVerbosity(initialization = SciMLLogging.Silent)`. To turn this \
+    warning into an error, pass `fully_determined = true`.
     """
+end
+
+# The verbosity of `get_initialization_problem_type`, with its deprecated
+# `warn_initialize_determined` keyword applied.
+function _initialization_type_verbosity(verbose, warn_initialize_determined)
+    return _deprecated_override_toggle(
+        _route_problem_verbose(verbose), warn_initialize_determined,
+        :warn_initialize_determined, :get_initialization_problem_type,
+        :overdetermined_initialization => WarnLevel,
+        :underdetermined_initialization => WarnLevel,
+    )
 end
 
 """
@@ -492,11 +502,7 @@ function get_initialization_problem_type(
         sys::AbstractSystem, isys::AbstractSystem;
         verbose = DEFAULT_MTK_VERBOSE, warn_initialize_determined = nothing, kwargs...
     )
-    verbosity = _override_toggle(
-        _route_problem_verbose(verbose), warn_initialize_determined,
-        :overdetermined_initialization => WarnLevel,
-        :underdetermined_initialization => WarnLevel,
-    )
+    verbosity = _initialization_type_verbosity(verbose, warn_initialize_determined)
     neqs = length(equations(isys))
     nunknown = length(unknowns(isys))
 

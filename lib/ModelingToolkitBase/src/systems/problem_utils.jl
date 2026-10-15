@@ -233,9 +233,8 @@ function Base.showerror(io::IO, err::UnexpectedSymbolicValueInVarmap)
         `symbolic_u0 = true`. In case the initial conditions are not cyclic but \
         require more substitutions to resolve, increase `substitution_limit`. To report \
         cycles in initial conditions of unknowns/parameters, pass \
-        `verbose = MTKVerbosity(cyclic_dependency = SciMLLogging.WarnLevel)` (the \
-        deprecated `warn_cyclic_dependency = true` also works). If the cycles are still \
-        not reported, you may need to pass a larger value for \
+        `verbose = MTKVerbosity(cyclic_dependency = SciMLLogging.WarnLevel)`. If the \
+        cycles are still not reported, you may need to pass a larger value for \
         `circular_dependency_max_cycle_length` or `circular_dependency_max_cycles`.
         """
     )
@@ -2091,14 +2090,14 @@ function SciMLProblemOptions(
     verbosity = _route_problem_verbose(verbose)
     # Deprecated boolean keywords override the corresponding toggles when explicitly
     # passed (`nothing` = not passed).
-    verbosity = _override_toggle(
+    verbosity = _deprecated_override_toggle(
         verbosity, warn_initialize_determined,
-        :singular_initialization => WarnLevel,
-        :overdetermined_initialization => WarnLevel,
-        :underdetermined_initialization => WarnLevel,
+        :warn_initialize_determined, :SciMLProblemOptions,
+        _INITIALIZE_DETERMINED_TOGGLES...
     )
-    verbosity = _override_toggle(
-        verbosity, warn_cyclic_dependency, :cyclic_dependency => WarnLevel
+    verbosity = _deprecated_override_toggle(
+        verbosity, warn_cyclic_dependency, :warn_cyclic_dependency,
+        :SciMLProblemOptions, :cyclic_dependency => WarnLevel
     )
     return SciMLProblemOptions{E}(
         fn_opts, floatT, u0Type, u0_eltype, build_initializeprob, implicit_dae, guesses,
@@ -2694,7 +2693,7 @@ function process_kwargs(
         _skip_events = false, _skip_tstops = false, tspan = nothing, kwargs...
     )
     # Read before `filter_kwargs`, which removes an `MTKVerbosity` value.
-    mtk_verbosity = _route_problem_verbose(get(kwargs, :verbose, nothing))
+    mtk_verbosity = _problem_verbosity(kwargs)
     kwargs = filter_kwargs(kwargs)
     kwargs1 = (;)
 

@@ -109,7 +109,7 @@ end
     if (length(constraints(sys)) + length(op) > length(dvs))
         # Peek at `verbose` without consuming it: `process_SciMLProblem` (via `kwargs...`)
         # is the consumer of record, and `filter_kwargs` handles solver forwarding.
-        verbosity = _route_problem_verbose(get(kwargs, :verbose, nothing))
+        verbosity = _problem_verbosity(kwargs)
         @SciMLMessage(verbosity, :overdetermined_constraints) do
             "The BVProblem is overdetermined. The total number of conditions (# constraints + # fixed initial values given by op) exceeds the total number of states. The BVP solvers will default to doing a nonlinear least-squares optimization."
         end

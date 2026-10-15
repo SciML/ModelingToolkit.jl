@@ -6,11 +6,7 @@ function MTKBase.get_initialization_problem_type(
         warn_initialize_determined = nothing,
         use_scc = true, kwargs...
     )
-    verbosity = _override_toggle(
-        _route_problem_verbose(verbose), warn_initialize_determined,
-        :overdetermined_initialization => WarnLevel,
-        :underdetermined_initialization => WarnLevel,
-    )
+    verbosity = MTKBase._initialization_type_verbosity(verbose, warn_initialize_determined)
     neqs = length(equations(isys))
     nunknown = length(unknowns(isys))
     ts = get_tearing_state(isys)::TearingState

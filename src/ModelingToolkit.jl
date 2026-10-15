@@ -69,8 +69,10 @@ import Symbolics: rename, islinear,
 const derivative = Symbolics.derivative
 import ModelingToolkitBase as MTKBase
 using ModelingToolkitBase: MTKVerbosity, DEFAULT_MTK_VERBOSE, _process_verbose_param,
-    _route_problem_verbose, _toggle_enabled, _override_toggle
-using SciMLLogging: SciMLLogging, @SciMLMessage, WarnLevel
+    _route_problem_verbose, _toggle_enabled, _override_toggle, _deprecated_override_toggle,
+    _solver_kwargs, _system_verbosity, _problem_verbosity, _INITIALIZE_DETERMINED_TOGGLES
+using SciMLLogging: SciMLLogging, @SciMLMessage, InfoLevel, WarnLevel
+export SciMLLogging
 import SimpleNonlinearSolve
 
 using UnPack: @unpack

@@ -441,6 +441,8 @@ export set_defaults
 export state_priorities, irreducibles, maybe_zeros
 export mtkcompile, expand_connections, structural_simplify
 export MTKVerbosity
+# The toggle levels and presets of `MTKVerbosity` (e.g. `SciMLLogging.Silent`)
+export SciMLLogging
 export solve
 export Pre
 
