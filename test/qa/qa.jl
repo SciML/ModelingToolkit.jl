@@ -205,6 +205,8 @@ const REEXPORTED_API = (
     :SDEProblem, :SolverStepClock, :SteadyStateProblem, :TimeDomain,
     # CommonSolve: `solve` is the entry point of every documented workflow.
     :solve,
+    # SciMLLogging: the module, so that `SciMLLogging.Silent` etc. work for `MTKVerbosity`.
+    :SciMLLogging,
     # JumpProcesses: `JumpProblem` is constructed from a `System` with jumps.
     :JumpProblem,
     # BipartiteGraphs: `BipartiteGraph` is re-exported by ModelingToolkitBase for the
@@ -271,8 +273,9 @@ const NONPUBLIC_EXPLICIT_IMPORTS = (
     :filter_kwargs, :get_substitutions, :has_equations, :invalidate_cache!,
     :InvalidSystemException, :isdiffeq, :isdifferential, :lower_varname_with_unit, :Schedule,
     :setio, :shift2term, :simplify_shifts, :VariableShift, :VariableUnshifted,
-    :DEFAULT_MTK_VERBOSE, :_override_toggle, :_process_verbose_param,
-    :_route_problem_verbose, :_toggle_enabled,
+    :DEFAULT_MTK_VERBOSE, :_deprecated_override_toggle, :_process_verbose_param,
+    :_route_problem_verbose, :_solver_kwargs, :_system_verbosity, :_toggle_enabled,
+    :_problem_verbosity, :_INITIALIZE_DETERMINED_TOGGLES, :_override_toggle,
     # ModelingToolkitTearing
     :DefaultReassembleAlgorithm, :ReassembleAlgorithm, :SystemStructure, :TearingState,
     # Symbolics
@@ -313,7 +316,8 @@ const NONPUBLIC_QUALIFIED_ACCESSES = (
     :function_docstring, :generate_DAENLStepData, :generate_homotopy_residual,
     :generate_ODENLStepData,
     :GENERATE_X_KWARGS, :get_initialization_problem_type, :get_nonlinear_problem_type,
-    :has_any_homotopy, :indp_to_system, :invalidate_cache!, :LimitedCtx, :lower_homotopy,
+    :has_any_homotopy, :indp_to_system, :_initialization_type_verbosity, :invalidate_cache!,
+    :LimitedCtx, :lower_homotopy,
     :__mtkcompile,
     :ParameterArrayAssignments, :problem_docstring, :ReorderedDefaultParameters,
     :reverse_all_default_reversible_transformations, :simplify_sde_system, :simplify_shifts,

@@ -735,7 +735,6 @@ function __remake_buffer(indp, oldbuf::MTKParameters, idxs, vals; validate = tru
     # the index cache.
     sys = indp_to_system(indp)
     ic = get_index_cache(sys)
-    verbosity = _system_verbosity(sys)
     for (idx, val) in zip(idxs, vals)
         sym = nothing
         if val === missing
@@ -747,7 +746,7 @@ function __remake_buffer(indp, oldbuf::MTKParameters, idxs, vals; validate = tru
             if idx === nothing
                 @SciMLMessage(
                     "Symbolic variable $sym is not a (non-dependent) parameter in the system",
-                    verbosity, :parameter_not_in_system
+                    _system_verbosity(sys), :parameter_not_in_system
                 )
                 continue
             end
@@ -767,7 +766,7 @@ function __remake_buffer(indp, oldbuf::MTKParameters, idxs, vals; validate = tru
                     if idx === nothing
                         @SciMLMessage(
                             "Symbolic variable $sym is not a (non-dependent) parameter in the system",
-                            verbosity, :parameter_not_in_system
+                            _system_verbosity(sys), :parameter_not_in_system
                         )
                         continue
                     end

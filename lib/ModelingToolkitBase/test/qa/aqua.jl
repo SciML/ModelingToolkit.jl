@@ -175,6 +175,8 @@ const REEXPORTED_API = (
     :SDEProblem, :SolverStepClock, :SteadyStateProblem, :TimeDomain,
     # CommonSolve
     :solve,
+    # SciMLLogging: the module, for the levels and presets of `MTKVerbosity`
+    :SciMLLogging,
     # JumpProcesses
     :JumpProblem,
     # BipartiteGraphs

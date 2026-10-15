@@ -146,7 +146,7 @@ coupled to an ODE, and the others run much slower. Passing a specialization othe
     op_processed = operating_point_preprocess(sys, op)
     cbs = process_events(
         sys; callback, eval_expression, eval_module, op = op_processed, reset_jumps = true,
-        tspan, mtk_verbosity = _route_problem_verbose(get(kwargs, :verbose, nothing))
+        tspan, mtk_verbosity = _problem_verbosity(kwargs)
     )
 
     if tstops !== nothing

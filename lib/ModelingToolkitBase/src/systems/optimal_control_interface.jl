@@ -499,7 +499,7 @@ function process_DynamicOptProblem(
         eval_expression = false, eval_module = @__MODULE__,
         kwargs...
     )
-    verbosity = _route_problem_verbose(get(kwargs, :verbose, nothing))
+    verbosity = _problem_verbosity(kwargs)
     warn_overdetermined(sys, op, verbosity)
     ctrls = inputs(sys)
     states = unknowns(sys)
@@ -596,7 +596,8 @@ function process_DynamicOptProblem(
     add_user_constraints!(fullmodel, sys, tspan, pmap)
     add_initial_constraints!(fullmodel, u0, u0_idxs, model_tspan[1])
 
-    return prob_type(f, u0, tspan, p, fullmodel; kwargs...), pmap, nominal_values
+    prob = prob_type(f, u0, tspan, p, fullmodel; _solver_kwargs(prob_type, kwargs)...)
+    return prob, pmap, nominal_values
 end
 
 """

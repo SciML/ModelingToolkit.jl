@@ -294,7 +294,9 @@ System construction (group `system_construction`):
 - `constraint_variable_without_argument`: a constraint or cost uses an unknown with no
   argument, so it applies to the full time span. `WarnLevel` by default.
 - `unbalanced_connector`: a `@connector` has a different number of flow variables and
-  regular variables. `WarnLevel` by default.
+  regular variables. `mtkcompile` reports it once for each connector type. The
+  `verbose` of `mtkcompile` and the verbosity stored on the connector must both enable
+  it. `WarnLevel` by default.
 - `affect_default_independent_variable`: an affect has no independent variable, so it
   uses `t_nounits`. `WarnLevel` by default.
 - `substitute_skips_events`: `substitute(sys, rules)` changed a system that has events,
@@ -304,11 +306,12 @@ System construction (group `system_construction`):
 # Verbosity stored on a system
 
 Some diagnostics run where no `verbose` keyword is available: the checks in the
-[`System`](@ref) constructor, `@connector`, callback affects, and `remake`. These use the
+[`System`](@ref) constructor, callback affects, and `remake`. These use the
 verbosity that is stored in the metadata of the system. The `verbose` keyword of `System`
 sets it, and [`mtkcompile`](@ref) stores its own `verbose` value on the system that it
-returns. Functions that have their own `verbose` keyword (problem constructors,
-`mtkcompile`, `substitute`, ...) do not read the stored value.
+returns. If `mtkcompile` gets no `verbose`, it uses the value stored on its input system.
+Other functions that have their own `verbose` keyword (problem constructors,
+`substitute`, ...) do not read the stored value.
 
 # Sub-specifiers
 
@@ -316,7 +319,10 @@ returns. Functions that have their own `verbose` keyword (problem constructors,
   initialization `NonlinearProblem`/`SCCNonlinearProblem`. Accepts a `SciMLLogging`
   preset or a solver verbosity specifier (e.g. `NonlinearVerbosity`). Defaults to
   `Minimal()` (`None()` under the `None` preset), so inner linear-solver chatter stays
-  off during initialization.
+  off during initialization. A preset also applies to a linear initialization problem;
+  a `NonlinearVerbosity` does not, and that problem uses `linear_verbosity` instead.
+  The ModelingToolkit diagnostics of the initialization problem use the toggles of the
+  outer `MTKVerbosity`.
 
 The other sub-specifiers hold the verbosity of the solver for each problem family. A
 problem constructor that gets an `MTKVerbosity` forwards the matching field to `solve`.
@@ -332,6 +338,11 @@ of `MTKVerbosity` sets them to the same preset (for example, `MTKVerbosity(None(
 | `optimization_verbosity` | `OptimizationProblem` | `OptimizationVerbosity` (OptimizationBase) |
 | `bvp_verbosity` | `BVProblem` | `BVPVerbosity` (BoundaryValueDiffEqCore) |
 
+A `SteadyStateProblem` solved with `DynamicSS` does not give `nonlinear_verbosity` to the
+ODE solve; use the `odesolve_kwargs` of `DynamicSS` for that solve. The dynamic
+optimization problems (for example `JuMPDynamicOptProblem`) store no solver verbosity,
+because their `solve` methods take their own `verbose::Bool`.
+
 The solver specifiers have their own sub-specifiers. For example, the linear solves
 inside an ODE solve are controlled by the `linear_verbosity` of the `DEVerbosity`, not by
 the `linear_verbosity` field of `MTKVerbosity`:
@@ -342,14 +353,15 @@ MTKVerbosity(de_verbosity = DEVerbosity(linear_verbosity = SciMLLogging.None()))
 
 # Deprecated keyword equivalents
 
-These boolean keywords remain accepted and, when explicitly passed, override the
-corresponding toggles. They are deprecated in favor of `verbose`:
+These boolean keywords are deprecated in favor of `verbose`. When explicitly passed,
+they emit a deprecation warning and override the corresponding toggles:
 
 | Deprecated keyword | Toggles overridden |
 |:--- |:--- |
 | `warn_initialize_determined` | `singular_initialization`, `overdetermined_initialization`, `underdetermined_initialization` |
 | `warn_cyclic_dependency` | `cyclic_dependency` |
 | `warn_empty_op` (`linearization_function`) | `empty_operating_point` |
+| `print_underconstrained_variables` (`mtkcompile`) | `underconstrained_variables` (`true` sets `InfoLevel`) |
 
 # Examples
 
@@ -389,6 +401,12 @@ end
 
 _system_verbosity(sys) = getmetadata(sys, MTKVerbosityCtx, DEFAULT_MTK_VERBOSE)::MTKVerbosity
 
+# `sys` with `verbose` stored. No new copy of `sys` is made if it already stores `verbose`.
+function _set_system_verbosity(sys, verbose::MTKVerbosity)
+    getmetadata(sys, MTKVerbosityCtx, nothing) === verbose && return sys
+    return setmetadata(sys, MTKVerbosityCtx, verbose)
+end
+
 @inline _process_verbose_param(verbose::MTKVerbosity) = verbose
 @inline _process_verbose_param(preset::AbstractVerbosityPreset) = MTKVerbosity(preset)
 @inline function _process_verbose_param(verbose::Bool)
@@ -408,11 +426,37 @@ end
 end
 @inline _route_problem_verbose(::Any) = DEFAULT_MTK_VERBOSE
 
+# The toggles that the deprecated `warn_initialize_determined` keyword overrides.
+const _INITIALIZE_DETERMINED_TOGGLES = (
+    :singular_initialization => WarnLevel,
+    :overdetermined_initialization => WarnLevel,
+    :underdetermined_initialization => WarnLevel,
+)
+
+# The `MTKVerbosity` of a problem constructor with keywords `kwargs`: `verbose` with the
+# deprecated boolean keywords applied, as in `SciMLProblemOptions`. Use it where the
+# `SciMLProblemOptions` of the problem is not available. `SciMLProblemOptions` emits the
+# deprecation warnings, so this function does not.
+function _problem_verbosity(kwargs)
+    verbosity = _route_problem_verbose(get(kwargs, :verbose, nothing))
+    verbosity = _override_toggle(
+        verbosity, get(kwargs, :warn_initialize_determined, nothing),
+        _INITIALIZE_DETERMINED_TOGGLES...
+    )
+    return _override_toggle(
+        verbosity, get(kwargs, :warn_cyclic_dependency, nothing),
+        :cyclic_dependency => WarnLevel
+    )
+end
+
 # The `MTKVerbosity` sub-specifier that holds the solver verbosity for problem type `T`.
 # `AbstractBVProblem <: AbstractODEProblem`, so it needs its own method.
 _solver_verbosity_field(::Type) = nothing
 _solver_verbosity_field(::Type{<:SciMLBase.AbstractDEProblem}) = :de_verbosity
 _solver_verbosity_field(::Type{<:SciMLBase.AbstractBVProblem}) = :bvp_verbosity
+# The dynamic optimization `solve` methods take their own `verbose::Bool` and do not read
+# `prob.kwargs`, so an `MTKVerbosity` is not stored.
+_solver_verbosity_field(::Type{<:SciMLBase.AbstractDynamicOptProblem}) = nothing
 _solver_verbosity_field(::Type{<:SciMLBase.AbstractNonlinearProblem}) = :nonlinear_verbosity
 _solver_verbosity_field(::Type{<:SciMLBase.AbstractLinearProblem}) = :linear_verbosity
 function _solver_verbosity_field(::Type{<:SciMLBase.AbstractOptimizationProblem})
@@ -459,8 +503,35 @@ function _override_toggle(
     return MTKVerbosity{E}(vals...)
 end
 
-# The inner initialization problem inherits the outer cyclic-dependency setting: pass
-# an explicit `true` override when the toggle is enabled, or `nothing` (no override).
-function _cyclic_flag_for_initialization(verb::MTKVerbosity)
-    return _toggle_enabled(verb, :cyclic_dependency) ? true : nothing
+# `_override_toggle` for the deprecated boolean keyword `kw` of `caller`, with a
+# deprecation warning when the keyword is explicitly passed.
+function _deprecated_override_toggle(
+        verb::MTKVerbosity, ::Nothing, kw::Symbol, caller::Symbol, pairs::Pair...
+    )
+    return verb
+end
+function _deprecated_override_toggle(
+        verb::MTKVerbosity, flag::Bool, kw::Symbol, caller::Symbol,
+        pairs::Pair{Symbol, MessageLevel}...
+    )
+    toggles = join(("$(first(p)) = ..." for p in pairs), ", ")
+    Base.depwarn(
+        "The `$kw` keyword is deprecated, use `verbose = MTKVerbosity($toggles)` instead.",
+        caller
+    )
+    return _override_toggle(verb, flag, pairs...)
+end
+
+# The `verbose` of the inner initialization problem: the toggles of `verb`, with its
+# `initialization_verbosity` as the solver verbosity of the nonlinear problem types. A
+# preset or `Bool` also becomes the `linear_verbosity`; a `NonlinearVerbosity` does not,
+# because `LinearProblem` does not accept it.
+function _initialization_problem_verbosity(verb::MTKVerbosity{E}) where {E}
+    init = verb.initialization_verbosity
+    linear = init isa Union{AbstractVerbosityPreset, Bool} ? init : verb.linear_verbosity
+    vals = map(fieldnames(typeof(verb))) do f
+        f === :nonlinear_verbosity ? init :
+            f === :linear_verbosity ? linear : getfield(verb, f)
+    end
+    return MTKVerbosity{E}(vals...)
 end

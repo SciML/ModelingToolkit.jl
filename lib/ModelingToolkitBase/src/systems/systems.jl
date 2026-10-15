@@ -108,12 +108,13 @@ once — calling `mtkcompile` on an already-compiled system throws
   selects a `SciMLBase.HomotopyProblem`, and the initialization and event affect systems
   derived from the compiled system are compiled the same way. Use this for targets that
   cannot lower to a continuation solver. See [`strip_homotopy`](@ref).
-- `verbose = SciMLLogging.Standard()`: Controls diagnostic output during compilation.
-  Accepts an [`MTKVerbosity`](@ref) specifier, a `SciMLLogging` preset (`None()`,
-  `Minimal()`, `Standard()`, `Detailed()`, `All()`), or a `Bool` (`true` is equivalent
-  to `Standard()`, `false` to `None()`). Functions in `additional_passes` may opt in to
-  receiving the verbosity specifier by accepting `(sys, verbose::MTKVerbosity)`;
-  single-argument passes are called as before.
+- `verbose = nothing`: Controls diagnostic output during compilation. Accepts an
+  [`MTKVerbosity`](@ref) specifier, a `SciMLLogging` preset (`None()`, `Minimal()`,
+  `Standard()`, `Detailed()`, `All()`), or a `Bool` (`true` is equivalent to
+  `Standard()`, `false` to `None()`). `nothing` uses the verbosity stored on `sys` by
+  `System(...; verbose)`, or `Standard()` if there is none. The compiled system stores
+  the result. Functions in `additional_passes` can read it with
+  `ModelingToolkitBase._system_verbosity(sys)`.
 
 Remaining keyword arguments are forwarded to the internal compilation passes.
 
@@ -142,10 +143,11 @@ function mtkcompile(
         sys::System; additional_passes = (),
         inputs = SymbolicT[], outputs = SymbolicT[],
         disturbance_inputs = SymbolicT[],
-        split = true, homotopy = true, verbose = Standard(), kwargs...
+        split = true, homotopy = true, verbose = nothing, kwargs...
     )
-    verbose = _process_verbose_param(verbose)
+    verbose = verbose === nothing ? _system_verbosity(sys) : _process_verbose_param(verbose)
     isscheduled(sys) && throw(RepeatedStructuralSimplificationError())
+    warn_unbalanced_connectors(sys, verbose)
     if !homotopy
         sys = strip_homotopy(sys)
     end
@@ -163,20 +165,20 @@ function mtkcompile(
         inputs, outputs, disturbance_inputs, additional_passes, verbose,
         kwargs...
     )
+    # Diagnostics that have no `verbose` keyword (passes, `remake`, ...) read this value
+    # with `_system_verbosity`.
+    newsys = _set_system_verbosity(newsys, verbose)
     for pass in additional_passes
-        # A pass may opt in to receiving the verbosity specifier by accepting
-        # `(sys, verbose::MTKVerbosity)`.
-        newsys = applicable(pass, newsys, verbose) ? pass(newsys, verbose) : pass(newsys)
+        newsys = pass(newsys)
     end
+    # a pass can return a system without this metadata
+    newsys = _set_system_verbosity(newsys, verbose)
     @set! newsys.parent = toggle_namespacing(sys, false)
     # Record the choice so systems derived from `newsys` (initialization system, event
     # affect systems) are compiled with the same `homotopy` setting.
     if !homotopy
         newsys = setmetadata(newsys, HomotopyCtx, false)
     end
-    # Diagnostics on the compiled system that have no `verbose` keyword (e.g. `remake`)
-    # read this value.
-    newsys = setmetadata(newsys, MTKVerbosityCtx, verbose)
     # Singular systems may end up with parameter-only equations, which shouldn't error on `complete`
     newsys = complete(newsys; split, allow_parameter_eqs = true)
     return newsys
@@ -479,7 +481,7 @@ function __mtkcompile(
     sys = remove_unhack_system_transformation(sys)
     tf = add_array_observed!(obseqs, new_dvs)
     sys = with_reversible_transformation(sys, tf)
-    obseqs = topsort_equations(sys, obseqs, [eq.lhs for eq in obseqs])
+    obseqs = topsort_equations(sys, obseqs, [eq.lhs for eq in obseqs]; verbose)
 
     for eq in new_eqs
         if SU.query(eq.rhs) do v

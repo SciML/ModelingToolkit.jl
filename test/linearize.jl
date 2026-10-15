@@ -1,4 +1,5 @@
 using ModelingToolkit, ADTypes, Test
+import SciMLLogging
 using NonlinearSolve
 using Symbolics: value
 using CommonSolve: solve
@@ -305,7 +306,10 @@ closed_loop = System(
     ]
 )
 
-@test_nowarn linearize(closed_loop, :r, :y; warn_empty_op = false)
+@test_nowarn linearize(
+    closed_loop, :r, :y;
+    verbose = MTKVerbosity(empty_operating_point = SciMLLogging.Silent)
+)
 
 # https://discourse.julialang.org/t/mtk-change-in-linearize/115760/3
 @component function Tank_noi(; name, ρ = 1, A = 5, K = 5, h_ς = 3)
@@ -396,7 +400,7 @@ end
     @named tank_noi = Tank_noi()
     @unpack md_i, h, m = tank_noi
     m_ss = 2.4000000003229878
-    @test_warn ["empty operating point", "warn_empty_op"] linearize(
+    @test_warn ["empty operating point", "empty_operating_point"] linearize(
         tank_noi, [md_i], [h]; p = [md_i => 1.0, m => m_ss]
     )
 end

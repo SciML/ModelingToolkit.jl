@@ -882,7 +882,12 @@ end
 
 function alias_elimination!(
         state::TearingState;
-        verbose::MTKVerbosity = DEFAULT_MTK_VERBOSE, kwargs...
+        verbose::MTKVerbosity = DEFAULT_MTK_VERBOSE,
+        print_underconstrained_variables = nothing, kwargs...
+    )
+    verbose = _deprecated_override_toggle(
+        verbose, print_underconstrained_variables, :print_underconstrained_variables,
+        :mtkcompile, :underconstrained_variables => InfoLevel
     )
     StateSelection.complete!(state.structure)
     eqs_to_rm = Int[]

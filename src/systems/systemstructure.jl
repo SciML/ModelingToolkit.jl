@@ -291,7 +291,14 @@ function _mtkcompile_worker!(
         var_eq_matching = StateSelection.pantelides!(state; finalize = false, kwargs...)
         sys = pantelides_reassemble(state, var_eq_matching)
         state = TearingState(sys)
-        sys, mm = alias_elimination!(state; fully_determined, verbose, kwargs...)
+        sys, mm = alias_elimination!(
+            state; fully_determined, kwargs...,
+            # `_mtkcompile!` already reported the underconstrained variables
+            verbose = _override_toggle(
+                verbose, false, :underconstrained_variables => InfoLevel
+            ),
+            print_underconstrained_variables = nothing,
+        )
         state.mm = mm
         sys = ModelingToolkit.dummy_derivative(
             sys, state; fully_determined, verbose, kwargs...

@@ -173,19 +173,19 @@ function linearization_function(
         kwargs...
     )
     verbosity = _route_problem_verbose(verbose)
-    verbosity = _override_toggle(
-        verbosity, warn_empty_op, :empty_operating_point => WarnLevel
+    verbosity = _deprecated_override_toggle(
+        verbosity, warn_empty_op, :warn_empty_op, :linearization_function,
+        :empty_operating_point => WarnLevel
     )
-    verbosity = _override_toggle(
+    verbosity = _deprecated_override_toggle(
         verbosity, warn_initialize_determined,
-        :singular_initialization => WarnLevel,
-        :overdetermined_initialization => WarnLevel,
-        :underdetermined_initialization => WarnLevel,
+        :warn_initialize_determined, :linearization_function,
+        _INITIALIZE_DETERMINED_TOGGLES...
     )
     op = Dict(op)
     if isempty(op)
         @SciMLMessage(
-            "An empty operating point was passed to `linearization_function`. An operating point containing the variables that will be changed in `linearize` should be provided. Disable this warning by passing `verbose = MTKVerbosity(empty_operating_point = Silent)` (the deprecated `warn_empty_op = false` also works).",
+            "An empty operating point was passed to `linearization_function`. An operating point containing the variables that will be changed in `linearize` should be provided. Disable this warning by passing `verbose = MTKVerbosity(empty_operating_point = SciMLLogging.Silent)`.",
             verbosity, :empty_operating_point
         )
     end

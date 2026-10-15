@@ -394,7 +394,9 @@ struct System <: IntermediateDeprecationSystem
         end
         @assert iv === nothing || symtype(iv) === Real
         if (checks isa Bool && checks === true || checks isa Int && (checks & CheckComponents) > 0) && iv !== nothing
-            check_independent_variables((iv,), _metadata_verbosity(metadata))
+            # scan the metadata for the verbosity only when the warning can show
+            isparameter(iv) ||
+                check_independent_variables((iv,), _metadata_verbosity(metadata))
             check_variables(unknowns, iv)
             check_parameters(ps, iv)
             check_equations(eqs, iv)
