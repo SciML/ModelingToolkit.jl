@@ -364,6 +364,19 @@ if @isdefined(ModelingToolkit)
             op = ModelingToolkit.LinearizationOpPoint(nlsol, nlts; op = Dict(ncsys.nlC.u => missing))
         )
         @test length(mats_miss) == length(nlts)
+
+        # A `LinearizationOpPoint` may also be passed to the functions that build on
+        # `linearization_function`. The sensitivity function at the plant output has the
+        # dynamics of the loop-closed system, linearized at the state of the solution.
+        sens, _ = get_sensitivity(
+            nlsys, :plant_output; op = ModelingToolkit.LinearizationOpPoint(nlsol, 2.5)
+        )
+        xP, xC = nlsol(2.5, idxs = [ncsys.nlP.x, ncsys.nlC.x])
+        k = -2.0
+        A_closed = [-3xP^2 1; (-2xP * xC + k) -(1 + xP^2)]
+        by_reim = z -> (real(z), imag(z))
+        @test sort(eigvals(sens.A); by = by_reim) ≈ sort(eigvals(A_closed); by = by_reim) rtol = 1.0e-6
+        @test sens.D ≈ [1.0;;]
     end
 
     @testset "Complicated model" begin
