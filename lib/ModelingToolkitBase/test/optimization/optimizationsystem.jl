@@ -891,4 +891,46 @@ end
         msol = solve(mprob, Ipopt.Optimizer(); print_level = 0)
         check_optimum(msol)
     end
+
+    @testset "built with `≲` and `≳`" begin
+        @variables z[1:3]
+        @parameters t[1:3] lo[1:3] ub M[1:2, 1:3] c
+        pvals = [
+            t => [2.0, -1.0, 0.5], lo => zeros(3), ub => 1.0,
+            M => [1.0 0.0 1.0; 1.0 2.0 0.0], c => 2.0,
+        ]
+        xu0 = [0.5, 0.25, 0.75]
+        u0 = [x => xu0, z => fill(0.5, 3)]
+        cost = sum(abs2, x .- t) + sum(abs2, z .- 2.0)
+        cstrs = [x ≲ ub, x ≳ lo, sum(abs2, M .* z'; dims = 1) ≲ c]
+        @test all(cstr -> cstr isa Inequality, cstrs)
+        @named asys = System(
+            Equation[], [x, z], [t, lo, ub, M, c]; costs = [cost], constraints = cstrs
+        )
+        aprob = OptimizationProblem(complete(asys), [u0; pvals]; adtype = AutoForwardDiff())
+        @test aprob.lcons == fill(-Inf, 9)
+        @test aprob.ucons == zeros(9)
+        # `x = clamp.(t, lo, ub)`, and `colsq[j] * z[j]^2 = c` active with `colsq = [2, 4, 1]`
+        xopt = [1.0, 0.0, 0.5]
+        zopt = [1.0, sqrt(0.5), sqrt(2.0)]
+        @test aprob.f.cons(aprob.u0, aprob.p) ≈ [xu0 .- 1.0; -xu0; [2.0, 4.0, 1.0] .* 0.25 .- 2.0]
+
+        @named ssys = System(
+            Equation[], [x, z], [t, lo, ub, M, c]; costs = [cost],
+            constraints = [Symbolics.scalarize(x ≲ ub); Symbolics.scalarize(x ≳ lo)]
+        )
+        sprob = OptimizationProblem(complete(ssys), [u0; pvals]; adtype = AutoForwardDiff())
+        @test sprob.f.cons(sprob.u0, sprob.p) ≈ aprob.f.cons(aprob.u0, aprob.p)[1:6]
+
+        asol = solve(aprob, Ipopt.Optimizer(); print_level = 0)
+        @test SciMLBase.successful_retcode(asol)
+        @test asol[x] ≈ xopt atol = 1.0e-6
+        @test asol[z] ≈ zopt atol = 1.0e-6
+
+        mprob = OptimizationProblem(mtkcompile(asys), [u0; pvals]; adtype = AutoForwardDiff())
+        msol = solve(mprob, Ipopt.Optimizer(); print_level = 0)
+        @test SciMLBase.successful_retcode(msol)
+        @test msol[x] ≈ xopt atol = 1.0e-6
+        @test msol[z] ≈ zopt atol = 1.0e-6
+    end
 end
