@@ -83,7 +83,7 @@ a `Bool`:
 ```julia
 using SciMLLogging: SciMLLogging, Silent, InfoLevel
 
-mtkcompile(sys)                                    # default (Standard) verbosity
+mtkcompile(sys)                                    # stored verbosity of sys, else Standard
 mtkcompile(sys; verbose = false)                   # silence everything
 mtkcompile(sys; verbose = SciMLLogging.Detailed()) # more diagnostics
 
@@ -152,13 +152,14 @@ the initialization problem use the toggles of the outer `MTKVerbosity`. The
 The boolean keywords `warn_initialize_determined`, `warn_cyclic_dependency`,
 `warn_empty_op`, and `print_underconstrained_variables` (of `mtkcompile`) are deprecated
 in favor of `verbose`. When explicitly passed they emit a
-deprecation warning and override the corresponding toggles.
+deprecation warning and override the corresponding toggles. Julia shows these warnings
+only with `--depwarn=yes`, for example in `Pkg.test`.
 
 ### Verbosity stored on a system
 
 Some diagnostics run where no `verbose` keyword is available: the checks in the `System`
-constructor, callback affects, and `remake`. These use the verbosity that is stored in
-the metadata of the system. Set it with the `verbose` keyword of `System`. The author of
+constructor, callback affects, `remake`, and `IfLifting` and other `additional_passes`.
+These use the verbosity that is stored in the metadata of the system. Set it with the `verbose` keyword of `System`. The author of
 a connector can also silence the `unbalanced_connector` check, which `mtkcompile` does
 once for each connector type, for that connector:
 
