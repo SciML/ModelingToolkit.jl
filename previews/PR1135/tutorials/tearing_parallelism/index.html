@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Exposing More Parallelism By Tearing Algebraic Equations in ODESystems · ModelingToolkit.jl</title><script data-outdated-warner src="../../assets/warner.js"></script><link rel="canonical" href="https://mtk.sciml.ai/stable/tutorials/tearing_parallelism/"/><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.039/juliamono-regular.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.13.11/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script><link href="../../assets/favicon.ico" rel="icon" type="image/x-icon"/></head><body><div id="documenter"><nav class="docs-sidebar"><a class="docs-logo" href="../../"><img src="../../assets/logo.png" alt="ModelingToolkit.jl logo"/></a><div class="docs-package-name"><span class="docs-autofit"><a href="../../">ModelingToolkit.jl</a></span></div><form class="docs-search" action="../../search/"><input class="docs-search-query" id="documenter-search-query" name="q" type="text" placeholder="Search docs"/></form><ul class="docs-menu"><li><a class="tocitem" href="../../">Home</a></li><li><span class="tocitem">Symbolic Modeling Tutorials</span><ul><li><a class="tocitem" href="../ode_modeling/">Composing Ordinary Differential Equations</a></li><li><a class="tocitem" href="../acausal_components/">Acausal Component-Based Modeling the RC Circuit</a></li><li><a class="tocitem" href="../higher_order/">Automatic Transformation of Nth Order ODEs to 1st Order ODEs</a></li><li class="is-active"><a class="tocitem" href>Exposing More Parallelism By Tearing Algebraic Equations in ODESystems</a><ul class="internal"><li><a class="tocitem" href="#The-Component-Library"><span>The Component Library</span></a></li><li><a class="tocitem" href="#The-Model"><span>The Model</span></a></li><li><a class="tocitem" href="#What-Happened?"><span>What Happened?</span></a></li></ul></li><li><a class="tocitem" href="../nonlinear/">Modeling Nonlinear Systems</a></li><li><a class="tocitem" href="../optimization/">Modeling Optimization Problems</a></li><li><a class="tocitem" href="../stochastic_diffeq/">Modeling with Stochasticity</a></li><li><a class="tocitem" href="../nonlinear_optimal_control/">Nonlinear Optimal Control</a></li></ul></li><li><span class="tocitem">ModelingToolkitize Tutorials</span><ul><li><a class="tocitem" href="../../mtkitize_tutorials/modelingtoolkitize/">Automatically Accelerating ODEProblem Code</a></li><li><a class="tocitem" href="../../mtkitize_tutorials/modelingtoolkitize_index_reduction/">Automated Index Reduction of DAEs</a></li></ul></li><li><span class="tocitem">Basics</span><ul><li><a class="tocitem" href="../../basics/AbstractSystem/">The AbstractSystem Interface</a></li><li><a class="tocitem" href="../../basics/ContextualVariables/">Contextual Variable Types</a></li><li><a class="tocitem" href="../../basics/Composition/">Composing Models and Building Reusable Components</a></li><li><a class="tocitem" href="../../basics/Validation/">Model Validation and Units</a></li><li><a class="tocitem" href="../../basics/DependencyGraphs/">Dependency Graphs</a></li><li><a class="tocitem" href="../../basics/FAQ/">Frequently Asked Questions</a></li></ul></li><li><span class="tocitem">System Types</span><ul><li><a class="tocitem" href="../../systems/ODESystem/">ODESystem</a></li><li><a class="tocitem" href="../../systems/SDESystem/">SDESystem</a></li><li><a class="tocitem" href="../../systems/JumpSystem/">JumpSystem</a></li><li><a class="tocitem" href="../../systems/NonlinearSystem/">NonlinearSystem</a></li><li><a class="tocitem" href="../../systems/OptimizationSystem/">OptimizationSystem</a></li><li><a class="tocitem" href="../../systems/ControlSystem/">ControlSystem</a></li><li><a class="tocitem" href="../../systems/ReactionSystem/">ReactionSystem</a></li><li><a class="tocitem" href="../../systems/PDESystem/">PDESystem</a></li></ul></li><li><a class="tocitem" href="../../comparison/">Comparison of ModelingToolkit vs Equation-Based Modeling Languages</a></li><li><a class="tocitem" href="../../internals/">Internal Details</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Symbolic Modeling Tutorials</a></li><li class="is-active"><a href>Exposing More Parallelism By Tearing Algebraic Equations in ODESystems</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Exposing More Parallelism By Tearing Algebraic Equations in ODESystems</a></li></ul></nav><div class="docs-right"><a class="docs-edit-link" href="https://github.com/SciML/ModelingToolkit.jl/blob/master/docs/src/tutorials/tearing_parallelism.md" title="Edit on GitHub"><span class="docs-icon fab"></span><span class="docs-label is-hidden-touch">Edit on GitHub</span></a><a class="docs-settings-button fas fa-cog" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-sidebar-button fa fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a></div></header><article class="content" id="documenter-page"><h1 id="Exposing-More-Parallelism-By-Tearing-Algebraic-Equations-in-ODESystems"><a class="docs-heading-anchor" href="#Exposing-More-Parallelism-By-Tearing-Algebraic-Equations-in-ODESystems">Exposing More Parallelism By Tearing Algebraic Equations in ODESystems</a><a id="Exposing-More-Parallelism-By-Tearing-Algebraic-Equations-in-ODESystems-1"></a><a class="docs-heading-anchor-permalink" href="#Exposing-More-Parallelism-By-Tearing-Algebraic-Equations-in-ODESystems" title="Permalink"></a></h1><p>Sometimes it can be very non-trivial to parallelize a system. In this tutorial we will demonstrate how to make use of <code>structural_simplify</code> to expose more parallelism in the solution process and parallelize the resulting simulation.</p><h2 id="The-Component-Library"><a class="docs-heading-anchor" href="#The-Component-Library">The Component Library</a><a id="The-Component-Library-1"></a><a class="docs-heading-anchor-permalink" href="#The-Component-Library" title="Permalink"></a></h2><p>The following tutorial will use the following set of components describing electrical circuits:</p><pre><code class="language-julia hljs">using ModelingToolkit, OrdinaryDiffEq
+
+function connect_pin(ps...)
+    eqs = [
+           0 ~ sum(p-&gt;p.i, ps) # KCL
+          ]
+    # KVL
+    for i in 1:length(ps)-1
+        push!(eqs, ps[i].v ~ ps[i+1].v)
+    end
+
+    return eqs
+end
+
+function connect_heat(ps...)
+    eqs = [
+           0 ~ sum(p-&gt;p.Q_flow, ps)
+          ]
+    for i in 1:length(ps)-1
+        push!(eqs, ps[i].T ~ ps[i+1].T)
+    end
+
+    return eqs
+end
+
+# Basic electric components
+@parameters t
+const D = Differential(t)
+function Pin(;name)
+    @variables v(t)=1.0 i(t)=1.0
+    ODESystem(Equation[], t, [v, i], [], name=name)
+end
+
+function Ground(;name)
+    @named g = Pin()
+    eqs = [g.v ~ 0]
+    compose(ODESystem(eqs, t, [], [], name=name), g)
+end
+
+function ConstantVoltage(;name, V = 1.0)
+    val = V
+    @named p = Pin()
+    @named n = Pin()
+    @parameters V=V
+    eqs = [
+           V ~ p.v - n.v
+           0 ~ p.i + n.i
+          ]
+    compose(ODESystem(eqs, t, [], [V], name=name), p, n)
+end
+
+function HeatPort(;name)
+    @variables T(t)=293.15 Q_flow(t)=0.0
+    ODESystem(Equation[], t, [T, Q_flow], [], name=name)
+end
+
+function HeatingResistor(;name, R=1.0, TAmbient=293.15, alpha=1.0)
+    @named p = Pin()
+    @named n = Pin()
+    @named h = HeatPort()
+    @variables v(t) RTherm(t)
+    @parameters R=R TAmbient=TAmbient alpha=alpha
+    eqs = [
+           RTherm ~ R*(1 + alpha*(h.T - TAmbient))
+           v ~ p.i * RTherm
+           h.Q_flow ~ -v * p.i # -LossPower
+           v ~ p.v - n.v
+           0 ~ p.i + n.i
+          ]
+    compose(ODESystem(
+        eqs, t, [v, RTherm], [R, TAmbient, alpha],
+        name=name,
+    ), p, n, h)
+end
+
+function HeatCapacitor(;name, rho=8050, V=1, cp=460, TAmbient=293.15)
+    @parameters rho=rho V=V cp=cp
+    C = rho*V*cp
+    @named h = HeatPort()
+    eqs = [
+           D(h.T) ~ h.Q_flow / C
+          ]
+    compose(ODESystem(
+        eqs, t, [], [rho, V, cp],
+        name=name,
+    ), h)
+end
+
+function Capacitor(;name, C = 1.0)
+    @named p = Pin()
+    @named n = Pin()
+    @variables v(t)=0.0
+    @parameters C=C
+    eqs = [
+           v ~ p.v - n.v
+           0 ~ p.i + n.i
+           D(v) ~ p.i / C
+          ]
+    compose(ODESystem(
+        eqs, t, [v], [C],
+        name=name
+    ), p, n)
+end
+
+function rc_model(i; name, source, ground, R, C)
+    resistor = HeatingResistor(name=Symbol(:resistor, i), R=R)
+    capacitor = Capacitor(name=Symbol(:capacitor, i), C=C)
+    heat_capacitor = HeatCapacitor(name=Symbol(:heat_capacitor, i))
+
+    rc_eqs = [
+              connect_pin(source.p, resistor.p)
+              connect_pin(resistor.n, capacitor.p)
+              connect_pin(capacitor.n, source.n, ground.g)
+              connect_heat(resistor.h, heat_capacitor.h)
+             ]
+
+    rc_model = compose(ODESystem(rc_eqs, t, name=Symbol(name, i)),
+                       [resistor, capacitor, source, ground, heat_capacitor])
+end</code></pre><h2 id="The-Model"><a class="docs-heading-anchor" href="#The-Model">The Model</a><a id="The-Model-1"></a><a class="docs-heading-anchor-permalink" href="#The-Model" title="Permalink"></a></h2><p>Assuming that the components are defined, our model is 50 resistors and capacitors connected in parallel. Thus following the <a href="tutorials/@ref acausal">acausal components tutorial</a>, we can connect a bunch of RC components as follows:</p><pre><code class="language-julia hljs">V = 2.0
+source = ConstantVoltage(name=:source, V=V)
+ground = Ground(name=:ground)
+N = 50
+Rs = 10 .^range(0, stop=-4, length=N)
+Cs = 10 .^range(-3, stop=0, length=N)
+rc_systems = map(1:N) do i
+    rc_model(i; name=:rc, source=source, ground=ground, R=Rs[i], C=Cs[i])
+end;
+@variables E(t)=0.0
+eqs = [
+       D(E) ~ sum(((i, sys),)-&gt;getproperty(sys, Symbol(:resistor, i)).h.Q_flow, enumerate(rc_systems))
+      ]
+big_rc = compose(ODESystem(eqs, t, [E], []), rc_systems)</code></pre><p>Now let&#39;s say we want to expose a bit more parallelism via running tearing. How do we do that?</p><pre><code class="language-julia hljs">sys = structural_simplify(big_rc)</code></pre><p>Done, that&#39;s it. There&#39;s no more to it.</p><h2 id="What-Happened?"><a class="docs-heading-anchor" href="#What-Happened?">What Happened?</a><a id="What-Happened?-1"></a><a class="docs-heading-anchor-permalink" href="#What-Happened?" title="Permalink"></a></h2><p>Yes, that&#39;s a good question! Let&#39;s investigate a little bit more what had happened. If you look at the system we defined:</p><pre><code class="language-julia hljs">equations(big_rc)
+
+1051-element Vector{Equation}:
+ Differential(t)(E(t)) ~ rc10₊resistor10₊h₊Q_flow(t) + rc11₊resistor11₊h₊Q_flow(t) + rc12₊resistor12₊h₊Q_flow(t) + rc13₊resistor13₊h₊Q_flow(t) + rc14₊resistor14₊h₊Q_flow(t) + rc15₊resistor15₊h₊Q_flow(t) + rc16₊resistor16₊h₊Q_flow(t) + rc17₊resistor17₊h₊Q_flow(t) + rc18₊resistor18₊h₊Q_flow(t) + rc19₊resistor19₊h₊Q_flow(t) + rc1₊resistor1₊h₊Q_flow(t) + rc20₊resistor20₊h₊Q_flow(t) + rc21₊resistor21₊h₊Q_flow(t) + rc22₊resistor22₊h₊Q_flow(t) + rc23₊resistor23₊h₊Q_flow(t) + rc24₊resistor24₊h₊Q_flow(t) + rc25₊resistor25₊h₊Q_flow(t) + rc26₊resistor26₊h₊Q_flow(t) + rc27₊resistor27₊h₊Q_flow(t) + rc28₊resistor28₊h₊Q_flow(t) + rc29₊resistor29₊h₊Q_flow(t) + rc2₊resistor2₊h₊Q_flow(t) + rc30₊resistor30₊h₊Q_flow(t) + rc31₊resistor31₊h₊Q_flow(t) + rc32₊resistor32₊h₊Q_flow(t) + rc33₊resistor33₊h₊Q_flow(t) + rc34₊resistor34₊h₊Q_flow(t) + rc35₊resistor35₊h₊Q_flow(t) + rc36₊resistor36₊h₊Q_flow(t) + rc37₊resistor37₊h₊Q_flow(t) + rc38₊resistor38₊h₊Q_flow(t) + rc39₊resistor39₊h₊Q_flow(t) + rc3₊resistor3₊h₊Q_flow(t) + rc40₊resistor40₊h₊Q_flow(t) + rc41₊resistor41₊h₊Q_flow(t) + rc42₊resistor42₊h₊Q_flow(t) + rc43₊resistor43₊h₊Q_flow(t) + rc44₊resistor44₊h₊Q_flow(t) + rc45₊resistor45₊h₊Q_flow(t) + rc46₊resistor46₊h₊Q_flow(t) + rc47₊resistor47₊h₊Q_flow(t) + rc48₊resistor48₊h₊Q_flow(t) + rc49₊resistor49₊h₊Q_flow(t) + rc4₊resistor4₊h₊Q_flow(t) + rc50₊resistor50₊h₊Q_flow(t) + rc5₊resistor5₊h₊Q_flow(t) + rc6₊resistor6₊h₊Q_flow(t) + rc7₊resistor7₊h₊Q_flow(t) + rc8₊resistor8₊h₊Q_flow(t) + rc9₊resistor9₊h₊Q_flow(t)
+ 0 ~ rc1₊resistor1₊p₊i(t) + rc1₊source₊p₊i(t)
+ rc1₊source₊p₊v(t) ~ rc1₊resistor1₊p₊v(t)
+ 0 ~ rc1₊capacitor1₊p₊i(t) + rc1₊resistor1₊n₊i(t)
+ rc1₊resistor1₊n₊v(t) ~ rc1₊capacitor1₊p₊v(t)
+ ⋮
+ rc50₊source₊V ~ rc50₊source₊p₊v(t) - rc50₊source₊n₊v(t)
+ 0 ~ rc50₊source₊n₊i(t) + rc50₊source₊p₊i(t)
+ rc50₊ground₊g₊v(t) ~ 0
+ Differential(t)(rc50₊heat_capacitor50₊h₊T(t)) ~ rc50₊heat_capacitor50₊h₊Q_flow(t)*(rc50₊heat_capacitor50₊V^-1)*(rc50₊heat_capacitor50₊cp^-1)*(rc50₊heat_capacitor50₊rho^-1)</code></pre><p>You see it started as a massive 1051 set of equations. However, after eliminating redundancies we arrive at 151 equations:</p><pre><code class="language-julia hljs">equations(sys)
+
+151-element Vector{Equation}:
+ Differential(t)(E(t)) ~ -rc10₊capacitor10₊p₊i(t)*(rc10₊source₊V - rc10₊capacitor10₊v(t)) - (rc11₊capacitor11₊p₊i(t)*(rc11₊source₊V - rc11₊capacitor11₊v(t))) - (rc12₊capacitor12₊p₊i(t)*(rc12₊source₊V - rc12₊capacitor12₊v(t))) - (rc13₊capacitor13₊p₊i(t)*(rc13₊source₊V - rc13₊capacitor13₊v(t))) - (rc14₊capacitor14₊p₊i(t)*(rc14₊source₊V - rc14₊capacitor14₊v(t))) - (rc15₊capacitor15₊p₊i(t)*(rc15₊source₊V - rc15₊capacitor15₊v(t))) - (rc16₊capacitor16₊p₊i(t)*(rc16₊source₊V - rc16₊capacitor16₊v(t))) - (rc17₊capacitor17₊p₊i(t)*(rc17₊source₊V - rc17₊capacitor17₊v(t))) - (rc18₊capacitor18₊p₊i(t)*(rc18₊source₊V - rc18₊capacitor18₊v(t))) - (rc19₊capacitor19₊p₊i(t)*(rc19₊source₊V - rc19₊capacitor19₊v(t))) - (rc1₊resistor1₊p₊i(t)*(rc1₊source₊V - rc1₊capacitor1₊v(t))) - (rc20₊capacitor20₊p₊i(t)*(rc20₊source₊V - rc20₊capacitor20₊v(t))) - (rc21₊capacitor21₊p₊i(t)*(rc21₊source₊V - rc21₊capacitor21₊v(t))) - (rc22₊capacitor22₊p₊i(t)*(rc22₊source₊V - rc22₊capacitor22₊v(t))) - (rc23₊capacitor23₊p₊i(t)*(rc23₊source₊V - rc23₊capacitor23₊v(t))) - (rc24₊capacitor24₊p₊i(t)*(rc24₊source₊V - rc24₊capacitor24₊v(t))) - (rc25₊capacitor25₊p₊i(t)*(rc25₊source₊V - rc25₊capacitor25₊v(t))) - (rc26₊capacitor26₊p₊i(t)*(rc26₊source₊V - rc26₊capacitor26₊v(t))) - (rc27₊capacitor27₊p₊i(t)*(rc27₊source₊V - rc27₊capacitor27₊v(t))) - (rc28₊capacitor28₊p₊i(t)*(rc28₊source₊V - rc28₊capacitor28₊v(t))) - (rc29₊capacitor29₊p₊i(t)*(rc29₊source₊V - rc29₊capacitor29₊v(t))) - (rc2₊capacitor2₊p₊i(t)*(rc2₊source₊V - rc2₊capacitor2₊v(t))) - (rc30₊capacitor30₊p₊i(t)*(rc30₊source₊V - rc30₊capacitor30₊v(t))) - (rc31₊capacitor31₊p₊i(t)*(rc31₊source₊V - rc31₊capacitor31₊v(t))) - (rc32₊capacitor32₊p₊i(t)*(rc32₊source₊V - rc32₊capacitor32₊v(t))) - (rc33₊capacitor33₊p₊i(t)*(rc33₊source₊V - rc33₊capacitor33₊v(t))) - (rc34₊capacitor34₊p₊i(t)*(rc34₊source₊V - rc34₊capacitor34₊v(t))) - (rc35₊capacitor35₊p₊i(t)*(rc35₊source₊V - rc35₊capacitor35₊v(t))) - (rc36₊capacitor36₊p₊i(t)*(rc36₊source₊V - rc36₊capacitor36₊v(t))) - (rc37₊capacitor37₊p₊i(t)*(rc37₊source₊V - rc37₊capacitor37₊v(t))) - (rc38₊capacitor38₊p₊i(t)*(rc38₊source₊V - rc38₊capacitor38₊v(t))) - (rc39₊capacitor39₊p₊i(t)*(rc39₊source₊V - rc39₊capacitor39₊v(t))) - (rc3₊capacitor3₊p₊i(t)*(rc3₊source₊V - rc3₊capacitor3₊v(t))) - (rc40₊capacitor40₊p₊i(t)*(rc40₊source₊V - rc40₊capacitor40₊v(t))) - (rc41₊capacitor41₊p₊i(t)*(rc41₊source₊V - rc41₊capacitor41₊v(t))) - (rc42₊capacitor42₊p₊i(t)*(rc42₊source₊V - rc42₊capacitor42₊v(t))) - (rc43₊capacitor43₊p₊i(t)*(rc43₊source₊V - rc43₊capacitor43₊v(t))) - (rc44₊capacitor44₊p₊i(t)*(rc44₊source₊V - rc44₊capacitor44₊v(t))) - (rc45₊capacitor45₊p₊i(t)*(rc45₊source₊V - rc45₊capacitor45₊v(t))) - (rc46₊capacitor46₊p₊i(t)*(rc46₊source₊V - rc46₊capacitor46₊v(t))) - (rc47₊capacitor47₊p₊i(t)*(rc47₊source₊V - rc47₊capacitor47₊v(t))) - (rc48₊capacitor48₊p₊i(t)*(rc48₊source₊V - rc48₊capacitor48₊v(t))) - (rc49₊capacitor49₊p₊i(t)*(rc49₊source₊V - rc49₊capacitor49₊v(t))) - (rc4₊resistor4₊p₊i(t)*(rc4₊source₊V - rc4₊capacitor4₊v(t))) - (rc50₊capacitor50₊p₊i(t)*(rc50₊source₊V - rc50₊capacitor50₊v(t))) - (rc5₊capacitor5₊p₊i(t)*(rc5₊source₊V - rc5₊capacitor5₊v(t))) - (rc6₊capacitor6₊p₊i(t)*(rc6₊source₊V - rc6₊capacitor6₊v(t))) - (rc7₊capacitor7₊p₊i(t)*(rc7₊source₊V - rc7₊capacitor7₊v(t))) - (rc8₊capacitor8₊p₊i(t)*(rc8₊source₊V - rc8₊capacitor8₊v(t))) - (rc9₊capacitor9₊p₊i(t)*(rc9₊source₊V - rc9₊capacitor9₊v(t)))
+ 0 ~ rc1₊capacitor1₊v(t) + rc1₊resistor1₊R*rc1₊resistor1₊p₊i(t)*(1 + rc1₊resistor1₊alpha*(rc1₊heat_capacitor1₊h₊T(t) - rc1₊resistor1₊TAmbient)) - rc1₊source₊V
+ Differential(t)(rc1₊capacitor1₊v(t)) ~ rc1₊resistor1₊p₊i(t)*(rc1₊capacitor1₊C^-1)
+ Differential(t)(rc1₊heat_capacitor1₊h₊T(t)) ~ rc1₊resistor1₊p₊i(t)*(rc1₊heat_capacitor1₊V^-1)*(rc1₊heat_capacitor1₊cp^-1)*(rc1₊heat_capacitor1₊rho^-1)*(rc1₊source₊V - rc1₊capacitor1₊v(t))
+ 0 ~ rc2₊resistor2₊R*rc2₊capacitor2₊p₊i(t)*(1 + rc2₊resistor2₊alpha*(rc2₊heat_capacitor2₊h₊T(t) - rc2₊resistor2₊TAmbient)) + rc2₊capacitor2₊v(t) - rc2₊source₊V
+ ⋮
+ Differential(t)(rc49₊heat_capacitor49₊h₊T(t)) ~ rc49₊capacitor49₊p₊i(t)*(rc49₊heat_capacitor49₊V^-1)*(rc49₊heat_capacitor49₊cp^-1)*(rc49₊heat_capacitor49₊rho^-1)*(rc49₊source₊V - rc49₊capacitor49₊v(t))
+ 0 ~ rc50₊capacitor50₊v(t) + rc50₊resistor50₊R*rc50₊capacitor50₊p₊i(t)*(1 + rc50₊resistor50₊alpha*(rc50₊heat_capacitor50₊h₊T(t) - rc50₊resistor50₊TAmbient)) - rc50₊source₊V
+ Differential(t)(rc50₊capacitor50₊v(t)) ~ rc50₊capacitor50₊p₊i(t)*(rc50₊capacitor50₊C^-1)
+ Differential(t)(rc50₊heat_capacitor50₊h₊T(t)) ~ rc50₊capacitor50₊p₊i(t)*(rc50₊heat_capacitor50₊V^-1)*(rc50₊heat_capacitor50₊cp^-1)*(rc50₊heat_capacitor50₊rho^-1)*(rc50₊source₊V - rc50₊capacitor50₊v(t))</code></pre><p>That&#39;s not all though. In addition, the tearing process has turned the sets of nonlinear equations into separate blocks and constructed a DAG for the dependencies between the blocks. We can use the bipartite graph functionality to dig in and investigate what this means:</p><pre><code class="language-julia hljs">using ModelingToolkit.BipartiteGraphs
+big_rc = initialize_system_structure(big_rc)
+inc_org = BipartiteGraphs.incidence_matrix(structure(big_rc).graph)
+blt_org = StructuralTransformations.sorted_incidence_matrix(big_rc, only_algeqs=true, only_algvars=true)
+blt_reduced = StructuralTransformations.sorted_incidence_matrix(sys, only_algeqs=true, only_algvars=true)</code></pre><p><img src="https://user-images.githubusercontent.com/1814174/110589027-d4ec9b00-8143-11eb-8880-651da986504d.PNG" alt/></p><p>The figure on the left is the original incidence matrix of the algebraic equations. Notice that the original formulation of the model has dependencies between different equations, and so the full set of equations must be solved together. That exposes no parallelism. However, the Block Lower Triangular (BLT) transformation exposes independent blocks. This is then further impoved by the tearing process, which removes 90% of the equations and transforms the nonlinear equations into 50 independent blocks <em>which can now all be solved in parallel</em>. The conclusion is that, your attempts to parallelize are neigh: performing parallelism after structural simplification greatly improves the problem that can be parallelized, so this is better than trying to do it by hand.</p><p>After performing this, you can construct the <code>ODEProblem</code>/<code>ODAEProblem</code> and set <code>parallel_form</code> to use the exposed parallelism in multithreaded function constructions, but this showcases why <code>structural_simplify</code> is so important to that process.</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../higher_order/">« Automatic Transformation of Nth Order ODEs to 1st Order ODEs</a><a class="docs-footer-nextpage" href="../nonlinear/">Modeling Nonlinear Systems »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.4 on <span class="colophon-date" title="Wednesday 21 July 2021 20:33">Wednesday 21 July 2021</span>. Using Julia version 1.6.2.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>

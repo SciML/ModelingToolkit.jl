@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Initialization of Systems · ModelingToolkit.jl</title><meta name="title" content="Initialization of Systems · ModelingToolkit.jl"/><meta property="og:title" content="Initialization of Systems · ModelingToolkit.jl"/><meta property="twitter:title" content="Initialization of Systems · ModelingToolkit.jl"/><meta name="description" content="Documentation for ModelingToolkit.jl."/><meta property="og:description" content="Documentation for ModelingToolkit.jl."/><meta property="twitter:description" content="Documentation for ModelingToolkit.jl."/><meta property="og:url" content="https://docs.sciml.ai/ModelingToolkit/stable/tutorials/initialization/"/><meta property="twitter:url" content="https://docs.sciml.ai/ModelingToolkit/stable/tutorials/initialization/"/><link rel="canonical" href="https://docs.sciml.ai/ModelingToolkit/stable/tutorials/initialization/"/><script data-outdated-warner src="../../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../search_index.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script><link href="../../assets/favicon.ico" rel="icon" type="image/x-icon"/></head><body><div id="documenter"><nav class="docs-sidebar"><a class="docs-logo" href="../../"><img src="../../assets/logo.png" alt="ModelingToolkit.jl logo"/></a><div class="docs-package-name"><span class="docs-autofit"><a href="../../">ModelingToolkit.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../../">Home</a></li><li><a class="tocitem" href="../ode_modeling/">Getting Started with ModelingToolkit.jl</a></li><li><span class="tocitem">Tutorials</span><ul><li><a class="tocitem" href="../acausal_components/">Acausal Component-Based Modeling</a></li><li><a class="tocitem" href="../nonlinear/">Modeling Nonlinear Systems</a></li><li class="is-active"><a class="tocitem" href>Initialization of Systems</a><ul class="internal"><li><a class="tocitem" href="#Primer-on-Initialization-of-Differential-Algebraic-Equations"><span>Primer on Initialization of Differential-Algebraic Equations</span></a></li><li><a class="tocitem" href="#bindings_and_ics"><span>Bindings and Initial Conditions</span></a></li><li><a class="tocitem" href="#Initialization-By-Example:-The-Cartesian-Pendulum"><span>Initialization By Example: The Cartesian Pendulum</span></a></li><li><a class="tocitem" href="#Determinability:-Underdetermined-and-Overdetermined-Systems"><span>Determinability: Underdetermined and Overdetermined Systems</span></a></li><li><a class="tocitem" href="#Constant-constraints-in-initialization"><span>Constant constraints in initialization</span></a></li><li><a class="tocitem" href="#Initial-variables"><span>Initial variables</span></a></li><li><a class="tocitem" href="#Initialization-of-parameters"><span>Initialization of parameters</span></a></li><li><a class="tocitem" href="#What-constitutes-an-initialization-system?"><span>What constitutes an initialization system?</span></a></li><li><a class="tocitem" href="#Diving-Deeper:-Constructing-the-Initialization-System"><span>Diving Deeper: Constructing the Initialization System</span></a></li><li><a class="tocitem" href="#Numerical-Isolation:-InitializationProblem"><span>Numerical Isolation: InitializationProblem</span></a></li><li><a class="tocitem" href="#More-Features-of-the-Initialization-System:-Steady-State-and-Observable-Initialization"><span>More Features of the Initialization System: Steady-State and Observable Initialization</span></a></li><li><a class="tocitem" href="#Summary-of-Initialization-API"><span>Summary of Initialization API</span></a></li></ul></li><li><a class="tocitem" href="../optimization/">Modeling Optimization Problems</a></li><li><a class="tocitem" href="../modelingtoolkitize/">Modelingtoolkitize: Automatically Translating Numerical to Symbolic Code</a></li><li><a class="tocitem" href="../programmatically_generating/">Programmatically Generating and Scripting Systems</a></li><li><a class="tocitem" href="../stochastic_diffeq/">Modeling with Stochasticity</a></li><li><a class="tocitem" href="../dynamic_optimization/">Solving Dynamic Optimization Problems</a></li><li><a class="tocitem" href="../discrete_system/">(Experimental) Modeling Discrete Systems</a></li><li><a class="tocitem" href="../parameter_identifiability/">Parameter Identifiability in ODE Models</a></li><li><a class="tocitem" href="../change_independent_variable/">Changing the independent variable of ODEs</a></li><li><a class="tocitem" href="../bifurcation_diagram_computation/">Bifurcation Diagrams</a></li><li><a class="tocitem" href="../attractors/">Multi- and Nonlocal- Continuation</a></li><li><a class="tocitem" href="../SampledData/">Clocks and Sampled-Data Systems</a></li><li><a class="tocitem" href="../domain_connections/">Domains</a></li><li><a class="tocitem" href="../callable_params/">Callable parameters and interpolating data</a></li><li><a class="tocitem" href="../linear_analysis/">Linear Analysis</a></li><li><a class="tocitem" href="../disturbance_modeling/">Disturbance and input modeling modeling</a></li><li><a class="tocitem" href="../fmi/">Importing FMUs</a></li></ul></li><li><span class="tocitem">Examples</span><ul><li><input class="collapse-toggle" id="menuitem-4-1" type="checkbox"/><label class="tocitem" for="menuitem-4-1"><span class="docs-label">Basic Examples</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="../../examples/higher_order/">Automatic Transformation of Nth Order ODEs to 1st Order ODEs</a></li><li><a class="tocitem" href="../../examples/spring_mass/">Component-Based Modeling of a Spring-Mass System</a></li><li><a class="tocitem" href="../../examples/modelingtoolkitize_index_reduction/">Automated Index Reduction of DAEs</a></li><li><a class="tocitem" href="../../examples/remake/">Optimizing through an ODE solve and re-creating MTK Problems</a></li></ul></li><li><input class="collapse-toggle" id="menuitem-4-2" type="checkbox"/><label class="tocitem" for="menuitem-4-2"><span class="docs-label">Advanced Examples</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="../../examples/tearing_parallelism/">Exposing More Parallelism By Tearing Algebraic Equations in Systems</a></li><li><a class="tocitem" href="../../examples/sparse_jacobians/">Automated Sparse Analytical Jacobians</a></li><li><a class="tocitem" href="../../examples/perturbation/">Symbolic-Numeric Perturbation Theory for ODEs</a></li></ul></li></ul></li><li><span class="tocitem">API</span><ul><li><a class="tocitem" href="../../API/System/">The <code>System</code> type</a></li><li><a class="tocitem" href="../../API/variables/">Symbolic variables and variable metadata</a></li><li><a class="tocitem" href="../../API/model_building/">Model building reference</a></li><li><a class="tocitem" href="../../API/problems/">Building and solving numerical problems</a></li><li><a class="tocitem" href="../../API/dynamic_opt/">Dynamic Optimization Solvers</a></li><li><a class="tocitem" href="../../API/codegen/">Code generation utilities</a></li><li><a class="tocitem" href="../../API/PDESystem/">PDESystem</a></li></ul></li><li><span class="tocitem">Basics</span><ul><li><a class="tocitem" href="../../basics/Composition/">Composing Models and Building Reusable Components</a></li><li><a class="tocitem" href="../../basics/Events/">Event Handling and Callback Functions</a></li><li><a class="tocitem" href="../../basics/Linearization/">Linearization</a></li><li><a class="tocitem" href="../../basics/InputOutput/">Input output</a></li><li><a class="tocitem" href="../../basics/MTKLanguage/">ModelingToolkit Language: Modeling with <code>@mtkmodel</code>, <code>@connectors</code> and <code>@mtkcompile</code></a></li><li><a class="tocitem" href="../../basics/Validation/">Model Validation and Units</a></li><li><a class="tocitem" href="../../basics/Debugging/">Debugging</a></li><li><a class="tocitem" href="../../basics/DependencyGraphs/">Dependency Graphs</a></li><li><a class="tocitem" href="../../basics/Precompilation/">Working with Precompilation and Binary Building</a></li><li><a class="tocitem" href="../../basics/PrecompileComponents/">Building Precompilation-Friendly Components</a></li><li><a class="tocitem" href="../../basics/FAQ/">Frequently Asked Questions</a></li></ul></li><li><a class="tocitem" href="../../comparison/">Comparison of ModelingToolkit vs Equation-Based and Block Modeling Languages</a></li><li><span class="tocitem">Internal Details</span><ul><li><a class="tocitem" href="../../internals/">Internal Details</a></li><li><a class="tocitem" href="../../internals/structural_transformation/">Structural Transformation</a></li><li><a class="tocitem" href="../../internals/bipartite_graph/">Bipartite Graphs</a></li><li><a class="tocitem" href="../../internals/systems/">System construction</a></li></ul></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Tutorials</a></li><li class="is-active"><a href>Initialization of Systems</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Initialization of Systems</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/SciML/ModelingToolkit.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/SciML/ModelingToolkit.jl/blob/master/docs/src/tutorials/initialization.md" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="initialization"><a class="docs-heading-anchor" href="#initialization">Initialization of Systems</a><a id="initialization-1"></a><a class="docs-heading-anchor-permalink" href="#initialization" title="Permalink"></a></h1><p>While for simple numerical ODEs choosing an initial condition can be an easy affair, with ModelingToolkit&#39;s more general differential-algebraic equation (DAE) system there is more care needed due to the flexibility of the solver state. In this tutorial we will walk through the functionality involved in initialization of System and the diagnostics to better understand and debug the initialization problem.</p><h2 id="Primer-on-Initialization-of-Differential-Algebraic-Equations"><a class="docs-heading-anchor" href="#Primer-on-Initialization-of-Differential-Algebraic-Equations">Primer on Initialization of Differential-Algebraic Equations</a><a id="Primer-on-Initialization-of-Differential-Algebraic-Equations-1"></a><a class="docs-heading-anchor-permalink" href="#Primer-on-Initialization-of-Differential-Algebraic-Equations" title="Permalink"></a></h2><p>Before getting started, let&#39;s do a brief walkthrough of the mathematical principles of initialization of DAE systems. Take a DAE written in semi-explicit form:</p><p class="math-container">\[\begin{aligned}
+    x^\prime &amp;= f(x,y,t) \\
+    0 &amp;= g(x,y,t)
+\end{aligned}\]</p><p>where <span>$x$</span> are the differential variables and <span>$y$</span> are the algebraic variables. An initial condition <span>$u0 = [x(t_0) y(t_0)]$</span> is said to be consistent if <span>$g(x(t_0),y(t_0),t_0) = 0$</span>.</p><p>For ODEs, this is trivially satisfied. However, for more complicated systems it may not be easy to know how to choose the variables such that all of the conditions are satisfied. This is even more complicated when taking into account ModelingToolkit&#39;s simplification engine, given that variables can be eliminated and equations can be changed. If this happens, how do you know how to initialize the system?</p><h2 id="bindings_and_ics"><a class="docs-heading-anchor" href="#bindings_and_ics">Bindings and Initial Conditions</a><a id="bindings_and_ics-1"></a><a class="docs-heading-anchor-permalink" href="#bindings_and_ics" title="Permalink"></a></h2><p>ModelingToolkit represents initialization constraints in two different ways: bindings and initial conditions. Both of these are stored as stored as key-value pairs, similar to <code>defaults</code> in prior versions of ModelingToolkit. Bindings represent immutable relations between variables (and parameters) of a system. They cannot be changed after constructing a system. Initial conditions are simply a convenience to avoid repeatedly passing the same values to problem constructors.</p><pre><code class="language-julia hljs">using ModelingToolkit, Test
+using ModelingToolkit: t_nounits as t, D_nounits as D
+
+@variables x(t) y(t)
+@parameters p q
+@mtkcompile sys = System([D(x) ~ p * x + y, y ~ q * x], t; bindings = [y =&gt; x, q =&gt; 2p],
+                         initial_conditions = [x =&gt; 1, p =&gt; 1])</code></pre><p class="math-container">\[ \begin{align}
+\frac{\mathrm{d} ~ x\left( t \right)}{\mathrm{d}t} &amp;= y\left( t \right) + p ~ x\left( t \right)
+\end{align}
+ \]</p><pre><code class="language-julia-repl hljs" style="display:block;">julia&gt; bindings(sys)</code><code class="nohighlight hljs ansi" style="display:block;">ReadOnlyDicts.ReadOnlyDict{SymbolicUtils.BasicSymbolicImpl.var&quot;typeof(BasicSymbolicImpl)&quot;{SymReal}, SymbolicUtils.BasicSymbolicImpl.var&quot;typeof(BasicSymbolicImpl)&quot;{SymReal}, ModelingToolkitBase.AtomicArrayDict{SymbolicUtils.BasicSymbolicImpl.var&quot;typeof(BasicSymbolicImpl)&quot;{SymReal}, Dict{SymbolicUtils.BasicSymbolicImpl.var&quot;typeof(BasicSymbolicImpl)&quot;{SymReal}, SymbolicUtils.BasicSymbolicImpl.var&quot;typeof(BasicSymbolicImpl)&quot;{SymReal}}}} with 2 entries:
+  q    =&gt; <span class="sgr34">2</span>p
+  y(t) =&gt; x(t)</code><br/><code class="language-julia-repl hljs" style="display:block;">julia&gt; @test_throws Exception bindings(sys)[y] = 2x # throws</code><code class="nohighlight hljs ansi" style="display:block;"><span class="sgr32"><span class="sgr1">Test Passed</span></span>
+      Thrown: MethodError</code><br/><code class="language-julia-repl hljs" style="display:block;">julia&gt; initial_conditions(sys)</code><code class="nohighlight hljs ansi" style="display:block;">ModelingToolkitBase.AtomicArrayDict{SymbolicUtils.BasicSymbolicImpl.var&quot;typeof(BasicSymbolicImpl)&quot;{SymReal}, Dict{SymbolicUtils.BasicSymbolicImpl.var&quot;typeof(BasicSymbolicImpl)&quot;{SymReal}, SymbolicUtils.BasicSymbolicImpl.var&quot;typeof(BasicSymbolicImpl)&quot;{SymReal}}} with 2 entries:
+  p    =&gt; <span class="sgr34">1</span>
+  x(t) =&gt; <span class="sgr34">1</span></code><br/><code class="language-julia-repl hljs" style="display:block;">julia&gt; initial_conditions(sys)[x] = 2</code><code class="nohighlight hljs ansi" style="display:block;">2</code><br/><code class="language-julia-repl hljs" style="display:block;">julia&gt; initial_conditions(sys)</code><code class="nohighlight hljs ansi" style="display:block;">ModelingToolkitBase.AtomicArrayDict{SymbolicUtils.BasicSymbolicImpl.var&quot;typeof(BasicSymbolicImpl)&quot;{SymReal}, Dict{SymbolicUtils.BasicSymbolicImpl.var&quot;typeof(BasicSymbolicImpl)&quot;{SymReal}, SymbolicUtils.BasicSymbolicImpl.var&quot;typeof(BasicSymbolicImpl)&quot;{SymReal}}} with 2 entries:
+  p    =&gt; <span class="sgr34">1</span>
+  x(t) =&gt; <span class="sgr34">2</span></code></pre><p>Variables/parameters which have an entry in bindings are referred to as &quot;bound&quot; variables/ parameters. The term &quot;bound symbolics&quot; is used to refer to such symbolic variables, regardless of whether they are variables or parameters.</p><p>Bindings for variables can be constants or functions of other variables/parameters. Bindings for parameters can only be constants or functions of other parameters. It is often useful to bind a parameter to the initial value of a variable. In this case, the <code>Initial</code> operator can be used. In the above example, <code>q =&gt; Initial(y)</code> is a valid binding, whereas <code>q =&gt; y</code> is not.</p><p>Bound symbolics cannot be given initial conditions. No symbolic can have an entry in both <code>bindings</code> and <code>initial_conditions</code>. Since <code>initial_conditions</code> is a convenience for passing values to problem constructors, bound symbolics cannot be given values in the problem constructor either. The exception is solvable parameters, which have a binding of <code>missing</code>. Solving for parameter values is covered in more detail in a later section.</p><pre><code class="language-julia-repl hljs" style="display:block;">julia&gt; tspan = (0.0, 1.0)</code><code class="nohighlight hljs ansi" style="display:block;">(0.0, 1.0)</code><br/><code class="language-julia-repl hljs" style="display:block;">julia&gt; ODEProblem(sys, [], tspan) # fine</code><code class="nohighlight hljs ansi" style="display:block;">┌ Warning: Initialization system is overdetermined. 2 equations for 1 unknowns. Initialization will default to using least squares. `SCCNonlinearProblem` can only be used for initialization of fully determined systems and hence will not be used here.
+│ 
+│ 
+│ To suppress this warning, pass `warn_initialize_determined = false`. To turn this warning into an error, pass `fully_determined = true`.
+└ @ ModelingToolkit ~/work/ModelingToolkit.jl/ModelingToolkit.jl/src/initialization.jl:22
+<span class="sgr38_2" style="color:#56b6c2">ODEProblem</span> with uType <span class="sgr38_2" style="color:#56b6c2">Vector{Float64}</span> and tType <span class="sgr38_2" style="color:#56b6c2">Float64</span>. In-place: <span class="sgr38_2" style="color:#56b6c2">true</span>
+Initialization status: <span class="sgr38_2" style="color:#56b6c2">FULLY_DETERMINED</span>
+Non-trivial mass matrix: <span class="sgr38_2" style="color:#56b6c2">false</span>
+timespan: (0.0, 1.0)
+u0: 1-element Vector{Float64}:
+ 2.0</code><br/><code class="language-julia-repl hljs" style="display:block;">julia&gt; ODEProblem(sys, [x =&gt; 2, p =&gt; 2.5], tspan) # fine</code><code class="nohighlight hljs ansi" style="display:block;">┌ Warning: Initialization system is overdetermined. 2 equations for 1 unknowns. Initialization will default to using least squares. `SCCNonlinearProblem` can only be used for initialization of fully determined systems and hence will not be used here.
+│ 
+│ 
+│ To suppress this warning, pass `warn_initialize_determined = false`. To turn this warning into an error, pass `fully_determined = true`.
+└ @ ModelingToolkit ~/work/ModelingToolkit.jl/ModelingToolkit.jl/src/initialization.jl:22
+<span class="sgr38_2" style="color:#56b6c2">ODEProblem</span> with uType <span class="sgr38_2" style="color:#56b6c2">Vector{Float64}</span> and tType <span class="sgr38_2" style="color:#56b6c2">Float64</span>. In-place: <span class="sgr38_2" style="color:#56b6c2">true</span>
+Initialization status: <span class="sgr38_2" style="color:#56b6c2">FULLY_DETERMINED</span>
+Non-trivial mass matrix: <span class="sgr38_2" style="color:#56b6c2">false</span>
+timespan: (0.0, 1.0)
+u0: 1-element Vector{Float64}:
+ 2.0</code><br/><code class="language-julia-repl hljs" style="display:block;">julia&gt; @test_throws Exception ODEProblem(sys, [y =&gt; 1], tspan) # errors</code><code class="nohighlight hljs ansi" style="display:block;">┌ Warning: Initialization system is overdetermined. 3 equations for 1 unknowns. Initialization will default to using least squares. `SCCNonlinearProblem` can only be used for initialization of fully determined systems and hence will not be used here.
+│ 
+│ 
+│ To suppress this warning, pass `warn_initialize_determined = false`. To turn this warning into an error, pass `fully_determined = true`.
+└ @ ModelingToolkit ~/work/ModelingToolkit.jl/ModelingToolkit.jl/src/initialization.jl:22
+<span class="sgr32"><span class="sgr1">Test Passed</span></span>
+      Thrown: ArgumentError</code><br/><code class="language-julia-repl hljs" style="display:block;">julia&gt; @test_throws Exception ODEProblem(sys, [q =&gt; 2], tspan) # errors</code><code class="nohighlight hljs ansi" style="display:block;"><span class="sgr32"><span class="sgr1">Test Passed</span></span>
+      Thrown: AssertionError</code></pre><p>Bindings and initial conditions should not be cyclic. In other words, the binding or initial condition for a symbolic should not (directly or indirectly) be a function of itself.</p><p>Bindings for variables are treated equivalently to initial conditions when building problems. They form constraints in the initialization system. Bindings for floating-point-valued discrete variables (created via <code>@discretes</code> and used in events) are also treated in the same way. Bindings for non-floating-point discrete variables (such as ones with integer types) do not turn into constraints in the initialization system, since this would lead to mixed-integer problems. Bindings for these variables are still used to calculate initial conditions as if they were parameters. Bindings for parameters participate in initialization. The bound parameters are treated as unknowns of the initialization system.</p><p>The following table summarizes the differences. For each feature involved in initialization, it lists the mutability of that feature and for each type of value on the LHS, it lists the allowed values on the RHS along with its behavior during initialization. For this table, the nomenclature &quot;FP parameter&quot; or &quot;FP variable&quot; is used to refer to parameters/variables which take continuous values, determined by their <code>SymbolicUtils.symtype</code> being <code>Real</code>, or a subtype of <code>AbstractFloat</code>, or an array thereof. The term &quot;variable&quot; in this table is used to refer to both continously-varying quantities such as the unknowns of a DAE (created via <code>@variables</code>) as well as discretely-varying quantities updated in events (created by <code>@discretes</code>). Note that all FP variables are solved for by initialization. Any quantity that initialization solves for is referred to as an &quot;initialization unknown&quot;.</p><table><tr><th style="text-align: right">Feature</th><th style="text-align: right">Mutability</th><th style="text-align: right">LHS</th><th style="text-align: right">RHS/Value</th><th style="text-align: right">Initialization behavior</th></tr><tr><td style="text-align: right">Bindings</td><td style="text-align: right">Immutable</td><td style="text-align: right">FP parameter</td><td style="text-align: right">Constant/expression of other parameters</td><td style="text-align: right">The LHS is considered an initialization unknown and the mapping is a constraint equation.</td></tr><tr><td style="text-align: right">Bindings</td><td style="text-align: right">Immutable</td><td style="text-align: right">FP parameter</td><td style="text-align: right"><code>missing</code></td><td style="text-align: right">The LHS is considered an initialization unknown</td></tr><tr><td style="text-align: right">Bindings</td><td style="text-align: right">Immutable</td><td style="text-align: right">FP variable</td><td style="text-align: right">Constant/expression of other variables/parameters</td><td style="text-align: right">The mapping is a constraint equation.</td></tr><tr><td style="text-align: right">Bindings</td><td style="text-align: right">Immutable</td><td style="text-align: right">Non-FP parameter</td><td style="text-align: right">Constant/expression of other parameters</td><td style="text-align: right">A mapping determining the value of the parameter. Not involved in initialization.</td></tr><tr><td style="text-align: right">Bindings</td><td style="text-align: right">Immutable</td><td style="text-align: right">Non-FP variable</td><td style="text-align: right">Constant/expression of other variables/parameters</td><td style="text-align: right">A mapping determining the initial value of the variable. Not involved in initialization.</td></tr><tr><td style="text-align: right">Initial conditions</td><td style="text-align: right">Mutable</td><td style="text-align: right">FP variable not in bindings</td><td style="text-align: right">Constant/expression of other variables/parameters</td><td style="text-align: right">The mapping is a constraint equation.</td></tr><tr><td style="text-align: right">Initial conditions</td><td style="text-align: right">Mutable</td><td style="text-align: right">Non-FP variable not in bindings</td><td style="text-align: right">Constant/expression of other variables/parameters</td><td style="text-align: right">A mapping determining the initial value of the variable</td></tr><tr><td style="text-align: right">Initial conditions</td><td style="text-align: right">Mutable</td><td style="text-align: right">Parameter not in bindings</td><td style="text-align: right">Constant/expression of other variables/parameters</td><td style="text-align: right">A mapping determining the value of the parameter</td></tr><tr><td style="text-align: right">Initial conditions</td><td style="text-align: right">Mutable</td><td style="text-align: right">Parameter bound to <code>missing</code></td><td style="text-align: right">Constant/expression of other variables/parameters</td><td style="text-align: right">The mapping acts as a constraint equation</td></tr><tr><td style="text-align: right">Initial conditions</td><td style="text-align: right">Mutable</td><td style="text-align: right">Variable in bindings</td><td style="text-align: right">Invalid. Will error.</td><td style="text-align: right">N/A</td></tr><tr><td style="text-align: right">Initial conditions</td><td style="text-align: right">Mutable</td><td style="text-align: right">Parameter in bindings not bound to <code>missing</code></td><td style="text-align: right">Invalid. Will error.</td><td style="text-align: right">N/A</td></tr><tr><td style="text-align: right">Initialization equations</td><td style="text-align: right">Immutable</td><td style="text-align: right">N/A</td><td style="text-align: right">Any equation of variables/parameters</td><td style="text-align: right">Acts as a constraint in initialization</td></tr></table><p>The variable-value mapping provided to problem constructors (such as <code>ODEProblem</code>) is merged with (and overrides) initial conditions.</p><h2 id="Initialization-By-Example:-The-Cartesian-Pendulum"><a class="docs-heading-anchor" href="#Initialization-By-Example:-The-Cartesian-Pendulum">Initialization By Example: The Cartesian Pendulum</a><a id="Initialization-By-Example:-The-Cartesian-Pendulum-1"></a><a class="docs-heading-anchor-permalink" href="#Initialization-By-Example:-The-Cartesian-Pendulum" title="Permalink"></a></h2><p>To illustrate how to perform the initialization, let&#39;s take a look at the Cartesian pendulum:</p><pre><code class="language-julia hljs">using OrdinaryDiffEq, Plots
+
+@parameters g
+@variables x(t) y(t) [state_priority = 10] λ(t)
+eqs = [D(D(x)) ~ λ * x
+       D(D(y)) ~ λ * y - g
+       x^2 + y^2 ~ 1]
+@mtkcompile pend = System(eqs, t)</code></pre><p class="math-container">\[ \begin{align}
+0 &amp;= 1 - \left( y\left( t \right) \right)^{2} - \left( x\left( t \right) \right)^{2} \\
+\frac{\mathrm{d} ~ y\left( t \right)}{\mathrm{d}t} &amp;= \mathtt{yˍt}\left( t \right) \\
+0 &amp;=  - 2 ~ \mathtt{yˍt}\left( t \right) ~ y\left( t \right) - 2 ~ \mathtt{xˍt}\left( t \right) ~ x\left( t \right) \\
+\frac{\mathrm{d} ~ \mathtt{yˍt}\left( t \right)}{\mathrm{d}t} &amp;=  - g + y\left( t \right) ~ \lambda\left( t \right) \\
+0 &amp;=  - 2 ~ \mathtt{xˍtt}\left( t \right) ~ x\left( t \right) - 2 ~ \left( \mathtt{yˍt}\left( t \right) \right)^{2} - 2 ~ \left( \mathtt{xˍt}\left( t \right) \right)^{2} - 2 ~ y\left( t \right) ~ \left(  - g + y\left( t \right) ~ \lambda\left( t \right) \right)
+\end{align}
+ \]</p><p>While we defined the system using second derivatives and a length constraint, the structural simplification system improved the numerics of the system to be solvable using the dummy derivative technique, which results in 3 algebraic equations and 2 differential equations. In this case, the differential equations with respect to <code>y</code> and <code>D(y)</code>, though it could have just as easily have been <code>x</code> and <code>D(x)</code>. How do you initialize such a system if you don&#39;t know in advance what variables may defined the equation&#39;s state?</p><p>To see how the system works, let&#39;s start the pendulum in the far right position, i.e. <code>x(0) = 1</code> and <code>y(0) = 0</code>. We can do this by:</p><pre><code class="language-julia hljs">prob = ODEProblem(pend, [x =&gt; 1, y =&gt; 0, g =&gt; 1], (0.0, 1.5), guesses = [λ =&gt; 1])</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi"><span class="sgr38_2" style="color:#56b6c2">ODEProblem</span> with uType <span class="sgr38_2" style="color:#56b6c2">Vector{Float64}</span> and tType <span class="sgr38_2" style="color:#56b6c2">Float64</span>. In-place: <span class="sgr38_2" style="color:#56b6c2">true</span>
+Initialization status: <span class="sgr38_2" style="color:#56b6c2">FULLY_DETERMINED</span>
+Non-trivial mass matrix: <span class="sgr38_2" style="color:#56b6c2">true</span>
+timespan: (0.0, 1.5)
+u0: 5-element Vector{Float64}:
+ 0.0
+ 0.0
+ 1.0
+ 0.0
+ 1.0</code></pre><p>This solves via:</p><pre><code class="language-julia hljs">sol = solve(prob, Rodas5P())
+plot(sol, idxs = (x, y))</code></pre><img src="4d4b69ab.svg" alt="Example block output"/><p>and we can check it satisfies our conditions via:</p><pre><code class="language-julia hljs">conditions = getfield.(equations(pend)[3:end], :rhs)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">3-element Vector{SymbolicUtils.BasicSymbolicImpl.var&quot;typeof(BasicSymbolicImpl)&quot;{SymReal}}:
+ -<span class="sgr34">2</span>yˍt(t)*y(t) - <span class="sgr34">2</span>xˍt(t)*x(t)
+ -g + y(t)*λ(t)
+ -<span class="sgr34">2</span>xˍtt(t)*x(t) - <span class="sgr34">2</span>(yˍt(t)^<span class="sgr34">2</span>) - <span class="sgr34">2</span>(xˍt(t)^<span class="sgr34">2</span>) - <span class="sgr34">2</span>y(t)*(-g + y(t)*λ(t))</code></pre><pre><code class="language-julia hljs">[sol[conditions][1]; sol[x][1] - 1; sol[y][1]]</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">5-element Vector{Float64}:
+ -0.0
+ -1.0
+  0.0
+  0.0
+  0.0</code></pre><p>Notice that we set <code>[x =&gt; 1, y =&gt; 0]</code> as our initial conditions and <code>[λ =&gt; 1]</code> as our guess. The difference is that the initial conditions are <strong>required to be satisfied</strong>, while the guesses are simply a guess for what the initial value might be. Every variable must have either an initial condition or a guess, and thus since we did not know what <code>λ</code> would be we set it to 1 and let the initialization scheme find the correct value for λ. Indeed, the value for <code>λ</code> at the initial time is not 1:</p><pre><code class="language-julia hljs">sol[λ][1]</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">0.0</code></pre><p>We can similarly choose <code>λ = 0</code> and solve for <code>y</code> to start the system:</p><pre><code class="language-julia hljs">prob = ODEProblem(pend, [x =&gt; 1, λ =&gt; 0, g =&gt; 1], (0.0, 1.5); guesses = [y =&gt; 1])
+sol = solve(prob, Rodas5P())
+plot(sol, idxs = (x, y))</code></pre><img src="891b2ec5.svg" alt="Example block output"/><p>or choose to satisfy derivative conditions:</p><pre><code class="language-julia hljs">prob = ODEProblem(
+    pend, [x =&gt; 1, D(y) =&gt; 0, g =&gt; 1], (0.0, 1.5); guesses = [λ =&gt; 0, y =&gt; 1])
+sol = solve(prob, Rodas5P())
+plot(sol, idxs = (x, y))</code></pre><img src="090ccdb5.svg" alt="Example block output"/><p>Notice that since a derivative condition is given, we are required to give a guess for <code>y</code>.</p><p>We can also directly give equations to be satisfied at the initial point by using the <code>initialization_eqs</code> keyword argument, for example:</p><pre><code class="language-julia hljs">prob = ODEProblem(pend, [x =&gt; 1, g =&gt; 1], (0.0, 1.5); guesses = [λ =&gt; 0, y =&gt; 1],
+    initialization_eqs = [y ~ 0])
+sol = solve(prob, Rodas5P())
+plot(sol, idxs = (x, y))</code></pre><img src="d5674eff.svg" alt="Example block output"/><p>Additionally, note that the initial conditions are allowed to be functions of other variables and parameters:</p><pre><code class="language-julia hljs">prob = ODEProblem(
+    pend, [x =&gt; 1, D(y) =&gt; g, g =&gt; 1], (0.0, 3.0); guesses = [λ =&gt; 0, y =&gt; 1])
+sol = solve(prob, Rodas5P())
+plot(sol, idxs = (x, y))</code></pre><img src="f339cdb5.svg" alt="Example block output"/><h2 id="Determinability:-Underdetermined-and-Overdetermined-Systems"><a class="docs-heading-anchor" href="#Determinability:-Underdetermined-and-Overdetermined-Systems">Determinability: Underdetermined and Overdetermined Systems</a><a id="Determinability:-Underdetermined-and-Overdetermined-Systems-1"></a><a class="docs-heading-anchor-permalink" href="#Determinability:-Underdetermined-and-Overdetermined-Systems" title="Permalink"></a></h2><p>For this system we have 3 conditions to satisfy:</p><pre><code class="language-julia hljs">conditions = getfield.(equations(pend)[3:end], :rhs)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">3-element Vector{SymbolicUtils.BasicSymbolicImpl.var&quot;typeof(BasicSymbolicImpl)&quot;{SymReal}}:
+ -<span class="sgr34">2</span>yˍt(t)*y(t) - <span class="sgr34">2</span>xˍt(t)*x(t)
+ -g + y(t)*λ(t)
+ -<span class="sgr34">2</span>xˍtt(t)*x(t) - <span class="sgr34">2</span>(yˍt(t)^<span class="sgr34">2</span>) - <span class="sgr34">2</span>(xˍt(t)^<span class="sgr34">2</span>) - <span class="sgr34">2</span>y(t)*(-g + y(t)*λ(t))</code></pre><p>when we initialize with</p><pre><code class="language-julia hljs">prob = ODEProblem(pend, [x =&gt; 1, y =&gt; 0, g =&gt; 1], (0.0, 1.5); guesses = [y =&gt; 0, λ =&gt; 1])</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi"><span class="sgr38_2" style="color:#56b6c2">ODEProblem</span> with uType <span class="sgr38_2" style="color:#56b6c2">Vector{Float64}</span> and tType <span class="sgr38_2" style="color:#56b6c2">Float64</span>. In-place: <span class="sgr38_2" style="color:#56b6c2">true</span>
+Initialization status: <span class="sgr38_2" style="color:#56b6c2">FULLY_DETERMINED</span>
+Non-trivial mass matrix: <span class="sgr38_2" style="color:#56b6c2">true</span>
+timespan: (0.0, 1.5)
+u0: 5-element Vector{Float64}:
+ 0.0
+ 0.0
+ 1.0
+ 0.0
+ 1.0</code></pre><p>we have two extra conditions to satisfy, <code>x ~ 1</code> and <code>y ~ 0</code> at the initial point. That gives 5 equations for 5 variables. However, this is not sufficient for a well-formed system. This initialization is singular, which means that at least one of the initial conditions is redundant and provides no extra information. Here, one of <code>x ~ 1</code> or <code>y ~ 0</code> is redundant, since the other can be inferred using the algebraic equation <code>x ^ 2 + y ^ 2 ~ 1</code>. Thus, this is similar to an underdetermined system. To make the system well-formed, we need to give an initial value for a derivative. For example:</p><pre><code class="language-julia hljs">prob = ODEProblem(pend, [x =&gt; 1, D(y) =&gt; 0, g =&gt; 1], (0.0, 1.5); guesses = [y =&gt; 0, λ =&gt; 1])</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi"><span class="sgr38_2" style="color:#56b6c2">ODEProblem</span> with uType <span class="sgr38_2" style="color:#56b6c2">Vector{Float64}</span> and tType <span class="sgr38_2" style="color:#56b6c2">Float64</span>. In-place: <span class="sgr38_2" style="color:#56b6c2">true</span>
+Initialization status: <span class="sgr38_2" style="color:#56b6c2">FULLY_DETERMINED</span>
+Non-trivial mass matrix: <span class="sgr38_2" style="color:#56b6c2">true</span>
+timespan: (0.0, 1.5)
+u0: 5-element Vector{Float64}:
+ 0.0
+ 0.0
+ 1.0
+ 0.0
+ 1.0</code></pre><p>Now the system is well-formed. What happens if that&#39;s not the case?</p><pre><code class="language-julia hljs">prob = ODEProblem(pend, [x =&gt; 1, g =&gt; 1], (0.0, 1.5); guesses = [y =&gt; 0, λ =&gt; 1])</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi"><span class="sgr38_2" style="color:#56b6c2">ODEProblem</span> with uType <span class="sgr38_2" style="color:#56b6c2">Vector{Float64}</span> and tType <span class="sgr38_2" style="color:#56b6c2">Float64</span>. In-place: <span class="sgr38_2" style="color:#56b6c2">true</span>
+Initialization status: <span class="sgr38_2" style="color:#56b6c2">UNDERDETERMINED</span>
+Non-trivial mass matrix: <span class="sgr38_2" style="color:#56b6c2">true</span>
+timespan: (0.0, 1.5)
+u0: 5-element Vector{Float64}:
+ 0.0
+ 0.0
+ 1.0
+ 0.0
+ 1.0</code></pre><p>Here we have 4 equations for 5 unknowns (note: the warning is post-simplification of the nonlinear system, which solves the trivial <code>x ~ 1</code> equation analytical and thus says 3 equations for 4 unknowns). This warning thus lets you know the system is underdetermined and thus the solution is not necessarily unique. It can still be solved:</p><pre><code class="language-julia hljs">sol = solve(prob, Rodas5P())
+plot(sol, idxs = (x, y))</code></pre><img src="357a63bf.svg" alt="Example block output"/><p>and the found initial condition satisfies all constraints which were given. In the opposite direction, we may have an overdetermined system:</p><pre><code class="language-julia hljs">prob = ODEProblem(
+    pend, [x =&gt; 1, y =&gt; 0.0, D(y) =&gt; 0, g =&gt; 1], (0.0, 1.5); guesses = [λ =&gt; 1])</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi"><span class="sgr38_2" style="color:#56b6c2">ODEProblem</span> with uType <span class="sgr38_2" style="color:#56b6c2">Vector{Float64}</span> and tType <span class="sgr38_2" style="color:#56b6c2">Float64</span>. In-place: <span class="sgr38_2" style="color:#56b6c2">true</span>
+Initialization status: <span class="sgr38_2" style="color:#56b6c2">OVERDETERMINED</span>
+Non-trivial mass matrix: <span class="sgr38_2" style="color:#56b6c2">true</span>
+timespan: (0.0, 1.5)
+u0: 5-element Vector{Float64}:
+ 0.0
+ 0.0
+ 1.0
+ 0.0
+ 1.0</code></pre><p>Can that be solved?</p><pre><code class="language-julia hljs">sol = solve(prob, Rodas5P())
+plot(sol, idxs = (x, y))</code></pre><img src="ff35f274.svg" alt="Example block output"/><p>Indeed since we saw <code>D(y) = 0</code> at the initial point above, it turns out that this solution is solvable with the chosen initial conditions. However, for overdetermined systems we often aren&#39;t that lucky. If the set of initial conditions cannot be satisfied, then you will get a <code>SciMLBase.ReturnCode.InitialFailure</code>:</p><pre><code class="language-julia hljs">prob = ODEProblem(
+    pend, [x =&gt; 1, y =&gt; 0.0, D(y) =&gt; 2.0, λ =&gt; 1, g =&gt; 1], (0.0, 1.5); guesses = [λ =&gt; 1])
+sol = solve(prob, Rodas5P())</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">retcode: InitialFailure
+Interpolation: specialized 4th (Rodas6P = 5th) order &quot;free&quot; stiffness-aware interpolation
+t: 1-element Vector{Float64}:
+ 0.0
+u: 1-element Vector{Vector{Float64}}:
+ [0.0, 0.0, 1.0, 0.2135639436481748, 1.0]</code></pre><p>What this means is that the initial condition finder failed to find an initial condition. While this can be sometimes due to numerical error (which is then helped by picking guesses closer to the correct value), most circumstances of this come from ill-formed models. Especially <strong>if your system is overdetermined and you receive an InitialFailure, the initial conditions may not be analytically satisfiable!</strong>. In our case here, if you sit down with a pen and paper long enough you will see that <code>λ = 0</code> is required for this equation, but since we chose <code>λ = 1</code> we end up with a set of equations that are impossible to satisfy.</p><div class="admonition is-info" id="Note-c597c2c072579c14"><header class="admonition-header">Note<a class="admonition-anchor" href="#Note-c597c2c072579c14" title="Permalink"></a></header><div class="admonition-body"><p>If you would prefer to have an error instead of a warning in the context of non-fully determined systems, pass the keyword argument <code>fully_determined = true</code> into the problem constructor. Additionally, any warning about not being fully determined can be suppressed via passing <code>warn_initialize_determined = false</code>.</p></div></div><h2 id="Constant-constraints-in-initialization"><a class="docs-heading-anchor" href="#Constant-constraints-in-initialization">Constant constraints in initialization</a><a id="Constant-constraints-in-initialization-1"></a><a class="docs-heading-anchor-permalink" href="#Constant-constraints-in-initialization" title="Permalink"></a></h2><p>Consider the pendulum system again:</p><pre><code class="language-julia-repl hljs" style="display:block;">julia&gt; equations(pend)</code><code class="nohighlight hljs ansi" style="display:block;">5-element Vector{Equation}:
+ <span class="sgr34">0</span> ~ <span class="sgr34">1</span> - (y(t)^<span class="sgr34">2</span>) - (x(t)^<span class="sgr34">2</span>)
+ Differential(t, 1)(y(t)) ~ yˍt(t)
+ <span class="sgr34">0</span> ~ -<span class="sgr34">2</span>yˍt(t)*y(t) - <span class="sgr34">2</span>xˍt(t)*x(t)
+ Differential(t, 1)(yˍt(t)) ~ -g + y(t)*λ(t)
+ <span class="sgr34">0</span> ~ -<span class="sgr34">2</span>xˍtt(t)*x(t) - <span class="sgr34">2</span>(yˍt(t)^<span class="sgr34">2</span>) - <span class="sgr34">2</span>(xˍt(t)^<span class="sgr34">2</span>) - <span class="sgr34">2</span>y(t)*(-g + y(t)*λ(t))</code><br/><code class="language-julia-repl hljs" style="display:block;">julia&gt; observed(pend)</code><code class="nohighlight hljs ansi" style="display:block;">1-element Vector{Equation}:
+ xˍtt(t) ~ λ(t)*x(t)</code></pre><p>Suppose we want to solve the same system with multiple different initial y-velocities from a given position.</p><pre><code class="language-julia hljs">prob = ODEProblem(
+    pend, [x =&gt; 1, D(y) =&gt; 0, g =&gt; 1], (0.0, 1.5); guesses = [λ =&gt; 0, y =&gt; 1, x =&gt; 1])
+sol1 = solve(prob, Rodas5P())</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">retcode: Success
+Interpolation: specialized 4th (Rodas6P = 5th) order &quot;free&quot; stiffness-aware interpolation
+t: 20-element Vector{Float64}:
+ 0.0
+ 1.0e-6
+ 3.5483964504735125e-5
+ 0.0003803236095520864
+ 0.003828720060025599
+ 0.027022845817911142
+ 0.06952849114310715
+ 0.12348330264239848
+ 0.19107139437955104
+ 0.2711392464939563
+ 0.3660928386982344
+ 0.4754456175472783
+ 0.5998982859599798
+ 0.7383726420641863
+ 0.8874202726705647
+ 1.038077997390442
+ 1.1887357221103192
+ 1.3393934468301965
+ 1.4619879875464854
+ 1.5
+u: 20-element Vector{Vector{Float64}}:
+ [-0.0, 0.0007886435331230285, 1.0, 0.0, 0.0007886430426196882]
+ [7.886432873711593e-10, 0.0007886435326230288, 0.9999996890206408, -9.999993780413668e-7, 0.0007886435316230295]
+ [2.7984168094605724e-8, 0.0007886429035675515, 0.999999689021137, -3.548394243520122e-5, 0.0007886416444565978]
+ [2.999121557700147e-7, 0.0007885712101440162, 0.9999996890776749, -0.000380323373035464, 0.0007884265641859918]
+ [2.9914316183537802e-6, 0.0007813139890045206, 0.9999996947741787, -0.003828717708105446, 0.0007666549007674377]
+ [1.144489111110381e-5, 0.0004235266021620328, 0.9999999103125999, -0.02702283722423117, -0.00030670726597585004]
+ [-0.00011322443167869572, -0.0016284607374096106, 0.9999986740550948, -0.06952838088810515, -0.006462669514511911]
+ [-0.0008440493003482461, -0.006835356599981845, 0.9999766386455634, -0.1234799092357251, -0.022083357865619747]
+ [-0.0033368614844247564, -0.01746444243587319, 0.9998474846670765, -0.19103674458294762, -0.05397061791371046]
+ [-0.009749047121722079, -0.035960356996919095, 0.9993532152427405, -0.27092980188708704, -0.10945836354566675]
+ [-0.024212293674116973, -0.06616550684770933, 0.9978086517012479, -0.3651329283376304, -0.20007378054785402]
+ [-0.05316171490468119, -0.1119539829011542, 0.9937133526358323, -0.4718675389657719, -0.3374388879295507]
+ [-0.10644606305806832, -0.17800698318455813, 0.9840290980689769, -0.5884383554855538, -0.5355959324529834]
+ [-0.19631371055255656, -0.26783554068614707, 0.9634643477774762, -0.7061903373912067, -0.8050727841236719]
+ [-0.333030428052951, -0.38108638157703456, 0.9245389949648648, -0.8079728599404015, -1.1447952969552615]
+ [-0.5124812942366911, -0.508047141954428, 0.8613290007826334, -0.8688882145081399, -1.5256077212927688]
+ [-0.7242380480217279, -0.639891175842747, 0.7684666824454544, -0.8698453442608326, -1.920935998203844]
+ [-0.9489519500660994, -0.7663757151816569, 0.6424049908292165, -0.7956582822760679, -2.299612679117338]
+ [-1.1220990190098987, -0.857071381651426, 0.5152203212697682, -0.6747740560257587, -2.5711033741524782]
+ [-1.1714979005913835, -0.8818190851617859, 0.4715878080338637, -0.6265064868213392, -2.646735039648627]</code></pre><pre><code class="language-julia hljs">sol1[D(y), 1]</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">0.0</code></pre><p>Repeatedly re-creating the <code>ODEProblem</code> with different values of <code>D(y)</code> and <code>x</code> or repeatedly calling <code>remake</code> is slow. Instead, for any <code>variable =&gt; constant</code> constraint in the <code>ODEProblem</code> initialization (whether provided to the <code>ODEProblem</code> constructor or a default value) we can update the <code>constant</code> value. ModelingToolkit refers to these values using the <code>Initial</code> operator. For example:</p><pre><code class="language-julia hljs">prob.ps[[Initial(x), Initial(D(y))]]</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">2-element Vector{Float64}:
+ 1.0
+ 0.0</code></pre><p>To solve with a different starting y-velocity, we can simply do</p><pre><code class="language-julia hljs">prob.ps[Initial(D(y))] = -0.1
+sol2 = solve(prob, Rodas5P())</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">retcode: Success
+Interpolation: specialized 4th (Rodas6P = 5th) order &quot;free&quot; stiffness-aware interpolation
+t: 21-element Vector{Float64}:
+ 0.0
+ 1.0e-6
+ 3.056463775652848e-5
+ 0.0003262110153218133
+ 0.003282674790974661
+ 0.02000910238185361
+ 0.05864412152457414
+ 0.11170041394178451
+ 0.17718845418816948
+ 0.25835895669276704
+ ⋮
+ 0.5927541807934541
+ 0.7326015330578903
+ 0.8785141543663934
+ 1.0244267756748964
+ 1.1703393969833993
+ 1.300770582747752
+ 1.4082908551593922
+ 1.487566488892493
+ 1.5
+u: 21-element Vector{Vector{Float64}}:
+ [7.886435331230286e-5, 0.0007886435331230285, 1.0, -0.1, -0.009211356957380313]
+ [7.885516632767382e-5, 0.000788543532623025, 0.9999996890995002, -0.10000100000726413, -0.009211662687967071]
+ [7.858269581715989e-5, 0.0007855866022454451, 0.9999996914267976, -0.1000305648594727, -0.009220533479099811]
+ [7.584355136328036e-5, 0.0007559692243950606, 0.999999714255225, -0.10032621334826576, -0.009309385612650963]
+ [4.699239586531967e-5, 0.00045498804235805947, 0.9999998964929352, -0.10328269454673789, -0.010212329158761992]
+ [-0.0001695067547391551, -0.0014124488381630908, 0.9999990024936034, -0.1200090089523136, -0.01581463980117603]
+ [-0.0010780291173174744, -0.006795280224404758, 0.9999769118076999, -0.1586401323787672, -0.03196313408334965]
+ [-0.003518189676096507, -0.016619032399946807, 0.9998618942369302, -0.21166714553248528, -0.061434391202078574]
+ [-0.009041499773259716, -0.032621417195686876, 0.9994677792812504, -0.27701692886358564, -0.10944154600933555]
+ [-0.020915796203900862, -0.058383107174625394, 0.9982942476261583, -0.3576395290797551, -0.18672660424339924]
+ ⋮
+ [-0.1596172598759109, -0.23163541255468562, 0.9728024964098358, -0.6703495318576836, -0.7064784744793093]
+ [-0.2741866764785731, -0.3330675313920058, 0.9429026306760061, -0.7762243366301418, -1.0107588796084948]
+ [-0.4331774336238818, -0.4524877371004232, 0.8917702468178408, -0.8537408234412308, -1.3689766031727626]
+ [-0.6274233146225454, -0.5798075047424652, 0.8147534944456319, -0.8817157642655306, -1.7508316560531783]
+ [-0.843321139753018, -0.7066317058765711, 0.7075848699687303, -0.8445727520235677, -2.1309586130346934]
+ [-1.0364854335491762, -0.8111458289570036, 0.584855921770695, -0.747507708291888, -2.443919331137673]
+ [-1.1809027760672652, -0.8850964616919664, 0.46542973431829504, -0.6211856950081478, -2.665170732014202]
+ [-1.271371154713126, -0.9298038754663357, 0.36807276136528466, -0.5034250379084644, -2.7994373404511874]
+ [-1.284365330226829, -0.9359383347293649, 0.35216393079023545, -0.4832660283225643, -2.819078618283799]</code></pre><pre><code class="language-julia hljs">sol2[D(y), 1]</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">-0.1</code></pre><p>Note that this <em>only</em> applies for constant constraints for the current ODEProblem. For example, <code>D(x)</code> does not have a constant constraint - it is solved for by initialization. Thus, mutating <code>Initial(D(x))</code> does not have any effect:</p><pre><code class="language-julia-repl hljs" style="display:block;">julia&gt; sol2[D(x), 1]</code><code class="nohighlight hljs ansi" style="display:block;">7.886435331230286e-5</code><br/><code class="language-julia-repl hljs" style="display:block;">julia&gt; prob.ps[Initial(D(x))] = 1.0</code><code class="nohighlight hljs ansi" style="display:block;">1.0</code><br/><code class="language-julia-repl hljs" style="display:block;">julia&gt; sol3 = solve(prob, Rodas5P())</code><code class="nohighlight hljs ansi" style="display:block;">retcode: Success
+Interpolation: specialized 4th (Rodas6P = 5th) order &quot;free&quot; stiffness-aware interpolation
+t: 21-element Vector{Float64}:
+ 0.0
+ 1.0e-6
+ 3.056463775652848e-5
+ 0.0003262110153218133
+ 0.003282674790974661
+ 0.02000910238185361
+ 0.05864412152457414
+ 0.11170041394178451
+ 0.17718845418816948
+ 0.25835895669276704
+ ⋮
+ 0.5927541807934541
+ 0.7326015330578903
+ 0.8785141543663934
+ 1.0244267756748964
+ 1.1703393969833993
+ 1.300770582747752
+ 1.4082908551593922
+ 1.487566488892493
+ 1.5
+u: 21-element Vector{Vector{Float64}}:
+ [7.886435331230286e-5, 0.0007886435331230285, 1.0, -0.1, -0.009211356957380313]
+ [7.885516632767382e-5, 0.000788543532623025, 0.9999996890995002, -0.10000100000726413, -0.009211662687967071]
+ [7.858269581715989e-5, 0.0007855866022454451, 0.9999996914267976, -0.1000305648594727, -0.009220533479099811]
+ [7.584355136328036e-5, 0.0007559692243950606, 0.999999714255225, -0.10032621334826576, -0.009309385612650963]
+ [4.699239586531967e-5, 0.00045498804235805947, 0.9999998964929352, -0.10328269454673789, -0.010212329158761992]
+ [-0.0001695067547391551, -0.0014124488381630908, 0.9999990024936034, -0.1200090089523136, -0.01581463980117603]
+ [-0.0010780291173174744, -0.006795280224404758, 0.9999769118076999, -0.1586401323787672, -0.03196313408334965]
+ [-0.003518189676096507, -0.016619032399946807, 0.9998618942369302, -0.21166714553248528, -0.061434391202078574]
+ [-0.009041499773259716, -0.032621417195686876, 0.9994677792812504, -0.27701692886358564, -0.10944154600933555]
+ [-0.020915796203900862, -0.058383107174625394, 0.9982942476261583, -0.3576395290797551, -0.18672660424339924]
+ ⋮
+ [-0.1596172598759109, -0.23163541255468562, 0.9728024964098358, -0.6703495318576836, -0.7064784744793093]
+ [-0.2741866764785731, -0.3330675313920058, 0.9429026306760061, -0.7762243366301418, -1.0107588796084948]
+ [-0.4331774336238818, -0.4524877371004232, 0.8917702468178408, -0.8537408234412308, -1.3689766031727626]
+ [-0.6274233146225454, -0.5798075047424652, 0.8147534944456319, -0.8817157642655306, -1.7508316560531783]
+ [-0.843321139753018, -0.7066317058765711, 0.7075848699687303, -0.8445727520235677, -2.1309586130346934]
+ [-1.0364854335491762, -0.8111458289570036, 0.584855921770695, -0.747507708291888, -2.443919331137673]
+ [-1.1809027760672652, -0.8850964616919664, 0.46542973431829504, -0.6211856950081478, -2.665170732014202]
+ [-1.271371154713126, -0.9298038754663357, 0.36807276136528466, -0.5034250379084644, -2.7994373404511874]
+ [-1.284365330226829, -0.9359383347293649, 0.35216393079023545, -0.4832660283225643, -2.819078618283799]</code><br/><code class="language-julia-repl hljs" style="display:block;">julia&gt; sol3[D(x), 1]</code><code class="nohighlight hljs ansi" style="display:block;">7.886435331230286e-5</code></pre><p>To enforce this constraint, we would have to <code>remake</code> the problem (or construct a new one).</p><pre><code class="language-julia-repl hljs" style="display:block;">julia&gt; prob2 = remake(prob; u0 = [y =&gt; 0.0, D(x) =&gt; 0.0, x =&gt; nothing, D(y) =&gt; nothing]);</code><br/><code class="language-julia-repl hljs" style="display:block;">julia&gt; sol4 = solve(prob2, Rodas5P())</code><code class="nohighlight hljs ansi" style="display:block;">retcode: Success
+Interpolation: specialized 4th (Rodas6P = 5th) order &quot;free&quot; stiffness-aware interpolation
+t: 20-element Vector{Float64}:
+ 0.0
+ 1.0e-6
+ 5.540219466450185e-5
+ 0.0005994241413095204
+ 0.006039643607759706
+ 0.03755465900304276
+ 0.08672571662088342
+ 0.14500768475163897
+ 0.21805607365401547
+ 0.3034592522412556
+ 0.4042517543642823
+ 0.5193089654142312
+ 0.6494507540547032
+ 0.7927146156554767
+ 0.9436696363653303
+ 1.0946246570751839
+ 1.2455796777850374
+ 1.3808040682851601
+ 1.4865746470779102
+ 1.5
+u: 20-element Vector{Vector{Float64}}:
+ [0.0, 0.0, 1.0, 0.0, 0.0]
+ [-4.999999999999893e-19, -4.999999999999966e-13, 1.0, -9.999999999999896e-7, -1.4999999999999716e-12]
+ [-8.502583606501615e-14, -1.5347015868216895e-9, 1.0, -5.540219466450247e-5, -4.604104760465107e-9]
+ [-1.0768933466356877e-10, -1.7965465059232684e-7, 0.9999999999999839, -0.0005994241413095128, -5.389639517769833e-7]
+ [-1.1015493051290433e-7, -1.8238647453103972e-5, 0.9999999998336759, -0.006039643606554288, -5.4715942360346705e-5]
+ [-2.648265102334569e-5, -0.0007051761340477578, 0.99999975136322, -0.03755464779808041, -0.0021155284412574097]
+ [-0.0003261459782660234, -0.003760664290007691, 0.9999929286696843, -0.08672498070151313, -0.011281993437637054]
+ [-0.0015245050052265872, -0.010513381771854095, 0.9999447328018571, -0.14499806780315264, -0.031540146901945405]
+ [-0.005183239507423908, -0.023771537883104984, 0.9997174163705099, -0.21798213336906763, -0.07131461877458602]
+ [-0.013963535887989788, -0.046024240627170344, 0.9989403195270796, -0.3030734237531689, -0.1380727246768547]
+ [-0.0329652686733479, -0.08160073125308731, 0.9966650818323947, -0.40263473051056303, -0.24480211068760294]
+ [-0.06964343683797058, -0.13435177127825107, 0.9909336392477366, -0.5136663281576118, -0.4030545797842482]
+ [-0.13515156295194167, -0.20902843312821318, 0.977909380768263, -0.6322889876448508, -0.6270809913762698]
+ [-0.24182097666707622, -0.30807613684899965, 0.9513613325549332, -0.7467708178331304, -0.924209568500642]
+ [-0.39605146097353405, -0.4280599919066894, 0.9037498982862636, -0.8361994995267421, -1.284118191896176]
+ [-0.5895442906089244, -0.5580759530720351, 0.8297898570274549, -0.8766331149698673, -1.6740648137181302]
+ [-0.8093220872722914, -0.6893826654716032, 0.7244005028244759, -0.850548378223033, -2.067652976130007]
+ [-1.0097634267026614, -0.7990352089537728, 0.6012957096080004, -0.7600532823462889, -2.396039291522158]
+ [-1.154324688247314, -0.8736005410063296, 0.48665819409446365, -0.6431982369284169, -2.619518197170617]
+ [-1.1715692657298016, -0.882118162647953, 0.47102818092479415, -0.6255875790423816, -2.6460524857595336]</code><br/><code class="language-julia-repl hljs" style="display:block;">julia&gt; sol4[D(x), 1]</code><code class="nohighlight hljs ansi" style="display:block;">0.0</code></pre><p>Note the need to provide <code>x =&gt; nothing, D(y) =&gt; nothing</code> to override the previously provided initial conditions. Since <code>remake</code> is a partial update, the constraints provided to it are merged with the ones already present in the problem. Existing constraints can be removed by providing a value of <code>nothing</code>.</p><h2 id="Initial-variables"><a class="docs-heading-anchor" href="#Initial-variables">Initial variables</a><a id="Initial-variables-1"></a><a class="docs-heading-anchor-permalink" href="#Initial-variables" title="Permalink"></a></h2><p>The <code>Initial</code> form used above is only available for a specific set of variables. ModelingToolkit allows using the <code>Initial</code> form on:</p><ul><li>Unknowns (<code>unknowns(sys)</code>).</li><li>Observables (<code>observables(sys)</code>).</li><li>First derivatives of unknowns (even if the unknown in question is itself the derivative of another unknown/observable).</li><li>First derivatives of observables (likewise).</li><li>Discrete variables (created via <code>@discretes</code> and updated via events).</li><li>Bound parameters (<code>bound_parameters(sys)</code>).</li></ul><h2 id="Initialization-of-parameters"><a class="docs-heading-anchor" href="#Initialization-of-parameters">Initialization of parameters</a><a id="Initialization-of-parameters-1"></a><a class="docs-heading-anchor-permalink" href="#Initialization-of-parameters" title="Permalink"></a></h2><p>Parameters may also be treated as unknowns in the initialization system. This is automatically the case for any floating-point-typed (a symtype of <code>Real</code> or <code>&lt;:AbstractFloat</code>) bound parameter. The binding is used as an initialization equation. It is also often useful to solve for parameters that are not explicitly bound to functions of other parameters. For example, a model for the fluid flow in a circular pipe might use the cross-sectional area <code>A</code> of the pipe. For convenience, the model may want to allow specifying either the area <code>A</code> directly or the radius <code>r</code> of the pipe. Binding <code>A =&gt; pi * r * r</code> prevents directly specifying the value of <code>A</code>. In such cases, the required parameters can be marked as initialization unknowns by giving them a binding of <code>missing</code>. These parameters are henceforth referred to as &quot;solvable parameters&quot;. In the previous example, this would entail passing <code>[A =&gt; missing, r =&gt; missing]</code> to the <code>bindings</code> keyword of the <code>System</code> constructor. The relation between them can be passed as an equation <code>A ~ pi * r * r</code> to the <code>initialization_eqs</code> keyword of the <code>System</code> constructor.</p><p><code>remake</code> will reconstruct the initialization system and problem, given the new constraints provided to it. The new values will be combined with the original variable-value mapping provided to <code>ODEProblem</code> and used to construct the initialization problem.</p><h3 id="Parameter-initialization-by-example"><a class="docs-heading-anchor" href="#Parameter-initialization-by-example">Parameter initialization by example</a><a id="Parameter-initialization-by-example-1"></a><a class="docs-heading-anchor-permalink" href="#Parameter-initialization-by-example" title="Permalink"></a></h3><p>Consider the following system, where the sum of two unknowns is a constant parameter <code>total</code>.</p><pre><code class="language-julia hljs">using ModelingToolkit, OrdinaryDiffEq # hidden
+using ModelingToolkit: t_nounits as t, D_nounits as D # hidden
+
+@variables x(t) y(t)
+@parameters total
+@mtkcompile sys = System([D(x) ~ -x, total ~ x + y], t; bindings = [total =&gt; missing])</code></pre><p class="math-container">\[ \begin{align}
+\frac{\mathrm{d} ~ x\left( t \right)}{\mathrm{d}t} &amp;=  - x\left( t \right)
+\end{align}
+ \]</p><p>Given any two of <code>x</code>, <code>y</code> and <code>total</code> we can determine the remaining variable.</p><pre><code class="language-julia hljs">prob = ODEProblem(sys, [x =&gt; 1.0, y =&gt; 2.0], (0.0, 1.0))
+integ = init(prob, Tsit5())
+integ.ps[total]</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">3.0</code></pre><p>Suppose we want to re-create this problem, but now solve for <code>x</code> given <code>total</code> and <code>y</code>:</p><pre><code class="language-julia hljs">prob2 = remake(prob; u0 = [y =&gt; 1.0], p = [total =&gt; 4.0])
+initsys = prob2.f.initializeprob.f.sys</code></pre><p class="math-container">\[ \begin{align}
+0 &amp;= \mathtt{total} - y\left( t \right) - x\left( t \right)
+\end{align}
+ \]</p><p>The system is now overdetermined. In fact:</p><pre><code class="language-julia hljs">[equations(initsys); observed(initsys)]</code></pre><p class="math-container">\[ \begin{align}
+0 &amp;= \mathtt{total} - y\left( t \right) - x\left( t \right) \\
+y\left( t \right) &amp;= Initial\left( y\left( t \right) \right) \\
+\mathtt{total} &amp;= Initial\left( \mathtt{total} \right) \\
+x\left( t \right) &amp;= Initial\left( x\left( t \right) \right) \\
+\mathtt{xˍt}\left( t \right) &amp;=  - x\left( t \right)
+\end{align}
+ \]</p><p>The system can never be satisfied and will always lead to an <code>InitialFailure</code>. This is due to the aforementioned behavior of retaining the original variable-value mapping provided to <code>ODEProblem</code>. To fix this, we pass <code>x =&gt; nothing</code> to <code>remake</code> to remove its retained value.</p><pre><code class="language-julia hljs">prob2 = remake(prob; u0 = [y =&gt; 1.0, x =&gt; nothing], p = [total =&gt; 4.0])
+initsys = prob2.f.initializeprob.f.sys</code></pre><p class="math-container">\[ \begin{align}
+\end{align}
+ \]</p><p>The system is fully determined, and the equations are solvable.</p><pre><code class="language-julia hljs">[equations(initsys); observed(initsys)]</code></pre><p class="math-container">\[ \begin{align}
+y\left( t \right) &amp;= Initial\left( y\left( t \right) \right) \\
+\mathtt{total} &amp;= Initial\left( \mathtt{total} \right) \\
+x\left( t \right) &amp;= \mathtt{total} - y\left( t \right) \\
+\mathtt{xˍt}\left( t \right) &amp;=  - x\left( t \right)
+\end{align}
+ \]</p><h2 id="What-constitutes-an-initialization-system?"><a class="docs-heading-anchor" href="#What-constitutes-an-initialization-system?">What constitutes an initialization system?</a><a id="What-constitutes-an-initialization-system?-1"></a><a class="docs-heading-anchor-permalink" href="#What-constitutes-an-initialization-system?" title="Permalink"></a></h2><p>The initialization system considers the following as unknowns:</p><ul><li>All unknowns of the system (<code>unknowns(sys)</code>).</li><li>First derivatives of all differential variables in the system.</li><li>All observables of the system (<code>observables(sys)</code>).</li><li>All bound parameters of the system (<code>bound_parameters(sys)</code>).</li><li>All parameters with a binding of <code>missing</code>.</li></ul><p>The equations of the initialization system are:</p><ul><li>All equations of the system (<code>equations(sys)</code>). Differential equations are used to solve for the first derivatives of differential variables.</li><li>All observed equations of the system (<code>observed(sys)</code>).</li><li>All bindings in the system, excluding bindings for solvable parameters (since the value is <code>missing</code>).</li><li>All additional initialization equations (<code>initialization_equations(sys)</code>). This also includes additional equations passed to the <code>initialization_eqs</code> keyword of the problem constructor.</li><li>All initial conditions, formed by combinding <code>initial_conditions(sys)</code> with those passed to the problem. Initial conditions passed to the problem override those in the system in case of conflict.</li></ul><p>ModelingToolkit&#39;s improved simplification and index reduction may also be able to analytically find the derivatives of some algebraic variables, typically ones corresponding to algebraic equations that arise from index reduction. In such a case, these variables (along with the corresponding equations) are also present in the initialization system.</p><h2 id="Diving-Deeper:-Constructing-the-Initialization-System"><a class="docs-heading-anchor" href="#Diving-Deeper:-Constructing-the-Initialization-System">Diving Deeper: Constructing the Initialization System</a><a id="Diving-Deeper:-Constructing-the-Initialization-System-1"></a><a class="docs-heading-anchor-permalink" href="#Diving-Deeper:-Constructing-the-Initialization-System" title="Permalink"></a></h2><p>To get a better sense of the initialization system and to help debug it, you can construct the initialization system directly. The initialization system is a NonlinearSystem which requires the system-level information and the additional nonlinear equations being tagged to the system.</p><pre><code class="language-julia hljs">isys = generate_initializesystem(pend; op = [x =&gt; 1.0, y =&gt; 0.0], guesses = [λ =&gt; 1])</code></pre><p class="math-container">\[ \begin{align}
+\mathtt{yˍtt}\left( t \right) &amp;=  - g + y\left( t \right) ~ \lambda\left( t \right) \\
+0 &amp;= 1 - \left( y\left( t \right) \right)^{2} - \left( x\left( t \right) \right)^{2} \\
+0 &amp;=  - 2 ~ \mathtt{yˍt}\left( t \right) ~ y\left( t \right) - 2 ~ \mathtt{xˍt}\left( t \right) ~ x\left( t \right) \\
+0 &amp;=  - 2 ~ \mathtt{xˍtt}\left( t \right) ~ x\left( t \right) - 2 ~ \left( \mathtt{yˍt}\left( t \right) \right)^{2} - 2 ~ \left( \mathtt{xˍt}\left( t \right) \right)^{2} - 2 ~ y\left( t \right) ~ \left(  - g + y\left( t \right) ~ \lambda\left( t \right) \right) \\
+x\left( t \right) &amp;= Initial\left( x\left( t \right) \right) \\
+y\left( t \right) &amp;= Initial\left( y\left( t \right) \right) \\
+\mathtt{xˍtt}\left( t \right) &amp;= \lambda\left( t \right) ~ x\left( t \right)
+\end{align}
+ \]</p><p>We can inspect what its equations and unknown values are:</p><pre><code class="language-julia hljs">equations(isys)</code></pre><p class="math-container">\[ \begin{align}
+\mathtt{yˍtt}\left( t \right) &amp;=  - g + y\left( t \right) ~ \lambda\left( t \right) \\
+0 &amp;= 1 - \left( y\left( t \right) \right)^{2} - \left( x\left( t \right) \right)^{2} \\
+0 &amp;=  - 2 ~ \mathtt{yˍt}\left( t \right) ~ y\left( t \right) - 2 ~ \mathtt{xˍt}\left( t \right) ~ x\left( t \right) \\
+0 &amp;=  - 2 ~ \mathtt{xˍtt}\left( t \right) ~ x\left( t \right) - 2 ~ \left( \mathtt{yˍt}\left( t \right) \right)^{2} - 2 ~ \left( \mathtt{xˍt}\left( t \right) \right)^{2} - 2 ~ y\left( t \right) ~ \left(  - g + y\left( t \right) ~ \lambda\left( t \right) \right) \\
+x\left( t \right) &amp;= Initial\left( x\left( t \right) \right) \\
+y\left( t \right) &amp;= Initial\left( y\left( t \right) \right) \\
+\mathtt{xˍtt}\left( t \right) &amp;= \lambda\left( t \right) ~ x\left( t \right)
+\end{align}
+ \]</p><pre><code class="language-julia hljs">unknowns(isys)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">7-element Vector{SymbolicUtils.BasicSymbolicImpl.var&quot;typeof(BasicSymbolicImpl)&quot;{SymReal}}:
+ xˍt(t)
+ y(t)
+ x(t)
+ yˍt(t)
+ λ(t)
+ xˍtt(t)
+ yˍtt(t)</code></pre><p>Notice that all initial conditions are treated as initial equations. Additionally, for systems with observables, those observables are too treated as initial equations. We can see the resulting simplified system via the command:</p><pre><code class="language-julia hljs">isys = mtkcompile(isys; fully_determined = false)</code></pre><p class="math-container">\[ \begin{align}
+0 &amp;=  - 2 ~ \mathtt{yˍt}\left( t \right) ~ y\left( t \right) - 2 ~ \mathtt{xˍt}\left( t \right) ~ x\left( t \right) \\
+0 &amp;=  - 2 ~ \mathtt{xˍtt}\left( t \right) ~ x\left( t \right) - 2 ~ \left( \mathtt{yˍt}\left( t \right) \right)^{2} - 2 ~ \left( \mathtt{xˍt}\left( t \right) \right)^{2} - 2 ~ y\left( t \right) ~ \left(  - g + y\left( t \right) ~ \lambda\left( t \right) \right) \\
+0 &amp;= 1 - \left( y\left( t \right) \right)^{2} - \left( x\left( t \right) \right)^{2}
+\end{align}
+ \]</p><p>Note <code>fully_determined=false</code> allows for the simplification to occur when the number of equations does not match the number of unknowns, which we can use to investigate our overdetermined system:</p><pre><code class="language-julia hljs">isys = ModelingToolkit.generate_initializesystem(
+    pend; op = [x =&gt; 1, y =&gt; 0.0, D(y) =&gt; 2.0, λ =&gt; 1], guesses = [λ =&gt; 1])</code></pre><p class="math-container">\[ \begin{align}
+\mathtt{yˍtt}\left( t \right) &amp;=  - g + y\left( t \right) ~ \lambda\left( t \right) \\
+0 &amp;= 1 - \left( y\left( t \right) \right)^{2} - \left( x\left( t \right) \right)^{2} \\
+0 &amp;=  - 2 ~ \mathtt{yˍt}\left( t \right) ~ y\left( t \right) - 2 ~ \mathtt{xˍt}\left( t \right) ~ x\left( t \right) \\
+0 &amp;=  - 2 ~ \mathtt{xˍtt}\left( t \right) ~ x\left( t \right) - 2 ~ \left( \mathtt{yˍt}\left( t \right) \right)^{2} - 2 ~ \left( \mathtt{xˍt}\left( t \right) \right)^{2} - 2 ~ y\left( t \right) ~ \left(  - g + y\left( t \right) ~ \lambda\left( t \right) \right) \\
+\lambda\left( t \right) &amp;= Initial\left( \lambda\left( t \right) \right) \\
+\mathtt{yˍt}\left( t \right) &amp;= Initial\left( \mathtt{yˍt}\left( t \right) \right) \\
+x\left( t \right) &amp;= Initial\left( x\left( t \right) \right) \\
+y\left( t \right) &amp;= Initial\left( y\left( t \right) \right) \\
+\mathtt{xˍtt}\left( t \right) &amp;= \lambda\left( t \right) ~ x\left( t \right)
+\end{align}
+ \]</p><pre><code class="language-julia hljs">isys = mtkcompile(isys; fully_determined = false)</code></pre><p class="math-container">\[ \begin{align}
+0 &amp;=  - 2 ~ \mathtt{yˍt}\left( t \right) ~ y\left( t \right) - 2 ~ \mathtt{xˍt}\left( t \right) ~ x\left( t \right) \\
+0 &amp;=  - 2 ~ \mathtt{xˍtt}\left( t \right) ~ x\left( t \right) - 2 ~ \left( \mathtt{yˍt}\left( t \right) \right)^{2} - 2 ~ \left( \mathtt{xˍt}\left( t \right) \right)^{2} - 2 ~ y\left( t \right) ~ \left(  - g + y\left( t \right) ~ \lambda\left( t \right) \right) \\
+0 &amp;= 1 - \left( y\left( t \right) \right)^{2} - \left( x\left( t \right) \right)^{2} \\
+0 &amp;= Initial\left( \mathtt{yˍt}\left( t \right) \right) - \mathtt{yˍt}\left( t \right)
+\end{align}
+ \]</p><pre><code class="language-julia hljs">equations(isys)</code></pre><p class="math-container">\[ \begin{align}
+0 &amp;=  - 2 ~ \mathtt{yˍt}\left( t \right) ~ y\left( t \right) - 2 ~ \mathtt{xˍt}\left( t \right) ~ x\left( t \right) \\
+0 &amp;=  - 2 ~ \mathtt{xˍtt}\left( t \right) ~ x\left( t \right) - 2 ~ \left( \mathtt{yˍt}\left( t \right) \right)^{2} - 2 ~ \left( \mathtt{xˍt}\left( t \right) \right)^{2} - 2 ~ y\left( t \right) ~ \left(  - g + y\left( t \right) ~ \lambda\left( t \right) \right) \\
+0 &amp;= 1 - \left( y\left( t \right) \right)^{2} - \left( x\left( t \right) \right)^{2} \\
+0 &amp;= Initial\left( \mathtt{yˍt}\left( t \right) \right) - \mathtt{yˍt}\left( t \right)
+\end{align}
+ \]</p><pre><code class="language-julia hljs">unknowns(isys)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">2-element Vector{SymbolicUtils.BasicSymbolicImpl.var&quot;typeof(BasicSymbolicImpl)&quot;{SymReal}}:
+ yˍt(t)
+ xˍt(t)</code></pre><pre><code class="language-julia hljs">observed(isys)</code></pre><p class="math-container">\[ \begin{align}
+x\left( t \right) &amp;= Initial\left( x\left( t \right) \right) \\
+y\left( t \right) &amp;= Initial\left( y\left( t \right) \right) \\
+\lambda\left( t \right) &amp;= Initial\left( \lambda\left( t \right) \right) \\
+\mathtt{xˍtt}\left( t \right) &amp;= \lambda\left( t \right) ~ x\left( t \right) \\
+\mathtt{yˍtt}\left( t \right) &amp;=  - g + y\left( t \right) ~ \lambda\left( t \right)
+\end{align}
+ \]</p><p>After simplification we see that we have 5 equatinos to solve with 3 variables, and the system that is given is not solvable.</p><h2 id="Numerical-Isolation:-InitializationProblem"><a class="docs-heading-anchor" href="#Numerical-Isolation:-InitializationProblem">Numerical Isolation: InitializationProblem</a><a id="Numerical-Isolation:-InitializationProblem-1"></a><a class="docs-heading-anchor-permalink" href="#Numerical-Isolation:-InitializationProblem" title="Permalink"></a></h2><p>To inspect the numerics of the initialization problem, we can use the <code>InitializationProblem</code> constructor which acts just like an <code>ODEProblem</code> or <code>NonlinearProblem</code> constructor, but creates the special initialization system for a given <code>sys</code>. This is done as follows:</p><pre><code class="language-julia hljs">iprob = ModelingToolkit.InitializationProblem(pend, 0.0,
+    [x =&gt; 1, y =&gt; 0.0, D(y) =&gt; 2.0, λ =&gt; 1, g =&gt; 1], guesses = [λ =&gt; 1])</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi"><span class="sgr38_2" style="color:#56b6c2">NonlinearLeastSquaresProblem</span> with uType <span class="sgr38_2" style="color:#56b6c2">Vector{Float64}</span>. In-place: <span class="sgr38_2" style="color:#56b6c2">true</span>
+u0: 2-element Vector{Float64}:
+ 0.0
+ 0.0</code></pre><p>We can see that because the system is overdetermined we receive a NonlinearLeastSquaresProblem, solvable by <a href="https://docs.sciml.ai/NonlinearSolve/stable/">NonlinearSolve.jl</a>. Using NonlinearSolve we can recreate the initialization solve directly:</p><pre><code class="language-julia hljs">using NonlinearSolve
+sol = solve(iprob)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">retcode: StalledSuccess
+u: 2-element Vector{Float64}:
+ 0.2135639436481748
+ 0.0</code></pre><div class="admonition is-info" id="Note-9db68b3af74ecf0a"><header class="admonition-header">Note<a class="admonition-anchor" href="#Note-9db68b3af74ecf0a" title="Permalink"></a></header><div class="admonition-body"><p>For more information on solving NonlinearProblems and NonlinearLeastSquaresProblems, check out the <a href="https://docs.sciml.ai/NonlinearSolve/stable/tutorials/getting_started/">NonlinearSolve.jl tutorials!</a>.</p></div></div><p>We can see that the default solver stalls</p><pre><code class="language-julia hljs">sol.stats</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">SciMLBase.NLStats
+Number of function evaluations:                    9150
+Number of Jacobians created:                       3424
+Number of factorizations:                          0
+Number of linear solves:                           5119
+Number of nonlinear solver iterations:             4119</code></pre><p>after doing many iterations, showing that it tried to compute but could not find a valid solution. Trying other solvers:</p><pre><code class="language-julia hljs">sol = solve(iprob, GaussNewton())</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">retcode: MaxIters
+u: 2-element Vector{Float64}:
+ 0.2096926320172635
+ 1.3322676295502257e-15</code></pre><p>gives the same issue, indicating that the chosen initialization system is unsatisfiable. We can check the residuals:</p><pre><code class="language-julia hljs">sol.resid</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">4-element Vector{Float64}:
+ -2.6645352591004514e-15
+ -2.087941999844655
+  0.0
+  1.7903073679827366</code></pre><p>to see the problem is not equation 2 but other equations in the system. Meanwhile, changing some of the conditions:</p><pre><code class="language-julia hljs">iprob = ModelingToolkit.InitializationProblem(pend, 0.0,
+    [x =&gt; 1, y =&gt; 0.0, D(y) =&gt; 0.0, λ =&gt; 0, g =&gt; 1], guesses = [λ =&gt; 1])</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi"><span class="sgr38_2" style="color:#56b6c2">NonlinearLeastSquaresProblem</span> with uType <span class="sgr38_2" style="color:#56b6c2">Vector{Float64}</span>. In-place: <span class="sgr38_2" style="color:#56b6c2">true</span>
+u0: 2-element Vector{Float64}:
+ 0.0
+ 0.0</code></pre><p>gives a NonlinearLeastSquaresProblem which can be solved:</p><pre><code class="language-julia hljs">sol = solve(iprob)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">retcode: Success
+u: 2-element Vector{Float64}:
+ 0.0
+ 0.0</code></pre><pre><code class="language-julia hljs">sol.resid</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">4-element Vector{Float64}:
+ -0.0
+  0.0
+  0.0
+  0.0</code></pre><p>In comparison, if we have a well-conditioned system:</p><pre><code class="language-julia hljs">iprob = ModelingToolkit.InitializationProblem(pend, 0.0,
+    [x =&gt; 1, D(x) =&gt; 0.0, g =&gt; 1], guesses = [λ =&gt; 1, y =&gt; 0])</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi"><span class="sgr38_2" style="color:#56b6c2">SCCNonlinearProblem</span> with uType <span class="sgr38_2" style="color:#56b6c2">Vector{Float64}</span>. In-place: <span class="sgr38_2" style="color:#56b6c2">false</span>
+u0: 3-element Vector{Float64}:
+ 0.0
+ 0.0
+ 1.0</code></pre><p>notice that we instead obtained a NonlinearProblem. In this case we can use different solvers which can take advantage of the fact that the Jacobian is square.</p><pre><code class="language-julia hljs">sol = solve(iprob)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">retcode: Success
+u: 3-element Vector{Float64}:
+ 0.0
+ 0.0
+ 0.0</code></pre><pre><code class="language-julia hljs">sol = solve(iprob, TrustRegion())</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">retcode: Success
+u: 3-element Vector{Float64}:
+ 0.0
+ 0.0
+ 0.0</code></pre><h2 id="More-Features-of-the-Initialization-System:-Steady-State-and-Observable-Initialization"><a class="docs-heading-anchor" href="#More-Features-of-the-Initialization-System:-Steady-State-and-Observable-Initialization">More Features of the Initialization System: Steady-State and Observable Initialization</a><a id="More-Features-of-the-Initialization-System:-Steady-State-and-Observable-Initialization-1"></a><a class="docs-heading-anchor-permalink" href="#More-Features-of-the-Initialization-System:-Steady-State-and-Observable-Initialization" title="Permalink"></a></h2><div class="admonition is-warning" id="Example-currently-disabled-f047672614348ce4"><header class="admonition-header">Example currently disabled<a class="admonition-anchor" href="#Example-currently-disabled-f047672614348ce4" title="Permalink"></a></header><div class="admonition-body"><p>This section&#39;s examples are currently disabled due to a compatibility issue with the initialization system and the current ModelingToolkit stack.</p></div></div><p>Let&#39;s take a Lotka-Volterra system:</p><pre><code class="language-julia hljs">@variables x(t) y(t) z(t)
+@parameters α=1.5 β=1.0 γ=3.0 δ=1.0
+
+eqs = [D(x) ~ α * x - β * x * y
+       D(y) ~ -γ * y + δ * x * y
+       z ~ x + y]
+
+@named sys = System(eqs, t)
+simpsys = mtkcompile(sys)
+tspan = (0.0, 10.0)</code></pre><p>Using the derivative initializations, we can set the ODE to start at the steady state by initializing the derivatives to zero:</p><pre><code class="language-julia hljs">prob = ODEProblem(simpsys, [D(x) =&gt; 0.0, D(y) =&gt; 0.0], tspan, guesses = [x =&gt; 1, y =&gt; 1])
+sol = solve(prob, Tsit5(), abstol = 1e-16)</code></pre><p>Notice that this is a &quot;numerical zero&quot;, not an exact zero, and thus the solution will leave the steady state in this instance because it&#39;s an unstable steady state.</p><p>Additionally, notice that in this setup we have an observable <code>z ~ x + y</code>. If we instead know the initial condition for the observable we can use that directly:</p><pre><code class="language-julia hljs">prob = ODEProblem(simpsys, [D(x) =&gt; 0.0, z =&gt; 2.0], tspan, guesses = [x =&gt; 1, y =&gt; 1])
+sol = solve(prob, Tsit5())</code></pre><p>We can check that indeed the solution does satisfy that D(x) = 0 at the start:</p><pre><code class="language-julia hljs">sol[α * x - β * x * y]</code></pre><pre><code class="language-julia hljs">plot(sol)</code></pre><h2 id="Summary-of-Initialization-API"><a class="docs-heading-anchor" href="#Summary-of-Initialization-API">Summary of Initialization API</a><a id="Summary-of-Initialization-API-1"></a><a class="docs-heading-anchor-permalink" href="#Summary-of-Initialization-API" title="Permalink"></a></h2><article><details class="docstring" open="true"><summary id="ModelingToolkitBase.Initial-tutorials-initialization"><a class="docstring-binding" href="#ModelingToolkitBase.Initial-tutorials-initialization"><code>ModelingToolkitBase.Initial</code></a> — <span class="docstring-category">Type</span></summary><section><div><pre><code class="language-julia hljs">Initial(x)</code></pre><p>The <code>Initial</code> operator. Used by initialization to store constant constraints on variables of a system. See the documentation section on initialization for more information.</p></div><a class="docs-sourcelink" target="_blank" href="https://github.com/SciML/ModelingToolkit.jl/blob/75da61178c0428d8bece1acf454b96cfd4af6272/lib/ModelingToolkitBase/src/systems/abstractsystem.jl#L508-L513">source</a></section></details></article><article><details class="docstring" open="true"><summary id="ModelingToolkitBase.isinitial-tutorials-initialization"><a class="docstring-binding" href="#ModelingToolkitBase.isinitial-tutorials-initialization"><code>ModelingToolkitBase.isinitial</code></a> — <span class="docstring-category">Function</span></summary><section><div><p>Returns true if the parameter <code>p</code> is of the form <code>Initial(x)</code>.</p></div><a class="docs-sourcelink" target="_blank" href="https://github.com/SciML/ModelingToolkit.jl/blob/75da61178c0428d8bece1acf454b96cfd4af6272/lib/ModelingToolkitBase/src/systems/abstractsystem.jl#L627-L629">source</a></section></details></article><article><details class="docstring" open="true"><summary id="ModelingToolkitBase.generate_initializesystem-tutorials-initialization"><a class="docstring-binding" href="#ModelingToolkitBase.generate_initializesystem-tutorials-initialization"><code>ModelingToolkitBase.generate_initializesystem</code></a> — <span class="docstring-category">Function</span></summary><section><div><pre><code class="language-julia hljs">generate_initializesystem(
+    sys::ModelingToolkitBase.AbstractSystem;
+    time_dependent_init,
+    kwargs...
+) -&gt; System
+</code></pre><p>Generate the initialization system for <code>sys</code>. The initialization system is a system of nonlinear equations that solve for the full set of initial conditions of <code>sys</code> given specified constraints.</p><p>The initialization system can be of two types: time-dependent and time-independent. Time-dependent initialization systems solve for the initial values of unknowns as well as the values of solvable parameters of the system. Time-independent initialization systems only solve for solvable parameters of the system.</p><p><strong>Keyword arguments</strong></p><ul><li><code>time_dependent_init</code>: Whether to create an initialization system for a time-dependent system. A time-dependent initialization requires a time-dependent <code>sys</code>, but a time- independent initialization can be created regardless.</li><li><code>op</code>: The operating point of user-specified initial conditions of variables in <code>sys</code>.</li><li><code>initialization_eqs</code>: Additional initialization equations to use apart from those in <code>initialization_equations(sys)</code>.</li><li><code>guesses</code>: Additional guesses to use apart from those in <code>guesses(sys)</code>.</li><li><code>default_dd_guess</code>: Default guess for dummy derivative variables in time-dependent initialization.</li><li><code>algebraic_only</code>: If <code>false</code>, does not use initialization equations (provided via the keyword or part of the system) to construct initialization.</li><li><code>check_defguess</code>: Whether to error when a variable does not have a default or guess despite ModelingToolkitBase expecting it to.</li><li><code>name</code>: The name of the initialization system.</li></ul><p>All other keyword arguments are forwarded to the <a href="../../API/System/#ModelingToolkitBase.System"><code>System</code></a> constructor.</p></div><a class="docs-sourcelink" target="_blank" href="https://github.com/SciML/ModelingToolkit.jl/blob/75da61178c0428d8bece1acf454b96cfd4af6272/lib/ModelingToolkitBase/src/systems/nonlinear/initializesystem.jl#L1-L31">source</a></section></details></article><article><details class="docstring" open="true"><summary id="ModelingToolkitBase.initialization_equations-tutorials-initialization"><a class="docstring-binding" href="#ModelingToolkitBase.initialization_equations-tutorials-initialization"><code>ModelingToolkitBase.initialization_equations</code></a> — <span class="docstring-category">Function</span></summary><section><div><pre><code class="language-julia hljs">initialization_equations(
+    sys::ModelingToolkitBase.AbstractSystem
+) -&gt; Any
+</code></pre><p>Get the initialization equations of the system <code>sys</code> and its subsystems.</p><p>See also <a href="../../API/System/#ModelingToolkitBase.guesses"><code>guesses</code></a>, <a href="../../API/System/#ModelingToolkitBase.initial_conditions"><code>initial_conditions</code></a> and <a href="../../API/System/#ModelingToolkitBase.get_initialization_eqs"><code>ModelingToolkitBase.get_initialization_eqs</code></a>.</p></div><a class="docs-sourcelink" target="_blank" href="https://github.com/SciML/ModelingToolkit.jl/blob/75da61178c0428d8bece1acf454b96cfd4af6272/lib/ModelingToolkitBase/src/systems/abstractsystem.jl#L2139">source</a></section></details></article><article><details class="docstring" open="true"><summary id="ModelingToolkitBase.guesses-tutorials-initialization"><a class="docstring-binding" href="#ModelingToolkitBase.guesses-tutorials-initialization"><code>ModelingToolkitBase.guesses</code></a> — <span class="docstring-category">Function</span></summary><section><div><pre><code class="language-julia hljs">guesses(sys::ModelingToolkitBase.AbstractSystem) -&gt; Any
+</code></pre><p>Get the guesses for variables in the initialization system of the system <code>sys</code> and its subsystems.</p><p>See also <a href="../../API/System/#ModelingToolkitBase.initialization_equations"><code>initialization_equations</code></a> and <a href="../../API/System/#ModelingToolkitBase.get_guesses"><code>ModelingToolkitBase.get_guesses</code></a>.</p></div><a class="docs-sourcelink" target="_blank" href="https://github.com/SciML/ModelingToolkit.jl/blob/75da61178c0428d8bece1acf454b96cfd4af6272/lib/ModelingToolkitBase/src/systems/abstractsystem.jl#L1688">source</a></section></details></article><article><details class="docstring" open="true"><summary id="ModelingToolkitBase.bindings-tutorials-initialization"><a class="docstring-binding" href="#ModelingToolkitBase.bindings-tutorials-initialization"><code>ModelingToolkitBase.bindings</code></a> — <span class="docstring-category">Function</span></summary><section><div><pre><code class="language-julia hljs">bindings(sys::ModelingToolkitBase.AbstractSystem) -&gt; Any
+</code></pre><p>Get the bindings of a system <code>sys</code> and its subsystems.</p></div><a class="docs-sourcelink" target="_blank" href="https://github.com/SciML/ModelingToolkit.jl/blob/75da61178c0428d8bece1acf454b96cfd4af6272/lib/ModelingToolkitBase/src/systems/abstractsystem.jl#L1744-L1748">source</a></section></details></article><article><details class="docstring" open="true"><summary id="ModelingToolkitBase.initial_conditions-tutorials-initialization"><a class="docstring-binding" href="#ModelingToolkitBase.initial_conditions-tutorials-initialization"><code>ModelingToolkitBase.initial_conditions</code></a> — <span class="docstring-category">Function</span></summary><section><div><pre><code class="language-julia hljs">initial_conditions(
+    sys::ModelingToolkitBase.AbstractSystem
+) -&gt; Any
+</code></pre><p>Get the initial conditions of a system <code>sys</code> and its subsystems.</p></div><a class="docs-sourcelink" target="_blank" href="https://github.com/SciML/ModelingToolkit.jl/blob/75da61178c0428d8bece1acf454b96cfd4af6272/lib/ModelingToolkitBase/src/systems/abstractsystem.jl#L1760-L1764">source</a></section></details></article></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../nonlinear/">« Modeling Nonlinear Systems</a><a class="docs-footer-nextpage" href="../optimization/">Modeling Optimization Problems »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.17.0 on <span class="colophon-date" title="Wednesday 6 May 2026 13:01">Wednesday 6 May 2026</span>. Using Julia version 1.10.11.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
