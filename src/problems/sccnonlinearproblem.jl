@@ -923,7 +923,9 @@ function SciMLBase.SCCSteadyStateProblem{iip, specialize}(
     # it; derive the constructors from the user's `op` container type instead.
     u0s = state_values(ssprob)
     floatT = u0s === nothing ? Float64 : eltype(u0s)
-    u0_constructor = get_u0_constructor(u0_constructor, typeof(op), floatT, false)
+    u0_constructor = get_u0_constructor(
+        u0_constructor, typeof(op), something(get(kwargs, :u0_eltype, nothing), floatT), false
+    )
     p_constructor = get_p_constructor(p_constructor, typeof(op), floatT)
     residual_kwargs = (;
         (name => value for (name, value) in pairs(kwargs) if !(name in SCC_SSPROB_INIT_KWARGS))...,

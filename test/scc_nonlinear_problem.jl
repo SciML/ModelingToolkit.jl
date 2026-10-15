@@ -892,3 +892,31 @@ end
         sys, Dict(); missing_guess_value = MissingGuessValue.Error()
     )
 end
+
+@testset "SCCSteadyStateProblem static `op` honors `u0_eltype`" begin
+    @variables a(t) b(t) c(t) d(t) x(t)
+    @mtkcompile sys = System([D(a) ~ 2 - a^3, D(b) ~ a - b^3], t)
+    msys = mtkcompile(
+        System(
+            [D(c) ~ 5 - 3c - d, D(d) ~ 5 - c - 2d, D(x) ~ c + d - x^3], t;
+            name = :mb
+        )
+    )
+    for (csys, cop) in (
+            (sys, SA[a => 1.0, b => 1.0]),
+            (msys, SA[c => 0.8, d => 1.8, x => 0.8]),
+        )
+        prob = SCCSteadyStateProblem{false}(csys, cop; u0_eltype = Float32)
+        N = length(state_values(prob))
+        @test state_values(prob) isa SVector{N, Float32}
+        for block in prob.probs
+            u = state_values(block)
+            u === nothing && continue
+            @test u isa SVector{<:Any, Float32}
+        end
+        direct = SCCNonlinearProblem{false}(
+            mtkcompile(NonlinearSystem(csys)), cop; u0_eltype = Float32
+        )
+        @test typeof(state_values(prob)) == typeof(state_values(direct))
+    end
+end
