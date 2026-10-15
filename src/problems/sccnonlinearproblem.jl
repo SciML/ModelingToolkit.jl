@@ -616,7 +616,7 @@ function SciMLBase.SCCNonlinearProblem{iip, specialize}(
 
     _, u0, p = process_SciMLProblem(
         EmptySciMLFunction{iip}, sys, op; eval_expression, eval_module, symbolic_u0 = true,
-        missing_guess_value, u0_constructor, p_constructor, kwargs...
+        missing_guess_value, p_constructor, kwargs...
     )
     op = calculate_op_from_u0_p(sys, u0, p)
 
@@ -750,6 +750,8 @@ function SciMLBase.SCCNonlinearProblem{iip, specialize}(
             prob = LinearProblem{iip}(A, b, p; f = symbolic_interface, u0 = _u0)
         else
             if !isempty(symbolic_idxs)
+                # `create_array` gives an immutable static container for a static `op`; fill a mutable copy.
+                _u0 = collect(_u0)
                 Moshi.Match.@match missing_guess_value begin
                     MissingGuessValue.Constant(val) => begin
                         _u0[symbolic_idxs] .= val
@@ -854,8 +856,10 @@ is processed as for `SteadyStateProblem`. The result is always an
 no unknowns. Its states are those of the compiled residual system in SCC order,
 and `sol[x]` resolves eliminated variables as observed. A structurally singular
 residual (e.g. a conservation law) has no SCC form and `mtkcompile` throws; use
-`SteadyStateProblem` for those systems. `combine_sccs` and `missing_guess_value`
-behave as for `SCCNonlinearProblem`.
+`SteadyStateProblem` for those systems. `combine_sccs` behaves as for
+`SCCNonlinearProblem`. Unknowns that neither `op`, the guesses nor the
+initialization equations determine receive the `missing_guess_value` fallback
+directly, as in `SCCNonlinearProblem`.
 
 The initialization keywords (`guesses`, `initialization_eqs`, `fully_determined`,
 `use_scc`, `warn_initialize_determined`, `check_initialization_units`,
@@ -888,6 +892,21 @@ const SCC_SSPROB_INIT_KWARGS = (
     :allow_incomplete, :init_compiler_options, :return_operating_point,
 )
 
+"""
+    $(TYPEDSIGNATURES)
+
+The fallback guess for `var` under the `MissingGuessValue` policy `missing_guess_value`,
+as `SCCNonlinearProblem` assigns to its blocks' unknowns.
+"""
+function fallback_guess(var, missing_guess_value)
+    return Moshi.Match.@match missing_guess_value begin
+        MissingGuessValue.Constant(val) => val
+        MissingGuessValue.Random(rng) => rand(rng)
+        MissingGuessValue.HashedRandom() => hash(var) / 0x1p64
+        MissingGuessValue.Error() => throw(MissingGuessError([var], [var]))
+    end
+end
+
 function SciMLBase.SCCSteadyStateProblem{iip, specialize}(
         sys::System, op; eval_expression = false,
         eval_module = @__MODULE__, u0_constructor = identity,
@@ -900,9 +919,16 @@ function SciMLBase.SCCSteadyStateProblem{iip, specialize}(
                 "the residual system is always compiled to callable functions."
         )
     )
+    # The NaN sentinel marks the states the steady-state processing could only fill
+    # from the fallback guess; the tearing of its initialization system decides which
+    # unknowns those are, so they are replaced with the real fallback below.
+    ss_missing_guess_value = Moshi.Data.isa_variant(
+            missing_guess_value, MissingGuessValue.Error
+        ) ? missing_guess_value : MissingGuessValue.Constant(NaN)
     ssprob = SteadyStateProblem{iip, specialize}(
         sys, op; eval_expression, eval_module, expression,
-        u0_constructor, p_constructor, missing_guess_value, kwargs...
+        u0_constructor, p_constructor,
+        missing_guess_value = ss_missing_guess_value, kwargs...
     )
     ssys = sys
     while MTKBase.has_parent(ssys)
@@ -911,9 +937,12 @@ function SciMLBase.SCCSteadyStateProblem{iip, specialize}(
         ssys = parent
     end
     rsys = mtkcompile(NonlinearSystem(ssys))
-    nlop = calculate_op_from_u0_p(
-        ssprob.f.sys, state_values(ssprob), parameter_values(ssprob)
-    )
+    u0s = state_values(ssprob)
+    ssu0 = u0s === nothing ? nothing : [
+            isnan(v) ? fallback_guess(x, missing_guess_value) : v
+            for (x, v) in zip(unknowns(ssprob.f.sys), u0s)
+        ]
+    nlop = calculate_op_from_u0_p(ssprob.f.sys, ssu0, parameter_values(ssprob))
     # `Initial` parameters are generated per system: `ssprob.f.sys` also has `Initial(D(x))`
     # for its derivatives, which the time-independent residual system does not. Transfer
     # only the `Initial` values it has; its initialization system would treat the others
@@ -921,7 +950,6 @@ function SciMLBase.SCCSteadyStateProblem{iip, specialize}(
     filter!(kv -> !MTKBase.isinitial(first(kv)) || is_parameter(rsys, first(kv)), nlop)
     # `nlop` is a `Dict`, so the residual problem cannot infer static containers from
     # it; derive the constructors from the user's `op` container type instead.
-    u0s = state_values(ssprob)
     floatT = u0s === nothing ? Float64 : eltype(u0s)
     u0_constructor = get_u0_constructor(
         u0_constructor, typeof(op), something(get(kwargs, :u0_eltype, nothing), floatT), false

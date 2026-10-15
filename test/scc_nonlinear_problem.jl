@@ -878,19 +878,33 @@ end
 
 @testset "SCCSteadyStateProblem `missing_guess_value`" begin
     @variables a(t) b(t)
-    @mtkcompile sys = System([D(a) ~ 2 - a^3, D(b) ~ a - b^3], t)
-    prob = SCCSteadyStateProblem(
-        sys, Dict(); missing_guess_value = MissingGuessValue.Constant(0.2)
-    )
-    @test state_values(prob) == [0.2, 0.2]
-    direct = SCCNonlinearProblem(
-        mtkcompile(NonlinearSystem(sys)), Dict();
-        missing_guess_value = MissingGuessValue.Constant(0.2)
-    )
-    @test state_values(prob) == state_values(direct)
-    @test_throws ModelingToolkit.MissingGuessError SCCSteadyStateProblem(
-        sys, Dict(); missing_guess_value = MissingGuessValue.Error()
-    )
+    C = MissingGuessValue.Constant(0.2)
+    f32 = u -> Float32.(u)
+    # The variable that the steady-state initialization tears depends on the unknown
+    # order, so both orientations of the chain are checked.
+    for eqs in ([D(a) ~ 2 - a^3, D(b) ~ a - b^3], [D(b) ~ 2 - b^3, D(a) ~ b - a^3])
+        @mtkcompile sys = System(eqs, t)
+        nlsys = mtkcompile(NonlinearSystem(sys))
+        prob = SCCSteadyStateProblem(sys, Dict(); missing_guess_value = C)
+        @test state_values(prob) == [0.2, 0.2]
+        direct = SCCNonlinearProblem(nlsys, Dict(); missing_guess_value = C)
+        @test state_values(prob) == state_values(direct)
+        @test_throws ModelingToolkit.MissingGuessError SCCSteadyStateProblem(
+            sys, Dict(); missing_guess_value = MissingGuessValue.Error()
+        )
+        for p in (
+                SCCSteadyStateProblem(sys, Dict(); u0_constructor = f32, missing_guess_value = C),
+                SCCNonlinearProblem(nlsys, Dict(); u0_constructor = f32, missing_guess_value = C),
+            )
+            @test state_values(p) isa Vector{Float32}
+            @test state_values(p) == Float32[0.2, 0.2]
+        end
+        for (ctor, csys) in ((SCCSteadyStateProblem{false}, sys), (SCCNonlinearProblem{false}, nlsys))
+            p = ctor(csys, SA[a => 1.0]; missing_guess_value = C)
+            @test state_values(p) isa SVector{2, Float64}
+            @test getu(p, [a, b])(p) == [1.0, 0.2]
+        end
+    end
 end
 
 @testset "SCCSteadyStateProblem static `op` honors `u0_eltype`" begin
