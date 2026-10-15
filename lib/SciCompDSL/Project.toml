@@ -1,7 +1,7 @@
 name = "SciCompDSL"
 uuid = "91a8cdf1-4ca6-467b-a780-87fda3fff15e"
 authors = ["Aayush Sabharwal <aayush.sabharwal@gmail.com>"]
-version = "1.0.5"
+version = "1.0.6"
 
 [deps]
 DocStringExtensions = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"
@@ -31,7 +31,7 @@ DocStringExtensions = "0.9.5"
 DynamicQuantities = "1"
 MLStyle = "0.4.17"
 ModelingToolkit = "11.21"
-ModelingToolkitBase = "1"
+ModelingToolkitBase = "1, 2"
 OrderedCollections = "1.8, 2"
 OrdinaryDiffEqDefault = "2"
 OrdinaryDiffEqTsit5 = "2"

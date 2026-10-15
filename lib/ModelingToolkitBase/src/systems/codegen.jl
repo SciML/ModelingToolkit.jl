@@ -447,12 +447,13 @@ $GENERATE_X_KWARGS
 - `simplify`, `sparse`: Forwarded to [`calculate_jacobian`](@ref).
 - `checkbounds`: Whether to check correctness of indices at runtime if `sparse`.
   Also forwarded to `build_function_wrapper`.
+- `cachesyms`: Symbols supplied as cache arguments to the generated function.
 
 All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 """
 function generate_jacobian(
         sys::System, opts::GeneratedFunctionOptions;
-        simplify::Bool = false, sparse::Bool = false
+        simplify::Bool = false, sparse::Bool = false, cachesyms = nothing
     )
     (; eval_expression, eval_module, compiler_options) = opts
     expression = expression_val(opts)
@@ -464,6 +465,10 @@ function generate_jacobian(
     end
     jac = calculate_jacobian(sys; simplify, sparse, dvs)
     p = reorder_parameters(sys)
+    n_param_buffers = length(p)  # # of parameter buffers, BEFORE any cachesyms are appended
+    if cachesyms isa Vector{Vector{SymbolicT}}
+        append!(p, cachesyms)
+    end
     t = get_iv(sys)
     if t !== nothing && sparse && opts.codegen.checkbounds
         wrap_code = assert_jac_length_header(sys) # checking sparse J indices at runtime is expensive for large systems
@@ -478,7 +483,7 @@ function generate_jacobian(
     end
     res = build_function_wrapper(
         sys, jac, collect(Any, args), BuildFunctionWrapperOptions(;
-            u_arg = 1,
+            u_arg = 1, n_param_buffers,
             codegen_function_options = setproperties(opts.codegen, (; wrap_code))
         )
     )

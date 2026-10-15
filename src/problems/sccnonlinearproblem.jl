@@ -475,7 +475,8 @@ struct SCCNonlinearFunction{iip} end
 function SCCNonlinearFunction{iip}(
         decomposition::SCCDecomposition, i::Int, cachesyms, op;
         specialize = SciMLBase.AutoSpecialize, eval_expression = false,
-        eval_module = @__MODULE__, kwargs...
+        eval_module = @__MODULE__, jac = false, sparse = false, u0_eltype = Float64,
+        kwargs...
     ) where {iip}
     subsys = decomposition.subsystems[i]
     islin = decomposition.islinear[i]
@@ -483,7 +484,7 @@ function SCCNonlinearFunction{iip}(
     if islin
         return LinearFunction{iip}(
             subsys; eval_expression, eval_module, cachesyms,
-            structural_hint = decomposition.hints[i], kwargs...
+            structural_hint = decomposition.hints[i], jac, sparse, kwargs...
         )
     end
     rps = reorder_parameters(subsys)
@@ -502,15 +503,17 @@ function SCCNonlinearFunction{iip}(
         return NonlinearFunction{iip, specialize}(hf; sys = subsys)
     end
 
-    f = generate_rhs(
-        subsys,
-        GeneratedFunctionOptions(;
-            expression = Val{false}, wrap_gfw = Val{true}, eval_expression, eval_module
-        );
-        cachesyms
+    gfwopts = GeneratedFunctionOptions(;
+        expression = Val{false}, wrap_gfw = Val{true}, eval_expression, eval_module
     )
+    f = generate_rhs(subsys, gfwopts; cachesyms)
+    _jac = jac ? generate_jacobian(subsys, gfwopts; sparse, cachesyms) : nothing
+    jac_prototype = sparse ?
+        similar(calculate_jacobian(subsys; sparse = true), u0_eltype) : nothing
 
-    return NonlinearFunction{iip, specialize}(f; sys = subsys)
+    return NonlinearFunction{iip, specialize}(
+        f; sys = subsys, jac = _jac, jac_prototype
+    )
 end
 
 """$(MTKBase.problem_docstring(SciMLBase.SCCNonlinearProblem, NonlinearFunction, false; init = false))"""
@@ -529,6 +532,7 @@ end
 function SciMLBase.SCCNonlinearProblem{iip, specialize}(
         sys::System, op; eval_expression = false,
         eval_module = @__MODULE__, u0_constructor = identity,
+        p_constructor = identity,
         missing_guess_value = default_missing_guess_value(), combine_sccs = true, kwargs...
     ) where {iip, specialize}
     if !iscomplete(sys) || get_tearing_state(sys) === nothing
@@ -571,8 +575,8 @@ function SciMLBase.SCCNonlinearProblem{iip, specialize}(
         # for a stateless system, which solvers reject.
         TProb = MTKBase.get_nonlinear_problem_type(sys)
         prob = TProb{iip, specialize}(
-            sys, op; eval_expression, eval_module, u0_constructor, missing_guess_value,
-            jac = true, kwargs...
+            sys, op; eval_expression, eval_module, u0_constructor, p_constructor,
+            missing_guess_value, (; jac = true, kwargs...)...
         )
         state_values(prob) === nothing && return remake(prob; u0 = Float64[])
         return prob
@@ -582,7 +586,7 @@ function SciMLBase.SCCNonlinearProblem{iip, specialize}(
         if calculate_A_b(sys; throw = false) !== nothing
             linprob = LinearProblem{iip}(
                 sys, op; eval_expression, eval_module,
-                u0_constructor, kwargs...
+                u0_constructor, p_constructor, kwargs...
             )
             # Required for filling missing parameter values when this is an initialization
             # problem
@@ -601,7 +605,7 @@ function SciMLBase.SCCNonlinearProblem{iip, specialize}(
             # `NonlinearProblem` would drop the λ-sweep and Newton-solve the target directly.
             TProb = MTKBase.get_nonlinear_problem_type(sys)
             return TProb{iip, specialize}(
-                sys, op; eval_expression, eval_module, u0_constructor, missing_guess_value, kwargs...
+                sys, op; eval_expression, eval_module, u0_constructor, p_constructor, missing_guess_value, kwargs...
             )
         end
     end
@@ -612,13 +616,31 @@ function SciMLBase.SCCNonlinearProblem{iip, specialize}(
 
     _, u0, p = process_SciMLProblem(
         EmptySciMLFunction{iip}, sys, op; eval_expression, eval_module, symbolic_u0 = true,
-        missing_guess_value, kwargs...
+        missing_guess_value, p_constructor, kwargs...
     )
     op = calculate_op_from_u0_p(sys, u0, p)
+
+    # A user-provided `u0_eltype` is honored at block level: the symbolic `u0`
+    # buffer keeps whatever `varmap_to_vars` produced, and each block's state is
+    # converted below.
+    u0_eltype = something(get(kwargs, :u0_eltype, nothing), Union{})
+    if u0_eltype === Union{}
+        for x in u0
+            symbolic_type(x) == NotSymbolic() || continue
+            u0_eltype = typeof(x)
+            break
+        end
+        if u0_eltype === Union{} || u0_eltype === Nothing
+            u0_eltype = Float64
+        end
+        u0_eltype = float(u0_eltype)
+    end
 
     explicitfuns = Union{Returns{Nothing}, CacheWriter{Any}, typeof(__explicitfun_copy_states)}[]
     nlfuns = []
     decomposition = SCCDecomposition(sys, var_sccs, eq_sccs; combine_sccs)
+    # Problem keywords (`maxiters`, tolerances, ...) stored on every nonlinear block.
+    probkw = process_kwargs(sys; kwargs...)
 
 
     # Invalidate the SCC information - `decomposition` is the source of truth now
@@ -677,21 +699,10 @@ function SciMLBase.SCCNonlinearProblem{iip, specialize}(
         end
         f = SCCNonlinearFunction{iip}(
             decomposition, i, cachebufsyms, op;
-            specialize, eval_expression, eval_module, kwargs...
+            specialize, eval_expression, eval_module, (; kwargs..., u0_eltype)...
         )
         push!(nlfuns, f)
     end
-
-    u0_eltype = Union{}
-    for x in u0
-        symbolic_type(x) == NotSymbolic() || continue
-        u0_eltype = typeof(x)
-        break
-    end
-    if u0_eltype === Union{} || u0_eltype === Nothing
-        u0_eltype = Float64
-    end
-    u0_eltype = float(u0_eltype)
 
     if !isempty(decomposition.cachetypes)
         templates = map(decomposition.cachetypes, decomposition.cachesizes) do T, n
@@ -739,6 +750,8 @@ function SciMLBase.SCCNonlinearProblem{iip, specialize}(
             prob = LinearProblem{iip}(A, b, p; f = symbolic_interface, u0 = _u0)
         else
             if !isempty(symbolic_idxs)
+                # `create_array` gives an immutable static container for a static `op`; fill a mutable copy.
+                _u0 = collect(_u0)
                 Moshi.Match.@match missing_guess_value begin
                     MissingGuessValue.Constant(val) => begin
                         _u0[symbolic_idxs] .= val
@@ -775,9 +788,9 @@ function SciMLBase.SCCNonlinearProblem{iip, specialize}(
                 # solving the block sweeps λ from the `simplified` form to `actual`. Blocks
                 # are solved in dependency order, so each one reaches `λ = 1` before the
                 # next begins.
-                SciMLBase.HomotopyProblem(f, _u0, p; λspan = (0.0, 1.0))
+                SciMLBase.HomotopyProblem(f, _u0, p; λspan = (0.0, 1.0), probkw...)
             else
-                NonlinearProblem(f, _u0, p)
+                NonlinearProblem(f, _u0, p; probkw...)
             end
         end
         push!(subprobs, prob)
@@ -834,75 +847,149 @@ function calculate_op_from_u0_p(sys::System, u0::Union{Nothing, AbstractVector},
 end
 
 """
+$(MTKBase.problem_docstring(SciMLBase.SCCSteadyStateProblem, NonlinearFunction, false; init = false, expression = false))
+
+The steady-state residual of the uncompiled model — the `NonlinearSystem` of the
+root of `sys`'s parent chain — is `mtkcompile`d and decomposed into SCCs, and `op`
+is processed as for `SteadyStateProblem`. The result is always an
+`SCCSteadyStateProblem`: a single block when the residual is a single SCC or has
+no unknowns. Its states are those of the compiled residual system in SCC order,
+and `sol[x]` resolves eliminated variables as observed. A structurally singular
+residual (e.g. a conservation law) has no SCC form and `mtkcompile` throws; use
+`SteadyStateProblem` for those systems. `combine_sccs` behaves as for
+`SCCNonlinearProblem`. `op`, the guesses and the initialization equations
+determine the states as for `SteadyStateProblem`, except that derivatives without
+a guess are not taken to be zero: unknowns that only the differential equations
+determine receive the `missing_guess_value` fallback directly, as in
+`SCCNonlinearProblem`.
+
+The initialization keywords (`guesses`, `initialization_eqs`, `fully_determined`,
+`use_scc`, `warn_initialize_determined`, `check_initialization_units`,
+`initsys_mtkcompile_kwargs`, `time_dependent_init`, `algebraic_only`,
+`allow_incomplete`, `init_compiler_options`, `return_operating_point`) apply to
+processing `op` against the time-dependent system. All other keywords are also
+forwarded to the residual `SCCNonlinearProblem`, so function options (`jac`,
+`sparse`, `u0_eltype`, ...) apply to every block and problem keywords
+(`maxiters`, `abstol`, ...) are stored on every nonlinear block.
+`expression = Val{true}` is not supported.
+"""
+function SciMLBase.SCCSteadyStateProblem(sys::System, op; kwargs...)
+    return SCCSteadyStateProblem{true}(sys, op; kwargs...)
+end
+
+function SciMLBase.SCCSteadyStateProblem{iip}(sys::System, op; kwargs...) where {iip}
+    specialize = get(kwargs, :specialize, SciMLBase.AutoSpecialize)
+    forwarded_kwargs = (;
+        (key => value for (key, value) in kwargs if key !== :specialize)...,
+    )
+    return SCCSteadyStateProblem{iip, specialize}(sys, op; forwarded_kwargs...)
+end
+
+# Keywords consumed while processing `op` against the time-dependent system;
+# everything else is forwarded to the residual `SCCNonlinearProblem`.
+const SCC_SSPROB_INIT_KWARGS = (
+    :initialization_eqs, :fully_determined, :use_scc,
+    :warn_initialize_determined, :check_initialization_units,
+    :initsys_mtkcompile_kwargs, :time_dependent_init, :algebraic_only,
+    :allow_incomplete, :init_compiler_options, :return_operating_point,
+)
+
+"""
     $(TYPEDSIGNATURES)
 
-Whether `err`, thrown by `mtkcompile`, reports a structurally unbalanced or singular
-system. See `ModelingToolkitBase.UNBALANCED_SYSTEM_EXCEPTIONS`.
+The fallback guess for `var` under the `MissingGuessValue` policy `missing_guess_value`,
+as `SCCNonlinearProblem` assigns to its blocks' unknowns.
 """
-function is_structurally_unbalanced_error(err)
-    T = typeof(err)
-    kind = nameof(T)
-    kind in MTKBase.UNBALANCED_SYSTEM_EXCEPTIONS || return false
-    kind === :InvalidSystemException || return true
-    # `InvalidSystemException` also reports problems unrelated to the structure.
-    return fieldcount(T) == 1 && fieldtype(T, 1) <: AbstractString &&
-        occursin("singular", getfield(err, 1))
+function fallback_guess(var, missing_guess_value)
+    return Moshi.Match.@match missing_guess_value begin
+        MissingGuessValue.Constant(val) => val
+        MissingGuessValue.Random(rng) => rand(rng)
+        MissingGuessValue.HashedRandom() => hash(var) / 0x1p64
+        MissingGuessValue.Error() => throw(MissingGuessError([var], [var]))
+    end
 end
 
 """
     $(TYPEDSIGNATURES)
 
-Return a `prob -> problem` callable producing the `SCCNonlinearProblem` that a
-`SteadyStateProblem` built on `sys` lowers to: the `NonlinearSystem`
-steady-state residual of the original (uncompiled) model is `mtkcompile`d and
-decomposed into SCCs. The compiled residual system is memoized, while the
-operating point is rebuilt from the queried problem's `u0`/`p` on every call so
-that a `remake`d `SteadyStateProblem` yields a matching lowering. The lowering
-is deferred because building it requires a full `mtkcompile` of the residual
-system, which most `SteadyStateProblem` consumers never need.
-
-The steady-state residual can be structurally unbalanced or singular even when
-the ODE is not, e.g. for a reaction network with a conservation law, where the
-residual determines the steady state only up to the conserved quantities that
-the initial condition fixes. Such a residual has no SCC lowering, so the
-callable then returns the steady-state residual wrapped as a plain
-`NonlinearProblem`, i.e. what `SciMLBase.NonlinearProblem(prob)` builds for a
-`SteadyStateProblem` without a lowering. Pseudo-transient solvers such as
-`DynamicSS` then integrate the ODE as usual.
+`user_guesses` as a vector of pairs, extended with a `NaN` guess for every derivative of
+`sys` that neither `user_guesses` nor `guesses(sys)` specifies. The steady-state
+initialization system otherwise guesses such derivatives as zero, which makes the states
+that the differential equations tie to them look determined.
 """
-function MTKBase.steady_state_sccprob(sys::System, op; kwargs...)
-    # `nothing`: not compiled yet, `missing`: the residual has no SCC lowering.
-    ref = Ref{Any}(nothing)
-    return function _sccprob(prob)
-        if ref[] === nothing
-            ssys = sys
-            while MTKBase.has_parent(ssys)
-                parent = MTKBase.get_parent(ssys)
-                (parent === nothing || parent === ssys) && break
-                ssys = parent
-            end
-            ref[] = try
-                mtkcompile(NonlinearSystem(ssys))
-            catch err
-                is_structurally_unbalanced_error(err) || rethrow()
-                @debug "The steady-state residual of $(nameof(sys)) cannot be lowered \
-                    to an `SCCNonlinearProblem`; solving the unlowered residual." err
-                missing
-            end
-        end
-        if ref[] === missing
-            return NonlinearProblem{SciMLBase.isinplace(prob)}(
-                prob.f, state_values(prob), parameter_values(prob)
-            )
-        end
-        op = calculate_op_from_u0_p(
-            prob.f.sys, state_values(prob), parameter_values(prob)
-        )
-        # `Initial` parameters are generated per system: `prob.f.sys` also has `Initial(D(x))`
-        # for its derivatives, which the time-independent residual system does not. Transfer
-        # only the `Initial` values it has; its initialization system would treat the others
-        # as solvable and add identities `Initial(x) ~ Initial(x)`.
-        filter!(kv -> !MTKBase.isinitial(first(kv)) || is_parameter(ref[], first(kv)), op)
-        return SCCNonlinearProblem(ref[], op)
+function nan_derivative_guesses(sys::System, user_guesses)
+    derivs = SymbolicT[eq.lhs for eq in equations(sys) if isdiffeq(eq)]
+    if has_schedule(sys) && (sched = get_schedule(sys)) isa Schedule
+        append!(derivs, keys(sched.dummy_sub))
     end
+    guessed = Set{Any}(keys(guesses(sys)))
+    result = Pair[]
+    for (k, v) in user_guesses
+        push!(guessed, unwrap(k))
+        push!(result, k => v)
+    end
+    for d in derivs
+        (d in guessed || default_toterm(d) in guessed) && continue
+        push!(guessed, d)
+        push!(result, d => NaN)
+    end
+    return result
+end
+
+function SciMLBase.SCCSteadyStateProblem{iip, specialize}(
+        sys::System, op; eval_expression = false,
+        eval_module = @__MODULE__, u0_constructor = identity,
+        p_constructor = identity, expression = Val{false}, guesses = [],
+        missing_guess_value = default_missing_guess_value(), combine_sccs = true, kwargs...
+    ) where {iip, specialize}
+    expression === Val{false} || throw(
+        ArgumentError(
+            "`SCCSteadyStateProblem` does not support `expression = $expression`; " *
+                "the residual system is always compiled to callable functions."
+        )
+    )
+    # Derivatives without a guess are NaN, so the states that only the differential
+    # equations determine are NaN and receive the fallback below.
+    ssprob = SteadyStateProblem{iip, specialize}(
+        sys, op; eval_expression, eval_module, expression,
+        u0_constructor, p_constructor,
+        missing_guess_value, guesses = nan_derivative_guesses(sys, guesses), kwargs...
+    )
+    ssys = sys
+    while MTKBase.has_parent(ssys)
+        parent = MTKBase.get_parent(ssys)
+        (parent === nothing || parent === ssys) && break
+        ssys = parent
+    end
+    rsys = mtkcompile(NonlinearSystem(ssys))
+    u0s = state_values(ssprob)
+    ssu0 = u0s === nothing ? nothing : [
+            isnan(v) ? fallback_guess(x, missing_guess_value) : v
+            for (x, v) in zip(unknowns(ssprob.f.sys), u0s)
+        ]
+    nlop = calculate_op_from_u0_p(ssprob.f.sys, ssu0, parameter_values(ssprob))
+    # `Initial` parameters are generated per system: `ssprob.f.sys` also has `Initial(D(x))`
+    # for its derivatives, which the time-independent residual system does not. Transfer
+    # only the `Initial` values it has; its initialization system would treat the others
+    # as solvable and add identities `Initial(x) ~ Initial(x)`.
+    filter!(kv -> !MTKBase.isinitial(first(kv)) || is_parameter(rsys, first(kv)), nlop)
+    # `nlop` is a `Dict`, so the residual problem cannot infer static containers from
+    # it; derive the constructors from the user's `op` container type instead.
+    floatT = u0s === nothing ? Float64 : eltype(u0s)
+    u0_constructor = get_u0_constructor(
+        u0_constructor, typeof(op), something(get(kwargs, :u0_eltype, nothing), floatT), false
+    )
+    p_constructor = get_p_constructor(p_constructor, typeof(op), floatT)
+    residual_kwargs = (;
+        (name => value for (name, value) in pairs(kwargs) if !(name in SCC_SSPROB_INIT_KWARGS))...,
+    )
+    lowered = SCCNonlinearProblem{iip, specialize}(
+        rsys, nlop; eval_expression, eval_module,
+        u0_constructor, p_constructor, missing_guess_value, combine_sccs,
+        residual_kwargs...
+    )
+    lowered isa SCCNonlinearProblem && return SCCSteadyStateProblem(lowered)
+    return SCCSteadyStateProblem(
+        (lowered,), (Returns(nothing),), parameter_values(lowered), true; sys = rsys
+    )
 end

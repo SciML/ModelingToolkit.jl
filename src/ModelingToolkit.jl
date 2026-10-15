@@ -51,7 +51,8 @@ import Libdl
 import Combinatorics
 using SciMLBase: TimeDomain, Clock, SolverStepClock, ContinuousClock, OverrideInit, NoInit,
     LinearProblem, NonlinearFunction, NonlinearLeastSquaresProblem, NonlinearProblem,
-    ODEFunction, ODEProblem, SCCNonlinearProblem, SplitFunction, SplitODEProblem, remake
+    ODEFunction, ODEProblem, SCCNonlinearProblem, SCCSteadyStateProblem, SplitFunction,
+    SplitODEProblem, remake
 import Moshi
 import SCCNonlinearSolve
 import Graphs: add_edge!

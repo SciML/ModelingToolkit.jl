@@ -17,6 +17,6 @@ SimpleDiffEq = "05bca326-078c-5bf0-a5bf-ce7c7982d7fd"
 SymbolicIndexingInterface = "2efcf032-c050-4f8e-a9bb-153293bab1f5"
 
 [compat]
-ModelingToolkitStandardLibrary = "2.19"
+ModelingToolkitStandardLibrary = "2.29.9"
 SafeTestsets = "0.1, 1"
 SciMLTesting = "2.8"
