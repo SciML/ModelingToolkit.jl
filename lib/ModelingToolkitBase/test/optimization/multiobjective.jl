@@ -146,6 +146,36 @@ end
     @test weighted.f(weighted.u0, weighted.p) ≈ dot(weights, multi.f.f(multi.u0, multi.p))
 end
 
+@testset "derivatives of costs with array reductions nested in scalar expressions" begin
+    A = [1.0 2.0; 3.0 4.0]
+    @variables x[1:2]
+    @parameters p[1:2]
+    sys = complete(
+        System(
+            Equation[], [x], [p];
+            costs = [2 * sum(A * x), sum(abs2, A * x - p)], name = :nested_reductions
+        )
+    )
+    x0, p0 = [0.5, -1.0], [1.0, 2.0]
+    op = [x => x0, p => p0]
+    grads = [2 * vec(sum(A; dims = 1)), 2 * A' * (A * x0 - p0)]
+    hessians = [zeros(2, 2), 2 * A' * A]
+
+    @testset "sparse = $sparse" for sparse in (false, true)
+        prob = OptimizationProblem(sys, op; grad = true, hess = true, sparse)
+        @test prob.f.grad(prob.u0, prob.p) ≈ sum(grads)
+        @test prob.f.hess(prob.u0, prob.p) ≈ sum(hessians)
+
+        multi = OptimizationProblem(
+            sys, op; multiobjective = true, jac = true, hess = true, sparse
+        )
+        @test multi.f.jac(multi.u0, multi.p) ≈ permutedims(reduce(hcat, grads))
+        for (hess, expected) in zip(multi.f.hess, hessians)
+            @test hess(multi.u0, multi.p) ≈ expected
+        end
+    end
+end
+
 @testset "weighted and multi-objective agree on a discretized Poisson problem" begin
     # -u'' = 1 on (0, 1), u(0) = u(1) = 0 as D * u = h^2 * 1, with costs [misfit, Tikhonov]
     N = 8
