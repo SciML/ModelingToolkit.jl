@@ -552,6 +552,7 @@ end
 end
 
 @testset "SteadyStateProblem SCC lowering regressions" begin
+    # https://github.com/SciML/ModelingToolkit.jl/issues/5270
     @parameters a = 1.0 b = 1.0 c = 1.0 d = 2.0
     @variables p(t) = 0.0 h(t) = 0.0
     @mtkcompile sys = System(
@@ -561,6 +562,27 @@ end
     @test SciMLBase.successful_retcode(sol)
     @test sol[p] ≈ 1.0 atol = 1.0e-8
     @test sol[h] ≈ 2.0 atol = 1.0e-8
+
+    # The steady states are `±1` and `0`, so the solved root follows the
+    # problem's `u0`, including unknowns that are observed in the residual
+    # system and array unknowns.
+    # The ODE keeps `x` as its unknown and the residual system keeps `y`.
+    @variables x(t) = 0.9 y(t)
+    @mtkcompile sys = System([D(x) ~ y - x, y ~ x^3], t)
+    prob1 = remake(SteadyStateProblem(sys, []); u0 = [x => -0.9])
+    @variables x(t) y(t)
+    @mtkcompile sys = System([D(x) ~ y - x, y ~ x^3], t)
+    prob2 = SteadyStateProblem(sys, [x => -0.9])
+    for prob in (prob1, prob2)
+        sol = solve(prob, NewtonRaphson())
+        @test SciMLBase.successful_retcode(sol)
+        @test sol[x] ≈ -1.0 atol = 1.0e-8
+    end
+    @variables q(t)[1:2] = [0.9, 0.8]
+    @mtkcompile sys = System([D(q[1]) ~ q[1]^2 + q[2]^2 - 2, D(q[2]) ~ q[1] - q[2]], t)
+    sol = solve(remake(SteadyStateProblem(sys, []); u0 = [q => [-0.9, -0.8]]), NewtonRaphson())
+    @test SciMLBase.successful_retcode(sol)
+    @test sol[q] ≈ [-1.0, -1.0] atol = 1.0e-8
 
     # https://github.com/SciML/ModelingToolkit.jl/issues/5162
     @parameters α = 1.3 β = 0.9 γ = 0.8 δ = 1.8
