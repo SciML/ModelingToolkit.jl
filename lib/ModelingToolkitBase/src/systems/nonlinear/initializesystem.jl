@@ -354,6 +354,9 @@ function generate_initializesystem_timeindependent(
             get!(guesses, k, v)
         else
             newbinds[k] = v
+            # Bound parameters cannot have initial conditions; their binding
+            # determines the value, so only solvable parameters keep guesses.
+            delete!(guesses, split_indexed_var(k)[1])
         end
     end
 
@@ -433,6 +436,7 @@ function generate_initializesystem_timeindependent(
         Vector{Equation}(eqs_ics),
         vars,
         pars;
+        bindings = newbinds,
         initial_conditions = guesses,
         checks = check_units,
         name,
