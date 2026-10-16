@@ -164,52 +164,193 @@ function affect_pin_replacement(var)
     return Pre(var)
 end
 
-function _vars_outside_pre!(buf, eq)
-    empty!(buf)
+function _vars_outside_pre(eq::Equation)
+    buf = Set{SymbolicT}()
     SU.search_variables!(buf, eq; is_atomic = OperatorIsAtomic{Union{Pre, Differential}}())
-    out = Set{SymbolicT}()
-    for var in buf
-        iscall(var) && operation(var) isa Pre && continue
-        push!(out, var)
-        arr, isarr = split_indexed_var(var)
-        isarr && push!(out, arr)
-        if iscall(var) && operation(var) === getindex
-            push!(out, arguments(var)[1])
+    filter!(var -> !(iscall(var) && operation(var) isa Pre), buf)
+    return buf
+end
+
+"""
+A set of symbols that answers whether another symbol refers to (part of) the same
+variable. An array and its elements overlap, and an element indexed by a non-constant
+index overlaps every element of its array, but two elements with distinct constant
+indices do not overlap.
+"""
+struct SymbolFootprint
+    syms::Set{SymbolicT}
+    const_indexed_parents::Set{SymbolicT}
+    dynamic_indexed_parents::Set{SymbolicT}
+end
+
+SymbolFootprint() = SymbolFootprint(Set{SymbolicT}(), Set{SymbolicT}(), Set{SymbolicT}())
+
+function SymbolFootprint(vars)
+    fp = SymbolFootprint()
+    for var in vars
+        push!(fp, var)
+    end
+    return fp
+end
+
+function Base.push!(fp::SymbolFootprint, var::SymbolicT)
+    push!(fp.syms, var)
+    arr, isarr = split_indexed_var(var)
+    if isarr
+        push!(has_const_int_indices(var) ? fp.const_indexed_parents : fp.dynamic_indexed_parents, arr)
+    end
+    return fp
+end
+
+function overlaps(fp::SymbolFootprint, var::SymbolicT)
+    var in fp.syms && return true
+    var in fp.const_indexed_parents && return true
+    var in fp.dynamic_indexed_parents && return true
+    arr, isarr = split_indexed_var(var)
+    isarr || return false
+    (arr in fp.syms || arr in fp.dynamic_indexed_parents) && return true
+    return !has_const_int_indices(var) && arr in fp.const_indexed_parents
+end
+
+"""
+    affect_pin_substitutions(sys, user_affect, discrete_parameters)
+
+Choose the differential variables of `sys` that the equational affect `user_affect` keeps
+at their pre-event values, and return a substitution mapping each of them to its
+[`affect_pin_replacement`](@ref).
+
+A differential variable is a candidate when `user_affect` does not reference it outside
+`Pre`, it is not a dummy derivative or part of an index-reduced constraint, and it appears
+in an algebraic equation of `sys` or in an observed equation that also references an
+unknown touched by `user_affect`. The affect equations (user, algebraic and observed) are
+matched to the affect unknowns using non-differential unknowns first and untouched
+differential variables only where no other unknown is available. Candidates left unmatched
+are not needed to satisfy the affect and are pinned; each independent part of the system is
+thereby decided on its own.
+"""
+function affect_pin_substitutions(sys, user_affect::Vector{Equation}, discrete_parameters)
+    pin_subs = Dict{SymbolicT, SymbolicT}()
+    diffvars = collect_differential_variables(sys)
+    isempty(diffvars) && return pin_subs
+    diff_fp = SymbolFootprint(diffvars)
+
+    alg_eqs = flatten_equations(Vector{Equation}(alg_equations(sys)))
+    obs_eqs = flatten_equations(Vector{Equation}(observed(sys)))
+    eqs = Equation[flatten_equations(user_affect); alg_eqs; obs_eqs]
+    eq_vars = map(_vars_outside_pre, eqs)
+    nuser = length(eqs) - length(alg_eqs) - length(obs_eqs)
+    alg_range = (nuser + 1):(nuser + length(alg_eqs))
+    obs_range = (last(alg_range) + 1):length(eqs)
+
+    affect_unknowns = SymbolFootprint([unknowns(sys); observables(sys); discrete_parameters])
+    is_affect_unknown(var) = (iscall(var) && operation(var) isa Differential) ||
+        overlaps(affect_unknowns, var)
+
+    touched = SymbolFootprint()
+    for i in 1:nuser, var in eq_vars[i]
+        push!(touched, var)
+        if iscall(var) && operation(var) isa Differential
+            push!(touched, unwrap(default_toterm(var)))
         end
     end
-    return out
-end
 
-function _diff_appears_in_vars(d, vars::Set{SymbolicT})
-    d in vars && return true
-    arr, isarr = split_indexed_var(d)
-    isarr && arr in vars && return true
-    if iscall(d) && operation(d) === getindex && arguments(d)[1] in vars
-        return true
+    dummy = SymbolFootprint()
+    if has_schedule(sys)
+        schedule = get_schedule(sys)
+        if schedule isa Schedule
+            for (k, v) in schedule.dummy_sub
+                isequal(default_toterm(k), v) && push!(dummy, unwrap(v))
+            end
+        end
     end
-    # parent differential mentioned via an indexed element in vars
-    for v in vars
-        iscall(v) && operation(v) === getindex || continue
-        isequal(arguments(v)[1], d) && return true
-        a, ia = split_indexed_var(v)
-        ia && isequal(a, d) && return true
+    never_pin = SymbolFootprint()
+    for i in [alg_range; obs_range], var in eq_vars[i]
+        # Arrays referenced whole or through a non-constant index cannot be pinned
+        # element-wise.
+        if overlaps(diff_fp, var) && !(var in diff_fp.syms)
+            push!(never_pin, var)
+        end
     end
-    return false
-end
+    # Index-reduced constraints must stay solvable for the unknowns they were matched to.
+    if !isempty(dummy.syms)
+        for i in alg_range
+            any(var -> overlaps(dummy, var), eq_vars[i]) || continue
+            for var in eq_vars[i]
+                var in diff_fp.syms && push!(never_pin, var)
+            end
+        end
+    end
 
-function _in_sym_set(a, syms::Set{SymbolicT})
-    a in syms && return true
-    arr, isarr = split_indexed_var(a)
-    isarr && arr in syms && return true
-    if iscall(a) && operation(a) === getindex
-        arguments(a)[1] in syms && return true
+    is_pinnable(var) = var in diff_fp.syms && !overlaps(touched, var) &&
+        !overlaps(dummy, var) && !overlaps(never_pin, var)
+    candidates = Set{SymbolicT}()
+    for i in [alg_range; obs_range]
+        vars = eq_vars[i]
+        if i in obs_range
+            any(var -> overlaps(dummy, var), vars) && continue
+            any(var -> overlaps(touched, var) && is_affect_unknown(var), vars) || continue
+        end
+        for var in vars
+            is_pinnable(var) && push!(candidates, var)
+        end
     end
-    return false
-end
+    isempty(candidates) && return pin_subs
 
-function _eq_identically_zero(eq::Equation)
-    r = simplify(expand(eq.lhs - eq.rhs))
-    return isequal(r, 0) || (r isa Number && iszero(r))
+    var_ids = Dict{SymbolicT, Int}()
+    var_list = SymbolicT[]
+    function var_id(var)
+        return get!(var_ids, var) do
+            push!(var_list, var)
+            length(var_list)
+        end
+    end
+    function incident_ids(var)
+        is_affect_unknown(var) || return Int[]
+        sh = SU.shape(var)
+        arr, isarr = split_indexed_var(var)
+        if SU.is_array_shape(sh)
+            sh isa SU.ShapeVecT || return Int[]
+            return Int[var_id(var[i]) for i in SU.stable_eachindex(var)]
+        elseif isarr && !has_const_int_indices(var)
+            ash = SU.shape(arr)
+            ash isa SU.ShapeVecT || return Int[]
+            return Int[var_id(arr[i]) for i in SU.stable_eachindex(arr)]
+        end
+        return Int[var_id(var)]
+    end
+    eq_ids = Vector{Set{Int}}()
+    for vars in eq_vars
+        ids = Set{Int}()
+        for var in vars
+            union!(ids, incident_ids(var))
+        end
+        push!(eq_ids, ids)
+    end
+    graph = BipartiteGraph(length(eqs), length(var_list))
+    for (i, ids) in enumerate(eq_ids), j in ids
+        add_edge!(graph, i, j)
+    end
+
+    # Untouched differentials absorb an equation only when no other unknown can.
+    last_resort = BitVector(is_pinnable(var) for var in var_list)
+    matching = maximal_matching(graph; dstfilter = j -> !last_resort[j])
+    eq_matched = falses(length(eqs))
+    for j in eachindex(var_list)
+        src = matching[j]
+        src isa Int && (eq_matched[src] = true)
+    end
+    dcolor = falses(length(var_list))
+    for i in eachindex(eqs)
+        eq_matched[i] && continue
+        fill!(dcolor, false)
+        construct_augmenting_path!(matching, graph, i, Returns(true), dcolor)
+    end
+
+    for var in candidates
+        any(j -> matching[j] isa Int, incident_ids(var)) && continue
+        pin_subs[var] = affect_pin_replacement(var)
+    end
+    return pin_subs
 end
 
 function parent_symbol_for_affect_param(p)
@@ -231,181 +372,11 @@ function AffectSystem(
         @warn "No independent variable specified. Defaulting to t_nounits."
     end
     _unhack_sys = reverse_all_default_reversible_transformations(parent_sys)
-    # User affect equations (before parent alg/observed eqs are appended).
-    user_affect = affect
-    assigned = Set{SymbolicT}()
-    for eq in user_affect
-        lhs = eq.lhs
-        push!(assigned, lhs)
-        arr, isarr = split_indexed_var(lhs)
-        isarr && push!(assigned, arr)
-        if iscall(lhs) && operation(lhs) === getindex
-            push!(assigned, arguments(lhs)[1])
-        end
-    end
-    _varsbuf_user = Set{SymbolicT}()
-    user_outside_pre = Set{SymbolicT}()
-    for eq in user_affect
-        union!(user_outside_pre, _vars_outside_pre!(_varsbuf_user, eq))
-    end
-    parent_diff_vars = Set{SymbolicT}()
-    for var in collect_differential_variables(_unhack_sys)
-        push!(parent_diff_vars, var)
-        push!(parent_diff_vars, split_indexed_var(var)[1])
-    end
-    # Dummy-derivative variables from index reduction (e.g. `xˍt` for `D(x)`). Never pin
-    # these, and never pin other differentials that appear alongside them in algebraic
-    # constraints — those equations are the differentiated constraints and must stay
-    # matched to free unknowns.
-    dummy_deriv_vars = Set{SymbolicT}()
-    if has_schedule(_unhack_sys)
-        schedule = get_schedule(_unhack_sys)
-        if schedule isa Schedule
-            for (k, v) in schedule.dummy_sub
-                ttk = default_toterm(k)
-                if isequal(ttk, v)
-                    push!(dummy_deriv_vars, unwrap(v))
-                    push!(dummy_deriv_vars, split_indexed_var(unwrap(v))[1])
-                end
-            end
-        end
-    end
-    # User affect may still write `D(x)`; treat its toterm (`xˍt`) as user-touched too.
-    for var in collect(user_outside_pre)
-        if iscall(var) && operation(var) isa Differential
-            ttk = unwrap(default_toterm(var))
-            push!(user_outside_pre, ttk)
-            push!(user_outside_pre, split_indexed_var(ttk)[1])
-        end
-    end
-    # Free algebraic DOFs are non-differential unknowns (not observed outputs).
-    parent_alg = Set{SymbolicT}()
-    for var in unknowns(_unhack_sys)
-        if !_diff_appears_in_vars(var, parent_diff_vars)
-            push!(parent_alg, var)
-            push!(parent_alg, split_indexed_var(var)[1])
-        end
-    end
-    alg_extra = Equation[alg_equations(_unhack_sys)...]
-    obs_extra = Equation[observed(_unhack_sys)...]
-    extra_eqs = Equation[alg_extra; obs_extra]
-    # Differentials that appear in index-reduced algebraic constraints (constraints that
-    # mention a dummy derivative) must not be pinned.
-    index_reduced_ban = Set{SymbolicT}()
-    _varsbuf_extra = Set{SymbolicT}()
-    if !isempty(dummy_deriv_vars)
-        for eq in alg_extra
-            eq_vars = _vars_outside_pre!(_varsbuf_extra, eq)
-            any(d -> _in_sym_set(d, eq_vars), dummy_deriv_vars) || continue
-            for var in parent_diff_vars
-                if _diff_appears_in_vars(var, eq_vars)
-                    push!(index_reduced_ban, var)
-                end
-            end
-        end
-    end
-    # Pin sources: parent algebraic equations, plus observed equations that mention both a
-    # parent differential and a user-assigned symbol (index-1 algebraics torn into
-    # `observed` — the discrete-only #5200 pattern).
-    pin_source_eqs = Equation[alg_extra...]
-    for eq in obs_extra
-        eq_vars = _vars_outside_pre!(_varsbuf_extra, eq)
-        any(d -> _in_sym_set(d, eq_vars), dummy_deriv_vars) && continue
-        any(d -> _diff_appears_in_vars(d, eq_vars), parent_diff_vars) || continue
-        any(a -> _in_sym_set(a, assigned), eq_vars) || continue
-        push!(pin_source_eqs, eq)
-    end
-    # Pin differentials that appear only via parent algebraic/observed equations when those
-    # equations can be matched to *distinct* free algebraic unknowns (bipartite matching).
-    pin_subs = Dict{SymbolicT, SymbolicT}()
-    candidates = SymbolicT[]
-    for var in parent_diff_vars
-        _diff_appears_in_vars(var, user_outside_pre) && continue
-        _in_sym_set(var, dummy_deriv_vars) && continue
-        _in_sym_set(var, index_reduced_ban) && continue
-        for eq in pin_source_eqs
-            eq_vars = _vars_outside_pre!(_varsbuf_extra, eq)
-            if _diff_appears_in_vars(var, eq_vars)
-                push!(candidates, var)
-                break
-            end
-        end
-    end
-    free_algs = SymbolicT[]
-    for var in unknowns(_unhack_sys)
-        _diff_appears_in_vars(var, parent_diff_vars) && continue
-        _in_sym_set(var, assigned) && continue
-        push!(free_algs, var)
-    end
-    # Observed LHS of pin-source observed equations can absorb when tearing moved the
-    # algebraic out of `unknowns`.
-    for eq in pin_source_eqs
-        # Algebraic pin sources already use `unknowns`; only observed sources need this.
-        any(ae -> ae === eq, alg_extra) && continue
-        lhs = unwrap(eq.lhs)
-        _diff_appears_in_vars(lhs, parent_diff_vars) && continue
-        _in_sym_set(lhs, assigned) && continue
-        _in_sym_set(lhs, dummy_deriv_vars) && continue
-        push!(free_algs, lhs)
-    end
-    eqs_needing_absorb = Equation[]
-    for eq in pin_source_eqs
-        eq_vars = _vars_outside_pre!(_varsbuf_extra, eq)
-        any(c -> _diff_appears_in_vars(c, eq_vars), candidates) || continue
-        push!(eqs_needing_absorb, eq)
-    end
-    can_pin_candidates = !isempty(candidates) && !isempty(eqs_needing_absorb)
-    if can_pin_candidates
-        g = BipartiteGraph(length(eqs_needing_absorb), length(free_algs))
-        for (i, eq) in enumerate(eqs_needing_absorb)
-            eq_vars = _vars_outside_pre!(_varsbuf_extra, eq)
-            for (j, a) in enumerate(free_algs)
-                _in_sym_set(a, eq_vars) && add_edge!(g, i, j)
-            end
-        end
-        matching = maximal_matching(g)
-        matched_srcs = Set{Int}()
-        for j in 1:length(free_algs)
-            m = matching[j]
-            m isa Int && push!(matched_srcs, m)
-        end
-        can_pin_candidates = length(matched_srcs) == length(eqs_needing_absorb)
-    end
-    if can_pin_candidates
-        trial_subs = Dict{SymbolicT, SymbolicT}(
-            var => affect_pin_replacement(var) for var in candidates
-        )
-        parent_unknown_set = Set{SymbolicT}()
-        for var in unknowns(_unhack_sys)
-            push!(parent_unknown_set, var)
-            push!(parent_unknown_set, split_indexed_var(var)[1])
-        end
-        pin_ok = true
-        for eq in substitute(alg_extra, trial_subs)
-            eq_vars = _vars_outside_pre!(_varsbuf_extra, eq)
-            has_free = false
-            for a in eq_vars
-                iscall(a) && operation(a) isa Pre && continue
-                hasmetadata(a, AffectPinOrigin) && continue
-                any(isequal(a), keys(trial_subs)) && continue
-                if _in_sym_set(a, parent_unknown_set) && !_in_sym_set(a, assigned)
-                    has_free = true
-                    break
-                end
-            end
-            if !has_free && !_eq_identically_zero(eq)
-                pin_ok = false
-                break
-            end
-        end
-        if pin_ok
-            pin_subs = trial_subs
-        end
-    end
-    affect = Equation[user_affect; extra_eqs]
-    isempty(pin_subs) || (affect = substitute(affect, pin_subs))
-
     discrete_parameters = SymbolicAffect(affect; discrete_parameters).discrete_parameters
+    pin_subs = affect_pin_substitutions(_unhack_sys, affect, discrete_parameters)
+    extra_eqs = Equation[alg_equations(_unhack_sys); observed(_unhack_sys)]
+    affect = [affect; extra_eqs]
+    isempty(pin_subs) || (affect = substitute(affect, pin_subs))
 
     for p in discrete_parameters
         SU.query(isequal(unwrap(iv)), unwrap(p)) ||

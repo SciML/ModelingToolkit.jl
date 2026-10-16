@@ -2208,6 +2208,52 @@ end
     @test sol(t_after; idxs = λ) ≈ sol(t_after; idxs = u[1]) rtol = 1.0e-8
 end
 
+@testset "Issue#5200: differentials are pinned per independent part of the system" begin
+    # `z` must move to satisfy `z * y ~ p` after `y` is assigned; that must not stop `v`
+    # from being pinned in the unrelated `0 ~ 2λ + v - 2on` part.
+    @variables x(t) v(t) λ(t) [guess = 0.0] z(t) y(t) [guess = 1.0]
+    @discretes on(t) = 1.0
+    @parameters p = 1.0
+    eqs = [D(x) ~ v, D(v) ~ -λ, 0 ~ 2λ + v - 2on, D(z) ~ 1.0e-16, z * y ~ p]
+    ev = SymbolicDiscreteCallback(
+        [0.5], [on ~ 0.0, y ~ Pre(y) + 1]; discrete_parameters = [on]
+    )
+    @mtkcompile sys = System(eqs, t, [x, v, λ, z, y], [on, p]; discrete_events = [ev])
+    aff = affects(only(discrete_events(sys)))
+    @test any(isequal(v), parameters(aff))
+    @test !any(isequal(z), parameters(aff))
+
+    prob = ODEProblem(sys, [x => 0.0, v => 1.0, z => 1.0], (0.0, 1.0))
+    sol = solve(prob, Rodas5P(); abstol = 1.0e-10, reltol = 1.0e-10)
+    @test SciMLBase.successful_retcode(sol)
+    i = findall(==(0.5), sol.t)
+    @test length(i) >= 2
+    @test sol[v][i[end]] ≈ sol[v][i[1]] rtol = 1.0e-10
+    @test sol[z][i[end]] ≈ 0.5 rtol = 1.0e-10
+    @test sol[y][i[end]] ≈ 2.0 rtol = 1.0e-10
+    t_after = sol.t[findfirst(>(0.5), sol.t)]
+    @test sol(t_after; idxs = λ) ≈ -sol(t_after; idxs = v) / 2 rtol = 1.0e-8
+end
+
+@testset "Issue#5200: assigning one array element keeps the other elements pinned" begin
+    @variables u(t)[1:2] λ(t) [guess = 0.0]
+    @discretes on(t) = 1.0
+    eqs = [D(u) ~ [-u[1], -λ], 0 ~ 2λ + u[2] - 2on]
+    ev = SymbolicDiscreteCallback(
+        [0.5], [on ~ 0.0, u[1] ~ 2.0]; discrete_parameters = [on]
+    )
+    @mtkcompile sys = System(eqs, t, [u..., λ], [on]; discrete_events = [ev])
+    prob = ODEProblem(sys, [u => [1.0, 1.0]], (0.0, 1.0))
+    sol = solve(prob, Rodas5P(); abstol = 1.0e-10, reltol = 1.0e-10)
+    @test SciMLBase.successful_retcode(sol)
+    i = findall(==(0.5), sol.t)
+    @test length(i) >= 2
+    @test sol[u[1]][i[end]] ≈ 2.0 rtol = 1.0e-10
+    @test sol[u[2]][i[end]] ≈ sol[u[2]][i[1]] rtol = 1.0e-10
+    t_after = sol.t[findfirst(>(0.5), sol.t)]
+    @test sol(t_after; idxs = λ) ≈ -sol(t_after; idxs = u[2]) / 2 rtol = 1.0e-8
+end
+
 @testset "Symbolic array index in affect (issue #5078)" begin
     @variables x(t) y(t)
     @discretes k(t)::Int = 1 c(t) = 1.0
