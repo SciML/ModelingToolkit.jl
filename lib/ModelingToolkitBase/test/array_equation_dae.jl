@@ -209,3 +209,41 @@ end
     @test SciMLBase.successful_retcode(sol)
     @test maximum(abs, sol.u[end] .- [exp(-pi^2 * 0.1) * sinpi(x) for x in xs]) < 1.0e-2
 end
+
+# An array unknown alongside a scalar one, with parameters for symbolic initial values.
+function decay_array_system(n)
+    @independent_variables t
+    @variables u(t)[1:n] w(t)
+    @parameters b c
+    D = Differential(t)
+    @named sys = System([D(u) ~ -b .* u, D(w) ~ -w], t, [u, w], [b, c])
+    return complete(sys), u, w, b, c, D
+end
+
+@testset "symbolic `du0` of an array unknown is substituted through the varmap" begin
+    n = 4
+    sys, u, w, b, c, D = decay_array_system(n)
+    # `D(u[i])` refers to `D(w)`, which refers to `b`, which refers to `c`
+    op = vcat(
+        [u => w .* collect(1:n), w => 10.0, c => 3.0, b => 2c, D(w) => b * w],
+        [D(u[i]) => b * u[i] + D(w) for i in 1:n]
+    )
+    prob = DAEProblem(sys, op, (0.0, 1.0); build_initializeprob = false)
+    @test prob[u] == 10.0 .* (1:n)
+    @test prob[w] == 10.0
+    @test prob.du0 == vcat(60.0 .* (1:n) .+ 60.0, 60.0)
+end
+
+@testset "`du0` substitution is linear in the array length" begin
+    # `du0` is evaluated per scalar `D(u[i])`, but substitution acts on the whole array.
+    # Substituting it once per element made construction quadratic in `n`.
+    function construction_allocs(n)
+        sys, u, w, b, c, D = decay_array_system(n)
+        op = [u => ones(n), w => 1.0, c => 1.0, b => 2.0, D(w) => -w, D(u) => -b .* u]
+        build() = DAEProblem(sys, op, (0.0, 1.0); build_initializeprob = false)
+        build()
+        return @allocated build()
+    end
+    # linear scaling gives a ratio near 4, quadratic near 16
+    @test construction_allocs(2000) / construction_allocs(500) < 8
+end
