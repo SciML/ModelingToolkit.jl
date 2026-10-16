@@ -118,6 +118,64 @@ sol = solve(prob, Rodas5P())
     fully_determined = true
 )
 
+@testset "residual-form DAE initialization with array slices" begin
+    @independent_variables t_residual
+    @variables sx(t_residual) sy(t_residual)[1:3]
+    D = Differential(t_residual)
+
+    function check_residual_initialization(eqs, unks, op, expected_du; guesses = [])
+        sys = complete(System(eqs, t_residual, unks, []; name = :residual))
+        prob = DAEProblem(
+            sys, op, (0.0, 1.0); build_initializeprob = true, guesses
+        )
+        @test SciMLBase.successful_retcode(solve(prob.f.initializeprob))
+
+        integ = init(prob, DFBDF())
+        @test integ.du ≈ expected_du
+        residual = similar(integ.u)
+        prob.f(residual, integ.du, integ.u, integ.p, 0.0)
+        @test residual ≈ zeros(length(residual))
+    end
+
+    cases = [
+        (
+            "scalar", [0 ~ D(sx) + sx], [sx],
+            [sx => 1.0, D(sx) => -1.0], [-1.0],
+        ),
+        (
+            "array scalar equations", [0 ~ D(sy[i]) + sy[i] for i in 1:3],
+            [sy], [sy => [1.0, 2.0, 3.0], D(sy) => -[1.0, 2.0, 3.0]],
+            -[1.0, 2.0, 3.0],
+        ),
+        (
+            "scalarized slice equations", [zeros(3) ~ D(sy[1:3]) + sy[1:3]],
+            collect(sy),
+            [el => v for (el, v) in zip(vcat(collect(sy), D.(collect(sy))), [1.0, 2.0, 3.0, -1.0, -2.0, -3.0])],
+            -[1.0, 2.0, 3.0],
+        ),
+        (
+            "array slice equations", [zeros(3) ~ D(sy[1:3]) + sy[1:3]],
+            [sy], [sy => [1.0, 2.0, 3.0], D(sy) => -[1.0, 2.0, 3.0]],
+            -[1.0, 2.0, 3.0],
+        ),
+    ]
+    for (label, eqs, unks, op, expected_du) in cases
+        @testset "$label" begin
+            check_residual_initialization(eqs, unks, op, expected_du)
+        end
+    end
+
+    @testset "inconsistent fixed derivative operating point fails" begin
+        sys = complete(System([0 ~ D(sx) + sx], t_residual, [sx], []; name = :residual))
+        prob = DAEProblem(
+            sys, [sx => 1.0, D(sx) => 0.0], (0.0, 1.0);
+            build_initializeprob = true
+        )
+        @test !SciMLBase.successful_retcode(solve(prob.f.initializeprob))
+        @test !SciMLBase.successful_retcode(solve(prob, DFBDF()))
+    end
+end
+
 @testset "Unbalanced initialization error names the initialization system" begin
     err = try
         ODEProblem(
@@ -1868,13 +1926,19 @@ end
 
     auto_u = auto_data.initializeprobmap(auto_data.initializeprob)
     full_u = full_data.initializeprobmap(full_data.initializeprob)
-    @test full_u isa StaticVector
+    # Static `u0` is opt-in via `u0_constructor` (see the `static_constructor` cases
+    # below); without it the map returns the problem's own buffer type.
+    @test typeof(full_u) === typeof(full_prob.u0)
     @test full_u == auto_u
 
     auto_p = auto_data.initializeprobpmap(auto_prob, auto_data.initializeprob)
     full_p = full_data.initializeprobpmap(full_prob, full_data.initializeprob)
-    @test full_p.tunable isa StaticVector
-    @test full_p.initials isa StaticVector
+    # The map rebuilds `p`, and solve-time initialization assigns the result straight
+    # back into the integrator, so each buffer must come back as the exact type the
+    # problem's own `p` carries. Static storage appears where the problem uses it — see
+    # the `static_constructor` cases below.
+    @test typeof(full_p.tunable) === typeof(full_prob.p.tunable)
+    @test typeof(full_p.initials) === typeof(full_prob.p.initials)
     @test full_p.tunable == auto_p.tunable
     @test full_p.initials == auto_p.initials
     @test full_p.discrete == auto_p.discrete
@@ -1984,10 +2048,41 @@ end
     )
     nonbits_init = nonbits_prob.f.initialization_data
     nonbits_p = nonbits_init.initializeprobpmap(nonbits_prob, nonbits_init.initializeprob)
-    @test nonbits_p.tunable isa StaticArray
-    @test nonbits_p.initials isa StaticArray
+    @test typeof(nonbits_p.tunable) === typeof(nonbits_prob.p.tunable)
+    @test typeof(nonbits_p.initials) === typeof(nonbits_prob.p.initials)
     @test !any(buf -> buf isa StaticArray, nonbits_p.nonnumeric)
     @test remake(nonbits_prob, p = [nonbits_rate => 3.0]).p.tunable == [3.0]
+end
+
+@testset "FullSpecialize initialization survives a solve-time initialization" begin
+    # A nonlinear `initialization_eqs` is solved at `solve` time, and the result of
+    # `initializeprobpmap` is assigned straight into the integrator, which cannot convert
+    # between buffer types. So the map has to rebuild `p` with the problem's own buffer
+    # types rather than promoting them to `StaticArray`s.
+    @variables def_x(t) def_y(t)
+    @parameters def_rate = 1.0
+    @mtkcompile def_sys = System(
+        [D(def_x) ~ -def_rate * def_x, D(def_y) ~ -def_y], t;
+        initialization_eqs = [def_x^3 + def_x ~ 2, def_y ~ 2def_x + 1]
+    )
+    def_guesses = [def_x => 1.0, def_y => 1.0]
+
+    def_prob = ODEProblem{true, SciMLBase.FullSpecialize}(
+        def_sys, [], (0.0, 0.1); guesses = def_guesses
+    )
+    def_data = def_prob.f.initialization_data
+    @test def_data.initializeprobpmap isa RuntimeGeneratedFunction
+    @test typeof(def_data.initializeprobpmap(def_prob, def_data.initializeprob)) ===
+        typeof(def_prob.p)
+
+    def_sol = solve(def_prob, Tsit5())
+    @test SciMLBase.successful_retcode(def_sol)
+    auto_sol = solve(
+        ODEProblem{true, SciMLBase.AutoDespecialize}(
+            def_sys, [], (0.0, 0.1); guesses = def_guesses
+        ), Tsit5()
+    )
+    @test def_sol.u[1] == auto_sol.u[1]
 end
 
 @testset "Issue#3570, #3552: `Initial`s/guesses are copied to `u0` during `solve`/`init`" begin
@@ -2504,4 +2599,38 @@ end
     @test meta isa ModelingToolkitBase.InitializationMetadata
     @test ModelingToolkitBase.EnzymeCore.EnzymeRules.inactive_type(typeof(meta))
     @test ModelingToolkitBase.EnzymeCore.EnzymeRules.inactive_type(typeof(sys))
+end
+
+@testset "A buffer holding a single Bool discrete is copied from the initialization problem" begin
+    # The only Bool in the parameter object: its buffer is copied element by element from the
+    # initialization problem, through a template with a single entry
+    for n in (1, 2)
+        @discretes b(t)[1:n]::Bool
+        @variables x(t) = 0.0
+        ev = ModelingToolkitBase.SymbolicDiscreteCallback(0.1 => [b ~ .!Pre(b)]; discrete_parameters = [b])
+        @named sys = System([D(x) ~ ifelse(b[1], 1.0, -1.0)], t, [x], [b]; discrete_events = [ev])
+        prob = ODEProblem(mtkcompile(sys), [b => fill(true, n)], (0.0, 1.0))
+        @test prob.ps[b] == fill(true, n)
+        sol = solve(prob, Tsit5())
+        @test SciMLBase.successful_retcode(sol)
+    end
+end
+
+@testset "Inputs represented by time-independent parameters" begin
+    @variables x(t) = 1.0
+    @parameters u = 2.0
+    @named sys = System([D(x) ~ -x + u], t; inputs = [u])
+    sys = complete(sys)
+    @test isequal(only(ModelingToolkitBase.inputs(sys)), ModelingToolkitBase.unwrap(u))
+    prob = ODEProblem(sys, [], (0.0, 1.0))
+    @test prob[x] == 1.0
+    @test prob.ps[u] == 2.0
+    sol = solve(prob, Tsit5())
+    @test SciMLBase.successful_retcode(sol)
+    # With an initialization equation that involves the input
+    @variables z(t)
+    @named sys2 = System([D(z) ~ -z + u], t; inputs = [u], initialization_eqs = [z ~ 2u])
+    sys2 = complete(sys2)
+    prob2 = ODEProblem(sys2, [], (0.0, 1.0))
+    @test prob2[z] ≈ 4.0
 end

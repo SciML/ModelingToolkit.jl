@@ -384,11 +384,7 @@ function varmap_to_vars(
             MissingGuessValue.Constant(val) => begin
                 cval = BSImpl.Const{VartypeT}(val)
                 for var in missing_vars
-                    if Symbolics.isarraysymbolic(var)
-                        varmap[var] = BSImpl.Const{VartypeT}(fill(val, size(var)))
-                    else
-                        write_possibly_indexed_array!(varmap, var, cval, COMMON_NOTHING)
-                    end
+                    write_possibly_indexed_array!(varmap, var, cval, COMMON_NOTHING)
                 end
             end
             MissingGuessValue.Random(rng) => begin
@@ -660,13 +656,7 @@ function add_initials!(sys::AbstractSystem, op::SymmapT)
         haskey(op, p) && continue
         Moshi.Match.@match p begin
             BSImpl.Term(; f, args) && if f isa Initial end => begin
-                write_possibly_indexed_array!(
-                    op, p, if Symbolics.isarraysymbolic(p)
-                        BSImpl.Const{VartypeT}(fill(false, size(p)))
-                    else
-                        COMMON_FALSE
-                    end, COMMON_FALSE
-                )
+                write_possibly_indexed_array!(op, p, COMMON_FALSE, COMMON_FALSE)
             end
             _ => nothing
         end
@@ -833,12 +823,16 @@ function __apply_copy_template(valp, template)
         return p.constant[template.idx[1]][template.idx[2]]
     elseif template isa ParameterIndex{Nonnumeric, Tuple{Int, UnitRange{Int}}}
         return p.nonnumeric[template.idx[1]][template.idx[2]]
+    elseif template isa ParameterIndex{SciMLStructures.Caches, Tuple{Int, UnitRange{Int}}}
+        return p.caches[template.idx[1]][template.idx[2]]
     elseif template isa StaticBufferIndex{SciMLStructures.Discrete}
         return _static_buffer(p.discrete, template)[template.range]
     elseif template isa StaticBufferIndex{SciMLStructures.Constants}
         return _static_buffer(p.constant, template)[template.range]
     elseif template isa StaticBufferIndex{Nonnumeric}
         return _static_buffer(p.nonnumeric, template)[template.range]
+    elseif template isa StaticBufferIndex{SciMLStructures.Caches}
+        return _static_buffer(p.caches, template)[template.range]
     elseif template isa UnitRange{Int}
         return u[template]
     elseif template isa ObservedWrapper
@@ -850,9 +844,12 @@ function __apply_copy_template(valp, template)
     elseif template isa ParameterIndex{SciMLStructures.Constants, <:Tuple{Vararg{Int}}}
         i, j, rest... = template.idx
         return p.constant[i][j][rest...]
-    elseif template isa ParameterIndex{SciMLStructures.Nonnumeric, <:Tuple{Vararg{Int}}}
+    elseif template isa ParameterIndex{Nonnumeric, <:Tuple{Vararg{Int}}}
         i, j, rest... = template.idx
         return p.nonnumeric[i][j][rest...]
+    elseif template isa ParameterIndex{SciMLStructures.Caches, <:Tuple{Vararg{Int}}}
+        i, j, rest... = template.idx
+        return p.caches[i][j][rest...]
     else
         # MethodError because this is a manual dispatch chain
         throw(MethodError(__apply_copy_template, (valp, template)))
@@ -867,14 +864,23 @@ end
     end
 end
 
+# `mapreduce(f, vcat, (t,))` returns `f(t)` itself, so a root template with a single entry
+# that indexes one element of a buffer yields a scalar rather than a vector.
+__as_root_vector(x::AbstractArray) = x
+__as_root_vector(x) = [x]
+
 function (cp::CopyParamsByTemplate{IsRoot})(src) where {IsRoot}
     return if IsRoot
         if cp.fallback_getter === nothing
-            reshape(mapreduce(Base.Fix1(__apply_copy_template, src), vcat, cp.template), cp.size)
+            reshape(
+                __as_root_vector(mapreduce(Base.Fix1(__apply_copy_template, src), vcat, cp.template)),
+                cp.size
+            )
         else
             fb = cp.fallback_getter(src)
             reshape(
-                mapreduce(t -> __apply_root_template(src, t, fb), vcat, cp.template), cp.size
+                __as_root_vector(mapreduce(t -> __apply_root_template(src, t, fb), vcat, cp.template)),
+                cp.size
             )
         end
     else
@@ -1009,6 +1015,7 @@ function CopyParamsByTemplate(srcsys::AbstractSystem, syms::AbstractArray{Symbol
             _bufidx[2]:_bufidx[2]
         elseif _bufidx isa Tuple{Vararg{Int}} # indexing into a non-tunable array parameter
             push!(template, symidx)
+            push!(elem_types, typeof(symidx))
             continue
         else
             # Will error due to the typeassert on `bufidx`
@@ -1077,7 +1084,7 @@ function CopyParamsByTemplate(srcsys::AbstractSystem, syms::AbstractArray{Symbol
     for i in eachindex(template)
         entry = template[i]
         # Only lift the `(bufidx, range)` form into the type domain.
-        if entry isa ParameterIndex && entry.portion isa Union{SciMLStructures.Discrete, SciMLStructures.Constants, Nonnumeric} && entry.idx isa Tuple{Int, UnitRange{Int}}
+        if entry isa ParameterIndex && entry.portion isa Union{SciMLStructures.Discrete, SciMLStructures.Constants, Nonnumeric, SciMLStructures.Caches} && entry.idx isa Tuple{Int, UnitRange{Int}}
             delete!(elem_types, typeof(entry))
             template[i] = StaticBufferIndex{typeof(entry.portion)}(entry.idx)
             push!(elem_types, typeof(template[i]))
@@ -1149,9 +1156,12 @@ function (recon::MTKParametersReconstructor)(src, dst_ps::MTKParameters)
     end
     initialvals = recon.initials_fn(src)
     nonnumerics = recon.nonnumerics_fn(src)::typeof(dst_ps.nonnumeric)
+    caches = oldcache isa Tuple{} ? () : copy.(oldcache)
+    # The `DiffCache` scratch buffers are not copied from `src`; they are re-typed to
+    # match the value type of the reconstructed parameters.
     (; diffcache_buffer_idx) = recon
     if !iszero(diffcache_buffer_idx)
-        @set! nonnumerics[diffcache_buffer_idx] = DiffCacheAllocatorAPIWrapper{ForwardDiff.valtype(eltype(initialvals))}.(nonnumerics[diffcache_buffer_idx])
+        @set! caches[diffcache_buffer_idx] = DiffCacheAllocatorAPIWrapper{ForwardDiff.valtype(eltype(initialvals))}.(caches[diffcache_buffer_idx])
     end
     # This `convert` exists because a `Real` discrete might get its value from an
     # integer function of integer parameters/discretes. This ends up creating a
@@ -1159,7 +1169,7 @@ function (recon::MTKParametersReconstructor)(src, dst_ps::MTKParameters)
     return MTKParameters(
         tunablevals, initialvals,
         convert(typeof(dst_ps.discrete), recon.discretes_fn(src)),
-        recon.consts_fn(src), nonnumerics, oldcache isa Tuple{} ? () : copy.(oldcache)
+        recon.consts_fn(src), nonnumerics, caches
     )
 end
 
@@ -1234,7 +1244,6 @@ function MTKParametersReconstructor(
     else
         Base.Fix1(broadcast, p_constructor) ∘ Tuple ∘ CopyParamsByTemplate(srcsys, syms[4]; kwargs...)
     end
-    diffcache_buffer_idx = 0
     nonnumeric_getter = if isempty(syms[5])
         Returns(())
     else
@@ -1244,18 +1253,17 @@ function MTKParametersReconstructor(
                 Vector{bufsize.type}
             end
         )
-
-        diffcache_params = SU.getmetadata(dstsys, DiffCacheParams, Dict{SymbolicT, Int}())::Dict{SymbolicT, Int}
-        if !isempty(diffcache_params)
-            representative = first(keys(diffcache_params))
-            diffcache_buffer_idx, _ = ic.nonnumeric_idx[representative]
-            @set! buftypes[diffcache_buffer_idx] = identity
-            for (i, sym) in enumerate(syms[5][diffcache_buffer_idx])
-            end
-        end
         # nonnumerics retain the assigned buffer type without narrowing
         Base.Fix1(broadcast, _p_constructor) ∘
             Base.Fix1(Broadcast.BroadcastFunction(call), buftypes) ∘ Tuple ∘ CopyParamsByTemplate(srcsys, syms[5]; kwargs...)
+    end
+
+    # `DiffCache` buffers live in `caches` and are taken from the destination, not `src`.
+    diffcache_buffer_idx = 0
+    diffcache_params = SU.getmetadata(dstsys, DiffCacheParams, Dict{SymbolicT, Int}())::Dict{SymbolicT, Int}
+    if !isempty(diffcache_params)
+        ic = get_index_cache(dstsys)
+        diffcache_buffer_idx, _ = ic.caches_idx[first(keys(diffcache_params))]
     end
 
     return MTKParametersReconstructor(tunable_getter, initials_getter, discs_getter, const_getter, nonnumeric_getter, diffcache_buffer_idx)
@@ -1457,7 +1465,7 @@ struct InitializationMetadata{R <: ReconstructInitializeprob, GUU, SIU}
     get_updated_u0::GUU
     """
     A function which takes parameter object and `u0` of the problem and sets
-    `Initial.(unknowns(sys))` in the former, returning the updated parameter object.
+    `Initial.(flat_unknowns(sys))` in the former, returning the updated parameter object.
     """
     set_initial_unknowns!::SIU
     """
@@ -1478,27 +1486,27 @@ $(TYPEDFIELDS)
 """
 struct GetUpdatedU0{GG, GIU}
     """
-    Mask with length `length(unknowns(sys))` denoting indices of variables which should
-    take the guess value from `initializeprob`.
+    Mask with length `length(flat_unknowns(sys))` denoting indices of variables which
+    should take the guess value from `initializeprob`.
     """
     guessvars::BitVector
     """
     Function which returns the values of variables in `initializeprob` for which
-    `guessvars` is `true`, in the order they occur in `unknowns(sys)`.
+    `guessvars` is `true`, in the order they occur in `flat_unknowns(sys)`.
     """
     get_guessvars::GG
     """
-    Function which returns `Initial.(unknowns(sys))` as a `Vector`.
+    Function which returns `Initial.(flat_unknowns(sys))` as a `Vector`.
     """
     get_initial_unknowns::GIU
 end
 
 function GetUpdatedU0(sys::AbstractSystem, initsys::AbstractSystem, op::AbstractDict; kwargs...)
-    dvs = unknowns(sys)
+    dvs = flat_unknowns(sys)
     eqs = equations(sys)
     guessvars = trues(length(dvs))
     for (i, var) in enumerate(dvs)
-        varval = get(op, var, COMMON_NOTHING)
+        varval = get_possibly_indexed(op, var, COMMON_NOTHING)
         guessvars[i] = varval === COMMON_NOTHING || !SU.isconst(varval)
     end
     get_guessvars = iszero(count(guessvars)) ? nothing : CopyParamsByTemplate(initsys, dvs[guessvars]; kwargs...)
@@ -1521,7 +1529,7 @@ struct SetInitialUnknowns{S}
 end
 
 function SetInitialUnknowns(sys::AbstractSystem)
-    initpars = Initial.(unknowns(sys))
+    initpars = Initial.(flat_unknowns(sys))
     idxs_in_initials = Int[]
     sizehint!(idxs_in_initials, length(initpars))
     if is_split(sys)
@@ -1683,15 +1691,18 @@ function _construct_fullspecialize_initializeprobmap(
     sol = INITMAP_SOLUTION
     sources = _generated_map_sources(sol, is_time_dependent(initsys))
     n = length(solved_unknowns)
-    static_type = iip ? MVector : SVector
+    # Static `u0` is opt-in through `u0_constructor`, exactly as on the default map path.
+    # Forcing it here would change `prob.u0`'s type out from under the caller, and an
+    # `MVector` cannot even be the element type of a GPU array.
+    u0_prototype = u0_constructor === identity ? Expr(:curly, Vector, INITMAP_ELTYPE) :
+        Expr(:curly, SVector, n, INITMAP_ELTYPE)
     map_expr = _generated_map_expr(expr, [sol], sources) do raw
         T = INITMAP_ELTYPE
         p = Expr(:call, GlobalRef(SymbolicIndexingInterface, :parameter_values), sol)
         tunable_eltype = Expr(:call, GlobalRef(@__MODULE__, :_tunable_eltype), p)
         promoted = Expr(:call, promote_type, Expr(:call, eltype, raw), tunable_eltype, floatT)
         static_values = Expr(
-            :call, GlobalRef(@__MODULE__, :_static_initialization_buffer),
-            Expr(:curly, static_type, n, T), raw
+            :call, GlobalRef(@__MODULE__, :_static_initialization_buffer), u0_prototype, raw
         )
         result = Expr(:call, QuoteNode(u0_constructor), static_values)
         if iip
@@ -1704,15 +1715,33 @@ function _construct_fullspecialize_initializeprobmap(
     )
 end
 
+# `prototype` says what the result has to look like: a `StaticArray` type for the state
+# map, and the problem's own corresponding `p` buffer for each parameter portion.
 function _static_initialization_buffer(prototype, values)
-    T = isempty(values) ? eltype(prototype) :
-        promote_type(eltype(prototype), mapreduce(typeof, promote_type, values))
-    if !ArrayInterface.ismutable(prototype)
+    P = prototype isa Type ? prototype : typeof(prototype)
+    T = isempty(values) ? eltype(P) :
+        promote_type(eltype(P), mapreduce(typeof, promote_type, values))
+    if !ArrayInterface.ismutable(P)
         return SVector{length(values), T}(values)
-    elseif isbitstype(T)
+    elseif P <: StaticArray && isbitstype(T)
         return MVector{length(values), T}(values)
     else
-        return collect(T, values)
+        # A plain mutable buffer stays plain. The map rebuilds `p`, and solve-time
+        # initialization assigns the result straight back (`integrator.p = pmap(...)`),
+        # which cannot convert between buffer types — so the result must carry the same
+        # `MTKParameters` type the problem already has. Static storage is produced exactly
+        # where the problem already uses it, which is the GPU / `p_constructor` case this
+        # path exists for. A mutable non-isbits buffer additionally cannot be a
+        # `StaticArray` at all: `MVector` rejects `setindex!` on a non-isbits eltype.
+        #
+        # Filled explicitly rather than with `collect`, because StaticArrays overloads
+        # `collect` to preserve staticness: `collect(T, ::SVector)` returns a
+        # `SizedVector`, not a `Vector`.
+        buffer = Vector{T}(undef, length(values))
+        for (i, value) in enumerate(values)
+            buffer[i] = value
+        end
+        return buffer
     end
 end
 
@@ -2188,7 +2217,7 @@ function maybe_build_initialization_problem(
 
     if time_dependent_init
         all_init_syms = Set(all_symbols(initializeprob))
-        solved_unknowns = filter(var -> var in all_init_syms, unknowns(sys))
+        solved_unknowns = filter(var -> var in all_init_syms, flat_unknowns(sys))
         if isempty(solved_unknowns)
             initializeprobmap = nothing
         elseif map_specialize === SciMLBase.FullSpecialize
@@ -2436,9 +2465,11 @@ function __process_SciMLProblem(
     iv = has_iv(sys) ? get_iv(sys) : nothing
     eqs = equations(sys)
 
-    # Implicit-DAE codegen expands an array equation into one output row per element, so
-    # array equations are usable there. Every other problem type still needs `mtkcompile`.
-    implicit_dae || check_array_equations_unknowns(eqs, dvs)
+    # Residual-style codegen expands an array equation into one output row per element,
+    # so constructors that build such residuals accept array equations directly.
+    # Every other problem type still needs `mtkcompile`.
+    accepts_array_equations(constructor) || check_array_equations(eqs)
+    dvs = flat_unknowns(sys)
 
     op = build_operating_point(sys, op; fast_path = true)
 
@@ -2556,17 +2587,20 @@ function __process_SciMLProblem(
         du0 = nothing
     end
 
-    if constructor <: NonlinearFunction && length(dvs) != length(eqs)
-        kwargs = merge(
-            kwargs,
-            (;
-                resid_prototype = u0_constructor(
-                    calculate_resid_prototype(
-                        length(eqs), u0, p
-                    )
-                ),
+    if constructor <: NonlinearFunction
+        nrows = count_equation_rows(eqs)
+        if length(dvs) != nrows
+            kwargs = merge(
+                kwargs,
+                (;
+                    resid_prototype = u0_constructor(
+                        calculate_resid_prototype(
+                            nrows, u0, p
+                        )
+                    ),
+                )
             )
-        )
+        end
     end
 
     f = constructor(
@@ -2582,6 +2616,20 @@ function __process_SciMLProblem(
         return implicit_dae ? (f, du0, u0, p) : (f, u0, p)
     end
 end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Whether `constructor` accepts a system containing array equations (equations whose sides
+are array-valued). Residual-style codegen lowers each array equation to one scalar row
+per element through `array_residual_maker`; constructors whose generated function does
+not assemble residuals this way must keep returning `false`, so that the system is
+required to be scalarized by `mtkcompile` first.
+"""
+accepts_array_equations(::Type{<:SciMLBase.ODEFunction}) = true
+accepts_array_equations(::Type{<:SciMLBase.DAEFunction}) = true
+accepts_array_equations(::Type{<:SciMLBase.NonlinearFunction}) = true
+accepts_array_equations(::Any) = false
 
 # Check that the keys of a u0map or pmap are valid
 # (i.e. are symbolic keys, and are defined for the system.)

@@ -46,10 +46,11 @@ function SciMLBase.NonlinearFunction{iip, spec}(
         if u0 === nothing || p === nothing
             error("u0, and p must be specified for FunctionWrapperSpecialize on NonlinearFunction.")
         end
+        resid = resid_prototype === nothing ? u0 : resid_prototype
         if E
-            f = :($(SciMLBase.wrapfun_iip)($f, ($u0, $u0, $p)))
+            f = :($(SciMLBase.wrapfun_iip)($f, ($resid, $u0, $p)))
         else
-            f = SciMLBase.wrapfun_iip(f, (u0, u0, p))
+            f = SciMLBase.wrapfun_iip(f, (resid, u0, p))
         end
     end
 
@@ -85,13 +86,13 @@ end
     $(TYPEDSIGNATURES)
 
 Construct the `lb` and `ub` vectors of bounds for the unknowns of `sys` from their `bounds`
-metadata, aligned with the order of `unknowns(sys)`. `op` is the operating point used to
+metadata, aligned with the order of `flat_unknowns(sys)`. `op` is the operating point used to
 resolve any symbolic bounds. Returns `(nothing, nothing)` if no unknown has a finite bound,
 so problems without bounds are left untouched (and don't trigger the bounds-handling path in
 the solver). See also [`getbounds`](@ref).
 """
 function generate_nonlinear_bounds(sys::AbstractSystem, op)
-    dvs = unknowns(sys)
+    dvs = flat_unknowns(sys)
     isempty(dvs) && return nothing, nothing
     lb = first.(getbounds.(dvs))
     ub = last.(getbounds.(dvs))
@@ -221,7 +222,7 @@ end
     f, u0,
         p = process_SciMLProblem(
         NonlinearFunction{_iip, spec}, sys, op;
-        check_length, expression, kwargs...
+        check_length, check_compatibility, expression, kwargs...
     )
 
     lb, ub = resolve_nonlinear_bounds(sys, op, lb, ub)
