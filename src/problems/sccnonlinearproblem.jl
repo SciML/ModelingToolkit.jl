@@ -608,20 +608,7 @@ function SciMLBase.SCCNonlinearProblem{iip, specialize}(
         end
     end
 
-    # Multi-block SCC lowering is not defined for time-dependent systems (generated
-    # parameter buffers are wrong). Require an explicit conversion; if the user disables
-    # the check, convert safely rather than proceeding to a BoundsError.
-    if is_time_dependent(sys)
-        if check_compatibility
-            check_compatible_system(SCCNonlinearProblem, sys)
-        else
-            return SCCNonlinearProblem{iip, specialize}(
-                mtkcompile(NonlinearSystem(sys)), op;
-                eval_expression, eval_module, u0_constructor, missing_guess_value,
-                combine_sccs, check_compatibility = false, kwargs...
-            )
-        end
-    end
+    check_compatibility && check_compatible_system(SCCNonlinearProblem, sys)
 
     dvs = unknowns(sys)
     ps = parameters(sys)
@@ -629,7 +616,7 @@ function SciMLBase.SCCNonlinearProblem{iip, specialize}(
 
     _, u0, p = process_SciMLProblem(
         EmptySciMLFunction{iip}, sys, op; eval_expression, eval_module, symbolic_u0 = true,
-        missing_guess_value, kwargs...
+        missing_guess_value, check_compatibility, kwargs...
     )
     op = calculate_op_from_u0_p(sys, u0, p)
 
@@ -694,7 +681,7 @@ function SciMLBase.SCCNonlinearProblem{iip, specialize}(
         end
         f = SCCNonlinearFunction{iip}(
             decomposition, i, cachebufsyms, op;
-            specialize, eval_expression, eval_module, kwargs...
+            specialize, eval_expression, eval_module, check_compatibility, kwargs...
         )
         push!(nlfuns, f)
     end
@@ -816,16 +803,20 @@ function SciMLBase.SCCNonlinearProblem{iip, specialize}(
     end
 end
 
+# Only reached for multiple SCCs: the single-SCC fallback to `NonlinearProblem` converts
+# time-dependent systems itself, but the multi-block lowering generates wrong parameter
+# buffers for them.
 function MTKBase.check_compatible_system(::Type{<:SCCNonlinearProblem}, sys::System)
-    # Multi-block only: single-block/empty paths fall through to NonlinearProblem, which
-    # already converts. Do not suggest `check_compatibility = false` — that opt-out is
-    # handled above by converting rather than skipping into a BoundsError.
-    return check_time_independent(
-        sys, SCCNonlinearProblem;
-        suggest_disable = false,
-        msg = "`SCCNonlinearProblem` with multiple SCCs requires a time-independent system. " *
-            "Convert with `mtkcompile(NonlinearSystem(sys))` before constructing the problem.",
-    )
+    return if is_time_dependent(sys)
+        throw(
+            SystemCompatibilityError(
+                """
+                `SCCNonlinearProblem` with multiple SCCs requires a time-independent system. \
+                Convert it with `mtkcompile(NonlinearSystem(sys))` first.
+                """
+            )
+        )
+    end
 end
 
 function calculate_op_from_u0_p(sys::System, u0::Union{Nothing, AbstractVector}, p::MTKParameters)

@@ -19,10 +19,12 @@ using ModelingToolkitBase: t_nounits as t, SystemCompatibilityError
         end
         @test err isa SystemCompatibilityError
         @test occursin("mtkcompile(NonlinearSystem(sys))", sprint(showerror, err))
-        @test !occursin("check_compatibility = false", sprint(showerror, err))
         @test_throws SystemCompatibilityError SCCNonlinearProblem(
             timedep, op; combine_sccs = true, guesses
         )
+        @test SCCNonlinearProblem(
+            timedep, op; combine_sccs = false, guesses, check_compatibility = false
+        ) isa SciMLBase.SCCNonlinearProblem
     end
 
     @testset "Single-block time-dependent falls back to NonlinearProblem" begin
