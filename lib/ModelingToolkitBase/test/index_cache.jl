@@ -157,6 +157,13 @@ end
     @test SU.symtype(dcp) === SU.FnType{Tuple, Any, Any}
     sys = complete(sys)
     prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0))
+    # `DiffCache`s are scratch that generated code writes active values into, so they
+    # live in the AD-shadowed `caches` portion, not the Enzyme-inactive `nonnumeric` one.
+    @test isempty(prob.p.nonnumeric)
+    @test only(prob.p.caches) isa Vector{ModelingToolkitBase.DiffCacheAllocatorAPIWrapper{Float64}}
+    # generated code destructures `MTKParameters` through linear indexing
+    @test prob.p[length(prob.p)] === only(prob.p.caches)
+    @test copy(prob.p) == prob.p
     diffcachewrapper = prob.ps[dcp]
     arr = diffcachewrapper(1.0, (2, 2, 2))
     @test arr isa Array{Float64, 3}
