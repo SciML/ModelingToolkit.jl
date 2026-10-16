@@ -133,3 +133,23 @@ end
     sys = System(eqs, t, [x], [B, L]; name = :col, bindings = Dict(B => [0.0; 1 / L;;]))
     @test size(bindings(sys)[B]) == (2, 1)
 end
+
+@testset "Callable parameter bound to a function via `bindings` (#5259)" begin
+    # The shape of `foo` is that of its return value, while the binding is the
+    # Julia function itself; their sizes are not comparable.
+    array_parameter(x) = [x, 2x]
+    @parameters foo(::Real)[1:2]
+    @variables z(t)
+    sys = System(
+        [D(z) ~ foo(z)[2]], t, [z], [foo];
+        name = :c, bindings = Dict(foo => array_parameter)
+    )
+    @test haskey(bindings(sys), foo)
+    # `build_initializeprob = false` skips the initialization system, where the
+    # substituted call `(array_parameter(z))[2]` has symtype `Any` and tearing
+    # cannot form `0 ~ rhs - lhs` from it.
+    prob = ODEProblem(
+        mtkcompile(sys), [z => 1.0], (0.0, 1.0); build_initializeprob = false
+    )
+    @test prob isa ODEProblem
+end

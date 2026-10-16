@@ -392,10 +392,12 @@ function check_bindings(atomic_ps::AtomicArraySet{Dict{SymbolicT, Nothing}}, bin
                 )
             end
         else
-            # Known sizes must match; later symbolic substitution errors do not name the parameter.
+            # Known sizes must match; later symbolic substitution errors do not name the
+            # parameter. For a callable parameter the shape is that of the return value,
+            # while the binding is the function itself, so the sizes are not comparable.
             psh = SU.shape(p)
             vsh = SU.shape(val)
-            if !(psh isa SU.Unknown) && !(vsh isa SU.Unknown)
+            if !(psh isa SU.Unknown) && !(vsh isa SU.Unknown) && !(symtype(p) <: FnType)
                 psz = size(p)
                 vsz = size(val)
                 if psz != vsz
