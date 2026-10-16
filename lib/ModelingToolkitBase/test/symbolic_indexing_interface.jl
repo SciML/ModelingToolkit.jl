@@ -270,3 +270,27 @@ end
     sol = solve(prob, Tsit5())
     @test sol[p] == sol[:p] == sol.ps[p] == sol.ps[:p]
 end
+
+@testset "Array observed element dependencies" begin
+    SII = SymbolicIndexingInterface
+    t = ModelingToolkitBase.t_nounits
+    D = Differential(t)
+    for dims in ((6,), (2, 3))
+        ranges = map(n -> 1:n, dims)
+        @variables x(t)[ranges...] y(t)[ranges...]
+        @parameters gain = 2.0
+        sy = complete(
+            System(
+                [D(x) ~ -x], t, vec(collect(Symbolics.scalarize(x))), [gain];
+                observed = [y ~ gain .* x], name = :array_observed
+            )
+        )
+        initial = reshape(collect(1.0:prod(dims)), dims)
+        pr = DAEProblem(sy, [x => initial, D(x) => -initial], (0.0, 1.0); build_initializeprob = false)
+        @test SII.get_all_timeseries_indexes(sy, first(y)) == Set([SII.ContinuousTimeseries()])
+        @test SII.getu(pr, y)(pr) == 2initial
+        @test SII.getu(pr, first(y))(pr) == 2first(initial)
+        @test SII.getu(pr, (first(y), y[dims...]))(pr) == (2first(initial), 2last(initial))
+        @test SII.observed(pr, y)(pr.u0, pr.p, 0.0) == SII.getu(pr, y)(pr)
+    end
+end
