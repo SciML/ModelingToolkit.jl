@@ -8,6 +8,7 @@ using SymbolicIndexingInterface: getu, getp
 using StaticArrays
 using LinearAlgebra, Test
 using SymbolicUtils
+using Graphs
 import ModelingToolkitBase
 using Symbolics: SymbolicT, VartypeT, unwrap
 using ModelingToolkit: t_nounits as t, D_nounits as D
@@ -53,6 +54,26 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 
     # Test BLT sorted
     @test istril(StructuralTransformations.sorted_incidence_matrix(model), 2)
+end
+
+@testset "sorted_incidence_matrix column permutation" begin
+    # Non-square incidence with distinct columns and unmatched dummy derivatives:
+    # `var_sccs` alone is an incomplete column permutation (the #4961 failure mode).
+    @variables x(t) y(t)
+    @named sys = System([D(x) ~ -x, D(y) ~ -x - y], t)
+    compiled = mtkcompile(sys)
+    @test ModelingToolkit.get_schedule(compiled) !== nothing
+    ts = ModelingToolkit.get_tearing_state(compiled)
+    imat = Graphs.incidence_matrix(ts.structure.graph)
+    var_sccs = ModelingToolkit.get_schedule(compiled).var_sccs
+    matched = reduce(vcat, var_sccs)
+    q = vcat(matched, setdiff(axes(imat, 2), matched))
+    @test length(matched) < size(imat, 2)
+    @test length(q) == size(imat, 2)
+    @test !all(imat[:, i] == imat[:, 1] for i in axes(imat, 2))
+    @test Matrix(imat[:, q]) != Matrix(imat[:, reverse(q)])
+    M = StructuralTransformations.sorted_incidence_matrix(compiled)
+    @test M == imat[axes(imat, 1), q]
 end
 
 @testset "With parameters" begin
