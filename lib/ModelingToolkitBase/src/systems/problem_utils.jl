@@ -1952,12 +1952,11 @@ function _construct_fullspecialize_initializeprobpmap(
     prob = INITMAP_PROBLEM
     sol = INITMAP_SOLUTION
     sources = _generated_map_sources(sol, is_time_dependent(initsys))
+    ddexpr = isempty(solved_ddvs) ? nothing :
+        build_explicit_observed_function(initsys, Tuple(solved_ddvs), gen_opts)
     if !needs_pmap
         # No parameter reconstruction is required; the map only writes solved
         # derivative values and returns the existing `p`.
-        ddexpr = build_explicit_observed_function(
-            initsys, Tuple(solved_ddvs), gen_opts
-        )
         map_expr = _generated_map_expr(ddexpr, [prob, sol], sources) do raw
             return Expr(
                 :block,
@@ -1976,8 +1975,6 @@ function _construct_fullspecialize_initializeprobpmap(
             gen_opts.compiler_options
         )
     end
-    ddexpr = isempty(solved_ddvs) ? nothing :
-        build_explicit_observed_function(initsys, Tuple(solved_ddvs), gen_opts)
     ps = parameters(sys; initial_parameters = true)
     # One entry per `MTKParameters` portion, each holding that portion's buffers. Kept a
     # concretely typed `Vector` rather than a tuple of tuples: the portions are iterated,
