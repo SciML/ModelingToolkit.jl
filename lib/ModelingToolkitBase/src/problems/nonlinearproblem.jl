@@ -89,9 +89,8 @@ Restore the `sentinel` (`-Inf` for lower bounds, `Inf` for upper bounds) in `res
 every entry that was already `sentinel` in `metadata_bounds`.
 
 Symbolic bounds are resolved by merging the operating point into the bounds map, which also
-assigns every *unbounded* unknown its operating-point value. Those values are initial
-guesses, not bounds: left in place they pin the unknown to `lb == ub == u0`, which the
-solver's bounds transform turns into `NaN`.
+assigns every *unbounded* side of an unknown its operating-point value. Those values are
+initial guesses, not bounds: left in place they clamp the unknown at its initial value.
 """
 function restore_infinite_bounds(metadata_bounds, resolved, sentinel)
     return map(zip(metadata_bounds, resolved)) do (meta, res)

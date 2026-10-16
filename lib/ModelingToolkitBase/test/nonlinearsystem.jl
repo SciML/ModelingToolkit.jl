@@ -771,21 +771,22 @@ end
     @test uprob.lb == [-10.0]
     @test uprob.ub == [10.0]
 
-    # Symbolic bounds are resolved through the operating point, which must not leak the
-    # operating-point *value* of an unbounded unknown into its bounds. Doing so pins the
-    # unknown to `lb == ub == u0` and the solver's bounds transform then returns `NaN`.
+    # Symbolic bounds are resolved through the operating point, whose values for unknowns
+    # are initial guesses: they must not become the bound of an unbounded side.
     @parameters lo = -1.0
-    @variables sc [bounds = (lo, 1.0)] sd
-    @mtkcompile ssys = System([0 ~ sc^2 + sd^2 - 1, 0 ~ sc^2 - sd^2 - 0.5])
-    sprob = NonlinearProblem(ssys, [sc => 0.8, sd => 0.4])
-    sdvs = unknowns(ssys)
-    sci = findfirst(isequal(sc), sdvs)
-    sdi = findfirst(isequal(sd), sdvs)
-    @test sprob.lb[sci] == -1.0 && sprob.ub[sci] == 1.0
-    @test sprob.lb[sdi] == -Inf && sprob.ub[sdi] == Inf
-    ssol = solve(sprob)
-    @test SciMLBase.successful_retcode(ssol)
-    @test !any(isnan, ssol.u)
+    @variables sc [bounds = (lo, 1.0)] sd se [bounds = (0.0, Inf)]
+    for (v, vbounds) in [(sd, (-Inf, Inf)), (se, (0.0, Inf))]
+        @mtkcompile ssys = System([0 ~ sc^2 + v^2 - 1, 0 ~ sc^2 - v^2 - 0.5])
+        sprob = NonlinearProblem(ssys, [sc => 0.8, v => 0.4])
+        sdvs = unknowns(ssys)
+        sci = findfirst(isequal(sc), sdvs)
+        vi = findfirst(isequal(v), sdvs)
+        @test sprob.lb[sci] == -1.0 && sprob.ub[sci] == 1.0
+        @test (sprob.lb[vi], sprob.ub[vi]) == vbounds
+        ssol = solve(sprob)
+        @test SciMLBase.successful_retcode(ssol)
+        @test !any(isnan, ssol.u)
+    end
 end
 
 @testset "Array unknowns on a `complete`d system" begin
