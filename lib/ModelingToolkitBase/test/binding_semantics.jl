@@ -1,5 +1,6 @@
 using ModelingToolkitBase
 using ModelingToolkitBase: t_nounits as t, D_nounits as D, SymbolicContinuousCallback, SymbolicDiscreteCallback
+using OrdinaryDiffEqTsit5: Tsit5
 using Symbolics: SConst
 using Test
 
@@ -135,8 +136,6 @@ end
 end
 
 @testset "Callable parameter bound to a function via `bindings` (#5259)" begin
-    # The shape of `foo` is that of its return value, while the binding is the
-    # Julia function itself; their sizes are not comparable.
     array_parameter(x) = [x, 2x]
     @parameters foo(::Real)[1:2]
     @variables z(t)
@@ -147,9 +146,11 @@ end
     @test haskey(bindings(sys), foo)
     # `build_initializeprob = false` skips the initialization system, where the
     # substituted call `(array_parameter(z))[2]` has symtype `Any` and tearing
-    # cannot form `0 ~ rhs - lhs` from it.
+    # cannot form `0 ~ rhs - lhs` from it:
+    # https://github.com/SciML/ModelingToolkit.jl/issues/5282
     prob = ODEProblem(
         mtkcompile(sys), [z => 1.0], (0.0, 1.0); build_initializeprob = false
     )
-    @test prob isa ODEProblem
+    sol = solve(prob, Tsit5())
+    @test sol[z][end] ≈ exp(2) rtol = 1.0e-5
 end
