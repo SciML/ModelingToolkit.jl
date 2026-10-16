@@ -316,7 +316,11 @@ requirements.
 All other SCCs are generated as a symbolic expression with `MTKTearing.INLINE_LINEAR_SCC_OP`
 as the head. To avoid allocating `A` and `b` in each `f` call, this uses the DiffCache API
 in ModelingToolkitBase, enabling non-allocating construction that is robust to automatic
-differentiation. `PreallocationTools.get_tmp` requires a "representative" or "reference"
+differentiation. The `DiffCache`s are registered as parameters via
+`ModelingToolkitBase.add_diffcache` and stored in the `caches` portion of `MTKParameters`.
+They are scratch that the generated code writes active intermediates into, so they must
+not live in the `nonnumeric` portion, which is declared inactive for Enzyme and
+non-differentiable for ChainRules. `PreallocationTools.get_tmp` requires a "representative" or "reference"
 value that defines whether it should return a standard floating point buffer or a buffer of
 duals. This is the `reference` construction logic here. The expressions for `A` and `b`
 are not `array_literal`. They use `ArrayMaker` with `fill!` to fill the buffer with zeros and

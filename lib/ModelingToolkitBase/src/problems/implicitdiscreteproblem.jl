@@ -29,7 +29,7 @@ function SciMLBase.ImplicitDiscreteFunction{iip, spec}(
     opts.check_compatibility && check_compatible_system(ImplicitDiscreteFunction, sys)
 
     iv = get_iv(sys)
-    dvs = unknowns(sys)
+    dvs = flat_unknowns(sys)
     (; u0, p, t, analytic, initialization_data) = opts
     codegen_opts = opts.codegen
 
@@ -73,7 +73,7 @@ end
     check_compatibility && check_compatible_system(ImplicitDiscreteProblem, sys)
 
     _iip = resolve_iip(iip, op)
-    dvs = unknowns(sys)
+    dvs = flat_unknowns(sys)
     op = to_varmap(op, dvs)
     add_toterms!(op; replace = true)
     f, u0,
