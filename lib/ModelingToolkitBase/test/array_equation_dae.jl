@@ -209,3 +209,35 @@ end
     @test SciMLBase.successful_retcode(sol)
     @test maximum(abs, sol.u[end] .- [exp(-pi^2 * 0.1) * sinpi(x) for x in xs]) < 1.0e-2
 end
+
+@testset "`fuse_broadcasts` reaches the DAE residual" begin
+    n = 32
+    @independent_variables t
+    @variables u(t)[1:n]
+    D = Differential(t)
+    eqs = [D(u[2:n]) ~ u[1:(n - 1)] .- 2 .* u[2:n], D(u[1:1]) ~ -u[1:1]]
+    sys = complete(System(eqs, t, collect(u), []; name = :sys))
+    op = vcat([u[i] => 0.0 for i in 1:n], [D(u[i]) => 0.0 for i in 1:n])
+    uv = collect(range(1.0, 2.0; length = n))
+    duv = collect(range(0.1, 0.8; length = n))
+    function residual(; kwargs...)
+        prob = DAEProblem(sys, op, (0.0, 1.0); build_initializeprob = false, kwargs...)
+        out = zeros(n)
+        prob.f(out, duv, uv, prob.p, 0.0)
+        return out
+    end
+    iip_code(; kwargs...) = string(
+        ModelingToolkitBase.generate_rhs(
+            sys; implicit_dae = true, expression = Val{true}, kwargs...
+        )[2]
+    )
+    # `DAEProblem` hands the keyword to Symbolics' codegen options. Fusion needs Symbolics'
+    # `fuse_broadcasts` option and a SymbolicUtils with fused broadcast codegen.
+    fuses = hasfield(Symbolics.CodegenFunctionOptions, :fuse_broadcasts) &&
+        isdefined(Symbolics.SymbolicUtils.Code, :FUSE_BROADCASTS_KEY)
+    @test !occursin("fused_materialize", iip_code())
+    @test occursin("fused_materialize", iip_code(; fuse_broadcasts = true)) == fuses
+    expected = [uv[1:(n - 1)] .- 2 .* uv[2:n] .- duv[2:n]; -uv[1] - duv[1]]
+    @test residual() ≈ expected
+    @test residual(; fuse_broadcasts = true) == residual()
+end
