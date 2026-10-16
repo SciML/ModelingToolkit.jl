@@ -61,3 +61,17 @@ end
     sol = solve(prob)
     @test SciMLBase.successful_retcode(sol)
 end
+
+@testset "concrete complex symtypes are continuous" begin
+    @test ModelingToolkitBase.is_floatingpoint_symtype(Complex{Real})
+    @test ModelingToolkitBase.is_floatingpoint_symtype(ComplexF64)
+    @test ModelingToolkitBase.is_floatingpoint_symtype(Vector{Complex{Real}})
+    @test !ModelingToolkitBase.is_floatingpoint_symtype(Complex{Int})
+end
+
+@testset "differential of a `Complex{Real}` unknown" begin
+    xr = Symbolics.unwrap(only(@variables x(t)::Complex))
+    @test Symbolics.symtype(xr) == Complex{Real}
+    @named sys = System([D(xr) ~ -conj(xr)], t)
+    @test isequal(only(unknowns(sys)), xr)
+end

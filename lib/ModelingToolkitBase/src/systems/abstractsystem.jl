@@ -313,7 +313,8 @@ for traitT in [
                 push!(ts_idxs, ContinuousTimeseries())
             else
                 if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
-                    if (ts = get(ic.observed_syms_to_timeseries, s, nothing)) !== nothing
+                    parent, _ = split_indexed_var(s)
+                    if (ts = get(ic.observed_syms_to_timeseries, s, get(ic.observed_syms_to_timeseries, parent, nothing))) !== nothing
                         union!(ts_idxs, ts)
                     elseif (ts = get(ic.dependent_pars_to_timeseries, s, nothing)) !==
                             nothing
@@ -1062,6 +1063,7 @@ function Base.propertynames(sys::AbstractSystem; private = false)
             push!(names, getname(s))
         end
         has_unknowns(sys) && for s in get_unknowns(sys)
+            hasname(s) || continue
             push!(names, getname(s))
         end
         has_ps(sys) && for s in get_ps(sys)
@@ -1069,6 +1071,7 @@ function Base.propertynames(sys::AbstractSystem; private = false)
             push!(names, getname(s))
         end
         has_observed(sys) && for s in get_observed(sys)
+            hasname(s.lhs) || continue
             push!(names, getname(s.lhs))
         end
         has_iv(sys) && push!(names, getname(get_iv(sys)))
@@ -1108,14 +1111,14 @@ function getvar(sys::AbstractSystem, name::Symbol; namespace = does_namespacing(
     end
 
     sts = get_unknowns(sys)
-    i = findfirst(x -> getname(x) == name, sts)
+    i = findfirst(x -> hasname(x) && getname(x) == name, sts)
     if i !== nothing
         return namespace ? renamespace(sys, sts[i]) : sts[i]
     end
 
     if has_ps(sys)
         ps = get_ps(sys)
-        i = findfirst(x -> getname(x) == name, ps)
+        i = findfirst(x -> hasname(x) && getname(x) == name, ps)
         if i !== nothing
             return namespace ? renamespace(sys, ps[i]) : ps[i]
         end
@@ -1123,7 +1126,7 @@ function getvar(sys::AbstractSystem, name::Symbol; namespace = does_namespacing(
 
     if has_observed(sys)
         obs = get_observed(sys)
-        i = findfirst(x -> getname(x.lhs) == name, obs)
+        i = findfirst(x -> hasname(x.lhs) && getname(x.lhs) == name, obs)
         if i !== nothing
             return namespace ? renamespace(sys, obs[i].lhs) : obs[i].lhs
         end
@@ -3053,14 +3056,14 @@ function component_post_processing(__source__, expr, isconnector)
             # we need to create a closure to escape explicit return in `body`.
             res = (() -> $body)()
             if $isdefined(res, :gui_metadata) && $getfield(res, :gui_metadata) === nothing
-                name = $(Meta.quot(fname))
+                __mtk_gui_name = $(Meta.quot(fname))
                 if $isconnector
                     $Setfield.@set!(res.connector_type = $connector_type(res))
                 end
                 $Setfield.@set!(
                     res.gui_metadata = $GUIMetadata(
                         $GlobalRef(
-                            @__MODULE__, name
+                            @__MODULE__, __mtk_gui_name
                         )
                     )
                 )
