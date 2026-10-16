@@ -1,3 +1,4 @@
+"""$(function_docstring(SDEFunction, true, [:jac, :tgrad]))"""
 @fallback_iip_specialize function SciMLBase.SDEFunction{iip, spec}(
         sys::System; u0 = nothing, p = nothing, tgrad = false, jac = false,
         t = nothing, eval_expression = false, eval_module = @__MODULE__,
@@ -20,7 +21,7 @@ end
     SciMLBase.SDEFunction{iip, spec}(sys::System, opts::SciMLFunctionOptions; kwargs...)
 
 Public entry point that builds an `SDEFunction` directly from a pre-assembled
-[`SciMLFunctionOptions`](@ref), bypassing the `kwargs...` wrapper above.
+`SciMLFunctionOptions`, bypassing the `kwargs...` wrapper above.
 """
 function SciMLBase.SDEFunction{iip, spec}(
         sys::System, opts::SciMLFunctionOptions{E};
@@ -82,8 +83,9 @@ function SciMLBase.SDEFunction{iip, spec}(
     return maybe_codegen_scimlfn(Val{E}, SDEFunction{iip, spec}, args; kwargs...)
 end
 
+"""$(problem_docstring(SciMLBase.SDEProblem, SDEFunction, true))"""
 @fallback_iip_specialize function SciMLBase.SDEProblem{iip, spec}(
-        sys::System, op, tspan;
+        sys::System, op, tspan = default_tspan(sys);
         callback = nothing, check_length = true, eval_expression = false,
         eval_module = @__MODULE__, check_compatibility = true, sparse = false,
         sparsenoise = sparse, expression = Val{false}, _skip_events = false, kwargs...

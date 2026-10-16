@@ -1,6 +1,4 @@
-struct InitializationProblem{iip, specialization} end
-
-@doc """
+"""
     InitializationProblem(sys::AbstractSystem, t, op = Dict(); kwargs...)
     InitializationProblem{iip}(sys::AbstractSystem, t, op = Dict(); kwargs...)
     InitializationProblem{iip, specialize}(sys::AbstractSystem, t, op = Dict(); kwargs...)
@@ -20,7 +18,18 @@ $INITIALIZEPROB_KWARGS
 $INTERNAL_INITIALIZEPROB_KWARGS
 
 All other keyword arguments are forwarded to the wrapped problem constructor.
-""" InitializationProblem
+"""
+struct InitializationProblem{iip, specialization} end
+
+function _initialization_problem_constructor(TProb, iip, specialize)
+    if TProb === LinearInitializationProblem
+        return TProb{iip}, (;)
+    elseif TProb === SCCNonlinearProblem
+        return TProb{iip}, (; specialize)
+    else
+        return TProb{iip, specialize}, (;)
+    end
+end
 
 """
     $(TYPEDSIGNATURES)
@@ -41,7 +50,7 @@ as an explicit keyword.
 function InitializationProblem{iip}(
         sys::AbstractSystem, t, op, opts::SciMLProblemOptions; kwargs...
     ) where {iip}
-    return InitializationProblem{iip, SciMLBase.AutoSpecialize}(sys, t, op, opts; kwargs...)
+    return InitializationProblem{iip, SciMLBase.AutoDespecialize}(sys, t, op, opts; kwargs...)
 end
 
 function InitializationProblem{iip, specialize}(
@@ -169,8 +178,10 @@ function InitializationProblem{iip, specialize}(
     # Only forward `check_length` when the caller explicitly set it; otherwise let the
     # underlying problem type apply its own default (see the keyword's definition above).
     check_length_kw = check_length === nothing ? (;) : (; check_length)
-    TProb{_iip}(
-        isys, op; kwargs..., check_length_kw...,
+    problem_constructor, problem_kwargs =
+        _initialization_problem_constructor(TProb, _iip, specialize)
+    return problem_constructor(
+        isys, op; kwargs..., problem_kwargs..., check_length_kw...,
         u0_constructor, p_constructor, missing_guess_value,
         eval_expression, eval_module, warn_cyclic_dependency,
         circular_dependency_max_cycle_length, circular_dependency_max_cycles,
@@ -195,7 +206,10 @@ function mtkcompile_initialization_system(
         isys::AbstractSystem, sys::AbstractSystem; fully_determined, kwargs...
     )
     try
-        return mtkcompile(isys; fully_determined, split = is_split(sys), kwargs...)
+        return mtkcompile(
+            isys; fully_determined, split = is_split(sys),
+            homotopy = homotopy_enabled(sys), kwargs...
+        )
     catch err
         newerr = with_initialization_context(err, isys, sys; kwargs...)
         newerr === err && rethrow()
@@ -248,7 +262,8 @@ equations an unbalanced initialization system is missing, in the same terms as
 function initialization_system_size(isys::AbstractSystem, sys::AbstractSystem; kwargs...)
     return try
         compiled = mtkcompile(
-            isys; fully_determined = false, split = is_split(sys), kwargs...
+            isys; fully_determined = false, split = is_split(sys),
+            homotopy = homotopy_enabled(sys), kwargs...
         )
         (length(equations(compiled)), length(unknowns(compiled)))
     catch

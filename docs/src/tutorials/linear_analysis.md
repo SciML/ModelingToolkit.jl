@@ -36,6 +36,18 @@ The directionality of an analysis point can be thought of as an arrow in a block
 
 This is signified by the name being the middle argument to `connect`.
 
+An analysis point of a built model is referred to by property access on the system in
+which it was created, `sys.analysis_point_name`, and the functions above accept the
+[`AnalysisPoint`](@ref) this returns. A point belonging to a subsystem is reached through
+the hierarchy, `sys.inner.analysis_point_name`. The system must be the unsimplified and
+uncompleted model, since both `mtkcompile` and `complete` remove the analysis points.
+
+!!! warning "Old style"
+
+    Referring to an analysis point by its `Symbol` name, as in
+    `get_sensitivity(sys, :plant_input)`, is the old style and is retained only for
+    backwards compatibility. It will be deprecated.
+
 Of the above mentioned functions, all except for [`open_loop`](@ref) return the output of [`ModelingToolkit.linearize`](@ref), which is
 
 ```julia
@@ -67,8 +79,8 @@ eqs = [connect(P.output, :plant_output, C.input)  # Connect with an automaticall
        connect(C.output, :plant_input, P.input)]
 sys = System(eqs, t, systems = [P, C], name = :feedback_system)
 
-matrices_S = get_sensitivity(sys, :plant_input)[1] # Compute the matrices of a state-space representation of the (input)sensitivity function.
-matrices_T = get_comp_sensitivity(sys, :plant_input)[1]
+matrices_S = get_sensitivity(sys, sys.plant_input)[1] # Compute the matrices of a state-space representation of the (input)sensitivity function.
+matrices_T = get_comp_sensitivity(sys, sys.plant_input)[1]
 ```
 
 Continued linear analysis and design can be performed using ControlSystemsBase.jl.
@@ -95,7 +107,7 @@ T = comp_sensitivity(P, C) # or feedback(P*C)
 We may also derive the loop-transfer function $L(s) = P(s)C(s)$ using
 
 ```@example LINEAR_ANALYSIS
-matrices_L = get_looptransfer(sys, :plant_output)[1]
+matrices_L = get_looptransfer(sys, sys.plant_output)[1]
 L = ss(matrices_L...)
 ```
 
@@ -109,7 +121,7 @@ To obtain the transfer function between two analysis points, we call `linearize`
 
 ```@example LINEAR_ANALYSIS
 using ModelingToolkit # hide
-matrices_PS = linearize(sys, :plant_input, :plant_output)[1]
+matrices_PS = linearize(sys, sys.plant_input, sys.plant_output)[1]
 ```
 
 this particular transfer function should be equivalent to the linear system `P(s)S(s)`, i.e., equivalent to

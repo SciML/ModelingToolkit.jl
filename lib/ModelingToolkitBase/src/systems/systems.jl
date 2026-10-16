@@ -76,18 +76,72 @@ $(SIGNATURES)
 Compile the given system into a form that ModelingToolkitBase can generate code for. Also
 performs order reduction for ODEs and handles simple discrete/implicit-discrete systems.
 
+The returned system is a new system; `sys` is not modified. A system can only be compiled
+once — calling `mtkcompile` on an already-compiled system throws
+`RepeatedStructuralSimplificationError`.
+
+# Arguments
+
+- `sys`: The [`System`](@ref) to compile. It must not already be compiled.
+
 # Keyword Arguments
 
-+ `fully_determined=true` controls whether or not an error will be thrown if the number of equations don't match the number of inputs, outputs, and equations.
-+ `inputs`, `outputs` and `disturbance_inputs` are passed as keyword arguments.` All inputs` get converted to parameters and are allowed to be unconnected, allowing models where `n_unknowns = n_equations - n_inputs`.
+- `inputs`: Variables to treat as inputs. They are converted to parameters and are allowed
+  to be unconnected, permitting models where `n_unknowns = n_equations - n_inputs`. Array
+  variables must have known shape and be passed either whole or fully scalarized in sorted
+  order.
+- `outputs`: Variables to treat as outputs of the compiled system.
+- `disturbance_inputs`: Inputs that represent disturbances. Like `inputs`, they are
+  converted to parameters and excluded from the equation/unknown balance check.
+- `fully_determined = true`: Whether to throw an error when the system is unbalanced, i.e.
+  when the number of equations differs from the number of unknowns after `inputs` and
+  `disturbance_inputs` have been removed. Passing `false` (or `nothing`) skips the check.
+- `additional_passes = ()`: A collection of functions applied to the system, in order,
+  after the built-in compilation passes have run. Each takes and returns a system.
+- `split = true`: Whether the compiled system uses the split parameter representation,
+  which stores parameters in type-homogeneous buffers indexed by an `IndexCache`. Pass
+  `false` to use a flat parameter vector instead.
+- `homotopy = true`: Whether Modelica [`homotopy`](@ref)`(actual, simplified)` operators
+  are kept for lowering to a continuation solve. Pass `false` to replace every such node
+  by its `actual` branch before compilation: the generated code then contains only
+  `actual` (the `simplified` expression is never emitted), problem construction never
+  selects a `SciMLBase.HomotopyProblem`, and the initialization and event affect systems
+  derived from the compiled system are compiled the same way. Use this for targets that
+  cannot lower to a continuation solver. See [`strip_homotopy`](@ref).
+
+Remaining keyword arguments are forwarded to the internal compilation passes.
+
+# Returns
+
+A new, completed [`System`](@ref) suitable for code generation and problem construction.
+
+# Examples
+
+```julia
+using ModelingToolkit
+using ModelingToolkit: t_nounits as t, D_nounits as D
+
+@variables x(t) y(t)
+@parameters τ
+
+# `y` is eliminated as an observed variable of the compiled system
+sys = System([D(x) ~ (y - x) / τ, y ~ 2x], t; name = :sys)
+csys = mtkcompile(sys)
+
+unknowns(csys)  # [x(t)]
+observed(csys)  # [y(t) ~ 2x(t)]
+```
 """
 function mtkcompile(
         sys::System; additional_passes = (),
         inputs = SymbolicT[], outputs = SymbolicT[],
         disturbance_inputs = SymbolicT[],
-        split = true, kwargs...
+        split = true, homotopy = true, kwargs...
     )
     isscheduled(sys) && throw(RepeatedStructuralSimplificationError())
+    if !homotopy
+        sys = strip_homotopy(sys)
+    end
 
     # For backward compatibility with old ModelingToolkit which does not
     # integrate with the reversible transformation API.
@@ -106,10 +160,25 @@ function mtkcompile(
         newsys = pass(newsys)
     end
     @set! newsys.parent = toggle_namespacing(sys, false)
+    # Record the choice so systems derived from `newsys` (initialization system, event
+    # affect systems) are compiled with the same `homotopy` setting.
+    if !homotopy
+        newsys = setmetadata(newsys, HomotopyCtx, false)
+    end
     # Singular systems may end up with parameter-only equations, which shouldn't error on `complete`
     newsys = complete(newsys; split, allow_parameter_eqs = true)
     return newsys
 end
+
+"""
+    $(TYPEDSIGNATURES)
+
+The unknowns of `sys` in the layout of a problem's state vector `u`. Array unknowns
+contribute one entry per element, so `u` stays flat even when `sys` has not been scalarized
+by `mtkcompile`; the generated code then reconstructs each array unknown as a view into
+`u`.
+"""
+flat_unknowns(sys::AbstractSystem) = scalarized_vars(unknowns(sys))
 
 function scalarized_vars(vars)
     scal = SymbolicT[]
@@ -166,6 +235,7 @@ function __mtkcompile(
     sys = expand_connections(sys)
     sys = discrete_unknowns_to_parameters(sys)
     sys = discover_globalscoped(sys)
+    sys = apply_limited_lowering(sys)
     flat_dvs = scalarized_vars(unknowns(sys))
     original_vars = Set{SymbolicT}(flat_dvs)
     eqs = flatten_equations(equations(sys))

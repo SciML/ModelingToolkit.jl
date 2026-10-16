@@ -204,8 +204,8 @@ let
     )
     @test all(
         sym_issubset(
-                continuous_events_toplevel(sys), get_continuous_events(sys)
-            )
+            continuous_events_toplevel(sys), get_continuous_events(sys)
+        )
             for sys in [sys_bot, sys_mid2, sys_mid1, sys_top]
     )
     @test all(

@@ -1,4 +1,5 @@
 name: Downgrade Sublibraries
+
 on:
   pull_request:
     branches:
@@ -10,12 +11,40 @@ on:
       - master
     paths-ignore:
       - 'docs/**'
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
+
+# ModelingToolkitBase's full "All" suite exceeds the 6h job wall when Downgrade
+# no longer aborts early on floor bugs. Mirror Sublibrary CI: one Downgrade job
+# per test_groups.toml section for MTKBase, plus a separate SciCompDSL job.
 jobs:
-  downgrade-sublibraries:
+  downgrade-scicompdsl:
     uses: "SciML/.github/.github/workflows/sublibrary-downgrade.yml@v1"
     secrets: "inherit"
     with:
       julia-version: "lts"
+      projects: "lib/SciCompDSL"
+
+  downgrade-mtkbase:
+    strategy:
+      fail-fast: false
+      matrix:
+        group:
+          - InterfaceI
+          - InterfaceII
+          - Initialization
+          - SymbolicIndexingInterface
+          - Extended
+          - RegressionI
+          - Extensions
+          - Optimization
+          - QA
+    uses: "SciML/.github/.github/workflows/sublibrary-downgrade.yml@v1"
+    secrets: "inherit"
+    with:
+      julia-version: "lts"
+      projects: "lib/ModelingToolkitBase"
+      group-env-name: "GROUP"
+      group-env-value: ${{ matrix.group }}

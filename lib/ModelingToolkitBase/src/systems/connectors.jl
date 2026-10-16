@@ -1063,12 +1063,8 @@ function expand_connections(sys::AbstractSystem, ::Val{with_source_info} = Val(f
     sys, (csets, domain_csets) = generate_connection_set(sys)
     # generate equations, and stream equations
     ceqs, instream_csets = generate_connection_equations_and_stream_connections(sys, csets)
-    if with_source_info
-        source_visitor = SourceInformationVisitor()
-        eqs = equations(sys, source_visitor)
-    else
-        eqs = equations(sys)
-    end
+    source_visitor = SourceInformationVisitor()
+    eqs = with_source_info ? equations(sys, source_visitor) : equations(sys)
     stream_eqs, instream_subs = expand_instream(instream_csets, sys; tol = tol, eqs)
 
     if with_source_info
@@ -1092,6 +1088,7 @@ function expand_connections(sys::AbstractSystem, ::Val{with_source_info} = Val(f
         end
         source_info = EquationSourceInformation(sources, is_connection_equation)
     else
+        source_info = nothing
         eqs = [eqs; ceqs; stream_eqs]
     end
     if !isempty(instream_subs)

@@ -66,7 +66,8 @@ end
     @test ForwardDiff.gradient(x_at_0, [0.3, 0.7]) == zeros(2)
 end
 
-@parameters a b[1:3] c(t) d::Integer e[1:3] f[1:3, 1:3]::Int g::Vector{AbstractFloat} h::String
+@parameters a b[1:3] d::Integer e[1:3] f[1:3, 1:3]::Int g::Vector{AbstractFloat} h::String
+@discretes c(t)
 @named sys = System(
     Equation[], t, [], [a, b, c, d, e, f, g, h],
     continuous_events = [

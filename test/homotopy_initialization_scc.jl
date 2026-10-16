@@ -117,3 +117,23 @@ end
     @test SciMLBase.successful_retcode(sol)
     @test sol[a] ≈ sqrt(2) atol = 1.0e-8
 end
+
+@testset "homotopy = false: SCC init has no HomotopyProblem blocks" begin
+    @variables x(t) a(t) b(t) c(t)
+    @named sys = System(
+        [D(x) ~ -x, 0 ~ homotopy(a^2 - 2, a - 1.414), 0 ~ b^2 - a, 0 ~ c^2 - b],
+        t; guesses = [a => 1.5, b => 1.2, c => 1.1]
+    )
+    sys = mtkcompile(sys; homotopy = false)
+    @test !ModelingToolkit.homotopy_enabled(sys)
+    @test !ModelingToolkit.has_any_homotopy(sys)
+    iprob = ModelingToolkit.InitializationProblem(
+        sys, 0.0, [x => 1.0]; warn_initialize_determined = false
+    )
+    @test iprob isa SciMLBase.SCCNonlinearProblem
+    @test !any(p -> p isa SciMLBase.HomotopyProblem, iprob.probs)
+    sol = solve(iprob)
+    @test SciMLBase.successful_retcode(sol)
+    @test sol[a] ≈ sqrt(2) atol = 1.0e-6
+    @test sol[c] ≈ sqrt(sqrt(sqrt(2))) atol = 1.0e-6
+end

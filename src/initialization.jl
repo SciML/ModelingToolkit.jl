@@ -84,7 +84,13 @@ at the cost of compiling the residual for the backend's number types. `prob` may
 data (e.g. an `ODEProblem`/`DAEProblem` built from a `System`), or an initialization
 `NonlinearProblem`/`NonlinearLeastSquaresProblem` directly.
 
-# Keyword arguments
+# Arguments
+
+- `prob`: A problem with initialization data, or an initialization
+  `NonlinearProblem`/`NonlinearLeastSquaresProblem`.
+
+# Keywords
+
   - `rtol`: a singular value `σ` is treated as zero when `σ ≤ max(atol, rtol * σmax)`,
     where `σmax` is the largest singular value. Increase it to also surface near-singular
     directions.
@@ -113,6 +119,13 @@ A `NamedTuple` `(; jacobian, singular_values, rank, nullity, redundancy, underde
 
 A `nullity` of `0` means the Jacobian has full column rank at `u0` (no underdetermined
 unknowns); a `redundancy` of `0` means full row rank (no redundant equations).
+
+# Examples
+
+```julia
+analysis = analyze_initialization_jacobian(prob)
+analysis.nullity, analysis.redundancy
+```
 
 !!! note
     The Jacobian is evaluated at a single point (`u0`), so this reports the *local* rank

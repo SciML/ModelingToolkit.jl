@@ -98,10 +98,31 @@ function inputs_to_parameters!(state::TearingState, inputsyms::OrderedSet{Symbol
 end
 
 """
-    $TYPEDSIGNATURES
+    mtkcompile!(state::TearingState; kwargs...)
 
-Compile the system stored in `state` in place, updating its tearing state and returning the
-compiled [`System`](@ref).
+Mutating structural simplification entry point for an existing tearing state.
+
+This is developer-facing API used by ModelingToolkit internals and extension packages that
+already have a `TearingState`. User code should normally call [`ModelingToolkitBase.mtkcompile`](@ref) on a
+`System` instead.
+
+# Arguments
+
+- `state`: tearing state to simplify in place.
+
+# Keyword Arguments
+
+- `check_consistency`: whether to check the transformed system for structural consistency.
+- `fully_determined`: whether the transformed system is expected to have a square
+  equation/unknown structure.
+- `inputs`: variables to treat as external inputs.
+- `outputs`: variables to treat as requested outputs.
+- `disturbance_inputs`: input variables that should be treated as disturbances.
+- `kwargs...`: additional simplification options forwarded to the internal compiler.
+
+# Returns
+
+The simplified `System`.
 """
 function mtkcompile!(
         state::TearingState;
@@ -133,9 +154,10 @@ function mtkcompile!(
             discrete_pass_idx = findfirst(discrete_compile_pass, additional_passes)
             discrete_compile = additional_passes[discrete_pass_idx]
             deleteat!(additional_passes, discrete_pass_idx)
-            sys = System(
-                Equation[], get_iv(state.sys)::SymbolicT, SymbolicT[], get_ps(state.sys);
-                name = nameof(state.sys)
+            sys = copy(state.sys)
+            sys = ConstructionBase.setproperties(
+                sys; eqs = Equation[], unknowns = SymbolicT[],
+                observed = Equation[], initialization_eqs = Equation[]
             )
             return discrete_compile(sys, tss, clocked_inputs, ci, id_to_clock)
         end
@@ -218,11 +240,11 @@ function _mtkcompile!(
     validate_io!(state, orig_inputs, inputs, discrete_inputs, outputs, disturbance_inputs)
     # ModelingToolkit.markio!(state, orig_inputs, inputs, outputs, disturbance_inputs)
     union!(inputs, disturbance_inputs)
-    state = ModelingToolkit.inputs_to_parameters!(state, discrete_inputs, OrderedSet{SymbolicT}())
-    state = ModelingToolkit.inputs_to_parameters!(state, inputs, outputs)
+    state = inputs_to_parameters!(state, discrete_inputs, OrderedSet{SymbolicT}())
+    state = inputs_to_parameters!(state, inputs, outputs)
     eliminate_perfect_aliases!(state)
     StateSelection.trivial_tearing!(state)
-    sys, mm = ModelingToolkit.alias_elimination!(state; fully_determined, kwargs...)
+    sys, mm = alias_elimination!(state; fully_determined, kwargs...)
     old_to_new_eq, old_to_new_var, aliases = eliminate_perfect_aliases!(state)
     sys = state.sys
     mm = StateSelection.get_new_mm(aliases, old_to_new_eq, old_to_new_var, mm)
@@ -262,7 +284,7 @@ function _mtkcompile_worker!(
         var_eq_matching = StateSelection.pantelides!(state; finalize = false, kwargs...)
         sys = pantelides_reassemble(state, var_eq_matching)
         state = TearingState(sys)
-        sys, mm = ModelingToolkit.alias_elimination!(state; fully_determined, kwargs...)
+        sys, mm = alias_elimination!(state; fully_determined, kwargs...)
         state.mm = mm
         sys = ModelingToolkit.dummy_derivative(
             sys, state; fully_determined, kwargs...

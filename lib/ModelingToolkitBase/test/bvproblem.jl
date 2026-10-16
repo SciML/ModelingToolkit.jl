@@ -390,3 +390,42 @@ end
     @test bsol.ps[α] ≈ 1.8 rtol = 1.0e-2
     @test bsol.ps[γ] ≈ 6.5 rtol = 1.0e-2
 end
+
+@testset "Control-aware dynamics on compiled systems" begin
+    # A compiled system with a bound input used to generate control-free dynamics:
+    # `ODEFunction` froze the input at its operating-point value, and
+    # `f_prototype = length(dvs) - n_controls` miscounted the defect rows.
+    @variables x(t) u(t) [input = true, bounds = (-1.0, 1.0)]
+    costs = [ModelingToolkitBase.EvalAt(2.0)(x)^2]
+    cons = [ModelingToolkitBase.EvalAt(0.0)(x) ~ 1.0]
+    @named plant = System([D(x) ~ u], t; costs, constraints = cons)
+    @variables y(t) [output = true] v(t) [input = true, bounds = (-1.0, 1.0)]
+    @named gain = System([y ~ v], t)
+    @named composed = System([connect(gain.y, plant.u)], t; systems = [plant, gain])
+    sys = mtkcompile(composed; inputs = [gain.v])
+
+    prob = BVProblem(sys, [plant.x => 1.0, gain.v => 0.25], (0.0, 2.0))
+
+    nx = length(unknowns(sys))
+    nc = length(ModelingToolkitBase.inputs(sys))
+    @test nc == 1
+    # The controls are appended to the per-node decision vector, seeded from op
+    @test length(prob.u0) == nx + nc
+    @test prob.u0[(nx + 1):end] == [0.25]
+    # Defect rows are sized by the true state count, not states + controls
+    @test length(prob.f.f_prototype) == nx
+
+    # The dynamics respond to the stacked control input; D(x) ~ u exactly here
+    du1 = zeros(nx)
+    du2 = zeros(nx)
+    xu = copy(prob.u0)
+    xu[nx + 1] = 0.7
+    prob.f.f(du1, xu, prob.p, 0.0)
+    xu[nx + 1] = -0.3
+    prob.f.f(du2, xu, prob.p, 0.0)
+    @test du1[1] ≈ 0.7
+    @test du2[1] ≈ -0.3
+
+    # Out-of-place evaluation goes through the same stacked wrapper
+    @test prob.f.f(xu, prob.p, 0.0)[1] ≈ -0.3
+end

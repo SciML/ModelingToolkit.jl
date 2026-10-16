@@ -16,10 +16,10 @@ function MTKTearing.input_timedomain(::Hold, args::MTKTearing.IOTimeDomainArgsT 
 end
 
 function MTKTearing.input_timedomain(::SampleTime, arg = nothing)
-    return ModelingToolkit.MTKTearing.InputTimeDomainElT[]
+    return MTKTearing.InputTimeDomainElT[]
 end
 function MTKTearing.output_timedomain(::SampleTime, arg = nothing)
-    return ModelingToolkit.MTKTearing.InferredDiscrete(1)
+    return MTKTearing.InferredDiscrete(1)
 end
 
 function MTKTearing.output_timedomain(::Hold, _::MTKTearing.IOTimeDomainArgsT = nothing)

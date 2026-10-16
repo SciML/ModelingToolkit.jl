@@ -21,7 +21,7 @@ function modelingtoolkitize(
         u_names = nothing, p_names = nothing, kwargs...
     )
     p = prob.p
-    has_p = !(p isa Union{DiffEqBase.NullParameters, Nothing})
+    has_p = !(p isa Union{SciMLBase.NullParameters, Nothing})
 
     vars = construct_vars(prob, nothing, u_names)
     params = construct_params(prob, nothing, p_names)

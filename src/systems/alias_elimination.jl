@@ -1,10 +1,37 @@
 using SymbolicUtils: Rewriters
-using Graphs.Experimental.Traversals
+import Graphs.Experimental.Traversals
 
 """
-    $TYPEDSIGNATURES
+    alias_elimination(sys)
 
-Return a system with perfect aliases eliminated.
+Run the alias-elimination pass on `sys`.
+
+This is a lower-level structural simplification pass used by [`ModelingToolkitBase.mtkcompile`](@ref).
+End-user code should usually call `mtkcompile` instead.
+
+# Developer Interface
+
+Downstream packages may call `alias_elimination` on `System` values, but must not add methods
+to it. Its `TearingState` implementation is not an extension point.
+
+# Arguments
+
+- `sys`: system to transform.
+
+# Returns
+
+The alias-eliminated system.
+
+# Examples
+
+```julia
+using ModelingToolkit
+
+@independent_variables t
+@variables x(t)
+@named sys = System([Differential(t)(x) ~ x / x], t)
+equations(alias_elimination(sys))
+```
 """
 alias_elimination(sys) = alias_elimination!(TearingState(sys))[1]
 

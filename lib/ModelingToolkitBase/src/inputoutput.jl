@@ -199,43 +199,59 @@ has_var(ex, x) = x ∈ Set(get_variables(ex))
 # Build control function
 
 """
-    (f_oop, f_ip), x_sym, p_sym, io_sys = generate_control_function(
-            sys::System,
-            inputs                   = default_codegen_inputs(sys),
-            disturbance_inputs       = disturbances(sys);
-            known_disturbance_inputs = nothing,
-            implicit_dae             = false,
-            simplify                 = false,
-            split                    = true,
-        )
+    generate_control_function(sys, inputs = default_codegen_inputs(sys),
+        disturbance_inputs = disturbances(sys); kwargs...) -> (; f, dvs, ps, io_sys)
 
-For a system `sys` with inputs (as determined by [`unbound_inputs`](@ref) or user specified), generate functions with additional input argument `u`
+Generate the dynamics of an input-output system as callable functions of its state,
+inputs, parameters, and independent variable.
 
-The returned functions are the out-of-place (`f_oop`) and in-place (`f_ip`) forms:
-```
-f_oop : (x,u,p,t)      -> rhs         # basic form
-f_oop : (x,u,p,t,w)    -> rhs         # with known_disturbance_inputs
-f_ip  : (xout,x,u,p,t) -> nothing     # basic form
-f_ip  : (xout,x,u,p,t,w) -> nothing   # with known_disturbance_inputs
-```
+# Arguments
 
-The return values also include the chosen state-realization (the remaining unknowns) `x_sym` and parameters, in the order they appear as arguments to `f`.
+- `sys::AbstractSystem`: The system to generate dynamics for. An unscheduled system is
+  compiled with `mtkcompile`; a scheduled system is used as given.
+- `inputs`: Symbolic variables that form the generated input argument `u`. By default,
+  declared inputs are used for scheduled systems and external inputs for unscheduled systems.
+- `disturbance_inputs`: Unknown disturbance inputs. Their state and dynamics are retained,
+  but their values are set to zero and are not function arguments.
 
-# Disturbance Handling
+# Keywords
 
-- `disturbance_inputs`: Unknown disturbance inputs. The generated dynamics will preserve any state and dynamics associated with these disturbances, but the disturbance inputs themselves will not be included as function arguments. This is useful for state observers that estimate unmeasured disturbances.
+- `known_disturbance_inputs = nothing`: Disturbance inputs supplied as a final generated
+  argument `w`; they are removed from the parameter arguments.
+- `implicit_dae::Bool = false`: Generate residual dynamics for an implicit DAE.
+- `simplify::Bool = false`: Forwarded to `mtkcompile` when `sys` is unscheduled.
+- `split::Bool = true`: Forwarded to `mtkcompile` to select split-system generation.
+- `eval_expression::Bool = false`: Evaluate generated code in `eval_module` instead of
+  returning a runtime-generated function.
+- `eval_module::Module = @__MODULE__`: Module used when `eval_expression = true`.
+- `disturbance_argument = false`: Deprecated compatibility option. Use
+  `known_disturbance_inputs` instead.
+- `kwargs...`: Forwarded to `Symbolics.CodegenFunctionOptions`.
 
-- `known_disturbance_inputs`: Known disturbance inputs. The generated dynamics will preserve state and dynamics, and the disturbance inputs will be added as an additional input argument `w` to the generated function: `(x,u,p,t,w)->rhs`.
+# Returns
+
+A named tuple with:
+
+- `f`: A pair `(f_oop, f_iip)` of generated out-of-place and in-place dynamics wrappers.
+  The basic call signatures are `f_oop(x, u, p..., t)` and
+  `f_iip(dx, x, u, p..., t)`. With known disturbances, both have a final `w` argument.
+- `dvs`: The selected state variables, ordered as the `x` argument of `f`.
+- `ps`: The selected parameter variables, ordered as the parameter arguments of `f`.
+- `io_sys`: The scheduled system used to generate `f`.
 
 # Example
 
 ```julia
-using ModelingToolkitBase: generate_control_function, varmap_to_vars, defaults
-f, x_sym, ps = generate_control_function(sys, expression=Val{false}, simplify=false)
-p = varmap_to_vars(defaults(sys), ps)
-x = varmap_to_vars(defaults(sys), x_sym)
-t = 0
-f[1](x, inputs, p, t)
+using ModelingToolkitBase
+import ModelingToolkitBase: t_nounits as t, D_nounits as D
+
+@variables x(t) u(t)
+@parameters k
+@named sys = System([D(x) ~ -k * (x + u)], t)
+
+(; f, dvs, ps, io_sys) = generate_control_function(sys, [u]; simplify = true)
+p = [2.0]
+f[1]([1.0], [3.0], p, 0.0) # [-8.0]
 ```
 """
 function generate_control_function(

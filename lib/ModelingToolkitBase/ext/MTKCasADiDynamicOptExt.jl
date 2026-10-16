@@ -101,12 +101,13 @@ function MTK.CasADiDynamicOptProblem(
         dt = nothing,
         steps = nothing,
         tune_parameters = false,
-        guesses = Dict(),
+        guesses = Dict(), initial_trajectory = Dict(),
+        nominal_values = Dict(),
         bounds = Dict(), kwargs...
     )
     prob,
-        _ = MTK.process_DynamicOptProblem(
-        CasADiDynamicOptProblem, CasADiModel, sys, op, tspan; dt, steps, tune_parameters, guesses, bounds, kwargs...
+        _, _ = MTK.process_DynamicOptProblem(
+        CasADiDynamicOptProblem, CasADiModel, sys, op, tspan; dt, steps, tune_parameters, guesses, initial_trajectory, nominal_values, bounds, kwargs...
     )
     return prob
 end
@@ -119,6 +120,14 @@ function MTK.generate_state_variable!(model::Opti, u0, ns, tsteps)
     U = CasADi.variable!(model, ns, nt)
     set_initial!(model, U, DM(repeat(u0, 1, nt)))
     return MXLinearInterpolation(U, tsteps, tsteps[2] - tsteps[1])
+end
+
+function MTK.set_initial_trajectory!(m::Opti, U, idx, traj)
+    # The collocation grid is fixed when the variables are created, so the
+    # trajectory is sampled onto it. This overrides the constant `u0` seed set
+    # in `generate_state_variable!` for the entries of state `idx`.
+    t_samples = traj.(U.t)
+    return set_initial!(m, U[idx], DM(t_samples))
 end
 
 function MTK.generate_input_variable!(model::Opti, c0, nc, tsteps)
@@ -159,8 +168,8 @@ end
 
 MTK.set_objective!(m::CasADiModel, expr) = minimize!(m.model, MX(expr))
 
-function MTK.set_variable_bounds!(m::CasADiModel, sys, pmap, tf, tunable_params, user_bounds = Dict())
-    (; state_bounds, input_bounds, param_bounds, tf_bounds) = MTK.extract_variable_bounds(sys, pmap, tf, tunable_params, user_bounds)
+function MTK.set_variable_bounds!(m::CasADiModel, sys, pmap, tspan, tunable_params, user_bounds = Dict())
+    (; state_bounds, input_bounds, param_bounds, tf_bounds) = MTK.extract_variable_bounds(sys, pmap, tspan, tunable_params, user_bounds)
     for (i, (lo, hi)) in state_bounds
         subject_to!(m.model, m.U.u[i, :] >= lo)
         subject_to!(m.model, m.U.u[i, :] <= hi)

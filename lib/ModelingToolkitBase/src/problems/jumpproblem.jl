@@ -1,3 +1,7 @@
+# `tspan` has no default here, unlike every other time-dependent problem constructor:
+# `JumpProcesses` already defines `JumpProblem(prob, jumps...)`, so a two-argument method
+# with an untyped `op` is ambiguous with it (Aqua reports 14 ambiguities).
+"""$(problem_docstring(JumpProcesses.JumpProblem, "inner SciMLFunction", true; init = false, tspan_default = false))"""
 @fallback_iip_specialize function JumpProcesses.JumpProblem{iip, spec}(
         sys::System, op, tspan::Union{Tuple, Nothing};
         check_compatibility = true, eval_expression = false, eval_module = @__MODULE__,
@@ -53,7 +57,7 @@
             EmptySciMLFunction{iip}, sys, op;
             t = tspan === nothing ? nothing : tspan[1], check_length = false, build_initializeprob = false, kwargs...
         )
-        f = DiffEqBase.DISCRETE_INPLACE_DEFAULT
+        f = SciMLBase.DISCRETE_INPLACE_DEFAULT
 
         observedfun = ObservedFunctionCache(
             sys; eval_expression, eval_module, checkbounds
@@ -73,13 +77,13 @@
         sys, GeneratedFunctionOptions(; expression = Val{false}, eval_expression, eval_module)
     )
 
-    dvs = unknowns(sys)
+    dvs = flat_unknowns(sys)
     unknowntoid = Dict(value(unknown) => i for (i, unknown) in enumerate(dvs))
     js = jumps(sys)
     invttype = prob.tspan[1] === nothing ? Float64 : typeof(1 / prob.tspan[2])
 
     # handling parameter substitution and empty param vecs
-    p = (prob.p isa DiffEqBase.NullParameters || prob.p === nothing) ? Num[] : prob.p
+    p = (prob.p isa SciMLBase.NullParameters || prob.p === nothing) ? Num[] : prob.p
 
     majpmapper = JumpSysMajParamMapper(sys, p; jseqs = js, rateconsttype = invttype)
     _majs = Vector{MassActionJump}(filter(x -> x isa MassActionJump, js))
@@ -188,6 +192,13 @@ function updateparams!(
 end
 
 function updateparams!(
+        ratemap::JumpSysMajParamMapper{U, V, W},
+        params::SciMLBase.DespecializedParameters
+    ) where {U <: AbstractArray, V <: AbstractArray, W}
+    return updateparams!(ratemap, SciMLBase.unwrap_parameters(params))
+end
+
+function updateparams!(
         ::JumpSysMajParamMapper{U, V, W},
         params::Nothing
     ) where {U <: AbstractArray, V <: AbstractArray, W}
@@ -282,14 +293,17 @@ the system. Return the modified `munknowns`.
 function modified_unknowns!(munknowns, jump::Union{ConstantRateJump, VariableRateJump}, sts)
     for eq in jump.affect!
         st = eq.lhs
-        any(isequal(st), sts) && push!(munknowns, st)
+        isin(sts, st) && push!(munknowns, st)
     end
     return munknowns
 end
 
 function modified_unknowns!(munknowns, jump::MassActionJump, sts)
     for (unknown, stoich) in jump.net_stoch
-        any(isequal(unknown), sts) && push!(munknowns, unknown)
+        isin(sts, unknown) && push!(munknowns, unknown)
     end
     return munknowns
 end
+
+isin(sts, st) = any(isequal(st), sts)
+isin(sts::AbstractSet, st) = st in sts
