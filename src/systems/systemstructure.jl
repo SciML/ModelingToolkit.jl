@@ -228,6 +228,7 @@ function _mtkcompile!(
         inputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
         outputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
         disturbance_inputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
+        input_parameters::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
         eliminate_mm_zeros = true,
         kwargs...
     )
@@ -242,6 +243,13 @@ function _mtkcompile!(
     union!(inputs, disturbance_inputs)
     state = inputs_to_parameters!(state, discrete_inputs, OrderedSet{SymbolicT}())
     state = inputs_to_parameters!(state, inputs, outputs)
+    # Parameters that already represent inputs of the system are registered as such, so
+    # that later passes treat them like the parameters the inputs above are turned into.
+    if !isempty(input_parameters)
+        sys = state.sys
+        @set! sys.inputs = union(MTKBase.get_inputs(sys), input_parameters)
+        state.sys = sys
+    end
     eliminate_perfect_aliases!(state)
     StateSelection.trivial_tearing!(state)
     sys, mm = alias_elimination!(state; fully_determined, kwargs...)
