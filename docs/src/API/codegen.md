@@ -19,7 +19,11 @@ ModelingToolkit.generate_cost_hessian
 ModelingToolkit.generate_cons
 ModelingToolkit.generate_constraint_jacobian
 ModelingToolkit.generate_constraint_hessian
+ModelingToolkit.generate_multiobjective_cost
+ModelingToolkit.generate_multiobjective_jacobian
+ModelingToolkit.generate_multiobjective_hessian
 ModelingToolkit.generate_control_jacobian
+ModelingToolkit.generate_paramjac
 ModelingToolkit.build_explicit_observed_function
 ModelingToolkit.generate_control_function
 ModelingToolkit.generate_update_A
@@ -47,8 +51,19 @@ ModelingToolkit.calculate_cost_hessian
 ModelingToolkit.cost_hessian_sparsity
 ModelingToolkit.calculate_constraint_jacobian
 ModelingToolkit.calculate_constraint_hessian
+ModelingToolkit.calculate_multiobjective_jacobian
+ModelingToolkit.calculate_multiobjective_hessian
 ModelingToolkit.calculate_control_jacobian
+ModelingToolkit.calculate_paramjac
 ModelingToolkit.calculate_A_b
+```
+
+The constraint function and its derivatives are built from the residuals of the
+constraints, with one row per element of each array-valued constraint.
+
+```@docs
+ModelingToolkitBase.canonical_constraints
+ModelingToolkitBase.constraint_residual
 ```
 
 A system can be marked as unsupported by symbolic automatic differentiation, in which case

@@ -63,7 +63,7 @@ end
 
 """$(problem_docstring(SciMLBase.SDDEProblem, SDDEFunction, true))"""
 @fallback_iip_specialize function SciMLBase.SDDEProblem{iip, spec}(
-        sys::System, op, tspan;
+        sys::System, op, tspan = default_tspan(sys);
         callback = nothing, check_length = true, checkbounds = false,
         eval_expression = false, eval_module = @__MODULE__, check_compatibility = true,
         u0_constructor = identity, sparse = false, sparsenoise = sparse,

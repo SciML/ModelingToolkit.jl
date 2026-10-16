@@ -59,7 +59,7 @@ SymbolicUtils.promote_shape(::Shift, @nospecialize(x::SU.ShapeT)) = x
 Base.show(io::IO, D::Shift) = print(io, "Shift(", D.t, ", ", D.steps, ")")
 
 Base.:(==)(D1::Shift, D2::Shift) = isequal(D1.t, D2.t) && isequal(D1.steps, D2.steps)
-Base.hash(D::Shift, u::UInt) = hash(D.steps, hash(D.t, xor(u, 0x055640d6d952f101)))
+Base.hash(D::Shift, u::UInt) = hash(D.steps, hash(D.t, xor(u, 0x055640d6d952f101 % UInt)))
 
 Base.:^(D::Shift, n::Integer) = Shift(D.t, D.steps * n)
 Base.literal_pow(f::typeof(^), D::Shift, ::Val{n}) where {n} = Shift(D.t, D.steps * n)
@@ -190,10 +190,11 @@ $(TYPEDEF)
 at the inferred clock for that equation.
 """
 struct SampleTime <: Operator
+    k::ShiftIndex
     init::Union{Nothing, Real}
 end
 
-SampleTime(; init::Union{Nothing, Real} = nothing) = SampleTime(init)()
+SampleTime(k::ShiftIndex = ShiftIndex(); init::Union{Nothing, Real} = nothing) = SampleTime(k, init)()
 (D::SampleTime)() = STerm(D, SArgsT(()); type = Real, shape = SU.ShapeVecT())
 SymbolicUtils.promote_symtype(::SampleTime) = Real
 SymbolicUtils.promote_shape(::SampleTime) = SU.ShapeVecT()
@@ -245,7 +246,7 @@ SymbolicUtils.isbinop(::Sample) = false
 Base.show(io::IO, D::Sample) = print(io, "Sample(", D.clock, ")")
 
 Base.:(==)(D1::Sample, D2::Sample) = isequal(D1.clock, D2.clock)
-Base.hash(D::Sample, u::UInt) = hash(D.clock, xor(u, 0x055640d6d952f101))
+Base.hash(D::Sample, u::UInt) = hash(D.clock, xor(u, 0x055640d6d952f101 % UInt))
 
 function validate_operator(op::Sample, args, iv; context = nothing)
     arg = unwrap(only(args))
@@ -317,5 +318,11 @@ function SciMLBase.Clocks.EventClock(cb::SymbolicContinuousCallback)
     return SciMLBase.Clocks.EventClock(cb.zero_crossing_id)
 end
 
+# An operator term such as `Sample(x)`, `Hold(x)` or a clock change defined by another
+# package denotes the value at the current tick and is a symbol of its own, so shifts are
+# not distributed into operators. `Shift` and `Differential` are the exceptions.
+distribute_shift_into_operator(::Operator) = false
+distribute_shift_into_operator(::Shift) = true
+distribute_shift_into_operator(::Differential) = true
 distribute_shift_into_operator(::Sample) = false
 distribute_shift_into_operator(::Hold) = false

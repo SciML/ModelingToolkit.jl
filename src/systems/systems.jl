@@ -9,6 +9,7 @@ function MTKBase.__mtkcompile(
     sys, statemachines = extract_top_level_statemachines(sys)
     sys, source_info = expand_connections(sys, Val(true))
     sys = MTKBase.discover_maybe_zeros(sys)
+    sys, source_info = MTKBase.apply_limited_lowering(sys, source_info)
     state = TearingState(sys, source_info; sort_eqs, defer_scalarization = true)
     append!(state.statemachines, statemachines)
 
@@ -111,7 +112,7 @@ function MTKBase.__mtkcompile(
             continuous_events = continuous_events(sys),
             discrete_events = discrete_events(sys),
             gui_metadata = get_gui_metadata(sys),
-            tstops = symbolic_tstops(sys)
+            tstops = symbolic_tstops(sys), tspan = get_tspan(sys)
         )
         diffcache_params = SU.getmetadata(
             ode_sys, DiffCacheParams, Dict{SymbolicT, Int}()

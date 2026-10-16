@@ -15,7 +15,7 @@ end
 
 """$(problem_docstring(SciMLBase.BVProblem, ODEFunction, true; init = false, extra_body = BV_EXTRA_BODY))"""
 @fallback_iip_specialize function SciMLBase.BVProblem{iip, spec}(
-        sys::System, op, tspan;
+        sys::System, op, tspan = default_tspan(sys);
         check_compatibility = true,
         checkbounds = false, eval_expression = false, eval_module = @__MODULE__,
         expression = Val{false}, guesses = Dict(), callback = nothing,
@@ -26,7 +26,7 @@ end
     isnothing(callback) || error("BVP solvers do not support callbacks.")
 
     _iip = resolve_iip(iip, op)
-    dvs = unknowns(sys)
+    dvs = flat_unknowns(sys)
     ctrls = inputs(sys)
     op = to_varmap(op, dvs)
     # Optimal-control BVPs (systems carrying a cost) deliberately pin only the

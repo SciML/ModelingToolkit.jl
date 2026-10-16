@@ -910,17 +910,72 @@ struct ImplicitAffect{DVS, PS, AFFSYS, AFF, UG, AG, AUS, APS, US, PST, UGT, PG, 
     affprob::PROB
 end
 
+"""
+    affect_tolerance(integ, name::Symbol)
+
+The `abstol` or `reltol` an implicit affect's nonlinear solve should be run at, read off the
+integrator that triggered the callback.
+
+The affect equations are the parent system's algebraic and observed equations, so their
+residuals floor at the same roundoff level the ODE solver already lives with; holding the
+affect solve to a tighter tolerance than the integration itself makes a solvable callback
+report as unsolvable.
+
+Not every integrator has tolerances at all: `JumpProcesses`' `SSAIntegrator` stores `opts` as
+`(callback = ...,)`, so the field is simply absent and the nonlinear solver's default is used.
+
+Two values need translating before the nonlinear solver can be given them:
+
+  - `false` is what `OrdinaryDiffEqCore` stores for a tolerance that was not supplied under a
+    discrete problem (`OrdinaryDiffEqCore/src/solve.jl:377-378` and `:389-390` as of 4.16.0). It
+    is not a tolerance, but `Bool <: Number`, so forwarding it reaches
+    `NonlinearSolveBase.get_tolerance` as a *zero* tolerance, which no solve can meet. `nothing`
+    keeps the nonlinear solver's own default instead. (`IDSolve` maps `false` back to the default
+    as well, so this is the outer of two guards.)
+  - A per-component tolerance array is not something the nonlinear solve can take: it compares a
+    scalar norm against the tolerance
+    (`NonlinearSolveBase/src/termination_conditions.jl:246-248`), and the array is sized for the
+    parent system's unknowns rather than the affect's. `minimum` is a deliberate choice of
+    reduction - the tightest component, so the affect is never solved looser than any part of the
+    integration.
+"""
+function affect_tolerance(integ, name::Symbol)
+    opts = integ.opts
+    hasproperty(opts, name) || return nothing
+    tol = getproperty(opts, name)
+    tol isa Bool && return nothing
+    tol isa AbstractArray && return isempty(tol) ? nothing : minimum(tol)
+    return tol
+end
+
 function (ia::ImplicitAffect)(integ)
     ia.affu_setter!(ia.affprob, ia.affu_getter(integ))
     ia.affp_setter!(ia.affprob, ia.affp_getter(integ))
     # remake only updates tspan; result is a transient local, not stored back to struct
     affprob = remake(ia.affprob, tspan = (integ.t, integ.t))
-    affsol = init(affprob, IDSolve())
+    affsol = init(
+        affprob, IDSolve(); abstol = affect_tolerance(integ, :abstol),
+        reltol = affect_tolerance(integ, :reltol)
+    )
     (check_error(affsol) === ReturnCode.InitialFailure) &&
         throw(UnsolvableCallbackError(all_equations(ia.aff)))
     ia.u_setter!(integ, ia.u_getter(affsol))
     ia.p_setter!(integ, ia.p_getter(affsol))
     return ia.reset_jumps && reset_aggregated_jumps!(integ)
+end
+
+"""
+    EMPTY_AFFECT(integ, args...)
+
+Sentinel affect that does nothing. Used as the default `affect` / `affect_neg` when a
+callback specifies no affect, rather than passing `nothing` to SciMLBase (so continuous
+rootfinding still stops at the event). Clears `derivative_discontinuity` so DiffEqBase
+skips the post-affect re-initialization and trailing duplicate save; the root-time
+re-evaluation from `change_t_via_interpolation!` still runs.
+"""
+function EMPTY_AFFECT(integ, args...)
+    SciMLBase.derivative_discontinuity!(integ, false)
+    return nothing
 end
 
 @static if pkgversion(SciMLBase) < v"3"
@@ -954,7 +1009,7 @@ else
     Callable struct for a `VectorContinuousCallback`. Routes an
     integrator call to the appropriate per-equation affect based on the equation index `idx`.
     Created inside [`generate_callback`](@ref) for vectors of `SymbolicContinuousCallback`s.
-    Skips `nothing` affects.
+    Skips `nothing` / [`EMPTY_AFFECT`](@ref) affects.
 
     # Fields
     - `eq2affect`: maps condition equation index → affect index
@@ -968,17 +1023,25 @@ else
     end
 
     function (va::VectorAffect)(integ, evts)
+        applied = false
         for (i, evt) in enumerate(evts)
             if evt == 1
                 f = va.affects[va.eq2affect[i]]
-                f === nothing && continue
+                (f === nothing || f === EMPTY_AFFECT) && continue
                 f(integ)
+                applied = true
             elseif evt == -1
                 f = va.affect_negs[va.eq2affect[i]]
-                f === nothing && continue
+                (f === nothing || f === EMPTY_AFFECT) && continue
                 f(integ)
+                applied = true
             end
         end
+        # DiffEqBase assumes a non-`nothing` VectorContinuousCallback affect modifies
+        # the integrator. Clear the flag when every triggered edge had no real affect so
+        # the post-affect re-init / trailing save are skipped (root-time re-eval remains).
+        applied || SciMLBase.derivative_discontinuity!(integ, false)
+        return
     end
 end
 
@@ -1122,14 +1185,6 @@ function generate_discrete_callbacks(
 end
 
 """
-    EMPTY_AFFECT(args...)
-
-Sentinel affect that does nothing. Used as the default `affect` and `affect_neg` when a
-callback specifies no affect, rather than passing `nothing` to SciMLBase.
-"""
-EMPTY_AFFECT(args...) = nothing
-
-"""
     generate_callback(cbs::Vector{SymbolicContinuousCallback}, sys; kwargs...)
 
 Generate a `VectorContinuousCallback` (or a single `ContinuousCallback` if there is only
@@ -1225,7 +1280,7 @@ function compile_vector_callback_affects(cbs, sys, ic; kwargs...)
         push!(finals, compile_affect(cb.finalize, cb, sys; default = nothing, kwargs...))
         if ic !== nothing
             save_idxs = get(ic.callback_to_clocks, cb, Int[])
-            for _ in conditions(cb)
+            for _ in flatten_equations(equations(cb))
                 push!(saved_clock_partitions, save_idxs)
             end
         end
@@ -1625,7 +1680,7 @@ function process_events(sys; callback = nothing, tspan = nothing, kwargs...)
     contin_cbs = generate_continuous_callbacks(sys; kwargs...)
     discrete_cbs = generate_discrete_callbacks(sys; tspan, kwargs...)
     cb = merge_cb(contin_cbs, callback)
-    return (discrete_cbs === nothing) ? cb : CallbackSet(contin_cbs, discrete_cbs...)
+    return (discrete_cbs === nothing) ? cb : CallbackSet(cb, discrete_cbs...)
 end
 
 Base.@nospecializeinfer function _has_symbolic_events(sys)

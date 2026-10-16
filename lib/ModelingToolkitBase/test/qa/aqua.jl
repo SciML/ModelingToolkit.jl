@@ -8,11 +8,15 @@ using SciMLTesting
 const STALE_EXTENSION_DEPENDENCIES = [:SimpleNonlinearSolve]
 
 # ModelingToolkitBase supplies Symbolics expression-protocol methods for equations and
-# JumpProcesses jump types. These methods intentionally extend the corresponding
-# SymbolicUtils generic functions, while all other piracies remain checked.
+# JumpProcesses jump types. It is also the de-facto owner of `SCCNonlinearProblem`
+# construction: it provides the `SCCNonlinearProblem(::System)` constructors and the
+# `SCCNonlinearProblem(::SteadyStateProblem)` accessor for the lowering recorded in
+# `prob.lowered_problem`. These methods intentionally extend the corresponding external
+# generic functions, while all other piracies remain checked.
 const INTENTIONAL_EXTERNAL_GENERIC_EXTENSIONS = (
     ModelingToolkitBase.SymbolicUtils.search_variables!,
     ModelingToolkitBase.toexpr,
+    ModelingToolkitBase.SciMLBase.SCCNonlinearProblem,
 )
 
 # Moshi's `@data` expands to a submodule whose source ExplicitImports cannot walk.
@@ -54,7 +58,9 @@ const NONPUBLIC_EXPLICIT_IMPORTS = (
 # public spelling. Beyond the Symbolics/SymbolicUtils internals covered above, these are:
 # the SciMLBase callback/keyword defaults every problem constructor has to reproduce, the
 # `Moshi.Data`/`Moshi.Match` macro entry points, the Base internals with no public spelling
-# (`@__doc__`, `@ntuple`, `literal_pow`, `ReshapedArray`, ...), and the AD hooks
+# (`@__doc__`, `@ntuple`, `literal_pow`, `ReshapedArray`, and `setindex` — the
+# non-mutating array update an immutable iterate needs, which Base declares no public
+# spelling for), and the AD hooks
 # (`ForwardDiff.Dual`, `EnzymeCore.EnzymeRules`) the generated code dispatches on.
 const NONPUBLIC_QUALIFIED_ACCESSES = (
     # Symbolics
@@ -105,7 +111,7 @@ const NONPUBLIC_QUALIFIED_ACCESSES = (
     # Base
     Symbol("@__doc__"), :Callable, :Cartesian, :deepcopy_internal, :Experimental,
     :HasEltype, :JLOptions, :literal_pow, Symbol("@nospecializeinfer"), Symbol("@ntuple"),
-    :ReshapedArray,
+    :ReshapedArray, :setindex,
     # Base.Cartesian
     :poplinenum,
     # Base.Experimental

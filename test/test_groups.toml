@@ -6,6 +6,12 @@
 [InterfaceI]
 versions = ["lts", "1", "pre"]
 
+["InterfaceI 32-bit"]
+group = "InterfaceI"
+versions = ["1"]
+os = ["ubuntu-latest"]
+arch = "x86"
+
 [InterfaceII]
 versions = ["lts", "1", "pre"]
 

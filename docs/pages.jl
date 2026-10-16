@@ -27,6 +27,7 @@ pages = [
             "examples/higher_order.md",
             "examples/spring_mass.md",
             "examples/modelingtoolkitize_index_reduction.md",
+            "examples/interactive_simulation.md",
             "examples/remake.md",
         ],
         "Advanced Examples" => Any[
@@ -51,6 +52,7 @@ pages = [
         "basics/Composition.md",
         "basics/Events.md",
         "basics/Homotopy.md",
+        "basics/Limiting.md",
         "basics/Linearization.md",
         "basics/InputOutput.md",
         "basics/MTKLanguage.md",

@@ -96,7 +96,7 @@ function SciMLBase.DAEFunction{iip, spec}(
         uElType = u0 === nothing ? Float64 : eltype(u0)
         if jac
             J1 = calculate_jacobian(sys, sparse = sparse)
-            derivatives = Differential(get_iv(sys)).(unknowns(sys))
+            derivatives = Differential(get_iv(sys)).(flat_unknowns(sys))
             J2 = calculate_jacobian(sys; sparse = sparse, dvs = derivatives)
             similar(J1 + J2, uElType)
         else
@@ -122,7 +122,7 @@ end
 
 """$(problem_docstring(SciMLBase.DAEProblem, DAEFunction, true))"""
 @fallback_iip_specialize function SciMLBase.DAEProblem{iip, spec}(
-        sys::System, op, tspan;
+        sys::System, op, tspan = default_tspan(sys);
         callback = nothing, check_length = true, eval_expression = false,
         eval_module = @__MODULE__, check_compatibility = true,
         expression = Val{false}, kwargs...
@@ -145,8 +145,13 @@ end
     )
 
     diffvars = collect_differential_variables(sys)
-    sts = unknowns(sys)
-    differential_vars = map(Base.Fix2(in, diffvars), sts)
+    # An array unknown contributes one entry per element, and `D(x)` over the whole array
+    # makes every element differential.
+    differential_vars = map(flat_unknowns(sys)) do st
+        st in diffvars && return true
+        arr, isarr = split_indexed_var(st)
+        return isarr && arr in diffvars
+    end
 
     ptype = getmetadata(sys, ProblemTypeCtx, SciMLBase.StandardDAEProblem())
     args = (; f, du0, u0, tspan, p, ptype)
