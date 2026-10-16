@@ -1721,7 +1721,9 @@ function _static_initialization_buffer(prototype, values)
     P = prototype isa Type ? prototype : typeof(prototype)
     T = isempty(values) ? eltype(P) :
         promote_type(eltype(P), mapreduce(typeof, promote_type, values))
-    if !ArrayInterface.ismutable(P)
+    # `buffer_ismutable`, not `ArrayInterface.ismutable`: a discrete buffer is a
+    # `BlockedArray`, which `ArrayInterface` reports as mutable even around an `SVector`.
+    if !buffer_ismutable(P)
         return SVector{length(values), T}(values)
     elseif P <: StaticArray && isbitstype(T)
         return MVector{length(values), T}(values)
