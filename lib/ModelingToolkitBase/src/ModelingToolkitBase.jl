@@ -110,6 +110,7 @@ import Graphs: SimpleDiGraph, add_edge!
 import CommonSolve
 using CommonSolve: init, solve
 import EnumX
+import ReadOnlyArrays: ReadOnlyVector
 import ReadOnlyDicts: ReadOnlyDict
 
 import RuntimeGeneratedFunctions
