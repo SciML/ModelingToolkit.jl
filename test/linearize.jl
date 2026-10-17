@@ -466,3 +466,25 @@ end
     @test size(lsys.C) == (1, 0)
     @test size(lsys.D) == (1, 0)
 end
+
+@testset "Issue#5224: input Jacobian uses solved inputs, not guesses" begin
+    @variables x(t) = 1.0 u(t) [input = true] y(t) [output = true]
+    @named sys = System([D(x) ~ -x + u^2, y ~ x], t)
+    op = Dict(y => 4.0, D(x) => 0.0, u => missing, x => nothing)
+    mats, _, extras = linearize(
+        sys, [u], [y]; op, guesses = Dict(u => 1.0, x => 1.0),
+        initialization_abstol = 1.0e-12, initialization_reltol = 1.0e-12
+    )
+    @test mats.A ≈ [-1.0;;]
+    # Analytic B is [4.0] (= 2u at u = 2); atol follows from the tightened init tolerances.
+    @test mats.B ≈ [4.0;;] atol = 1.0e-10
+    @test extras.x ≈ [4.0]
+end
+
+@testset "Issue#5224: no-unknowns Pair-dict p uses updated inputs" begin
+    @variables uu(t) [input = true] yy(t) [output = true]
+    @named sys0 = System([yy ~ uu^2], t)
+    lf0, _ = linearization_function(sys0, [uu], [yy]; op = Dict(uu => 3.0))
+    # ∂(uu²)/∂uu = 2uu at the Pair-dict value 5, not the prepared op value 3.
+    @test only(lf0(nothing, [uu => 5.0], 0.0).h_u) ≈ 10.0
+end
