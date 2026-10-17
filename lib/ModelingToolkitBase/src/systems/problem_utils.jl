@@ -532,11 +532,19 @@ Performs symbolic substitution on the values in `varmap` for the keys in `vars`,
 in `varmap`, it is ignored.
 """
 function evaluate_varmap!(varmap::AbstractDict{SymbolicT, SymbolicT}, vars; limit = 100, allow_symbolic = false)
+    # Every element of an array variable maps to the whole array, so `vars` can visit
+    # the same key once per element, and `get` on an array key costs O(length). A key
+    # whose value is absent or constant is skipped. Only the key being substituted is
+    # ever written, so a skipped key keeps its value and every later visit skips too.
+    settled = Set{SymbolicT}()
     for k in vars
         arr, _ = split_indexed_var(unwrap(k))
+        arr in settled && continue
         v = get(varmap, arr, COMMON_NOTHING)
-        v === COMMON_NOTHING && continue
-        SU.isconst(v) && continue
+        if v === COMMON_NOTHING || SU.isconst(v)
+            push!(settled, arr)
+            continue
+        end
         varmap[arr] = fixpoint_sub(v, varmap; maxiters = limit, fold = Val(true), warn_maxiters = !allow_symbolic)
     end
     return
