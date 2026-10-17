@@ -732,11 +732,9 @@ end
 function scalarized_dae_residuals(sys::System)
     residuals = SymbolicT[]
     for eq in full_equations(sys)
-        residual = eq.rhs - eq.lhs
-        shape = SU.shape(residual)
-        SU.is_array_shape(shape) && any(isempty, shape) && continue
-        residual = Symbolics.scalarize(residual)
+        residual = Symbolics.scalarize(eq.rhs - eq.lhs)
         if residual isa AbstractArray
+            isempty(residual) && continue
             append!(residuals, vec(unwrap.(residual)))
         else
             push!(residuals, unwrap(residual))
