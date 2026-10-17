@@ -206,7 +206,11 @@ function map_variables_to_equations(sys::AbstractSystem; rename_dummy_derivative
             all(!Base.Fix1(StateSelection.isdervar, ts.structure), 𝑠neighbors(graph, eq))
         end
     )
-    alge_var_eq_matching = complete(maximal_matching(graph, in(algeqs), in(algvars)))
+    alge_var_eq_matching = complete(
+        maximal_matching(
+            graph; srcfilter = in(algeqs), dstfilter = in(algvars)
+        )
+    )
     for (i, eq) in enumerate(alge_var_eq_matching)
         eq isa Unassigned && continue
         mapping[get(dummy_sub, ts.fullvars[i], ts.fullvars[i])] = eqs[eq]
