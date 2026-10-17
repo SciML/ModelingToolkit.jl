@@ -256,10 +256,19 @@ function MTK._validate(terms::Vector, labels::Vector{String}; info::String = "")
 end
 
 function MTK._validate(conn::Connection; info::String = "")
-    valid = true
     syss = MTK.get_systems(conn)
+    if syss isa ConnectionNetwork
+        valid = true
+        for (i, (src, dst)) in enumerate(MTK.network_edge_ports(syss))
+            # variable-port edges of a network are not unit-checked
+            src isa MTK.AbstractSystem || continue
+            valid &= _validate_connected(System[src, dst]; info = "$info edge $i")
+        end
+        return valid
+    end
     # Causal variable `connect(a.y, b.u)` stores `Vector{SymbolicT}`, not systems.
     if MTK.is_causal_variable_connection(conn)
+        valid = true
         first_unit = nothing
         first_var = nothing
         for (i, var) in enumerate(syss)
@@ -280,6 +289,11 @@ function MTK._validate(conn::Connection; info::String = "")
         end
         return valid
     end
+    return _validate_connected(syss; info)
+end
+
+function _validate_connected(syss; info::String = "")
+    valid = true
     sys = first(syss)
     st = unknowns(sys)
     for i in 2:length(syss)

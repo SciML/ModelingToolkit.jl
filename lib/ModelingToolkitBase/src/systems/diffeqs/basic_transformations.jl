@@ -571,12 +571,37 @@ function change_independent_variable(
 
     # overload to specifically handle equations, which can be an equation or a connection
     function transform(eq::Equation, systems_map)
-        if eq.rhs isa Connection
-            eq = connect((systems_map[nameof(s)] for s in eq.rhs.systems)...)
+        rhs = value(eq.rhs)
+        if rhs isa Connection
+            systems = get_systems(rhs)
+            if systems isa ConnectionNetwork
+                newnodes = System[
+                    _transformed_connection_system(systems_map, n) for n in systems.nodes
+                ]
+                systems = ConnectionNetwork(newnodes, systems.edges)
+            elseif systems isa Vector{System}
+                systems = System[
+                    _transformed_connection_system(systems_map, s) for s in systems
+                ]
+            else
+                systems = SymbolicT[transform(v) for v in systems]
+            end
+            eq = Equation(value(eq.lhs), Connection(systems))
         else
             eq = transform(eq)
         end
         return eq::Equation
+    end
+
+    # find the transformed equivalent of a system referenced by a `Connection`,
+    # using its (possibly namespaced) name
+    function _transformed_connection_system(systems_map, s)
+        hierarchy = namespace_hierarchy(nameof(s))
+        cur = systems_map[hierarchy[1]]
+        for i in 2:length(hierarchy)
+            cur = getproperty(cur, hierarchy[i]; namespace = true)
+        end
+        return cur
     end
 
     # Use the utility function to transform everything in the system!

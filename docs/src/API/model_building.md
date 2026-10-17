@@ -89,8 +89,21 @@ macro.
 ```@docs
 connect
 domain_connect
+multiconnect
 @connector
 Connection
+```
+
+An entire graph of connections between an array of node subsystems can be written
+as a single `multiconnect` equation. See also the array-of-components form
+`multiconnect(portspec::Pair, g::Graphs.AbstractGraph)`, which encodes the
+connection graph in sparse selection matrices so that the symbolic representation
+does not grow with the number of edges.
+
+```@docs
+ConnectionEdge
+ConnectionNetwork
+ModelingToolkitBase.network_edge_ports
 ```
 
 Connections can be expanded using `expand_connections`.
