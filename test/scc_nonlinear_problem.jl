@@ -497,7 +497,13 @@ end
             prob = SCCNonlinearProblem{true, spec}(sys, op)
             @test length(prob.probs) == n
             @test prob.probs isa container
-            @test SciMLBase.successful_retcode(solve(prob, NewtonRaphson()))
+            sol = solve(prob, NewtonRaphson())
+            @test SciMLBase.successful_retcode(sol)
+            @test all(i -> sol.u[i]^3 + sol.u[i] ≈ (i == 1 ? 1 : sol.u[i - 1]), 1:n)
+            # Solving may internally take `prob.probs` through a different
+            # container specialization, but `sol.prob` still uses the
+            # caller's container representation.
+            @test sol.prob.probs isa container
         end
     end
 end

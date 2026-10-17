@@ -807,7 +807,32 @@ function _scc_problem(subprobs, explicitfuns, p, sys, specialize)
         return SCCNonlinearProblem(Tuple(subprobs), Tuple(explicitfuns), p, true; sys)
     end
     return SCCNonlinearProblem(
-        collect(Any, subprobs), SciMLBase.Void{Any}.(explicitfuns), p, true; sys
+        collect(Any, subprobs), SCCExplicitFuns(SciMLBase.Void{Any}.(explicitfuns)),
+        p, true; sys
+    )
+end
+
+# `SCCNonlinearSolve._scc_solve` only keeps its block aggregation inside Enzyme's type
+# analysis limits when `sols` is a tuple: the `AbstractVector` specialization of
+# `iteratively_build_sols` splats a `Vector{NonlinearSolution}` into `vcat`, which
+# Enzyme cannot compile, while the `Tuple` specialization unrolls instead. The two
+# solve the same blocks and are numerically identical, so vector-stored problems
+# mark `explicitfuns!` with `SCCExplicitFuns` to dispatch to the tuple specialization;
+# `prob.probs` and the `prob` attached to the returned solution keep `Vector` storage.
+struct SCCExplicitFuns{V <: AbstractVector} <: AbstractVector{Any}
+    funs::V
+end
+
+Base.size(funs::SCCExplicitFuns) = size(funs.funs)
+Base.getindex(funs::SCCExplicitFuns, i::Int) = funs.funs[i]
+Base.setindex!(funs::SCCExplicitFuns, f, i::Int) = (funs.funs[i] = f; funs)
+Base.similar(funs::SCCExplicitFuns) = SCCExplicitFuns(similar(funs.funs))
+
+function SCCNonlinearSolve.iteratively_build_sols(
+        alg, probs::AbstractVector, explicitfuns::SCCExplicitFuns; kwargs...
+    )
+    return SCCNonlinearSolve.iteratively_build_sols(
+        alg, Tuple(probs), Tuple(explicitfuns), Val(length(probs)); kwargs...
     )
 end
 
