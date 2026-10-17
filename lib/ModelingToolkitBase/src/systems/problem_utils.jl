@@ -532,8 +532,13 @@ Performs symbolic substitution on the values in `varmap` for the keys in `vars`,
 in `varmap`, it is ignored.
 """
 function evaluate_varmap!(varmap::AbstractDict{SymbolicT, SymbolicT}, vars; limit = 100, allow_symbolic = false)
+    # Every element of an array maps to the same `arr`, which is substituted as a whole.
+    # Visiting it once per element makes this quadratic in the array length.
+    seen = Set{SymbolicT}()
     for k in vars
         arr, _ = split_indexed_var(unwrap(k))
+        arr in seen && continue
+        push!(seen, arr)
         v = get(varmap, arr, COMMON_NOTHING)
         v === COMMON_NOTHING && continue
         SU.isconst(v) && continue
