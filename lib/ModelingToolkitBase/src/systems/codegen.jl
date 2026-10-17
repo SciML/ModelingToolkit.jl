@@ -1043,11 +1043,23 @@ end
 """
     $(TYPEDSIGNATURES)
 
+The objective `obj` in the form that is differentiated with respect to the scalar unknowns:
+reductions over `dims` are expanded by `expand_dims_reductions` and the result is
+scalarized. `Symbolics.gradient` and `Symbolics.hessian` throw for unknowns that appear
+inside a lazy array reduction nested in a scalar expression, such as `2 * sum(A * x)`.
+"""
+function differentiable_cost(obj::SymbolicT)
+    return Symbolics.scalarize(expand_dims_reductions(obj))::SymbolicT
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
 Calculate the gradient of the consolidated cost of `sys` with respect to the unknowns.
 `simplify` is forwarded to `Symbolics.gradient`.
 """
 function calculate_cost_gradient(sys::System; simplify = false)
-    obj = cost(sys)
+    obj = differentiable_cost(cost(sys))
     dvs = flat_unknowns(sys)
     return Symbolics.gradient(obj, dvs; simplify)
 end
@@ -1088,7 +1100,7 @@ Calculate the hessian of the consolidated cost of `sys` with respect to the unkn
 matrix is returned.
 """
 function calculate_cost_hessian(sys::System; sparse = false, simplify = false)
-    obj = cost(sys)
+    obj = differentiable_cost(cost(sys))
     dvs = flat_unknowns(sys)
     if sparse
         return Symbolics.sparsehessian(obj, dvs; simplify)::AbstractSparseArray
@@ -1534,7 +1546,7 @@ hessian matrices.
 function calculate_multiobjective_hessian(
         sys::System; simplify = false, sparse = false, return_sparsity = false
     )
-    objs = costs(sys)
+    objs = map(differentiable_cost, costs(sys))
     dvs = flat_unknowns(sys)
     sparsity = nothing
     if sparse
