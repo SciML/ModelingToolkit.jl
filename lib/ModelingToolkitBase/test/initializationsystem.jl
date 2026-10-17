@@ -2657,3 +2657,30 @@ end
     prob2 = ODEProblem(sys2, [], (0.0, 1.0))
     @test prob2[z] ≈ 4.0
 end
+
+@testset "`generate_initializesystem` pins each value of the operating point once" begin
+    # Each pin inserts an `Initial` key into the operating point. With 128 values, these
+    # insertions rehash its `Dict` while `generate_initializesystem` iterates over it.
+    n = 128
+    pinned(isys) = [eq.lhs for eq in equations(isys) if isequal(eq.rhs, Initial(eq.lhs))]
+
+    xs = [only(@variables $(Symbol(:x, i))(t)) for i in 1:n]
+    @mtkcompile sys = System([D(x) ~ -x for x in xs], t)
+    isys = generate_initializesystem(sys; op = [x => Float64(i) for (i, x) in enumerate(xs)])
+    pins = pinned(isys)
+    @test length(pins) == n
+    @test issetequal(pins, ModelingToolkitBase.unwrap.(xs))
+
+    ps = [only(@parameters $(Symbol(:p, i))) for i in 1:n]
+    @variables y
+    @mtkcompile sys = System(
+        [0 ~ y - sum(ps)], [y], ps;
+        bindings = [p => missing for p in ps], guesses = [p => 1.0 for p in ps]
+    )
+    isys = generate_initializesystem(
+        sys; time_dependent_init = false, op = [p => Float64(i) for (i, p) in enumerate(ps)]
+    )
+    pins = pinned(isys)
+    @test length(pins) == n
+    @test issetequal(pins, ModelingToolkitBase.unwrap.(ps))
+end
