@@ -72,6 +72,115 @@ solve(dprob, Tsit5());
 debug_system
 ```
 
+## Controlling verbosity
+
+Diagnostic output from ModelingToolkit — the `mtkcompile` pipeline, problem construction
+and initialization, and analysis utilities — is controlled through
+[SciMLLogging.jl](https://github.com/SciML/SciMLLogging.jl) via the `verbose` keyword
+argument, which accepts an [`MTKVerbosity`](@ref) specifier, a `SciMLLogging` preset, or
+a `Bool`:
+
+```julia
+using SciMLLogging: SciMLLogging, Silent, InfoLevel
+
+mtkcompile(sys)                                    # stored verbosity of sys, else Standard
+mtkcompile(sys; verbose = false)                   # silence everything
+mtkcompile(sys; verbose = SciMLLogging.Detailed()) # more diagnostics
+
+# fine-grained control per toggle or group
+mtkcompile(sys; verbose = MTKVerbosity(state_priority_tie = Silent))
+mtkcompile(sys; verbose = MTKVerbosity(compilation = InfoLevel))
+```
+
+The available toggles are documented on [`MTKVerbosity`](@ref):
+
+| Toggle                            | Default     | Controls                                                               |
+|:--------------------------------- |:----------- |:---------------------------------------------------------------------- |
+| `state_priority_tie`              | `WarnLevel` | Tied `state_priority` in an alias group during alias elimination        |
+| `underconstrained_variables`      | `Silent`    | Report of underconstrained variables found during alias elimination     |
+| `if_lifting_condition_grammar`    | `WarnLevel` | `IfLifting` skipping a condition outside its supported grammar          |
+| `observed_equation_cycle`         | `Silent`    | Printing the smallest cycle when sorting observed equations fails       |
+| `singular_initialization`         | `WarnLevel` | Structurally singular initialization system                             |
+| `overdetermined_initialization`   | `WarnLevel` | Overdetermined initialization system (least-squares fallback)           |
+| `underdetermined_initialization`  | `WarnLevel` | Underdetermined initialization system (least-squares fallback)          |
+| `scc_initialization_unavailable`  | `WarnLevel` | `SCCNonlinearProblem` initialization requires `split = true`            |
+| `cyclic_dependency`               | `Silent`    | Cycles among initial conditions of unknowns/parameters                  |
+| `overdetermined_constraints`      | `WarnLevel` | Overdetermined `BVProblem`/dynamic-optimization constraints             |
+| `missing_scc_schedule`            | `WarnLevel` | Simplified system unexpectedly missing a tearing schedule               |
+| `dynamic_opt_time_grid`           | `WarnLevel` | Ignored `dt`/`steps` argument in dynamic optimization                   |
+| `empty_operating_point`           | `WarnLevel` | Empty operating point passed to `linearization_function`                |
+| `initialization_analysis`         | `InfoLevel` | The report of `analyze_initialization_jacobian`                         |
+| `no_unbound_inputs`               | `WarnLevel` | `generate_control_function` found no unbound inputs                     |
+| `analysis_point_causality`        | `WarnLevel` | Reversed causality in an analysis-point `connect`                       |
+| `imperative_affect_specification` | `WarnLevel` | Duplicate, unassignable, or observed-and-modified `ImperativeAffect` symbols |
+| `parameter_not_in_system`         | `WarnLevel` | `remake` with a symbol that is not a parameter of the system           |
+| `independent_variable_not_parameter` | `WarnLevel` | Independent variable not defined with `@independent_variables`       |
+| `constraint_variable_without_argument` | `WarnLevel` | Constraint or cost with an unknown that has no argument          |
+| `unbalanced_connector`            | `WarnLevel` | `mtkcompile`: a connector with different numbers of flow and regular variables |
+| `affect_default_independent_variable` | `WarnLevel` | Affect with no independent variable, so it uses `t_nounits`       |
+| `substitute_skips_events`         | `WarnLevel` | `substitute` on a system with events, which it does not change         |
+
+### Problem constructors
+
+`SciMLBase.*Problem` constructors share the `verbose` keyword with the solver, since
+problem keyword arguments are forwarded to `solve`. The value is routed by type:
+
+  - an `MTKVerbosity` applies to ModelingToolkit, and its solver sub-specifier for the
+    problem type is forwarded to the solver (`de_verbosity` for an `ODEProblem`,
+    `nonlinear_verbosity` for a `NonlinearProblem`, ...);
+  - a preset or `Bool` applies to ModelingToolkit *and* is forwarded to the solver;
+  - a solver verbosity specifier (e.g. `DEVerbosity`) is forwarded untouched.
+
+Thus, one `MTKVerbosity` can control ModelingToolkit and the solver together:
+
+```julia
+verb = MTKVerbosity(
+    initialization = Silent,
+    de_verbosity = DEVerbosity(linear_verbosity = SciMLLogging.None()),
+)
+prob = ODEProblem(sys, op, tspan; verbose = verb)
+solve(prob, Rodas5P())  # the solver gets `verb.de_verbosity`
+```
+
+The `initialization_verbosity` sub-specifier of `MTKVerbosity` controls the verbosity of
+the initialization problem's solve (default `Minimal()`), and accepts a preset or a
+`NonlinearVerbosity`. A linear initialization problem uses a preset, but not a
+`NonlinearVerbosity`; then it uses `linear_verbosity`. The ModelingToolkit diagnostics of
+the initialization problem use the toggles of the outer `MTKVerbosity`. The
+[`MTKVerbosity`](@ref) docstring lists the solver sub-specifiers for each problem family.
+
+The boolean keywords `warn_initialize_determined`, `warn_cyclic_dependency`,
+`warn_empty_op`, and `print_underconstrained_variables` (of `mtkcompile`) are deprecated
+in favor of `verbose`. When explicitly passed they emit a
+deprecation warning and override the corresponding toggles. Julia shows these warnings
+only with `--depwarn=yes`, for example in `Pkg.test`.
+
+### Verbosity stored on a system
+
+Some diagnostics run where no `verbose` keyword is available: the checks in the `System`
+constructor, callback affects, `remake`, and `IfLifting` and other `additional_passes`.
+These use the verbosity that is stored in the metadata of the system. Set it with the `verbose` keyword of `System`. The author of
+a connector can also silence the `unbalanced_connector` check, which `mtkcompile` does
+once for each connector type, for that connector:
+
+```julia
+@connector function Pin(; name)
+    @variables v(t) w(t) i(t) [connect = Flow]
+    System(Equation[], t, [v, w, i], []; name,
+        verbose = MTKVerbosity(unbalanced_connector = Silent))
+end
+```
+
+`mtkcompile` stores its own `verbose` value on the system that it returns, so
+`remake` on a problem of `mtkcompile(sys; verbose = false)` is also quiet. If
+`mtkcompile` gets no `verbose`, it uses the value stored on its input system. Other
+functions that have their own `verbose` keyword, such as problem constructors and
+`substitute`, do not read the stored value.
+
+```@docs; canonical = false
+MTKVerbosity
+```
+
 ## Error message guidance
 
 Errors raised while building a problem describe what went wrong and then, where it is
@@ -89,6 +198,7 @@ ModelingToolkit.show_api_guidance!(false)
 
     `show_api_guidance!` is experimental and unsupported. It may change or be removed in
     any release, without a breaking version bump. Verbosity across the SciML ecosystem is
-    moving to [SciMLLogging.jl](https://github.com/SciML/SciMLLogging.jl), and this setting
-    is expected to be replaced by an option there once ModelingToolkit adopts it. That will
-    be the supported way to control this.
+    moving to [SciMLLogging.jl](https://github.com/SciML/SciMLLogging.jl), which
+    ModelingToolkit has begun adopting via [`MTKVerbosity`](@ref); this setting is
+    expected to be absorbed into that mechanism. That will be the supported way to
+    control this.

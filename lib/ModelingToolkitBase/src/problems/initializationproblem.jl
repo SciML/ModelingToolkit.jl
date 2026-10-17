@@ -58,11 +58,11 @@ function InitializationProblem{iip, specialize}(
         fast_path = false, guesses = [], check_length = nothing, kwargs...
     ) where {iip, specialize}
     (;
-        warn_initialize_determined, initialization_eqs, fully_determined,
+        verbosity, initialization_eqs, fully_determined,
         check_initialization_units, allow_incomplete, algebraic_only,
         time_dependent_init, initsys_mtkcompile_kwargs, is_steadystateprob,
         u0_constructor, p_constructor, use_scc, missing_guess_value,
-        warn_cyclic_dependency, circular_dependency_max_cycle_length,
+        circular_dependency_max_cycle_length,
         circular_dependency_max_cycles, init_compiler_options,
     ) = opts
     (; eval_expression, eval_module) = opts.fn_opts.codegen
@@ -117,8 +117,10 @@ function InitializationProblem{iip, specialize}(
     pareqs, resteqs = find_all_parameter_equations(isys)
     @set! isys.eqs = resteqs
     if simplify_system
+        # The compiled system stores `verbose`, so `remake` of the initialization problem
+        # also uses it. An explicit `verbose` in `initsys_mtkcompile_kwargs` wins.
         isys = mtkcompile_initialization_system(
-            isys, sys; fully_determined, initsys_mtkcompile_kwargs...
+            isys, sys; fully_determined, verbose = verbosity, initsys_mtkcompile_kwargs...
         )
     end
     for i in eachindex(pareqs)
@@ -129,15 +131,19 @@ function InitializationProblem{iip, specialize}(
 
     ts = get_tearing_state(isys)
     unassigned_vars = singular_check(ts)
-    if warn_initialize_determined && !isempty(unassigned_vars)
-        errmsg = """
-        The initialization system is structurally singular. Guess values may \
-        significantly affect the initial values of the ODE. The problematic variables \
-        are $unassigned_vars.
+    if !isempty(unassigned_vars)
+        @SciMLMessage(verbosity, :singular_initialization) do
+            """
+            The initialization system is structurally singular. Guess values may \
+            significantly affect the initial values of the ODE. The problematic variables \
+            are $unassigned_vars.
 
-        Note that the identification of problematic variables is a best-effort heuristic.
-        """
-        @warn errmsg
+            Note that the identification of problematic variables is a best-effort heuristic.
+
+            To suppress this warning, pass \
+            `verbose = MTKVerbosity(singular_initialization = SciMLLogging.Silent)`.
+            """
+        end
     end
 
     uninit = as_atomic_array_set(unknowns(sys))
@@ -174,7 +180,7 @@ function InitializationProblem{iip, specialize}(
     # to work properly.
     add_observed!(sys, ModelingToolkitBase.initial_conditions(isys))
     filter!(!Base.Fix2(===, COMMON_MISSING) ∘ last, op)
-    TProb = get_initialization_problem_type(sys, isys; warn_initialize_determined, use_scc)
+    TProb = get_initialization_problem_type(sys, isys; verbose = verbosity, use_scc)
     # Only forward `check_length` when the caller explicitly set it; otherwise let the
     # underlying problem type apply its own default (see the keyword's definition above).
     check_length_kw = check_length === nothing ? (;) : (; check_length)
@@ -183,7 +189,12 @@ function InitializationProblem{iip, specialize}(
     return problem_constructor(
         isys, op; kwargs..., problem_kwargs..., check_length_kw...,
         u0_constructor, p_constructor, missing_guess_value,
-        eval_expression, eval_module, warn_cyclic_dependency,
+        eval_expression, eval_module,
+        # The inner problem uses the toggles of `verbosity` for its own diagnostics. Its
+        # problem constructor puts the `initialization_verbosity` sub-specifier in
+        # `initializeprob.kwargs` (see `_solver_kwargs`), which `solve` merges at
+        # integrator initialization.
+        verbose = _initialization_problem_verbosity(verbosity),
         circular_dependency_max_cycle_length, circular_dependency_max_cycles,
         compiler_options = init_compiler_options,
         build_initializeprob = false, is_initializeprob = true
@@ -403,7 +414,8 @@ pluralize(n::Integer, word::AbstractString) = n == 1 ? word : word * "s"
         # `NonlinearLeastSquaresProblem` uses `false` for non-square); forwarding a single
         # value unconditionally would override and break one of those cases.
         check_length = nothing,
-        warn_initialize_determined = true,
+        verbose = nothing,
+        warn_initialize_determined = nothing,
         initialization_eqs = [],
         fully_determined = nothing,
         check_units = true,
@@ -415,7 +427,7 @@ pluralize(n::Integer, word::AbstractString) = n == 1 ? word : word * "s"
         u0_constructor = identity, p_constructor = identity, use_scc = true,
         missing_guess_value = default_missing_guess_value(),
         eval_expression = false, eval_module = @__MODULE__,
-        warn_cyclic_dependency = false,
+        warn_cyclic_dependency = nothing,
         circular_dependency_max_cycle_length = length(all_symbols(sys)),
         circular_dependency_max_cycles = 10,
         compiler_options::CompilerOptions = CompilerOptions(),
@@ -424,7 +436,7 @@ pluralize(n::Integer, word::AbstractString) = n == 1 ? word : word * "s"
     fn_opts = SciMLFunctionOptions(; eval_expression, eval_module)
     opts = SciMLProblemOptions(
         sys;
-        fn_opts, warn_initialize_determined, initialization_eqs, fully_determined,
+        fn_opts, verbose, warn_initialize_determined, initialization_eqs, fully_determined,
         check_initialization_units = check_units, allow_incomplete, algebraic_only,
         time_dependent_init, initsys_mtkcompile_kwargs, is_steadystateprob,
         u0_constructor, p_constructor, use_scc, missing_guess_value,
@@ -445,7 +457,8 @@ function overdetermined_initialization_message(neqs::Integer, nunknown::Integer,
     Call `analyze_initialization_jacobian(prob)` on the constructed problem to see which \
     equations are redundant (and which unknowns, if any, remain underdetermined).
 
-    To suppress this warning, pass `warn_initialize_determined = false`. To turn this \
+    To suppress this warning, silence the corresponding `MTKVerbosity` toggle, e.g. \
+    `verbose = MTKVerbosity(initialization = SciMLLogging.Silent)`. To turn this \
     warning into an error, pass `fully_determined = true`.
     """
 end
@@ -458,9 +471,21 @@ function underdetermined_initialization_message(neqs::Integer, nunknown::Integer
     Call `analyze_initialization_jacobian(prob)` on the constructed problem to see which \
     unknowns are underdetermined (and which equations, if any, are redundant).
 
-    To suppress this warning, pass `warn_initialize_determined = false`. To turn this \
+    To suppress this warning, silence the corresponding `MTKVerbosity` toggle, e.g. \
+    `verbose = MTKVerbosity(initialization = SciMLLogging.Silent)`. To turn this \
     warning into an error, pass `fully_determined = true`.
     """
+end
+
+# The verbosity of `get_initialization_problem_type`, with its deprecated
+# `warn_initialize_determined` keyword applied.
+function _initialization_type_verbosity(verbose, warn_initialize_determined)
+    return _deprecated_override_toggle(
+        _route_problem_verbose(verbose), warn_initialize_determined,
+        :warn_initialize_determined, :get_initialization_problem_type,
+        :overdetermined_initialization => WarnLevel,
+        :underdetermined_initialization => WarnLevel,
+    )
 end
 
 """
@@ -475,16 +500,21 @@ when `isys` contains Modelica `homotopy(actual, simplified)` nodes, otherwise
 """
 function get_initialization_problem_type(
         sys::AbstractSystem, isys::AbstractSystem;
-        warn_initialize_determined = true, kwargs...
+        verbose = DEFAULT_MTK_VERBOSE, warn_initialize_determined = nothing, kwargs...
     )
+    verbosity = _initialization_type_verbosity(verbose, warn_initialize_determined)
     neqs = length(equations(isys))
     nunknown = length(unknowns(isys))
 
-    if warn_initialize_determined && neqs > nunknown
-        @warn overdetermined_initialization_message(neqs, nunknown, "")
+    if neqs > nunknown
+        @SciMLMessage(verbosity, :overdetermined_initialization) do
+            overdetermined_initialization_message(neqs, nunknown, "")
+        end
     end
-    if warn_initialize_determined && neqs < nunknown
-        @warn underdetermined_initialization_message(neqs, nunknown, "")
+    if neqs < nunknown
+        @SciMLMessage(verbosity, :underdetermined_initialization) do
+            underdetermined_initialization_message(neqs, nunknown, "")
+        end
     end
 
     # Avoid using this for underdetermined systems

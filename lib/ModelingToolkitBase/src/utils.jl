@@ -151,15 +151,19 @@ Value that can be provided to the `check` keyword of `System` to enable checking
 """
 const CheckUnits = 1 << 2
 
-function check_independent_variables(ivs)
+function check_independent_variables(ivs, verbosity = DEFAULT_MTK_VERBOSE)
     for iv in ivs
-        isparameter(iv) || @invokelatest warn_indepvar(iv)
+        isparameter(iv) || @invokelatest warn_indepvar(iv, verbosity)
     end
     return
 end
 
-@noinline function warn_indepvar(iv::SymbolicT)
-    return @warn "Independent variable $iv should be defined with @independent_variables $iv."
+@noinline function warn_indepvar(iv::SymbolicT, verbosity)
+    @SciMLMessage(
+        "Independent variable $iv should be defined with @independent_variables $iv.",
+        verbosity, :independent_variable_not_parameter
+    )
+    return nothing
 end
 
 function check_parameters(ps, iv)

@@ -3535,17 +3535,22 @@ end
 
 _keytype(::Type{<:Pair{T, V}}) where {T, V} = T
 _keytype(::Type{T}) where {T} = keytype(T)
-function Symbolics.substitute(sys::AbstractSystem, rules::Union{Vector{<:Pair}, Dict})
+function Symbolics.substitute(
+        sys::AbstractSystem, rules::Union{Vector{<:Pair}, Dict}; verbose = Standard()
+    )
     if get_continuous_events(sys) !== nothing && !isempty(get_continuous_events(sys)) ||
             has_discrete_events(sys) && get_discrete_events(sys) !== nothing &&
             !isempty(get_discrete_events(sys))
-        @warn "`substitute` only supports performing substitutions in equations. This system has events, which will not be updated."
+        @SciMLMessage(
+            "`substitute` only supports performing substitutions in equations. This system has events, which will not be updated.",
+            _process_verbose_param(verbose), :substitute_skips_events
+        )
     end
     return if _keytype(eltype(rules)) <: Symbol
         dict = todict(rules)
         systems = get_systems(sys)
         # post-walk to avoid infinite recursion
-        @set! sys.systems = map(Base.Fix2(substitute, dict), systems)
+        @set! sys.systems = map(s -> substitute(s, dict; verbose), systems)
         something(get(rules, nameof(sys), nothing), sys)
     elseif sys isa System
         rules = todict(
@@ -3584,7 +3589,7 @@ function Symbolics.substitute(sys::AbstractSystem, rules::Union{Vector{<:Pair}, 
             get_initialization_eqs(sys), rules
         )
         @set! newsys.constraints = substitute(get_constraints(sys), rules)
-        @set! newsys.systems = map(s -> substitute(s, rules), get_systems(sys))
+        @set! newsys.systems = map(s -> substitute(s, rules; verbose), get_systems(sys))
     else
         error("substituting symbols is not supported for $(typeof(sys))")
     end
