@@ -149,7 +149,12 @@ function ChainRulesCore.rrule(
                 tunable, initials, discrete, constant, nonnumeric
             )
             idxs′ = NoTangent()
-            vals′ = map(i -> MTK._ducktyped_parameter_values(buf′, i), idxs)
+            # The cotangent of an array parameter is a view into `buf′`; copy it, since
+            # Mooncake's `@from_rrule` accumulates plain arrays only.
+            vals′ = map(idxs) do i
+                val′ = MTK._ducktyped_parameter_values(buf′, i)
+                val′ isa SubArray ? copy(val′) : val′
+            end
             return f′, indp′, oldbuf′, idxs′, vals′
         end
     end

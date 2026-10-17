@@ -145,6 +145,7 @@ end
         @safetestset "Despecialized MTKParameters AD Test" include("extensions/despecialized_parameters_ad.jl")
         @safetestset "Initialization maps AD" include("extensions/initialization_maps_ad.jl")
         @safetestset "Auto Differentiation Test" include("extensions/ad.jl")
+        @safetestset "Mooncake Extension Test" include("extensions/mooncake.jl")
     end
 
     if GROUP == "All" || GROUP == "Optimization"
