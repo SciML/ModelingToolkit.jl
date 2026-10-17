@@ -1050,10 +1050,31 @@ end
 # Required for DiffEqArray constructor to work during interpolation
 Base.size(::NestedGetIndex) = ()
 
+"""
+Return `buf` with a mutable parent so `copyto!` into `Block` views succeeds.
+
+OOP `ODEProblem{false}` layouts store discretes in `BlockedArray`s backed by
+`SVector`; solution interpolation via `with_updated_parameter_timeseries_values`
+must still write saved discrete snapshots into those buffers.
+"""
+function _mutable_discrete_buffer(buf::BlockedArray)
+    ArrayInterface.ismutable(parent(buf)) && return buf
+    data = similar(Vector{eltype(buf)}, size(buf))
+    copyto!(data, buf)
+    blocks = ntuple(Val(ndims(buf))) do i
+        Int.(blocksizes(buf, i))
+    end
+    return BlockedArray(data, blocks...)
+end
+
 function SymbolicIndexingInterface.with_updated_parameter_timeseries_values(
         ::AbstractSystem, ps::MTKParameters,
         args::Pair{<:Any, <:NestedGetIndex}...
     )
+    discrete = ntuple(j -> _mutable_discrete_buffer(ps.discrete[j]), Val(length(ps.discrete)))
+    if discrete !== ps.discrete
+        ps = @set ps.discrete = discrete
+    end
     for (i, ngi) in args
         for (j, val) in enumerate(ngi.x)
             copyto!(view(ps.discrete[j], Block(i)), val)
