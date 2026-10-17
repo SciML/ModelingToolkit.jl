@@ -4,6 +4,7 @@ using ModelingToolkitBase: MTKParameters, ParameterIndex, NONNUMERIC_PORTION, Ab
     SetInitialUnknowns, GeneratedFunctionWrapper, ObservedFunctionCache, MissingGuessValue
 using ModelingToolkitBase: System
 import ModelingToolkitBase as MTK
+import ChainRulesCore as CRC
 import Mooncake
 using Mooncake: @from_rrule, @zero_adjoint, MinimalCtx, NoTangent, NoRData, NoFData, increment_and_get_rdata!
 import SymbolicIndexingInterface: remake_buffer
@@ -28,6 +29,21 @@ function Mooncake.increment_and_get_rdata!(
         Mooncake.increment_and_get_rdata!(fd, NoRData(), td)
     end
     return NoRData()
+end
+
+# The rrules of `remake_buffer` and `SetInitialUnknowns` return the cotangent of an
+# MTKParameters as a ChainRulesCore `Tangent`, which leaves out `caches`.
+function Mooncake.increment_and_get_rdata!(
+        f::Mooncake.FData{<:NamedTuple{(:tunable, :initials, :discrete, :constant, :nonnumeric, :caches)}},
+        r::Mooncake.NoRData,
+        t::CRC.Tangent{<:MTKParameters, <:NamedTuple},
+    )
+    fields = (:tunable, :initials, :discrete, :constant, :nonnumeric, :caches)
+    tangents = map(fields) do field
+        td = getproperty(t, field)
+        td isa CRC.AbstractZero ? nothing : td
+    end
+    return Mooncake.increment_and_get_rdata!(f, r, NamedTuple{fields}(tangents))
 end
 
 # Fix StackOverflow in tangent_type for recursive/structural types.
