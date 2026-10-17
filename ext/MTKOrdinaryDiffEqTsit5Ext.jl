@@ -8,6 +8,7 @@ using PrecompileTools: @compile_workload, @setup_workload
     odeprob = ModelingToolkit.precompile_ode_problem()
     @compile_workload begin
         solve(odeprob, Tsit5())
+        solve(odeprob, Tsit5(); abstol = 1.0e-6, reltol = 1.0e-6)
     end
 end
 
