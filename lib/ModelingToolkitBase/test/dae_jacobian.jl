@@ -62,3 +62,34 @@ prob = DAEProblem(complete(sys), [du0; p], tspan, jac = true, sparse = true, mis
 sol = solve(prob, IDA(linear_solver = :KLU))
 
 @test maximum(sol - sol1) < 2.0e-12
+
+@testset "DAE Jacobians include both sides of scalar equations" begin
+    @variables x(t) y(t)
+    for differential_eq in (D(x) ~ y, 0 ~ y - D(x)),
+            algebraic_eq in (y ~ x^2, 0 ~ x^2 - y)
+        @named raw = System([differential_eq, algebraic_eq], t, [x, y], [])
+        sys = complete(raw)
+        u, du = [2.0, 5.0], [1.0, 0.0]
+        for analytic in (false, true), sparse in (false, true)
+            @testset "jac=$analytic sparse=$sparse" begin
+                f = DAEFunction(sys; jac = analytic, sparse, u0 = u)
+                residual = zeros(2)
+                f(residual, du, u, nothing, 0.0)
+                @test residual == [4.0, -1.0]
+                if sparse
+                    @test size(f.jac_prototype) == (2, 2)
+                    @test findnz(f.jac_prototype)[1:2] == ([1, 2, 1, 2], [1, 1, 2, 2])
+                end
+                if analytic
+                    for gamma in (0.0, 0.7, 1.3)
+                        expected = [-gamma 1.0; 2u[1] -1.0]
+                        jac = sparse ? copy(f.jac_prototype) : zeros(2, 2)
+                        f.jac(jac, du, u, nothing, gamma, 0.0)
+                        @test Matrix(jac) ≈ expected
+                        @test Matrix(f.jac(du, u, nothing, gamma, 0.0)) ≈ expected
+                    end
+                end
+            end
+        end
+    end
+end
