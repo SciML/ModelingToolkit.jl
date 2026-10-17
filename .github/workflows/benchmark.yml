@@ -9,6 +9,9 @@ on:
 permissions:
   pull-requests: write    # needed to post comments
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   bench:
     name: "Benchmarks"
