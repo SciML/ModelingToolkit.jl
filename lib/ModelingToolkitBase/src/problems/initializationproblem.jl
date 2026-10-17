@@ -533,6 +533,10 @@ struct LinearInitializationProblem{iip} end
 function LinearInitializationProblem{iip}(
         sys::AbstractSystem, op; u0_constructor = identity, kwargs...
     ) where {iip}
+    # The `A`/`b` substitution needs `xˍt` keys to resolve `Initial((xˍt)[i])` terms;
+    # equations are already built, so merging cannot add any.
+    op = copy(op)
+    merge_differential_toterm_entries!(op; all_entries = true)
     # check_length = false allows using this for non-square systems
     linprob = LinearProblem{iip}(sys, op; u0_constructor, check_length = false, kwargs...)
     # Required for filling missing parameter values when this is an initialization
