@@ -501,4 +501,16 @@ if !@isdefined(ModelingToolkit)
         pbuf = ProblemState(; u = Float64[], p = nothing, t = 1.0)
         @test fn(pbuf) == [1.0]
     end
+
+    @testset "`CopyParamsByTemplate` with more than four elements of a non-tunable array parameter" begin
+        @variables x(t)
+        @parameters p[1:5] = collect(1.0:5.0) [tunable = false]
+        @mtkcompile sys = System([D(x) ~ -x + sum(p)], t)
+        syms = Symbolics.SymbolicT[Symbolics.unwrap(p[i]) for i in 1:5]
+        @test all(i -> ModelingToolkitBase.parameter_index(sys, p[i]).idx isa NTuple{3, Int}, 1:5)
+        fn = ModelingToolkitBase.CopyParamsByTemplate(sys, syms)
+        prob = ODEProblem(sys, [x => 0.0], (0.0, 1.0))
+        pbuf = ProblemState(; u = prob.u0, p = prob.p, t = 0.0)
+        @test fn(pbuf) == collect(1.0:5.0)
+    end
 end

@@ -138,8 +138,13 @@ end
     )
 
     diffvars = collect_differential_variables(sys)
-    sts = unknowns(sys)
-    differential_vars = map(Base.Fix2(in, diffvars), sts)
+    # An array unknown contributes one entry per element, and `D(x)` over the whole array
+    # makes every element differential.
+    differential_vars = map(flat_unknowns(sys)) do st
+        st in diffvars && return true
+        arr, isarr = split_indexed_var(st)
+        return isarr && arr in diffvars
+    end
 
     ptype = getmetadata(sys, ProblemTypeCtx, SciMLBase.StandardDAEProblem())
     args = (; f, du0, u0, tspan, p, ptype)

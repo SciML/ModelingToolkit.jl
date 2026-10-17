@@ -491,6 +491,208 @@ end
     end
 end
 
+@testset "NonlinearSystem conversion: invalidated bindings graph" begin
+    # https://github.com/SciML/ModelingToolkit.jl/issues/5162
+    @independent_variables t
+    D = Differential(t)
+    @variables x(t) y(t)
+    @parameters p q r
+    @named sys = System(
+        [D(x) ~ p * x^3 + q, 0 ~ -y + q * x - r], t;
+        bindings = [r => 3p]
+    )
+    # `complete(flatten = false)` invalidates `parameter_bindings_graph`, but bound
+    # parameters remain in `ps`; `bound_parameters` must not be called on it.
+    csys = complete(sys; flatten = false)
+    @test ModelingToolkitBase.iscomplete(csys)
+    @test ModelingToolkitBase.get_parameter_bindings_graph(csys) === nothing
+    nlsys = NonlinearSystem(csys)
+    @test ModelingToolkitBase.iscomplete(nlsys)
+    @test r in ModelingToolkitBase.bound_parameters(nlsys)
+end
+
+@testset "NonlinearSystem conversion: initialization equation translation" begin
+    # https://github.com/SciML/ModelingToolkit.jl/issues/5162
+    @independent_variables t
+    D = Differential(t)
+    @variables x(t) y(t)
+    @parameters p
+    @named sys = System(
+        [D(x) ~ p * x, D(y) ~ x + y], t;
+        initialization_eqs = [
+            x ~ 1.0, x + y ~ p, Initial(y) ~ 2.0, D(x) ~ 0, Initial(D(y)) ~ 0,
+        ]
+    )
+    nlsys = NonlinearSystem(sys)
+    ieqs = initialization_equations(nlsys)
+    # Unknowns wrap in `Initial`, already-`Initial` terms pass through, and
+    # derivatives collapse to trivially-true equations which are dropped.
+    @test isequal(ieqs, [Initial(x) ~ 1.0, Initial(x) + Initial(y) ~ p, Initial(y) ~ 2.0])
+end
+
+@testset "NonlinearSystem conversion: hierarchical bindings" begin
+    @independent_variables t
+    D = Differential(t)
+    @variables x(t) u(t)
+    @parameters p q
+    @named inner = System([D(u) ~ q - u], t, [u], [q]; bindings = [q => 2.0])
+    sys = System(
+        [D(x) ~ p * inner.u - x], t, [x], [p]; name = :outer, systems = [inner]
+    )
+    nlsys = NonlinearSystem(sys)
+    # The subsystem's `q` binding is namespaced onto the parent, and `t => Inf` is
+    # only bound once - either mistake trips `no_override_merge!` here.
+    binds = ModelingToolkitBase.bindings(nlsys)
+    @test isequal(value(binds[t]), Inf)
+    @test isequal(value(binds[inner.q]), 2.0)
+end
+
+@testset "NonlinearSystem conversion: variable bindings become initial conditions" begin
+    @independent_variables t
+    D = Differential(t)
+    @parameters p z0
+    @variables x(t) z(t) = z0
+    # `z`'s default lives in `bindings` of the time-dependent system, where it is
+    # enforced during initialization. A time-independent system cannot enforce it,
+    # so the conversion moves it to `initial_conditions`.
+    sys = complete(
+        System([D(x) ~ p - x, D(z) ~ p - z], t, [x, z], [p, z0]; name = :sys)
+    )
+    nlsys = NonlinearSystem(sys)
+    ics = ModelingToolkitBase.initial_conditions(nlsys)
+    @test isequal(ics[z], z0)
+    @test !haskey(ModelingToolkitBase.bindings(nlsys), z)
+end
+
+@testset "NonlinearSystem conversion: connectors" begin
+    @independent_variables t
+    D = Differential(t)
+    @connector function Pin(; name)
+        vars = @variables v(t) [guess = 0.0] i(t) [connect = Flow, guess = 0.0]
+        System(Equation[], t, vars, []; name)
+    end
+    function Resistor(; name)
+        @named p = Pin()
+        @named n = Pin()
+        @parameters R = 1.0
+        System([0 ~ p.i + n.i, p.v - n.v ~ R * p.i], t, [], [R]; systems = [p, n], name)
+    end
+    function Capacitor(; name)
+        @named p = Pin()
+        @named n = Pin()
+        @variables vc(t) = 0.0
+        @parameters C = 1.0
+        System(
+            [0 ~ p.i + n.i, vc ~ p.v - n.v, C * D(vc) ~ p.i], t, [vc], [C];
+            systems = [p, n], name
+        )
+    end
+    function Source(; name)
+        @named p = Pin()
+        @named n = Pin()
+        @parameters V = 1.0
+        System([0 ~ p.i + n.i, p.v - n.v ~ V], t, [], [V]; systems = [p, n], name)
+    end
+    function Ground(; name)
+        @named g = Pin()
+        System([g.v ~ 0], t, [], []; systems = [g], name)
+    end
+    # The pins of `WrappedResistor` are outer connectors of its inner resistor.
+    function WrappedResistor(; name)
+        @named p = Pin()
+        @named n = Pin()
+        @named r = Resistor()
+        System(
+            [connect(p, r.p), connect(r.n, n)], t, [], [];
+            systems = [p, n, r], name, description = "wrapped resistor"
+        )
+    end
+    @named w = WrappedResistor()
+    @named c = Capacitor()
+    @named s = Source()
+    @named gnd = Ground()
+    @named rc = System(
+        [connect(s.p, w.p), connect(w.n, c.p), connect(c.n, s.n, gnd.g)], t;
+        systems = [w, c, s, gnd]
+    )
+
+    nlrc = NonlinearSystem(rc)
+    nlw = only(filter(sub -> nameof(sub) == :w, ModelingToolkitBase.get_systems(nlrc)))
+    for (sub, nlsub) in zip(ModelingToolkitBase.get_systems(w), ModelingToolkitBase.get_systems(nlw))
+        @test ModelingToolkitBase.get_connector_type(nlsub) ==
+            ModelingToolkitBase.get_connector_type(sub)
+    end
+    @test ModelingToolkitBase.get_connector_type(ModelingToolkitBase.get_systems(nlw)[1]) isa
+        ModelingToolkitBase.RegularConnector
+    @test ModelingToolkitBase.get_description(nlw) == "wrapped resistor"
+    # Connections are expanded after the conversion; without connector types the outer
+    # connectors are not recognized and the system is unbalanced.
+    @test mtkcompile(nlrc) isa System
+end
+
+abstract type AbstractNonlinearMedium end
+struct NonlinearMedium <: AbstractNonlinearMedium
+    k::Float64
+end
+medium_gain(m::AbstractNonlinearMedium, x) = m.k * x
+@register_symbolic medium_gain(m::AbstractNonlinearMedium, x)
+
+@testset "NonlinearSystem conversion: nonnumeric bound parameters" begin
+    # https://github.com/SciML/ModelingToolkit.jl/issues/5066
+    # Subsystem parameters bound to a parent-level nonnumeric parameter must
+    # stay bound through conversion so `NonlinearProblem` can evaluate them.
+    @independent_variables t
+    D = Differential(t)
+    function Source5066(; name, medium)
+        @parameters med::AbstractNonlinearMedium = medium
+        @variables u(t)
+        System([D(u) ~ 4.0 - medium_gain(med, u)], t, [u], [med]; name)
+    end
+    function Load5066(; name, medium)
+        @parameters med::AbstractNonlinearMedium = medium
+        @variables v(t) w(t)
+        System([D(v) ~ w - medium_gain(med, v)], t, [v, w], [med]; name)
+    end
+    @parameters mC::AbstractNonlinearMedium = NonlinearMedium(2.0)
+    @named src = Source5066(medium = mC)
+    @named ld = Load5066(medium = mC)
+    sys = mtkcompile(
+        System([ld.w ~ src.u^2], t, [], [mC]; systems = [src, ld], name = :top)
+    )
+    nlsys = NonlinearSystem(sys)
+    prob = NonlinearProblem(nlsys, [src.u => 1.0, ld.v => 1.0])
+    sol = solve(prob)
+    @test SciMLBase.successful_retcode(sol)
+    @test sol[src.u] ≈ 2.0
+    @test sol[ld.v] ≈ 2.0
+    @test sol.ps[mC] == NonlinearMedium(2.0)
+end
+
+@testset "bound parameters with guesses" begin
+    # Bound non-floating-point parameters keep their binding in the
+    # initialization system; a guess for them must not become a conflicting
+    # initial condition.
+    @variables x
+    @parameters p::Int = 2 q::Int
+    sys = complete(
+        System(
+            [x^2 ~ q], [x], [p, q]; name = :int_guess,
+            bindings = [q => 2p], guesses = [q => 999]
+        )
+    )
+    sol = solve(NonlinearProblem(sys, [x => 0.75]))
+    @test SciMLBase.successful_retcode(sol)
+    @test sol[x] ≈ 2.0
+    @test sol.ps[p] == 2
+    @test sol.ps[q] == 4
+
+    sol2 = solve(NonlinearProblem(sys, [x => 0.75]; guesses = [q => 999]))
+    @test SciMLBase.successful_retcode(sol2)
+    @test sol2[x] ≈ 2.0
+    @test sol2.ps[p] == 2
+    @test sol2.ps[q] == 4
+end
+
 @testset "oop `NonlinearLeastSquaresProblem` with `u0 === nothing`" begin
     @variables x y
     @named sys = System([0 ~ x - y], [], []; observed = [x ~ 1.0, y ~ 1.0])
@@ -568,4 +770,39 @@ end
     uprob = NonlinearProblem(sys, [x => 1.5]; lb = [-10.0], ub = [10.0])
     @test uprob.lb == [-10.0]
     @test uprob.ub == [10.0]
+end
+
+@testset "Array unknowns on a `complete`d system" begin
+    @variables z[1:3] w
+    @parameters a[1:3] b
+    eqs = [
+        0 ~ z[1] - a[1],
+        0 ~ z[2] - a[2],
+        0 ~ z[3] - a[3] * w,
+        0 ~ w - b,
+    ]
+    @named sys = System(eqs, [z, w], [a, b])
+    csys = complete(sys)
+    op = [z => zeros(3), w => 0.0, a => [1.0, 2.0, 3.0], b => 2.0]
+
+    prob = NonlinearProblem(csys, op)
+    @test length(prob.u0) == 4
+    @test prob.u0 ≈ zeros(4)
+    @test prob.f(prob.u0, prob.p) ≈ [-1.0, -2.0, 0.0, -2.0]
+    @test prob[z] ≈ zeros(3)
+    @test prob[z[2]] ≈ 0.0
+
+    sol = solve(prob, NewtonRaphson())
+    @test SciMLBase.successful_retcode(sol)
+    @test sol[z] ≈ [1.0, 2.0, 6.0]
+    @test sol[w] ≈ 2.0
+
+    # `mtkcompile` may reorder the unknowns, or eliminate them entirely once tearing is
+    # loaded, so only the solution is comparable
+    msys = mtkcompile(sys)
+    mprob = NonlinearProblem(msys, op)
+    msol = solve(mprob, NewtonRaphson())
+    @test SciMLBase.successful_retcode(msol)
+    @test msol[z] ≈ sol[z]
+    @test msol[w] ≈ sol[w]
 end

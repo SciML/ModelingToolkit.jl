@@ -428,7 +428,7 @@ function _compute_array_variable_buffer_idxs(args::Vector, ignore_vars, ignore_a
         # any element of args which is not an array is assumed to not contain a
         # scalarized array symbolic. This works because the only non-array element
         # is the independent variable
-        arg isa Vector{SymbolicT} || continue
+        arg isa AbstractVector{SymbolicT} || continue
         # entire arg-vectors whose decomposition is already accounted for (e.g. the
         # parameter slice, handled via the cached `param_var_to_arridxs`) are skipped
         # here so we never re-run `split_indexed_var`/`get_stable_index` on them.
