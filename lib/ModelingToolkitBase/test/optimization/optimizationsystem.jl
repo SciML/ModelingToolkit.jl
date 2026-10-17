@@ -811,6 +811,50 @@ end
         @test length(sprob.f.cons_expr) == 3
     end
 
+    @testset "`dims` beyond `ndims` and `init`" begin
+        @variables X[1:2, 1:3]
+        xv = [1.0 2.0 3.0; 4.0 5.0 6.0]
+        # Julia reduces `dims > ndims` over a trailing singleton axis
+        ref(u) = (
+            Y = reshape(u, 2, 3);
+            init = 3 * oneunit(eltype(Y));
+            [
+                vec(sum(abs2, Y; dims = 3)) .- 1.0;
+                vec(mapreduce(abs2, +, Y; dims = 3, init)) .- 20.0;
+                vec(mapreduce(abs2, +, Y; dims = 1, init)) .- 20.0
+            ]
+        )
+        xsys = complete(
+            System(
+                Equation[], [X], []; costs = [sum(abs2, X)], name = :xsys,
+                constraints = [
+                    Inequality(sum(abs2, X; dims = 3), 1.0, Symbolics.leq),
+                    Inequality(mapreduce(abs2, +, X; dims = 3, init = 3.0), 20.0, Symbolics.leq),
+                    Inequality(mapreduce(abs2, +, X; dims = 1, init = 3.0), 20.0, Symbolics.leq),
+                ]
+            )
+        )
+        xprob = OptimizationProblem(xsys, [X => xv]; cons_j = true, cons_h = true)
+        u = vec(xv)
+        @test xprob.u0 == u
+        @test xprob.f.cons(xprob.u0, xprob.p) ≈ ref(u)
+        rows = [
+            Core.eval(
+                Main, :(
+                    let X = $xv
+                        $e
+                    end
+                )
+            ) for e in xprob.f.cons_expr
+        ]
+        @test rows ≈ ref(u)
+        @test xprob.f.cons_j(xprob.u0, xprob.p) ≈ ForwardDiff.jacobian(ref, u)
+        @test all(
+            xprob.f.cons_h(xprob.u0, xprob.p) .≈
+                [ForwardDiff.hessian(v -> ref(v)[k], u) for k in 1:15]
+        )
+    end
+
     @testset "expression graph through AmplNLWriter" begin
         @variables u v w
         @parameters M[1:2, 1:3] c
@@ -885,6 +929,7 @@ end
         )
         ssol = solve(sprob, Ipopt.Optimizer(); print_level = 0)
         check_optimum(ssol)
+        @test sprob.f.cons_expr.exprs === nothing
 
         msys = mtkcompile(isys)
         mprob = OptimizationProblem(msys, [u0; pvals]; adtype = AutoForwardDiff())
