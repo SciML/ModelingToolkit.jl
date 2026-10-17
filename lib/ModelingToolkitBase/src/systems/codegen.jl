@@ -645,10 +645,10 @@ function generate_dae_jacobian(
     wrap_gfw = wrap_gfw_val(opts)
     dvs = flat_unknowns(sys)
     ps = parameters(sys; initial_parameters = true)
-    jac_u = calculate_jacobian(sys; simplify = simplify, sparse = sparse)
+    jac_u = calculate_dae_jacobian(sys; simplify, sparse)
     t = get_iv(sys)
     derivatives = Differential(t).(flat_unknowns(sys))
-    jac_du = calculate_jacobian(
+    jac_du = calculate_dae_jacobian(
         sys; simplify = simplify, sparse = sparse,
         dvs = derivatives
     )
@@ -727,6 +727,28 @@ function generate_trajectory(sys::System, expr, opts::GeneratedFunctionOptions)
         expression, wrap_gfw, (1, 2, is_split(sys)), res;
         compiler_options, eval_expression, eval_module
     )
+end
+
+function scalarized_dae_residuals(sys::System)
+    residuals = SymbolicT[]
+    for eq in full_equations(sys)
+        residual = Symbolics.scalarize(eq.rhs - eq.lhs)
+        if residual isa AbstractArray
+            isempty(residual) && continue
+            append!(residuals, vec(unwrap.(residual)))
+        else
+            push!(residuals, unwrap(residual))
+        end
+    end
+    return residuals
+end
+
+function calculate_dae_jacobian(
+        sys::System; sparse = false, simplify = false, dvs = flat_unknowns(sys)
+    )
+    check_symbolic_ad_allowed(sys)
+    residuals = scalarized_dae_residuals(sys)
+    return sparse ? sparsejacobian(residuals, dvs; simplify) : jacobian(residuals, dvs; simplify)
 end
 
 """
@@ -818,16 +840,11 @@ Return the sparsity pattern of the DAE jacobian of `sys` as a matrix.
 See also: [`generate_dae_jacobian`](@ref).
 """
 function jacobian_dae_sparsity(sys::System)
-    J1 = jacobian_sparsity(
-        [eq.rhs for eq in full_equations(sys)],
-        [dv for dv in flat_unknowns(sys)]
-    )
+    residuals = scalarized_dae_residuals(sys)
+    J1 = jacobian_sparsity(residuals, flat_unknowns(sys))
     derivatives = Differential(get_iv(sys)).(flat_unknowns(sys))
-    J2 = jacobian_sparsity(
-        [eq.rhs for eq in full_equations(sys)],
-        [dv for dv in derivatives]
-    )
-    return J1 + J2
+    J2 = jacobian_sparsity(residuals, derivatives)
+    return J1 .| J2
 end
 
 """
