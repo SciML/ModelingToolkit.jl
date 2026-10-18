@@ -36,3 +36,22 @@ end
     u0 = [1.0, 0.5]
     @test mooncake_gradient(loss_u0, u0) ≈ ForwardDiff.gradient(loss_u0, u0) rtol = 1.0e-6
 end
+
+# The value of a callable parameter sits in the non-numeric portion; a Float64 field in it,
+# as in a ModelingToolkitNeuralNets network, gives it a Mooncake tangent.
+struct Gain
+    k::Float64
+end
+(gain::Gain)(x) = gain.k * x
+
+@testset "Callable parameter" begin
+    @parameters β (gain::Gain)(..) = Gain(2.0)
+    @variables z(t)
+    @mtkcompile gain_sys = System([D(z) ~ -β * gain(z)], t)
+    gain_prob = ODEProblem(gain_sys, [z => 1.0, β => 1.0], (0.0, 1.0))
+    set_β = setp_oop(gain_prob, [β])
+    loss_β(p) = loss(remake(gain_prob; p = set_β(gain_prob, p)))
+    @test mooncake_gradient(loss_β, [1.0]) ≈ ForwardDiff.gradient(loss_β, [1.0]) rtol = 1.0e-6
+    loss_z(u0) = loss(remake(gain_prob; u0))
+    @test mooncake_gradient(loss_z, [1.0]) ≈ ForwardDiff.gradient(loss_z, [1.0]) rtol = 1.0e-6
+end

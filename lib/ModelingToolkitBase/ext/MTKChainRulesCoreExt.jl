@@ -2,7 +2,7 @@ module MTKChainRulesCoreExt
 
 import ChainRulesCore
 import ChainRulesCore: Tangent, ZeroTangent, NoTangent, zero_tangent, unthunk
-using ModelingToolkitBase: MTKParameters, ParameterIndex, NONNUMERIC_PORTION, AbstractSystem
+using ModelingToolkitBase: MTKParameters, ParameterIndex, AbstractSystem
 import ModelingToolkitBase
 import ModelingToolkitBase as MTK
 import SciMLStructures
@@ -23,7 +23,8 @@ end
 # Positional arguments of `MTKParameters` after `tunables`, in order. `setproperties`
 # (and hence every `@set!`/`SciMLStructures.replace` rebuild) lowers to this
 # constructor, so the pullback has to route each buffer's cotangent back to its own
-# argument — otherwise a rebuild silently zeroes every non-tunable portion.
+# argument — otherwise a rebuild silently zeroes every non-tunable portion. The
+# `nonnumeric` portion holds callables and other non-numeric values and gets no cotangent.
 const MTP_NONTUNABLE_FIELDS = (:initials, :discrete, :constant, :nonnumeric, :caches)
 
 _mtp_tangent(::Nothing) = NoTangent()
@@ -45,6 +46,7 @@ function ChainRulesCore.rrule(::Type{MTKParameters}, tunables, args...)
         end
         dargs = ntuple(length(args)) do i
             field = MTP_NONTUNABLE_FIELDS[i]
+            field === :nonnumeric && return NoTangent()
             hasproperty(dt, field) ? _mtp_tangent(getproperty(dt, field)) : NoTangent()
         end
         return (NoTangent(), dtunables, dargs...)
@@ -132,7 +134,6 @@ function ChainRulesCore.rrule(
     )
     disc_idxs = subset_idxs(idxs, SciMLStructures.Discrete(), oldbuf.discrete)
     const_idxs = subset_idxs(idxs, SciMLStructures.Constants(), oldbuf.constant)
-    nn_idxs = subset_idxs(idxs, NONNUMERIC_PORTION, oldbuf.nonnumeric)
 
     pullback = let idxs = idxs
         function remake_buffer_pullback(buf′)
@@ -144,7 +145,8 @@ function ChainRulesCore.rrule(
             initials = selected_tangents(buf′.initials, initials_idxs)
             discrete = selected_tangents(buf′.discrete, disc_idxs)
             constant = selected_tangents(buf′.constant, const_idxs)
-            nonnumeric = selected_tangents(buf′.nonnumeric, nn_idxs)
+            # As in the `MTKParameters` rule, the non-numeric portion gets no cotangent.
+            nonnumeric = NoTangent()
             oldbuf′ = Tangent{typeof(oldbuf)}(;
                 tunable, initials, discrete, constant, nonnumeric
             )
