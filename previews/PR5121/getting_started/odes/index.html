@@ -49,13 +49,13 @@ t: 13-element Vector{Float64}:
   0.0046961271425810395
   0.05065739856839143
   0.2869145018384405
-  0.7726576627215719
-  1.4618375775378243
-  2.3501444232755766
-  3.478824703799787
-  4.857068709045571
-  6.516935558461519
-  8.48280474414651
+  0.7726576627215718
+  1.461837577537824
+  2.3501444232755757
+  3.478824703799785
+  4.857068709045567
+  6.516935558461514
+  8.482804744146502
  10.0
 u: 13-element Vector{Vector{Float64}}:
  [0.0]
@@ -63,39 +63,39 @@ u: 13-element Vector{Vector{Float64}}:
  [0.0015641511526800133]
  [0.016744033475944844]
  [0.09120721243452083]
- [0.22705899484465128]
- [0.38570448676592856]
- [0.5431414095339753]
- [0.6863907995418785]
- [0.8019073430964941]
- [0.8860849247418124]
- [0.9408433858217612]
- [0.964324632243407]</code></pre><p><a href="https://docs.sciml.ai/DiffEqDocs/stable/">OrdinaryDiffEq.jl</a> contains a large number of numerical solvers. It also comes with a default solver which is used when calling <code>solve(prob)</code> and is capable of handling a large variety of systems.</p><p>We can obtain the timeseries of <code>x</code> by indexing the solution with the symbolic variable:</p><pre><code class="language-julia hljs">sol[x]</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">13-element Vector{Float64}:
+ [0.22705899484465125]
+ [0.3857044867659284]
+ [0.5431414095339749]
+ [0.6863907995418784]
+ [0.8019073430964936]
+ [0.8860849247418119]
+ [0.940843385821761]
+ [0.9643246322434068]</code></pre><p><a href="https://docs.sciml.ai/DiffEqDocs/stable/">OrdinaryDiffEq.jl</a> contains a large number of numerical solvers. It also comes with a default solver which is used when calling <code>solve(prob)</code> and is capable of handling a large variety of systems.</p><p>We can obtain the timeseries of <code>x</code> by indexing the solution with the symbolic variable:</p><pre><code class="language-julia hljs">sol[x]</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">13-element Vector{Float64}:
  0.0
  3.333277778395056e-5
  0.0015641511526800133
  0.016744033475944844
  0.09120721243452083
- 0.22705899484465128
- 0.38570448676592856
- 0.5431414095339753
- 0.6863907995418785
- 0.8019073430964941
- 0.8860849247418124
- 0.9408433858217612
- 0.964324632243407</code></pre><p>We can even obtain timeseries of complicated expressions involving the symbolic variables in the model</p><pre><code class="language-julia hljs">sol[(1 - x) / τ]</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">13-element Vector{Float64}:
+ 0.22705899484465125
+ 0.3857044867659284
+ 0.5431414095339749
+ 0.6863907995418784
+ 0.8019073430964936
+ 0.8860849247418119
+ 0.940843385821761
+ 0.9643246322434068</code></pre><p>We can even obtain timeseries of complicated expressions involving the symbolic variables in the model</p><pre><code class="language-julia hljs">sol[(1 - x) / τ]</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">13-element Vector{Float64}:
  0.3333333333333333
  0.33332222240740533
  0.3328119496157733
  0.3277519888413517
  0.30293092918849307
  0.25764700171844956
- 0.20476517107802383
- 0.15228619682200825
- 0.10453640015270715
- 0.06603088563450195
- 0.037971691752729186
- 0.01971887139274627
- 0.011891789252197657</code></pre><p>Perhaps more interesting is a plot of the solution. This can easily be achieved using Plots.jl.</p><pre><code class="language-julia hljs">using Plots
+ 0.20476517107802386
+ 0.15228619682200836
+ 0.1045364001527072
+ 0.06603088563450214
+ 0.037971691752729374
+ 0.019718871392746345
+ 0.01189178925219773</code></pre><p>Perhaps more interesting is a plot of the solution. This can easily be achieved using Plots.jl.</p><pre><code class="language-julia hljs">using Plots
 
-plot(sol)</code></pre><img src="fd0e98cc.svg" alt="Example block output"/><p>Similarly, we can plot different expressions:</p><pre><code class="language-julia hljs">plot(sol; idxs = (1 - x) / τ)</code></pre><img src="1be2785a.svg" alt="Example block output"/></article><nav class="docs-footer"><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.19.0 on <span class="colophon-date" title="Sunday 13 September 2026 01:08">Sunday 13 September 2026</span>. Using Julia version 1.10.12.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+plot(sol)</code></pre><img src="ad385d3d.svg" alt="Example block output"/><p>Similarly, we can plot different expressions:</p><pre><code class="language-julia hljs">plot(sol; idxs = (1 - x) / τ)</code></pre><img src="ddba219a.svg" alt="Example block output"/></article><nav class="docs-footer"><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.19.0 on <span class="colophon-date" title="Sunday 18 October 2026 12:48">Sunday 18 October 2026</span>. Using Julia version 1.10.12.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>

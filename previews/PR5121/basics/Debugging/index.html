@@ -13,7 +13,7 @@ sys = mtkcompile(sys)</code></pre><pre class="documenter-example-output"><code c
   u3(t)
   u2(t)
   u1(t)</code></pre><p>This problem causes the ODE solver to crash:</p><pre><code class="language-julia-repl hljs" style="display:block;">julia&gt; prob = ODEProblem(sys, [], (0.0, 10.0));</code><br/><code class="language-julia-repl hljs" style="display:block;">julia&gt; sol = solve(prob, Tsit5());</code><code class="nohighlight hljs ansi" style="display:block;">┌ Warning: Verbosity toggle: dt_epsilon 
-│  At t=2.001167437857666, dt was forced below floating point epsilon 4.440892098500626e-16. Aborting. There is either an error in your model specification or the true solution is unstable (or it cannot be represented in Float64 precision).
+│  At t=2.0011674378576663, dt was forced below floating point epsilon 4.440892098500626e-16. Aborting. There is either an error in your model specification or the true solution is unstable (or it cannot be represented in Float64 precision).
 │ 
 │ Diagnostics:
 │ 
@@ -24,13 +24,13 @@ sys = mtkcompile(sys)</code></pre><pre class="documenter-example-output"><code c
 │   step error estimate EEst = NaN (a step is accepted when EEst &lt;= 1)
 │   1 of 3 weighted residuals are non-finite (NaN/Inf)
 │   largest contributors to EEst = internalnorm(atmp), where atmp is the tolerance-weighted local error per state component:
-│     atmp[3] = NaN, u[3] = NaN, uprev[3] = 9.823e-32
-│     atmp[2] = 3.605e-29, u[2] = 0.1711, uprev[2] = 0.1711
-│     atmp[1] = 2.548e-29, u[1] = 0.535, uprev[1] = 0.535
+│     atmp[3] = NaN, u[3] = NaN, uprev[3] = 1.217e-31
+│     atmp[2] = -1.342e-28, u[2] = 0.1711, uprev[2] = 0.1711
+│     atmp[1] = 6.634e-29, u[1] = 0.535, uprev[1] = 0.535
 │ Symbolic Analysis of MTK System:
-│ in equation Differential(t, 1)(u1(t)) ~ -sqrt(u1(t)): sqrt of u1(t) = 9.823e-32 near/at singularity (derivative blows up).
-└ @ DiffEqBase ~/.julia/packages/DiffEqBase/wRYJL/src/check_error.jl:37</code></pre><p>This suggests <em>that</em> something went wrong, but not exactly <em>what</em> went wrong and <em>where</em> it did. In such situations, the <code>debug_system</code> function is helpful:</p><pre><code class="language-julia-repl hljs" style="display:block;">julia&gt; dsys = debug_system(sys; functions = [sqrt]);</code><br/><code class="language-julia-repl hljs" style="display:block;">julia&gt; dprob = ODEProblem(dsys, [], (0.0, 10.0));</code><br/><code class="language-julia-repl hljs" style="display:block;">julia&gt; dsol = solve(dprob, Tsit5());</code><code class="nohighlight hljs ansi" style="display:block;">ERROR: Function sqrt(u1(t)) errors with input
-  u1(t) =&gt; -9.057596781074334e-5</code></pre><p>Now we see that it crashed because <code>u1</code> decreased so much that it became negative and outside the domain of the <code>√</code> function. We could have figured that out ourselves, but it is not always so obvious for more complex models.</p><p>Suppose we also want to validate that <code>u1 + u2 &gt;= 2.0</code>. We can do this via the assertions functionality.</p><pre><code class="language-julia hljs">@mtkcompile sys = System(eqs, t; initial_conditions, assertions = [(u1 + u2 &gt;= 2.0) =&gt; &quot;Oh no!&quot;])</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi"><span class="sgr1">Model sys:</span>
+│ in equation Differential(t, 1)(u1(t)) ~ -sqrt(u1(t)): sqrt of u1(t) = 1.217e-31 near/at singularity (derivative blows up).
+└ @ DiffEqBase ~/.julia/packages/DiffEqBase/R4JAC/src/check_error.jl:37</code></pre><p>This suggests <em>that</em> something went wrong, but not exactly <em>what</em> went wrong and <em>where</em> it did. In such situations, the <code>debug_system</code> function is helpful:</p><pre><code class="language-julia-repl hljs" style="display:block;">julia&gt; dsys = debug_system(sys; functions = [sqrt]);</code><br/><code class="language-julia-repl hljs" style="display:block;">julia&gt; dprob = ODEProblem(dsys, [], (0.0, 10.0));</code><br/><code class="language-julia-repl hljs" style="display:block;">julia&gt; dsol = solve(dprob, Tsit5());</code><code class="nohighlight hljs ansi" style="display:block;">ERROR: Function sqrt(u1(t)) errors with input
+  u1(t) =&gt; -9.057596781072343e-5</code></pre><p>Now we see that it crashed because <code>u1</code> decreased so much that it became negative and outside the domain of the <code>√</code> function. We could have figured that out ourselves, but it is not always so obvious for more complex models.</p><p>Suppose we also want to validate that <code>u1 + u2 &gt;= 2.0</code>. We can do this via the assertions functionality.</p><pre><code class="language-julia hljs">@mtkcompile sys = System(eqs, t; initial_conditions, assertions = [(u1 + u2 &gt;= 2.0) =&gt; &quot;Oh no!&quot;])</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi"><span class="sgr1">Model sys:</span>
 <span class="sgr1">Equations (3):</span>
   3 standard: see equations(sys)
 <span class="sgr1">Unknowns (3):</span> see unknowns(sys)
@@ -39,7 +39,7 @@ sys = mtkcompile(sys)</code></pre><pre class="documenter-example-output"><code c
   u1(t)</code></pre><p>The assertions must be an iterable of pairs, where the first element is the symbolic condition and the second is a message to be logged when the condition fails. All assertions are added to the generated code and will cause the solver to reject steps that fail the assertions. For systems such as the above where the assertion is guaranteed to eventually fail, the solver will likely exit with a <code>dtmin</code> failure..</p><pre><code class="language-julia hljs">prob = ODEProblem(sys, [], (0.0, 10.0))
 sol = solve(prob, Tsit5())</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">retcode: Unstable
 Interpolation: specialized 4th order &quot;free&quot; interpolation
-t: 30-element Vector{Float64}:
+t: 31-element Vector{Float64}:
  0.0
  0.10506363765715951
  0.4538820261379217
@@ -51,7 +51,6 @@ t: 30-element Vector{Float64}:
  0.4575768939631952
  0.45757689871630836
  ⋮
- 0.45757690565399967
  0.45757690565415915
  0.45757690565422293
  0.45757690565424847
@@ -60,27 +59,28 @@ t: 30-element Vector{Float64}:
  0.4575769056542644
  0.4575769056542645
  0.4575769056542648
-u: 30-element Vector{Vector{Float64}}:
+ 0.4575769056542649
+u: 31-element Vector{Vector{Float64}}:
  [3.0, 2.0, 1.0]
  [2.8207840335397765, 1.8541771707038075, 0.8976959543392682]
- [2.2653554957755935, 1.4096161132331038, 0.5976202496740151]
- [2.2599007471325927, 1.4053139497313125, 0.5948201642704125]
- [2.259813524597223, 1.405245168558202, 0.5947754163468728]
- [2.259806546867109, 1.4052396661370692, 0.5947718365857056]
- [2.25980375577808, 1.4052374651716324, 0.5947704046842551]
- [2.259798173605193, 1.4052330632459298, 0.5947675408865251]
- [2.2597977270316596, 1.4052327110921714, 0.5947673117830045]
- [2.2597977198864836, 1.4052327054577116, 0.5947673081173485]
+ [2.2653554957755935, 1.4096161132331038, 0.5976202496740152]
+ [2.2599007471325927, 1.4053139497313125, 0.5948201642704126]
+ [2.259813524597223, 1.405245168558202, 0.5947754163468729]
+ [2.259806546867109, 1.4052396661370692, 0.5947718365857058]
+ [2.25980375577808, 1.4052374651716324, 0.5947704046842552]
+ [2.259798173605193, 1.4052330632459298, 0.5947675408865252]
+ [2.2597977270316596, 1.4052327110921714, 0.5947673117830046]
+ [2.2597977198864836, 1.4052327054577116, 0.5947673081173486]
  ⋮
- [2.2597977094573127, 1.4052326972335982, 0.5947673027669205]
- [2.259797709457073, 1.4052326972334093, 0.5947673027667975]
- [2.259797709456977, 1.4052326972333335, 0.5947673027667483]
- [2.259797709456939, 1.4052326972333034, 0.5947673027667286]
- [2.2597977094569233, 1.4052326972332914, 0.5947673027667207]
- [2.259797709456917, 1.4052326972332865, 0.5947673027667176]
- [2.2597977094569144, 1.4052326972332845, 0.5947673027667164]
- [2.2597977094569144, 1.4052326972332843, 0.5947673027667163]
- [2.259797709456914, 1.405232697233284, 0.5947673027667161]</code></pre><p>We can use <code>debug_system</code> to log the failing assertions in each call to the RHS function.</p><pre><code class="language-julia-repl hljs" style="display:block;">julia&gt; dsys = debug_system(sys; functions = []);</code><br/><code class="language-julia-repl hljs" style="display:block;">julia&gt; dprob = ODEProblem(dsys, [], (0.0, 10.0));</code><br/><code class="language-julia-repl hljs" style="display:block;">julia&gt; dsol = solve(dprob, Tsit5(); dtmin = 0.1); # high dtmin only to show less clutter on this page</code><code class="nohighlight hljs ansi" style="display:block;">┌ Error: Assertion (u1(t) + u2(t)) &gt;= 2.0 failed:
+ [2.259797709457073, 1.4052326972334093, 0.5947673027667976]
+ [2.259797709456977, 1.4052326972333335, 0.5947673027667484]
+ [2.259797709456939, 1.4052326972333034, 0.5947673027667287]
+ [2.2597977094569233, 1.4052326972332914, 0.5947673027667209]
+ [2.259797709456917, 1.4052326972332865, 0.5947673027667177]
+ [2.2597977094569144, 1.4052326972332845, 0.5947673027667165]
+ [2.2597977094569144, 1.4052326972332843, 0.5947673027667164]
+ [2.259797709456914, 1.405232697233284, 0.5947673027667162]
+ [2.259797709456914, 1.4052326972332838, 0.5947673027667161]</code></pre><p>We can use <code>debug_system</code> to log the failing assertions in each call to the RHS function.</p><pre><code class="language-julia-repl hljs" style="display:block;">julia&gt; dsys = debug_system(sys; functions = []);</code><br/><code class="language-julia-repl hljs" style="display:block;">julia&gt; dprob = ODEProblem(dsys, [], (0.0, 10.0));</code><br/><code class="language-julia-repl hljs" style="display:block;">julia&gt; dsol = solve(dprob, Tsit5(); dtmin = 0.1); # high dtmin only to show less clutter on this page</code><code class="nohighlight hljs ansi" style="display:block;">┌ Error: Assertion (u1(t) + u2(t)) &gt;= 2.0 failed:
 │ Oh no!
 └ @ ModelingToolkitBase ~/work/ModelingToolkit.jl/ModelingToolkit.jl/lib/ModelingToolkitBase/src/debugging.jl:68
 ┌ Error: Assertion (u1(t) + u2(t)) &gt;= 2.0 failed:
@@ -113,7 +113,10 @@ u: 30-element Vector{Vector{Float64}}:
 │     atmp[3] = NaN, u[3] = NaN, uprev[3] = 0.5976
 │     atmp[2] = -0.0007927, u[2] = 0.9228, uprev[2] = 1.41
 │     atmp[1] = -0.0002095, u[1] = 1.634, uprev[1] = 2.265
-└ @ DiffEqBase ~/.julia/packages/DiffEqBase/wRYJL/src/check_error.jl:37</code></pre><p>Note the logs containing the failed assertion and corresponding message. To temporarily disable logging in a system returned from <code>debug_system</code>, use <code>ModelingToolkit.ASSERTION_LOG_VARIABLE</code>.</p><pre><code class="language-julia-repl hljs" style="display:block;">julia&gt; dprob[ModelingToolkit.ASSERTION_LOG_VARIABLE] = false;</code><code class="nohighlight hljs ansi" style="display:block;">ERROR: Indexing with parameters is deprecated. Use `prob.ps[__log_assertions_ₘₜₖ] = false` for parameter indexing.</code><br/><code class="language-julia-repl hljs" style="display:block;">julia&gt; solve(dprob, Tsit5());</code><code class="nohighlight hljs ansi" style="display:block;">┌ Error: Assertion (u1(t) + u2(t)) &gt;= 2.0 failed:
+└ @ DiffEqBase ~/.julia/packages/DiffEqBase/R4JAC/src/check_error.jl:37</code></pre><p>Note the logs containing the failed assertion and corresponding message. To temporarily disable logging in a system returned from <code>debug_system</code>, use <code>ModelingToolkit.ASSERTION_LOG_VARIABLE</code>.</p><pre><code class="language-julia-repl hljs" style="display:block;">julia&gt; dprob[ModelingToolkit.ASSERTION_LOG_VARIABLE] = false;</code><code class="nohighlight hljs ansi" style="display:block;">ERROR: Indexing with parameters is deprecated. Use `prob.ps[__log_assertions_ₘₜₖ] = false` for parameter indexing.</code><br/><code class="language-julia-repl hljs" style="display:block;">julia&gt; solve(dprob, Tsit5());</code><code class="nohighlight hljs ansi" style="display:block;">┌ Error: Assertion (u1(t) + u2(t)) &gt;= 2.0 failed:
+│ Oh no!
+└ @ ModelingToolkitBase ~/work/ModelingToolkit.jl/ModelingToolkit.jl/lib/ModelingToolkitBase/src/debugging.jl:68
+┌ Error: Assertion (u1(t) + u2(t)) &gt;= 2.0 failed:
 │ Oh no!
 └ @ ModelingToolkitBase ~/work/ModelingToolkit.jl/ModelingToolkit.jl/lib/ModelingToolkitBase/src/debugging.jl:68
 ┌ Error: Assertion (u1(t) + u2(t)) &gt;= 2.0 failed:
@@ -1095,7 +1098,7 @@ u: 30-element Vector{Vector{Float64}}:
 │ Oh no!
 └ @ ModelingToolkitBase ~/work/ModelingToolkit.jl/ModelingToolkit.jl/lib/ModelingToolkitBase/src/debugging.jl:68
 ┌ Warning: Verbosity toggle: dt_epsilon 
-│  At t=0.4575769056542648, dt was forced below floating point epsilon 5.551115123125783e-17. Aborting. There is either an error in your model specification or the true solution is unstable (or it cannot be represented in Float64 precision).
+│  At t=0.4575769056542649, dt was forced below floating point epsilon 5.551115123125783e-17. Aborting. There is either an error in your model specification or the true solution is unstable (or it cannot be represented in Float64 precision).
 │ 
 │ Diagnostics:
 │ 
@@ -1107,16 +1110,16 @@ u: 30-element Vector{Vector{Float64}}:
 │   1 of 3 weighted residuals are non-finite (NaN/Inf)
 │   largest contributors to EEst = internalnorm(atmp), where atmp is the tolerance-weighted local error per state component:
 │     atmp[3] = NaN, u[3] = NaN, uprev[3] = 0.5948
-│     atmp[2] = 1.541e-30, u[2] = 1.405, uprev[2] = 1.405
-│     atmp[1] = -7.783e-32, u[1] = 2.26, uprev[1] = 2.26
+│     atmp[2] = 3.111e-30, u[2] = 1.405, uprev[2] = 1.405
+│     atmp[1] = 8.043e-31, u[1] = 2.26, uprev[1] = 2.26
 │ 
 │ Assertion violated: (u1(t) + u2(t)) &gt;= 2.0 - &quot;Oh no!&quot;
 │    subclause `(u1(t) + u2(t)) &gt;= 2.0` violated: u2(t) = 1.405, u1(t) = NaN
-└ @ DiffEqBase ~/.julia/packages/DiffEqBase/wRYJL/src/check_error.jl:37</code></pre><article><details class="docstring" open="true"><summary id="ModelingToolkitBase.debug_system-basics-Debugging"><a class="docstring-binding" href="#ModelingToolkitBase.debug_system-basics-Debugging"><code>ModelingToolkitBase.debug_system</code></a> — <span class="docstring-category">Function</span></summary><section><div><pre><code class="language-julia hljs">debug_system(sys::AbstractSystem; functions = [log, sqrt, (^), /, inv, asin, acos], error_nonfinite = true)</code></pre><p>Wrap <code>functions</code> in <code>sys</code> so any error thrown in them shows helpful symbolic-numeric information about its input. If <code>error_nonfinite</code>, functions that output nonfinite values (like <code>Inf</code> or <code>NaN</code>) also display errors, even though the raw function itself does not throw an exception (like <code>1/0</code>). For example:</p><pre><code class="language-julia-repl hljs">julia&gt; sys = debug_system(complete(sys))
+└ @ DiffEqBase ~/.julia/packages/DiffEqBase/R4JAC/src/check_error.jl:37</code></pre><article><details class="docstring" open="true"><summary id="ModelingToolkitBase.debug_system-basics-Debugging"><a class="docstring-binding" href="#ModelingToolkitBase.debug_system-basics-Debugging"><code>ModelingToolkitBase.debug_system</code></a> — <span class="docstring-category">Function</span></summary><section><div><pre><code class="language-julia hljs">debug_system(sys::AbstractSystem; functions = [log, sqrt, (^), /, inv, asin, acos], error_nonfinite = true)</code></pre><p>Wrap <code>functions</code> in <code>sys</code> so any error thrown in them shows helpful symbolic-numeric information about its input. If <code>error_nonfinite</code>, functions that output nonfinite values (like <code>Inf</code> or <code>NaN</code>) also display errors, even though the raw function itself does not throw an exception (like <code>1/0</code>). For example:</p><pre><code class="language-julia-repl hljs">julia&gt; sys = debug_system(complete(sys))
 
 julia&gt; prob = ODEProblem(sys, [0.0, 2.0], (0.0, 1.0))
 
 julia&gt; prob.f(prob.u0, prob.p, 0.0)
 ERROR: Function /(1, sin(P(t))) output non-finite value Inf with input
   1 =&gt; 1
-  sin(P(t)) =&gt; 0.0</code></pre><p>Additionally, all assertions in the system are optionally logged when they fail. A new parameter is also added to the system which controls whether the message associated with each assertion will be logged when the assertion fails. This parameter defaults to <code>true</code> and can be toggled by symbolic indexing with <code>ModelingToolkitBase.ASSERTION_LOG_VARIABLE</code>. For example, <code>prob.ps[ModelingToolkitBase.ASSERTION_LOG_VARIABLE] = false</code> will disable logging.</p></div><a class="docs-sourcelink" target="_blank" href="https://github.com/SciML/ModelingToolkit.jl/blob/ce3d7f022fb48c6c52531634598752a0096ca22a/lib/ModelingToolkitBase/src/systems/abstractsystem.jl#L3166-L3191">source</a></section></details></article><h2 id="Error-message-guidance"><a class="docs-heading-anchor" href="#Error-message-guidance">Error message guidance</a><a id="Error-message-guidance-1"></a><a class="docs-heading-anchor-permalink" href="#Error-message-guidance" title="Permalink"></a></h2><p>Errors raised while building a problem describe what went wrong and then, where it is useful, how to fix it in terms of the ModelingToolkit API — which keyword argument to pass, or where in the system to supply a value. Front ends which present a modelling language of their own can leave that part out, since advice to call <code>ODEProblem</code> or to pass <code>initialization_eqs</code> would send their users looking for something their language does not have. The description of what went wrong is unaffected.</p><pre><code class="language-julia hljs">ModelingToolkit.show_api_guidance!(false)</code></pre><div class="admonition is-warning" id="Experimental-d2570ccbefa1211e"><header class="admonition-header">Experimental<a class="admonition-anchor" href="#Experimental-d2570ccbefa1211e" title="Permalink"></a></header><div class="admonition-body"><p><code>show_api_guidance!</code> is experimental and unsupported. It may change or be removed in any release, without a breaking version bump. Verbosity across the SciML ecosystem is moving to <a href="https://github.com/SciML/SciMLLogging.jl">SciMLLogging.jl</a>, and this setting is expected to be replaced by an option there once ModelingToolkit adopts it. That will be the supported way to control this.</p></div></div></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../Validation/">« Model Validation and Units</a><a class="docs-footer-nextpage" href="../DependencyGraphs/">Dependency Graphs »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.19.0 on <span class="colophon-date" title="Sunday 13 September 2026 01:07">Sunday 13 September 2026</span>. Using Julia version 1.10.12.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+  sin(P(t)) =&gt; 0.0</code></pre><p>Additionally, all assertions in the system are optionally logged when they fail. A new parameter is also added to the system which controls whether the message associated with each assertion will be logged when the assertion fails. This parameter defaults to <code>true</code> and can be toggled by symbolic indexing with <code>ModelingToolkitBase.ASSERTION_LOG_VARIABLE</code>. For example, <code>prob.ps[ModelingToolkitBase.ASSERTION_LOG_VARIABLE] = false</code> will disable logging.</p></div><a class="docs-sourcelink" target="_blank" href="https://github.com/SciML/ModelingToolkit.jl/blob/43f55763564b18cc265f8973532ca8d151f5761f/lib/ModelingToolkitBase/src/systems/abstractsystem.jl#L3187-L3212">source</a></section></details></article><h2 id="Error-message-guidance"><a class="docs-heading-anchor" href="#Error-message-guidance">Error message guidance</a><a id="Error-message-guidance-1"></a><a class="docs-heading-anchor-permalink" href="#Error-message-guidance" title="Permalink"></a></h2><p>Errors raised while building a problem describe what went wrong and then, where it is useful, how to fix it in terms of the ModelingToolkit API — which keyword argument to pass, or where in the system to supply a value. Front ends which present a modelling language of their own can leave that part out, since advice to call <code>ODEProblem</code> or to pass <code>initialization_eqs</code> would send their users looking for something their language does not have. The description of what went wrong is unaffected.</p><pre><code class="language-julia hljs">ModelingToolkit.show_api_guidance!(false)</code></pre><div class="admonition is-warning" id="Experimental-d2570ccbefa1211e"><header class="admonition-header">Experimental<a class="admonition-anchor" href="#Experimental-d2570ccbefa1211e" title="Permalink"></a></header><div class="admonition-body"><p><code>show_api_guidance!</code> is experimental and unsupported. It may change or be removed in any release, without a breaking version bump. Verbosity across the SciML ecosystem is moving to <a href="https://github.com/SciML/SciMLLogging.jl">SciMLLogging.jl</a>, and this setting is expected to be replaced by an option there once ModelingToolkit adopts it. That will be the supported way to control this.</p></div></div></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../Validation/">« Model Validation and Units</a><a class="docs-footer-nextpage" href="../DependencyGraphs/">Dependency Graphs »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.19.0 on <span class="colophon-date" title="Sunday 18 October 2026 12:48">Sunday 18 October 2026</span>. Using Julia version 1.10.12.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
