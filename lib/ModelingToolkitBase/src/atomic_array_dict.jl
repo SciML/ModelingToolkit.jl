@@ -39,6 +39,19 @@ function Base.showerror(io::IO, err::IndexedArrayKeyError)
     )
 end
 
+struct RecordFieldKeyError <: Exception
+    k::SymbolicT
+end
+
+function Base.showerror(io::IO, err::RecordFieldKeyError)
+    return print(
+        io, """
+        `AtomicArrayDict` treats symbolic records as atomic. It does not allow keys to be \
+        projections of a record symbolic. Got key $(err.k).
+        """
+    )
+end
+
 """
     $TYPEDEF
 
@@ -86,7 +99,27 @@ function record_key_root(k::SymbolicT)::Tuple{SymbolicT, Bool}
 end
 
 function validate_atomic_array_key(k::SymbolicT)
+    # Record projections are not rejected here. Initialization is keyed on leaves -
+    # `Initial` exists for `p.x` and not for `p`, a record having no shape in the numeric
+    # initials buffer - and the initialization system it builds is itself a `System`, whose
+    # stored maps are of this type. What a user hands in is checked on the way in, by
+    # [`validate_given_atomic_array_key`](@ref).
     return split_indexed_var(k)[2] && throw(IndexedArrayKeyError(k))
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Check a key of a map a user supplied, which is stricter than
+[`validate_atomic_array_key`](@ref): a projection of a record is rejected the way an array
+element is, because the value belongs in the whole record, which is what gets stored.
+Setting one field is spelled `write_possibly_indexed_array!`, exactly as for an array.
+"""
+function validate_given_atomic_array_key(k::SymbolicT)
+    root, kind = split_composite_var(k)
+    kind === COMPOSITE_ARRAY && throw(IndexedArrayKeyError(k))
+    kind === COMPOSITE_RECORD && !isequal(root, k) && throw(RecordFieldKeyError(k))
+    return false
 end
 
 """
@@ -112,46 +145,11 @@ Base.haskey(dd::AtomicArrayDict, k) = haskey(dd.dict, k)
 
 Base.getindex(dd::AtomicArrayDict, k) = dd.dict[k]
 
-"""
-    $TYPEDSIGNATURES
 
-Whether `v` has no fields to project out of, and so is written to every node a record key
-lowers to rather than being decomposed. The sentinels used for "unspecified" and "solve
-for this" are the cases: `getproperty` on them would throw.
-"""
-function is_unprojectable_record_value(v::SymbolicT)
-    return v === COMMON_NOTHING || v === COMMON_MISSING
-end
-
-"""
-    $TYPEDSIGNATURES
-
-Write `v` under the record key `k` by lowering it, one entry per
-[`record_lowering_nodes`](@ref), each holding the corresponding projection of `v`.
-
-A record key is not a representation this dictionary keeps: `as_atomic_dict_with_defaults`
-lowers the ones it builds, and nothing downstream expects one. Writing directly has to do
-the same, or a record key enters through a path which does not normalize it - the system
-field returned by `get_initial_conditions` is an `AtomicArrayDict`, and mutating it is a
-supported way to set initial conditions.
-"""
-function __aad_setindex_record!(dd::AtomicArrayDict, v::SymbolicT, k::SymbolicT)
-    broadcast_value = is_unprojectable_record_value(v)
-    for node in record_lowering_nodes(k)
-        entry = broadcast_value ? v : record_leaf_entry(node, k, v)
-        __unsafe_aad_setindex!(dd, entry, node)
-    end
-    return v
-end
 
 function Base.setindex!(dd::AtomicArrayDict, v, k)
     k = unwrap(k)
     validate_atomic_array_key(k)
-    if Symbolics.issymstruct(k)
-        # `v` is commonly a plain value of the struct type rather than a symbolic, since
-        # that is the natural thing to write; wrap it so it can be projected.
-        return __aad_setindex_record!(dd, BSImpl.Const{VartypeT}(unwrap(v)), k)
-    end
     return __unsafe_aad_setindex!(dd, v, k)
 end
 
@@ -225,13 +223,50 @@ function as_atomic_dict_with_defaults(dict::AbstractDict{SymbolicT, SymbolicT}, 
             buffer[i] = record_leaf_entry(leaves[i], node, v)
         end
     end
-    for (k, v) in record_vals
-        __unsafe_aad_setindex!(dd, BSImpl.Const{VartypeT}(v), k)
+    for (root, buffer) in record_vals
+        __unsafe_aad_setindex!(dd, record_value_from_buffer(root, buffer), root)
     end
-    # Records are the right granularity for resolving what was asked for, but nothing
-    # downstream expects a record key, so lower before returning.
-    lower_record_entries!(dd, default)
     return dd
+end
+
+"""
+    $TYPEDSIGNATURES
+
+The value to store for record `root` given `buffer`, its leaves in
+[`record_leaves`](@ref) order. Unfilled leaves are still `default`, so the result is a
+symbolic literal until every one of them has been written - the record counterpart of an
+array entry that still holds the sentinel at some index.
+"""
+function record_value_from_buffer(root::SymbolicT, buffer::Vector{SymbolicT})
+    vals = map(x -> SU.isconst(x) ? unwrap_const(x) : x, buffer)
+    return BSImpl.Const{VartypeT}(record_node_value(root, root, vals))
+end
+
+"""
+    $TYPEDSIGNATURES
+
+The value to store for record `root` given one value per [`record_lowering_nodes`](@ref).
+
+Those nodes are not the leaves: a numeric array field is one node covering several leaves.
+Its value is spread back over them, and a field left unfilled marks every leaf beneath it
+unfilled too.
+"""
+function record_value_from_nodes(
+        root::SymbolicT, nodes::Vector{SymbolicT}, nodevals::Vector{SymbolicT}
+    )
+    leaves = record_leaves(root)
+    buffer = SymbolicT[COMMON_NOTHING for _ in eachindex(leaves)]
+    for (node, nv) in zip(nodes, nodevals)
+        idxs = record_node_indices(root, node)
+        if length(idxs) == 1
+            buffer[only(idxs)] = nv
+        else
+            for (j, i) in enumerate(idxs)
+                buffer[i] = nv === COMMON_NOTHING ? COMMON_NOTHING : nv[j]
+            end
+        end
+    end
+    return record_value_from_buffer(root, buffer)
 end
 
 """
@@ -243,6 +278,14 @@ create the key and set all other entries to `default`. If `k` is an array symbol
 is scalar-shaped, `v` is broadcast to `size(k)`.
 """
 function write_possibly_indexed_array!(dd::AtomicArrayDict{SymbolicT}, k::SymbolicT, v::SymbolicT, default::SymbolicT)
+    rroot, isrec = record_key_root(k)
+    # A projection is folded into the record it belongs to, the way an array element is
+    # folded into its array - unless the map is already keyed on that projection, which is
+    # how initialization's maps are keyed. Writing the root there would leave the value in
+    # two places, and the stale leaf is the one a lookup finds.
+    if isrec && !isequal(rroot, k) && !haskey(dd, k)
+        return write_record_field!(dd, rroot, k, v, default)
+    end
     root, isarr = split_indexed_var(k)
     if isarr
         buffer::Array{SymbolicT} = if haskey(dd, root)
@@ -277,6 +320,142 @@ end
 """
     $TYPEDSIGNATURES
 
+Fill `v` into field `k` of the record stored under `root`, leaving its other fields as they
+were - the record counterpart of writing one element of a stored array.
+
+The record is read back into its leaves, the leaves this field covers are written, and the
+whole is reassembled and stored again. Leaves never written stay `default`, so a record
+that has only been partly specified reassembles into a symbolic literal rather than a value
+of the struct type, which has no way to say "not yet known".
+"""
+function write_record_field!(
+        dd::AtomicArrayDict{SymbolicT}, root::SymbolicT, k::SymbolicT, v::SymbolicT,
+        default::SymbolicT
+    )
+    leaves = record_leaves(root)
+    buffer::Vector{SymbolicT} = if haskey(dd, root)
+        # Read the stored record back into its leaves by projecting each one out of it,
+        # the same way a stored array is read back with `collect`.
+        stored = dd[root]
+        SymbolicT[record_leaf_entry(leaf, root, stored) for leaf in leaves]
+    else
+        fill(default, length(leaves))
+    end
+    isempty(buffer) && return dd
+    for i in record_node_indices(root, k)
+        buffer[i] = record_leaf_entry(leaves[i], k, v)
+    end
+    __unsafe_aad_setindex!(dd, record_value_from_buffer(root, buffer), root)
+    return dd
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Merge `k => v` into `dd` the way [`left_merge!`](@ref) would, for a `k` that projects out of
+a record. The record is stored whole, so this is a partial write of the fields `k` covers,
+skipping the ones `dd` already has a value for - the same "left wins, except where left
+doesn't know" rule, applied through the record rather than to a key of its own.
+"""
+function merge_record_field!(dd::AtomicArrayDict{SymbolicT}, k::SymbolicT, v::SymbolicT)
+    if SU.is_array_shape(SU.shape(k))
+        for i in SU.stable_eachindex(k)
+            ki = k[i]::SymbolicT
+            vi = v[i]
+            vi === COMMON_NOTHING && continue
+            get_possibly_indexed(dd, ki, COMMON_NOTHING) === COMMON_NOTHING || continue
+            write_possibly_indexed_array!(dd, ki, vi, COMMON_NOTHING)
+        end
+    elseif get_possibly_indexed(dd, k, COMMON_NOTHING) === COMMON_NOTHING
+        write_possibly_indexed_array!(dd, k, v, COMMON_NOTHING)
+    end
+    return dd
+end
+
+"""
+    $TYPEDSIGNATURES
+
+The nodes a record key expands to for initialization: the deepest projections of `root`
+whose `Initial` exists. That is a leaf, except where a field is a numeric array, which
+stays whole - an array has an `Initial` of its own, so expanding past it would ask for a
+parameter that was never created.
+"""
+function record_lowering_nodes(root::SymbolicT)::Vector{SymbolicT}
+    nodes = SymbolicT[]
+    _record_lowering_nodes!(nodes, root)
+    return nodes
+end
+
+function _record_lowering_nodes!(nodes::Vector{SymbolicT}, node::SymbolicT)
+    T = SU.symtype(node)
+    if !Symbolics.issymstruct(node)
+        if SU.is_array_shape(SU.shape(node)) && !(T <: AbstractArray{<:Number})
+            for idx in SU.stable_eachindex(node)
+                _record_lowering_nodes!(nodes, node[idx]::SymbolicT)
+            end
+            return nodes
+        end
+        push!(nodes, node)
+        return nodes
+    end
+    for fname in fieldnames(T::DataType)
+        field = Symbolics.SymbolicGetproperty{T, fname}()(node)::SymbolicT
+        _record_lowering_nodes!(nodes, field)
+    end
+    return nodes
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Replace every record key of `op` with the nodes `Initial` is defined for, each holding
+that node's projection of
+the record's value. `op` is modified, since callers of this go on to write their own
+entries into the same map and expect to see them afterwards.
+
+Records are stored atomically, but initialization speaks in leaves: `Initial` exists for
+`p.x` and not for `p`, since a record has no shape to occupy in the flat numeric initials
+buffer - unlike an array, which gets an `Initial` of its own and so needs no translation.
+This converts the one vocabulary into the other at the door of initialization, leaving
+storage untouched; an unfilled field projects to the same sentinel a partially written
+array element would hold.
+"""
+function expand_record_keys!(op::AbstractDict)
+    records = SymbolicT[k for k in keys(op) if Symbolics.issymstruct(k)]
+    isempty(records) && return op
+    for k in records
+        v = op[k]
+        delete!(op, k)
+        for node in record_lowering_nodes(k)
+            entry = record_leaf_entry(node, k, v)
+            # A field the record says nothing about contributes no entry, exactly as a
+            # scalar variable nobody gave a value for is simply absent from the map. An
+            # entry holding "unfilled" would instead read as a value, and would shadow the
+            # one initialization goes on to determine.
+            is_unfilled_record_entry(entry) && continue
+            __unsafe_aad_setindex!(op, entry, node)
+        end
+    end
+    return op
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Whether a value projected out of a record says nothing about that field. The sentinels
+standing for "not given" are the cases; `CommonSentinel` is among them because
+`build_operating_point` substitutes it for an explicit `nothing`.
+"""
+function is_unfilled_record_entry(v::SymbolicT)
+    v === COMMON_NOTHING && return true
+    v === COMMON_MISSING && return true
+    v === COMMON_SENTINEL && return true
+    return SU.isconst(v) && unwrap_const(v) isa CommonSentinel
+end
+
+"""
+    $TYPEDSIGNATURES
+
 Check if `dd` has the key `k`. If `k` is indexed, check if `dd` has the array as a key.
 """
 function has_possibly_indexed_key(dd::AtomicArrayDict, k::SymbolicT)
@@ -289,8 +468,8 @@ end
     $TYPEDSIGNATURES
 
 The innermost proper ancestor of `k` that is a key of `dd`, or `nothing`. A struct
-projection is stored under whichever ancestor `lower_record_entries!` stopped at, which is
-not necessarily its immediate parent.
+projection is found under the record it belongs to, which is stored atomically and is not
+necessarily its immediate parent.
 """
 function nearest_present_ancestor(dd::AtomicArrayDict, k::SymbolicT)
     x = k
@@ -341,9 +520,8 @@ end
 """
     $TYPEDSIGNATURES
 
-The value `k` projects out of whichever ancestor of it `dd` holds, or `default` if it
-holds none. A record key is lowered to the nodes beneath it, so a projection of one is
-found under an ancestor rather than under itself.
+The value `k` projects out of whichever ancestor of it `dd` holds, or `default` if it holds
+none. Records are stored atomically, so a field is found under the record it belongs to.
 """
 function record_ancestor_value(dd::AtomicArrayDict, k::SymbolicT, default)
     anc = nearest_present_ancestor(dd, k)
@@ -351,78 +529,7 @@ function record_ancestor_value(dd::AtomicArrayDict, k::SymbolicT, default)
     return record_leaf_entry(k, anc, dd[anc])
 end
 
-"""
-    $TYPEDSIGNATURES
 
-The nodes a record key is lowered to: the deepest projections of `root` whose symtype
-flattens into a numeric buffer. This is a leaf, except where a field is a numeric array,
-which stays whole because ordinary array atomicity already covers it.
-
-This is the granularity `Initial` uses, and lowering is how the two are kept in agreement.
-Records are not left atomic here, because `Initial` cannot be applied to one: `Initial(p)`
-carries a record symtype, which has no slot in the flat numeric initials buffer, and unlike
-`getindex` it does not commute with field access, so `Initial(p).x` is a different symbolic
-from the `Initial(p.x)` the index cache holds. Arrays go the other way - atomic in both
-places - because an array parameter *is* a contiguous numeric block.
-"""
-function record_lowering_nodes(root::SymbolicT)::Vector{SymbolicT}
-    nodes = SymbolicT[]
-    _record_lowering_nodes!(nodes, root)
-    return nodes
-end
-
-function _record_lowering_nodes!(nodes::Vector{SymbolicT}, node::SymbolicT)
-    T = SU.symtype(node)
-    if !Symbolics.issymstruct(node)
-        if SU.is_array_shape(SU.shape(node)) && !(T <: AbstractArray{<:Number})
-            for idx in SU.stable_eachindex(node)
-                _record_lowering_nodes!(nodes, node[idx]::SymbolicT)
-            end
-            return nodes
-        end
-        push!(nodes, node)
-        return nodes
-    end
-    for fname in fieldnames(T::DataType)
-        field = Symbolics.SymbolicGetproperty{T, fname}()(node)::SymbolicT
-        _record_lowering_nodes!(nodes, field)
-    end
-    return nodes
-end
-
-"""
-    $TYPEDSIGNATURES
-
-Replace every record key of `dd` with its [`record_lowering_nodes`](@ref). Records are the
-right granularity for resolving what the user asked for, but everything downstream of that
-is keyed per numeric buffer entry. Entries still holding `default` are dropped.
-"""
-function lower_record_entries!(dd::AtomicArrayDict{SymbolicT}, default::SymbolicT)
-    for k in collect(keys(dd))
-        Symbolics.issymstruct(k) || continue
-        leaves = record_leaves(k)
-        buffer = record_buffer(dd[k])
-        lowered = Pair{SymbolicT, SymbolicT}[]
-        for node in record_lowering_nodes(k)
-            idxs = record_node_indices(k, node)
-            any(i -> buffer[i] === default, idxs) && continue
-            if length(idxs) == 1 && isequal(node, leaves[only(idxs)])
-                push!(lowered, node => buffer[only(idxs)])
-                continue
-            end
-            # Leaves below this node may be symbolic rather than constant, in which case
-            # the assembled value is a symbolic literal. Holes are already excluded above,
-            # so everything here is specified.
-            vals = map(x -> SU.isconst(x) ? unwrap_const(x) : x, buffer)
-            push!(lowered, node => BSImpl.Const{VartypeT}(record_node_value(k, node, vals)))
-        end
-        delete!(dd, k)
-        for (node, v) in lowered
-            __unsafe_aad_setindex!(dd, v, node)
-        end
-    end
-    return dd
-end
 
 """
     $TYPEDSIGNATURES
@@ -460,6 +567,26 @@ function index_substituted_array(res::SymbolicT, k::SymbolicT)
     end
 end
 
+"""
+    $(TYPEDEF)
+
+A set of symbolic variables, backed by an [`AtomicArrayDict`](@ref).
+
+It holds the two kinds of composite at different granularities, which is deliberate:
+
+  - A symbolic array is one entry. [`push_as_atomic_array!`](@ref) normalizes `x[1]` to
+    `x`, matching the dictionary, where `x` is a legal key and `x[1]` is not.
+  - A record is held at whatever granularity it is pushed at, and in practice that is its
+    leaves. A record's unknowns genuinely are its leaves - `p.x` is solved for, while `p`
+    is not a quantity with a value of its own - and the sets backed by this type are built
+    from maps that [`expand_record_keys!`](@ref) has already translated into leaves.
+
+Membership is therefore exact: a set given `p` does not report `p.x` as a member, and one
+given the leaves does not report `p`. Nothing here stops a caller from putting both
+spellings into one set. That the current callers do not follows from the order their maps
+are built, not from an invariant this type enforces, so a new caller that pushes a record
+whole alongside leaf-wise ones would get a set whose membership answers disagree.
+"""
 struct AtomicArraySet{D <: AbstractDict{SymbolicT, Nothing}} <: AbstractSet{SymbolicT}
     dd::AtomicArrayDict{Nothing, D}
 
@@ -476,8 +603,9 @@ Base.isempty(x::AtomicArraySet) = isempty(x.dd)
 Base.length(x::AtomicArraySet) = length(x.dd)
 Base.sizehint!(x::AtomicArraySet, n::Integer) = (sizehint!(x.dd, n); x)
 Base.in(item, x::AtomicArraySet) = haskey(x.dd, item)
-# Deliberately bypasses the record lowering in `setindex!`: a set records which variables
-# exist, and its callers expect a record pushed into it to stay one entry.
+# Deliberately unchecked: this is where a record goes in at whatever granularity the
+# caller has, which the docstring above describes. Array keys are normalized by
+# `push_as_atomic_array!` instead, before they reach here.
 Base.push!(x::AtomicArraySet, item) = (__unsafe_aad_setindex!(x.dd, nothing, unwrap(item)); x)
 Base.delete!(x::AtomicArraySet, item) = (delete!(x.dd, item); x)
 Base.empty(::AtomicArraySet{D}) where {D} = AtomicArraySet{D}()
@@ -492,8 +620,9 @@ end
 """
     $TYPEDSIGNATURES
 
-Add `item` to `x`. If `item` is an indexed array, add the array instead. Struct projections
-are added as-is: these sets track which variables exist, which is leaf granularity.
+Add `item` to `x`. If `item` is an indexed array, add the array instead. A record
+projection is added as-is, at leaf granularity - see [`AtomicArraySet`](@ref) for why the
+two composites are treated differently.
 """
 function push_as_atomic_array!(x::AtomicArraySet, item::SymbolicT)
     return push!(x, split_indexed_var(item)[1])

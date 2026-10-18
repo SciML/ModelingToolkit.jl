@@ -1926,7 +1926,7 @@ function _record_leaves(root::SymbolicT)
         SU.shape(root) isa SU.ShapeVecT || throw(ArgumentError(LazyString(
             "Cannot enumerate the leaves of `", root, "`, an array of records whose ",
             "shape is not known. Declare the variable with a concrete shape.")))
-        leaves = SymbolicT[]
+        leaves = SymbolicT[]yeah 
         for i in SU.stable_eachindex(root)
             append!(leaves, record_leaves(root[i]))
         end
@@ -2013,9 +2013,10 @@ function record_node_value(root::SymbolicT, node::SymbolicT, buffer::AbstractVec
     # reach a literal for narrow structs, via the constructor methods `@symstruct`
     # registers, but not for wide ones, where none are generated.
     if any(_contains_symbolic, fieldvals)
-        # Unwrapped: this assembles a value for internal buffers, which hold terms rather
-        # than the wrapper `record_literal` returns for user-facing use.
-        return unwrap(Symbolics.record_literal(T, fieldvals))
+        # The term rather than the wrapper, since this assembles a value for internal
+        # buffers. Unchecked, too: the fields come from a buffer that may still hold the
+        # sentinels marking ones not yet filled, which say nothing about their types.
+        return Symbolics.record_literal_term(T, fieldvals; check = false)
     end
     return T(fieldvals...)
 end
@@ -2026,7 +2027,13 @@ end
 Whether `x` is symbolic, or is an array with a symbolic entry. Used to decide whether a
 record can be assembled as a concrete value or has to stay a symbolic literal.
 """
-_contains_symbolic(x) = x isa SymbolicT
+# `nothing`/`missing` count too: they mark a field that has not been filled in, which no
+# value of the struct type can represent, so the record has to stay a literal. So does
+# `CommonSentinel`, which `build_operating_point` substitutes for an explicit `nothing`
+# before assembling records, and which means the same thing here.
+function _contains_symbolic(x)
+    return x isa SymbolicT || x === nothing || x === missing || x isa CommonSentinel
+end
 _contains_symbolic(x::AbstractArray) = any(_contains_symbolic, x)
 
 """
@@ -2078,6 +2085,26 @@ function left_merge!(a::AtomicArrayDict{SymbolicT}, b::AtomicArrayDict{SymbolicT
         end
 
         v_a = a[k]
+        if Symbolics.issymstruct(k)
+            # Same rule as for arrays below, field by field: what `a` says wins, except
+            # where it says nothing, which is where `b` is asked.
+            nodes = record_lowering_nodes(k)
+            buffer = SymbolicT[]
+            sizehint!(buffer, length(nodes))
+            filled = false
+            for node in nodes
+                left = record_leaf_entry(node, k, v_a)
+                if left === COMMON_NOTHING
+                    push!(buffer, record_leaf_entry(node, k, v))
+                    filled = true
+                else
+                    push!(buffer, left)
+                end
+            end
+            filled || continue
+            a[k] = record_value_from_nodes(k, nodes, buffer)
+            continue
+        end
         sh = SU.shape(k)
         SU.is_array_shape(sh) || continue
         any(Base.Fix2(===, COMMON_NOTHING) ∘ Base.Fix1(getindex, v_a), SU.stable_eachindex(v_a)) || continue
