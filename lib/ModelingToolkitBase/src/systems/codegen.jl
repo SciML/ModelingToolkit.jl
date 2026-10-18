@@ -67,7 +67,8 @@ function array_derivative_arguments!(rhss::Vector{SymbolicT}, dvs, D, ir::IRStru
     arrays = Dict{SymbolicT, SymbolicT}()
     for (parent, positions) in groups
         indices = SU.stable_eachindex(parent)
-        if length(positions) == length(indices) &&
+        if all(isone ∘ first, SU.shape(parent)) &&
+                length(positions) == length(indices) &&
                 positions == collect(first(positions):last(positions)) &&
                 all(isequal(dvs[i], parent[j]) for (i, j) in zip(positions, indices))
             arrays[parent] = Symbolics.term(reshape, du[first(positions):last(positions)], size(parent); type = symtype(parent), shape = SU.shape(parent))

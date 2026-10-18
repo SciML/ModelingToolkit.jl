@@ -182,6 +182,32 @@ end
     @test sizes[1] == sizes[2]
 end
 
+@testset "DAEFunction derivative slices with offset axes" begin
+    for origin in (0, 2)
+        @testset "origin = $origin" begin
+            @independent_variables t
+            @variables x(t)[origin:(origin + 3)]
+            D = Differential(t)
+            interior = origin:(origin + 2)
+            boundary = origin + 3
+            vars = [x[i] for i in origin:boundary]
+            sys = complete(
+                System(
+                    [D(x[interior]) ~ -x[interior], D(x[boundary]) ~ -x[boundary]],
+                    t, vars, []; name = :offset_decay
+                )
+            )
+            f = DAEFunction(sys)
+            u = collect(1.0:4.0)
+            du = -2u
+            out = zeros(4)
+            f(out, du, u, nothing, 0.0)
+            @test out == u
+            @test f(du, u, nothing, 0.0) == u
+        end
+    end
+end
+
 @testset "derivatives in observed expressions" begin
     @independent_variables t
     @variables u(t)[1:6] z(t) v(t)
