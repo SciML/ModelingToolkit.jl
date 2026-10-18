@@ -2003,7 +2003,8 @@ function __reverse_transformations_helper(fn::F, sys::System) where {F}
     tfs = getmetadata(sys, ReversibleTransformations, [])::Vector{Any}
     new_tfs = []
     for tf in Iterators.reverse(tfs)
-        if !fn(tf)::Bool
+        # Invalidation barrier: downstream packages add methods to `fn`.
+        if !(@invokelatest fn(tf))::Bool
             push!(new_tfs, tf)
             continue
         end
