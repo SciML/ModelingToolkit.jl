@@ -199,6 +199,9 @@ function generate_rhs(
     wrap_gfw = wrap_gfw_val(opts)
     dvs = flat_unknowns(sys)
     eqs = equations(sys)
+
+    override = check_mutable_cache(sys, RHSCodegenOverride, RHSCodegenOverride, nothing)
+
     # Empty-SCC / fully-eliminated nonlinear residual: skip when scalar,
     # implicit_dae, or cachesyms would need a different signature/body.
     if !is_time_dependent(sys) && isempty(dvs) && isempty(eqs) && isempty(extra_args) &&
@@ -313,12 +316,22 @@ function generate_rhs(
             (; wrap_code = (wrap_oop_similar_for_residual ∘ oop_wrap, iip_wrap))
         )
     end
-    res = build_function_wrapper(
-        sys, rhss, collect(Any, args), BuildFunctionWrapperOptions(;
-            p_start, extra_assignments, u_arg, n_param_buffers, p_end_kw...,
-            codegen_function_options = codegen_opts
+    if override === nothing
+        res = build_function_wrapper(
+            sys, rhss, collect(Any, args), BuildFunctionWrapperOptions(;
+                p_start, extra_assignments, u_arg, n_param_buffers, p_end_kw...,
+                codegen_function_options = codegen_opts
+            )
         )
-    )
+    else
+        rhss = map(Base.Fix1(getindex, override.ir), override.roots)
+        res = build_function_wrapper(
+            sys, rhss, collect(Any, args), BuildFunctionWrapperOptions(;
+                p_start, extra_assignments, u_arg, n_param_buffers, p_end_kw...,
+                override_ir = override.ir, codegen_function_options = codegen_opts
+            )
+        )
+    end
     nargs = length(args) - length(p) + 1
     if is_dde(sys)
         p_start += 1
@@ -328,6 +341,31 @@ function generate_rhs(
         expression, wrap_gfw, (p_start, nargs, is_split(sys)),
         res; compiler_options, eval_expression, eval_module
     )
+end
+
+struct RHSCodegenOverride
+    ir::IRStructure{VartypeT}
+    roots::Vector{Int32}
+end
+
+function should_invalidate_mutable_cache_entry(::Type{RHSCodegenOverride}, patch::NamedTuple)
+    return haskey(patch, :eqs) || haskey(patch, :observed) || haskey(patch, :unknowns) ||
+        haskey(patch, :bindings) || haskey(patch, :parameter_bindings_graph)
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Override the codegen of the RHS of `sys`, ensuring it uses the `roots` elements of
+`override_ir` for codegen. This override is invalidated if the equations, observed, unknowns,
+or bindings of `sys` are later changed. The list of invalidators may change in the future.
+"""
+function set_rhs_codegen_override!(sys::System, override_ir::IRStructure{VartypeT}, roots::Vector{Int32})
+    eqs = get_eqs(sys)
+    @assert length(roots) == length(eqs) "The number of roots must be the same as the number of equations"
+    store_to_mutable_cache!(sys, RHSCodegenOverride, RHSCodegenOverride(override_ir, roots))
+
+    return sys
 end
 
 """
