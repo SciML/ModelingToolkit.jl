@@ -103,3 +103,19 @@ function get_ir_info(sys::System)
 
     return irinfo
 end
+
+"""
+    $TYPEDSIGNATURES
+
+Return a `Tuple{IRStructure{VartypeT}, Vector{Int32}}` of an `IRStructure` containing the
+`full_equations` expressions and the indices corresponding to the relevant roots.
+The returned `IRStructure` is not used by MTK and can be mutated freely.
+"""
+function get_ir_for_equations(sys::AbstractSystem)::Tuple{IRStructure{VartypeT}, Vector{Int32}}
+    info = get_ir_info(sys)
+    ir = get_irstructure(sys)
+    exprs = map(Base.Fix1(getindex, ir), info.eqs_idxs)
+    new_ir = SU.subset_ir(ir, exprs)
+    new_idxs = map(Base.Fix1(getindex, new_ir), exprs)
+    return new_ir, new_idxs
+end
