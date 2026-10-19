@@ -144,6 +144,45 @@ end
 """
     $(TYPEDSIGNATURES)
 
+Warn if any entry of the initial state `u0` for the unknowns `dvs` is a non-finite number.
+Unknowns whose value in the operating point `op` is itself non-finite were given that
+value by the caller; for the others the value was derived, which is typically the result
+of a division by zero at the initial point in the compiled system, i.e. the structural
+simplification chose a state selection or a solve direction that is singular there.
+"""
+function warn_nonfinite_u0(dvs::Vector, u0, op::SymmapT)
+    given = SymbolicT[]
+    derived = SymbolicT[]
+    for (i, val) in enumerate(u0)
+        val isa Number && !isfinite(val) && i <= length(dvs) || continue
+        var = unwrap(dvs[i])
+        opval = get_possibly_indexed(op, var, COMMON_NOTHING)
+        opval = opval isa SymbolicT && SU.isconst(opval) ? SU.unwrap_const(opval) : opval
+        if opval isa Number && !isfinite(opval)
+            push!(given, var)
+        else
+            push!(derived, var)
+        end
+    end
+    if !isempty(given)
+        @warn "The initial value given for the following unknowns is not finite: $given."
+    end
+    if !isempty(derived)
+        @warn """
+        The initial value of the following unknowns is not finite: $derived. The \
+        simplified system is likely singular at the initial point: index reduction or \
+        tearing divided by a coefficient that is zero there. Consider providing the \
+        initial point to `mtkcompile` (`initial_point` keyword, or `initial_conditions` \
+        and `tspan` on the `System`), marking the vanishing coefficient with \
+        `maybe_zeros`, or changing the `state_priority` of the involved variables.
+        """
+    end
+    return nothing
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
 Attempt to interpret `vals` as a symbolic map of variables in `varlist` to values. Return
 the result as a `Dict{Any, Any}`. In case `vals` is already an iterable of pairs, convert
 it to a `Dict{Any, Any}` and return. If `vals` is an array (whose `eltype` is not `Pair`)
@@ -2477,6 +2516,8 @@ function __process_SciMLProblem(
 
     op = getmetadata(sys, ProblemConstructionHook, identity)(op)::SymmapT
     check_necessary_initial_conditions(sys, op)
+    # values given by the caller, before initialization writes derived values into `op`
+    given_op = copy(op)
 
     kwargs = NamedTuple(kwargs)
 
@@ -2551,6 +2592,9 @@ function __process_SciMLProblem(
     end
     if u0 !== nothing
         u0 = u0_constructor(u0)
+    end
+    if u0 !== nothing && !is_initializeprob && !symbolic_u0
+        warn_nonfinite_u0(dvs, u0, given_op)
     end
 
     check_eqs_u0(eqs, dvs, u0; check_length, kwargs...)

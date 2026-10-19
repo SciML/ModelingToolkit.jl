@@ -77,9 +77,32 @@ function dummy_derivative(
             return J
         end
     end
+    # Jacobian of the equations `eqs` with respect to the variables `vars`, evaluated at the
+    # initial point of the system. Only structurally incident pairs are differentiated.
+    numjac = let state = state
+        (eqs, vars) -> begin
+            graph = state.structure.graph
+            symeqs = equations(state)
+            col = Dict{Int, Int}(v => j for (j, v) in enumerate(vars))
+            J = zeros(Float64, length(eqs), length(vars))
+            for (i, eq) in enumerate(eqs)
+                ex = symeqs[eq].rhs - symeqs[eq].lhs
+                for v in 𝑠neighbors(graph, eq)
+                    j = get(col, v, 0)
+                    iszero(j) && continue
+                    val = MTKTearing.evaluate_at_initial_point(
+                        state, Symbolics.derivative(ex, state.fullvars[v])
+                    )
+                    (val === nothing || !isfinite(val)) && return nothing
+                    J[i, j] = val
+                end
+            end
+            return J
+        end
+    end
     state_priority = Base.Fix1(getindex, state.structure.state_priorities)
     tearing_result, extras = StateSelection.dummy_derivative_graph!(
-        state, jac; state_priority, kwargs...
+        state, jac; state_priority, numjac, kwargs...
     )
     return reassemble_alg(state, tearing_result, state.mm; fully_determined, kwargs...)
 end

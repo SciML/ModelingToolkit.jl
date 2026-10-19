@@ -32,7 +32,10 @@ which subcomponent each non-`connect` equation came from.
 
 A pass called `discover_maybe_zeros` uses `bindings` and `initial_conditions` to identify
 variables and parameters that might be zero in the system. This helps the rest of `mtkcompile`
-make better simplification decisions and avoid singularities. `TearingState` is a data structure
+make better simplification decisions and avoid singularities. In the same spirit, tearing never
+solves an equation for a variable whose coefficient evaluates to zero at the initial point of the
+system (for example `sin(ω * t)` when `tspan` starts at `t = 0`), see
+`ModelingToolkitTearing.evaluate_at_initial_point`. `TearingState` is a data structure
 that contains symbolic and structural information about the system. It represents the system
 as a list of equations, a list of variables, and some graphs to describe them. SDEs are identified
 here. They are simplified by removing brownian variables, simplifying the resultant DAE and
@@ -151,6 +154,19 @@ of `x` has a negative state priority, the minimum such priority is assigned to `
 maximum priority among its higher order derivatives is used. The state selection algorithm also
 uses symbolic jacobian information if possible, specifically when all jacobian coefficients are
 small integers.
+
+The structural choice can be singular at the initial point: for example, a multibody
+constraint solved for a coordinate whose column of the constraint jacobian vanishes in the
+initial configuration. When the jacobian of a block is not integer, `dummy_derivative` also
+evaluates it numerically at the initial point of the system. The initial point is built from
+`initial_conditions`, `bindings` and the start of `tspan` (if the system has one), and from
+the `initial_point` keyword argument of `mtkcompile`, which takes precedence. Guesses are not
+used, since they need not be close to the initial configuration. If the structurally selected
+dummy derivatives are numerically rank-deficient there, the candidates are reordered by a
+numerically independent set (found greedily, still in priority order) and selected again.
+This only changes the selection where the structural one is singular at the initial point;
+variables without a known value at the initial point disable the check for the expressions
+they appear in.
 
 The output of index reduction via the dummy derivatives algorithm consists of:
 - A new list of equations, where some new equations are differentiated version of other equations.

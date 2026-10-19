@@ -108,6 +108,12 @@ once — calling `mtkcompile` on an already-compiled system throws
   selects a `SciMLBase.HomotopyProblem`, and the initialization and event affect systems
   derived from the compiled system are compiled the same way. Use this for targets that
   cannot lower to a continuation solver. See [`strip_homotopy`](@ref).
+- `initial_point = nothing`: Values of unknowns (and optionally the independent variable)
+  at the initial point, as `variable => value` pairs or a dict, for example the `u0` map
+  later passed to the problem constructor. Index reduction and tearing use the initial
+  point, otherwise built only from `initial_conditions`, bindings and the start of
+  `tspan`, to avoid state selections and solve directions that are singular there. Pass
+  `guesses(sys)` if the guesses describe the initial configuration.
 
 Remaining keyword arguments are forwarded to the internal compilation passes.
 
