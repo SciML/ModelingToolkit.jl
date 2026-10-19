@@ -400,3 +400,51 @@ end
     )
     @test_throws ArgumentError calculate_paramjac(sys)
 end
+
+@testset "`get_ir_for_equations` and `set_rhs_codegen_override!`" begin
+    @variables x(t) y(t)
+    @parameters p q
+    @mtkcompile sys = System([D(x) ~ p * x + y, D(y) ~ q * x - p * y], t)
+    u0 = [x => 1.0, y => 1.0]
+    ps = [p => 2.0, q => 3.0]
+    tspan = (0.0, 1.0)
+    baseprob = ODEProblem(sys, u0, tspan, ps)
+    base_du = baseprob.f(baseprob.u0, baseprob.p, 0.0)
+
+    ir, roots = ModelingToolkitBase.get_ir_for_equations(sys)
+    @test ir isa SymbolicUtils.IRStructure
+    @test roots isa Vector{Int32}
+    @test length(roots) == length(equations(sys))
+    @test all(isequal(ir[root], eq.rhs) for (root, eq) in zip(roots, equations(sys)))
+
+    # The returned `IRStructure` is a subset copy; mutating it does not touch the
+    # system's own IR.
+    sys_ir_len = length(ModelingToolkitBase.get_irstructure(sys))
+    SymbolicUtils.populate_ir!(ir, ir[roots[1]] * 2)
+    @test length(ModelingToolkitBase.get_irstructure(sys)) == sys_ir_len
+
+    # An unmodified override must produce identical codegen.
+    ir_same, roots_same = ModelingToolkitBase.get_ir_for_equations(sys)
+    ModelingToolkitBase.set_rhs_codegen_override!(sys, ir_same, roots_same)
+    prob = ODEProblem(sys, u0, tspan, ps)
+    @test prob.f(prob.u0, prob.p, 0.0) == base_du
+
+    # Editing the subset IR and pointing a root at the new node changes the
+    # generated RHS.
+    ir_mod, roots_mod = ModelingToolkitBase.get_ir_for_equations(sys)
+    roots_mod[1] = SymbolicUtils.populate_ir!(ir_mod, ir_mod[roots_mod[1]] * 2)
+    ModelingToolkitBase.set_rhs_codegen_override!(sys, ir_mod, roots_mod)
+    prob = ODEProblem(sys, u0, tspan, ps)
+    @test prob.f(prob.u0, prob.p, 0.0) == [2base_du[1], base_du[2]]
+
+    # The number of roots must match the number of equations.
+    @test_throws AssertionError ModelingToolkitBase.set_rhs_codegen_override!(
+        sys, ir_mod, roots_mod[1:1])
+
+    # Patching the equations invalidates the override.
+    newsys = ModelingToolkitBase.ConstructionBase.setproperties(
+        sys, (; eqs = [D(x) ~ x, D(y) ~ y]))
+    @test ModelingToolkitBase.iscomplete(newsys)
+    newprob = ODEProblem(newsys, u0, tspan, ps)
+    @test newprob.f(newprob.u0, newprob.p, 0.0) == [1.0, 1.0]
+end
