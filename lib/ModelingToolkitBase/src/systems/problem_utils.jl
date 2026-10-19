@@ -1651,6 +1651,7 @@ const INITMAP_ELTYPE = :__mtk_initialization_map_eltype
 const INITMAP_SOLUTION = :__mtk_initialization_solution
 const INITMAP_PROBLEM = :__mtk_initialization_problem
 const INITMAP_OUTER_PARAMETERS = :__mtk_initialization_outer_parameters
+const INITMAP_VALUE_PROVIDER = :__mtk_initialization_value_provider
 
 function _generated_map_expr(finish, expr::Expr, map_args::Vector{Symbol}, sources::Vector{Expr})
     @assert expr.head === :function
@@ -1681,12 +1682,66 @@ function _generated_map_sources(valp::Symbol, time_dependent::Bool)
     return sources
 end
 
+# The generated maps may be handed to downstream code generators (FMUGeneration) that
+# `string` them into a package of their own, where none of the generating session's
+# `using`s are in effect. A type interpolated into an `Expr` prints unqualified whenever
+# the generating session has it in scope (`SVector` rather than `StaticArraysCore.SVector`),
+# and a qualified name only re-parses where its module is visible, so every non-`Base`
+# name below is spelled as a `GlobalRef` into this module, which such a package does import.
+_mtkbase_ref(name::Symbol) = GlobalRef(@__MODULE__, name)
+
+# `identity` is elided rather than interpolated: a function object prints as
+# `$(QuoteNode(identity))`, which does not re-parse.
+function _apply_constructor_expr(constructor, ex::Expr)
+    constructor === identity && return ex
+    return Expr(:call, QuoteNode(constructor), ex)
+end
+
+# Return `map_expr` itself for `expression = Val{true}`, otherwise compile it under
+# `gen_opts` (`RuntimeGeneratedFunctions` unless `eval_expression`).
+function _finish_generated_map(
+        map_expr::Expr, gen_opts::GeneratedFunctionOptions, expression
+    )
+    expression === Val{true} && return map_expr
+    return eval_or_rgf(
+        map_expr; gen_opts.eval_expression, gen_opts.eval_module, gen_opts.compiler_options
+    )
+end
+
+# The eltype of a generated `u0` map's output. By default it is promoted at run time the
+# way `PromoteToTunableEltype` does: at least `floatT`, and never narrower than the
+# tunables of the value provider `valp` (so `Dual` parameters propagate into `u0`). Whether
+# the tunables are empty is only known at run time, so that promotion is not statically
+# resolvable; `static_eltype` fixes the eltype at generation time instead, which a
+# statically compiled consumer of the `Expr` (juliac `--trim`) needs.
+function _u0_eltype_expr(raw::Symbol, valp::Symbol, floatT, static_eltype)
+    static_eltype === nothing || return static_eltype
+    p = Expr(:call, GlobalRef(SymbolicIndexingInterface, :parameter_values), valp)
+    tunable_eltype = Expr(:call, _mtkbase_ref(:_tunable_eltype), p)
+    return Expr(:call, promote_type, Expr(:call, eltype, raw), tunable_eltype, floatT)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Generate the `initializeprobmap` of `OverrideInitData` for `initsys`: a function of the
+solved initialization problem returning the values of `solved_unknowns` (a subset of the
+unknowns of the parent system) as the new `u0`. With `expression = Val{true}` the
+generated `Expr` is returned instead of being compiled. `static_eltype` fixes the eltype of
+the returned `u0` at generation time instead of promoting it from the tunables at run time
+(see `_u0_eltype_expr`).
+"""
 function _construct_fullspecialize_initializeprobmap(
         initsys::AbstractSystem, solved_unknowns, gen_opts::GeneratedFunctionOptions;
-        iip::Bool, u0_constructor, floatT
+        iip::Bool, u0_constructor, floatT, expression = Val{false}, static_eltype = nothing
     )
+    # A bare type interpolated into the generated code prints unqualified whenever the
+    # generating session has it in scope, so the `Expr` form cannot rely on `SVector`
+    # being resolvable where it is spliced in; `_static_initialization_buffer` gives the
+    # `Array` output the same static shape afterwards anyway.
+    output_type = expression === Val{true} ? Array : SVector
     expr = build_explicit_observed_function(
-        initsys, solved_unknowns, gen_opts; output_type = SVector
+        initsys, solved_unknowns, gen_opts; output_type
     )
     sol = INITMAP_SOLUTION
     sources = _generated_map_sources(sol, is_time_dependent(initsys))
@@ -1695,28 +1750,33 @@ function _construct_fullspecialize_initializeprobmap(
     # Forcing it here would change `prob.u0`'s type out from under the caller, and an
     # `MVector` cannot even be the element type of a GPU array.
     u0_prototype = u0_constructor === identity ? Expr(:curly, Vector, INITMAP_ELTYPE) :
-        Expr(:curly, SVector, n, INITMAP_ELTYPE)
+        Expr(:curly, _mtkbase_ref(:SVector), n, INITMAP_ELTYPE)
     map_expr = _generated_map_expr(expr, [sol], sources) do raw
         T = INITMAP_ELTYPE
-        p = Expr(:call, GlobalRef(SymbolicIndexingInterface, :parameter_values), sol)
-        tunable_eltype = Expr(:call, GlobalRef(@__MODULE__, :_tunable_eltype), p)
-        promoted = Expr(:call, promote_type, Expr(:call, eltype, raw), tunable_eltype, floatT)
         static_values = Expr(
-            :call, GlobalRef(@__MODULE__, :_static_initialization_buffer), u0_prototype, raw
+            :call, _mtkbase_ref(:_static_initialization_buffer), u0_prototype, raw
         )
-        result = Expr(:call, QuoteNode(u0_constructor), static_values)
+        result = _apply_constructor_expr(u0_constructor, static_values)
         if iip
-            result = Expr(:call, GlobalRef(@__MODULE__, :__iip_u0_ad_wrapper), result)
+            result = Expr(:call, _mtkbase_ref(:__iip_u0_ad_wrapper), result)
         end
-        return Expr(:block, :(local $T = $promoted), result)
+        return Expr(:block, :(local $T = $(_u0_eltype_expr(raw, sol, floatT, static_eltype))), result)
     end
-    return eval_or_rgf(
-        map_expr; gen_opts.eval_expression, gen_opts.eval_module, gen_opts.compiler_options
-    )
+    return _finish_generated_map(map_expr, gen_opts, expression)
 end
 
 # `prototype` says what the result has to look like: a `StaticArray` type for the state
 # map, and the problem's own corresponding `p` buffer for each parameter portion.
+# The state maps ask for a plain `Vector{T}` from the observed function's output; this
+# method keeps that case statically typed (the general one below decides the buffer kind
+# from a run-time `prototype`, which does not resolve under juliac `--trim`).
+function _static_initialization_buffer(::Type{Vector{T}}, values::AbstractVector) where {T}
+    S = promote_type(T, eltype(values))
+    buffer = Vector{S}(undef, length(values))
+    copyto!(buffer, values)
+    return buffer
+end
+
 function _static_initialization_buffer(prototype, values)
     P = prototype isa Type ? prototype : typeof(prototype)
     T = isempty(values) ? eltype(P) :
@@ -1751,26 +1811,39 @@ function _parameter_buffer_expr(prototype, raw::Symbol, idxs, p_constructor)
         push!(values.args, Expr(:ref, raw, i))
     end
     buffer = Expr(
-        :call, GlobalRef(@__MODULE__, :_static_initialization_buffer), prototype, values
+        :call, _mtkbase_ref(:_static_initialization_buffer), prototype, values
     )
-    p_constructor === identity && return buffer
-    return Expr(:call, QuoteNode(p_constructor), buffer)
+    return _apply_constructor_expr(p_constructor, buffer)
 end
 
-function _construct_fullspecialize_initializeprobpmap(
-        sys::AbstractSystem, initsys::AbstractSystem, gen_opts::GeneratedFunctionOptions;
-        p_constructor
+"""
+    $(TYPEDSIGNATURES)
+
+Generate a function that rebuilds the parameter object of `dstsys` with values read from a
+value provider of `srcsys`. The generated function takes the two arguments named in
+`map_args`: `prototype_arg`, a value provider of `dstsys` whose `parameter_values`
+supply the buffer types (and the caches), and `source_arg`, a value provider of `srcsys`
+supplying the values. With `unwrap_initials`, an `Initial(x)` parameter of `dstsys` is read
+as `x` when `x` is a variable of `srcsys` (this is how the solved unknowns of an
+initialization system become the `Initial` parameters of its parent). With
+`expression = Val{true}` the generated `Expr` is returned instead of being compiled.
+"""
+function _construct_fullspecialize_parameter_map(
+        srcsys::AbstractSystem, dstsys::AbstractSystem, gen_opts::GeneratedFunctionOptions;
+        p_constructor, unwrap_initials::Bool, prototype_arg::Symbol, source_arg::Symbol,
+        map_args::Vector{Symbol}, expression = Val{false}
     )
-    ps = parameters(sys; initial_parameters = true)
+    ps = parameters(dstsys; initial_parameters = true)
     # One entry per `MTKParameters` portion, each holding that portion's buffers. Kept a
     # concretely typed `Vector` rather than a tuple of tuples: the portions are iterated,
     # not indexed heterogeneously, and a tuple here would force the whole loop below to
     # specialize per system.
     groups = Vector{Vector{SymbolicT}}[]
-    if is_split(sys)
-        grouped = reorder_parameters(sys, ps; flatten = false)
+    if is_split(dstsys)
+        grouped = reorder_parameters(dstsys, ps; flatten = false)
         push!(groups, Vector{SymbolicT}[grouped[1]::Vector{SymbolicT}])
-        initial_syms = _unwrap_initial_symbols!(copy(grouped[2]::Vector{SymbolicT}), initsys)
+        initial_syms = copy(grouped[2]::Vector{SymbolicT})
+        unwrap_initials && _unwrap_initial_symbols!(initial_syms, srcsys)
         push!(groups, Vector{SymbolicT}[initial_syms])
         for i in 3:5
             push!(groups, grouped[i]::Vector{Vector{SymbolicT}})
@@ -1782,14 +1855,12 @@ function _construct_fullspecialize_initializeprobpmap(
     for group in groups, buffer in group
         append!(flat_syms, buffer)
     end
-    expr = build_explicit_observed_function(initsys, Tuple(flat_syms), gen_opts)
-    prob = INITMAP_PROBLEM
-    sol = INITMAP_SOLUTION
-    sources = _generated_map_sources(sol, is_time_dependent(initsys))
-    map_expr = _generated_map_expr(expr, [prob, sol], sources) do raw
+    expr = build_explicit_observed_function(srcsys, Tuple(flat_syms), gen_opts)
+    sources = _generated_map_sources(source_arg, is_time_dependent(srcsys))
+    map_expr = _generated_map_expr(expr, map_args, sources) do raw
         outer_p = INITMAP_OUTER_PARAMETERS
-        p = Expr(:call, GlobalRef(SymbolicIndexingInterface, :parameter_values), prob)
-        if !is_split(sys)
+        p = Expr(:call, GlobalRef(SymbolicIndexingInterface, :parameter_values), prototype_arg)
+        if !is_split(dstsys)
             result = _parameter_buffer_expr(outer_p, raw, eachindex(flat_syms), p_constructor)
             return Expr(:block, :(local $outer_p = $p), result)
         end
@@ -1807,14 +1878,13 @@ function _construct_fullspecialize_initializeprobpmap(
                 end
                 buffer = _parameter_buffer_expr(prototype, raw, idxs, p_constructor)
                 if field === :discrete
-                    sizes = get_index_cache(sys).discrete_buffer_sizes[buffer_idx]
-                    block_sizes = Expr(:call, Expr(:curly, SVector, length(sizes), Int))
+                    sizes = get_index_cache(dstsys).discrete_buffer_sizes[buffer_idx]
+                    block_sizes = Expr(:call, Expr(:curly, _mtkbase_ref(:SVector), length(sizes), Int))
                     for sz in sizes
                         push!(block_sizes.args, sz.length)
                     end
-                    p_constructor === identity ||
-                        (block_sizes = Expr(:call, QuoteNode(p_constructor), block_sizes))
-                    buffer = Expr(:call, BlockedArray, buffer, block_sizes)
+                    block_sizes = _apply_constructor_expr(p_constructor, block_sizes)
+                    buffer = Expr(:call, _mtkbase_ref(:BlockedArray), buffer, block_sizes)
                 end
                 push!(buffers, buffer)
             end
@@ -1827,14 +1897,78 @@ function _construct_fullspecialize_initializeprobpmap(
             end
             push!(portions, portion)
         end
-        result = Expr(:call, MTKParameters)
+        result = Expr(:call, _mtkbase_ref(:MTKParameters))
         append!(result.args, portions)
         push!(result.args, :($map($copy, $outer_p.caches)))
         return Expr(:block, :(local $outer_p = $p), result)
     end
-    return eval_or_rgf(
-        map_expr; gen_opts.eval_expression, gen_opts.eval_module, gen_opts.compiler_options
+    return _finish_generated_map(map_expr, gen_opts, expression)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Generate the `initializeprobpmap` of `OverrideInitData`: `(prob, initsol) -> p` rebuilding
+the parameter object of `sys` from the solved initialization problem `initsol`, with the
+solved unknowns written into the `Initial` parameters. See
+`_construct_fullspecialize_parameter_map`.
+"""
+function _construct_fullspecialize_initializeprobpmap(
+        sys::AbstractSystem, initsys::AbstractSystem, gen_opts::GeneratedFunctionOptions;
+        p_constructor, expression = Val{false}
     )
+    return _construct_fullspecialize_parameter_map(
+        initsys, sys, gen_opts; p_constructor, unwrap_initials = true,
+        prototype_arg = INITMAP_PROBLEM, source_arg = INITMAP_SOLUTION,
+        map_args = [INITMAP_PROBLEM, INITMAP_SOLUTION], expression
+    )
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Generate the two getters of a `ReconstructInitializeprob` as generated functions:
+`ugetter(valp)` returns the `u0` of `initsys` (its unknowns evaluated on a value provider
+`valp` of `sys`; `nothing` when `initsys` has no unknowns) and `pgetter(valp, initprob)`
+rebuilds the parameter object of `initsys` from `valp`, using `parameter_values(initprob)`
+for the buffer types. Together they refresh an initialization problem from the current
+`u0`/`p`/`t` of the parent problem, which is what `update_initializeprob!` and the
+`remake` fast path do through `ReconstructInitializeprob`. Returns `(; ugetter, pgetter)`.
+With `expression = Val{true}` the generated `Expr`s are returned instead of being
+compiled; a downstream code generator can then splice them into its own code.
+`static_eltype` fixes the eltype of `ugetter`'s result at generation time (see
+`_u0_eltype_expr`).
+"""
+function _construct_fullspecialize_reconstruct(
+        sys::AbstractSystem, initsys::AbstractSystem, gen_opts::GeneratedFunctionOptions;
+        u0_constructor = identity, p_constructor = identity, floatT = Float64,
+        expression = Val{false}, static_eltype = nothing
+    )
+    @assert is_initializesystem(initsys)
+    valp = INITMAP_VALUE_PROVIDER
+    ugetter = if isempty(unknowns(initsys))
+        nothing
+    else
+        expr = build_explicit_observed_function(sys, unknowns(initsys), gen_opts)
+        sources = _generated_map_sources(valp, is_time_dependent(sys))
+        u0_prototype = u0_constructor === identity ? Expr(:curly, Vector, INITMAP_ELTYPE) :
+            Expr(:curly, _mtkbase_ref(:SVector), length(unknowns(initsys)), INITMAP_ELTYPE)
+        map_expr = _generated_map_expr(expr, [valp], sources) do raw
+            T = INITMAP_ELTYPE
+            static_values = Expr(
+                :call, _mtkbase_ref(:_static_initialization_buffer), u0_prototype, raw
+            )
+            result = _apply_constructor_expr(u0_constructor, static_values)
+            return Expr(:block, :(local $T = $(_u0_eltype_expr(raw, valp, floatT, static_eltype))), result)
+        end
+        _finish_generated_map(map_expr, gen_opts, expression)
+    end
+    pgetter = _construct_fullspecialize_parameter_map(
+        sys, initsys, gen_opts; p_constructor, unwrap_initials = false,
+        prototype_arg = INITMAP_PROBLEM, source_arg = valp,
+        map_args = [valp, INITMAP_PROBLEM], expression
+    )
+    return (; ugetter, pgetter)
 end
 
 """
