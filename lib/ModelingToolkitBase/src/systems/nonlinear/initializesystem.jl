@@ -361,6 +361,9 @@ function generate_initializesystem_timeindependent(
             get!(guesses, k, v)
         else
             newbinds[k] = v
+            # Bound parameters cannot have initial conditions; their binding
+            # determines the value, so only solvable parameters keep guesses.
+            delete!(guesses, split_indexed_var(k)[1])
         end
     end
 
@@ -377,7 +380,10 @@ function generate_initializesystem_timeindependent(
     expand_record_keys!(guesses)
 
     valid_initial_parameters = AtomicArraySet{OrderedDict{SymbolicT, Nothing}}()
-    for (k, v) in op
+    # Iterate over a copy: the loop inserts `Initial` keys into `op`. An insertion can rehash
+    # the `Dict`, which moves its keys to new slots, and an iteration in progress then yields
+    # some keys twice and skips others.
+    for (k, v) in collect(op)
         if is_variable(sys, k) || has_observed_with_lhs(sys, k) ||
                 Moshi.Match.@match k begin
                 BSImpl.Term(; f, args) && if f isa Differential end => is_variable(sys, args[1])
@@ -443,6 +449,7 @@ function generate_initializesystem_timeindependent(
         Vector{Equation}(eqs_ics),
         vars,
         pars;
+        bindings = newbinds,
         initial_conditions = guesses,
         checks = check_units,
         name,
@@ -515,7 +522,10 @@ function timevaring_initsys_process_op!(
         der_subber::Symbolics.FixpointSubstituter,
         guesses::SymmapT
     )
-    for (k, v) in op
+    # Iterate over a copy: the loop inserts `Initial` keys into `op`. An insertion can rehash
+    # the `Dict`, which moves its keys to new slots, and an iteration in progress then yields
+    # some keys twice and skips others.
+    for (k, v) in collect(op)
         # Late binding `missing` also makes the key solvable
         if v === COMMON_MISSING
             push!(init_vars_set, k)
