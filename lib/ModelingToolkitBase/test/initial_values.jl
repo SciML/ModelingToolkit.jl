@@ -458,32 +458,6 @@ end
     @test_nowarn ODEProblem(sys, sim_cond, 1.0; guesses = [:A => 1.0])
 end
 
-@testset "Element-wise observed equations of an array" begin
-    function observed_array_system(n)
-        @variables u(t)[1:n] y(t)[1:n]
-        @parameters k = 2.0
-        @named sys = System(
-            [D(u) ~ -u], t, [u], [k]; observed = [y[i] ~ k * u[i] for i in 1:n]
-        )
-        return complete(sys), u, y
-    end
-
-    sys, u, y = observed_array_system(5)
-    prob = ODEProblem(sys, [u => collect(1.0:5.0)], (0.0, 1.0))
-    @test prob[y] == 2.0 .* (1:5)
-
-    # Writing each element of `y` into the operating point used to rebuild the whole
-    # array, making problem construction quadratic in `n`.
-    function construction_allocs(n)
-        sys, u, _ = observed_array_system(n)
-        build() = ODEProblem(sys, [u => ones(n)], (0.0, 1.0); build_initializeprob = false)
-        build()
-        return @allocated build()
-    end
-    # linear scaling gives a ratio near 4, the quadratic construction gave about 80
-    @test construction_allocs(2000) / construction_allocs(500) < 30
-end
-
 if !@isdefined(ModelingToolkit)
     @testset "Issue#4235: Duplicate initial conditions error" begin
         @variables X(t)

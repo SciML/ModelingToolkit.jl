@@ -198,71 +198,78 @@ function add_observed_equations!(varmap::AtomicArrayDict{SymbolicT}, eqs::Vector
     # may read elements written earlier, so element reads of a buffered array are served
     # from the buffer, and any other access to the array stores the buffer first.
     buffers = Dict{SymbolicT, Array{SymbolicT}}()
-    function store_buffer!(x::SymbolicT)
-        arr, _ = split_indexed_var(x)
-        buffer = pop!(buffers, arr, nothing)
-        buffer === nothing && return
-        varmap[arr] = if all(SU.isconst, buffer)
-            BSImpl.Const{VartypeT}(unwrap_const.(buffer))
-        else
-            BSImpl.Const{VartypeT}(buffer)
-        end
-        return
-    end
-    function lookup(x::SymbolicT)
-        arr, isarr = split_indexed_var(x)
-        buffer = get(buffers, arr, nothing)
-        if buffer !== nothing
-            if isarr && ndims(x) == 0 && has_const_int_indices(x)
-                return buffer[get_stable_index(x)]
-            end
-            store_buffer!(x)
-        end
-        return get_possibly_indexed(varmap, x, COMMON_NOTHING)
-    end
-    function write!(k::SymbolicT, v::SymbolicT)
-        arr, isarr = split_indexed_var(k)
-        if !isarr || ndims(k) != 0
-            store_buffer!(k)
-            write_possibly_indexed_array!(varmap, k, v, COMMON_NOTHING)
-            return
-        end
-        # As in `write_possibly_indexed_array!`, elements of an empty array are not
-        # written and do not create the key.
-        isempty(SU.stable_eachindex(arr)) && return
-        idx = get_stable_index(k)
-        buffer = get(buffers, arr, nothing)
-        if buffer === nothing
-            if haskey(varmap, arr)
-                buffer = collect(varmap[arr])
-            else
-                buffer = fill(COMMON_NOTHING, size(arr))
-                # Create the key now, as the unbuffered write would, so the keys of
-                # `varmap` are inserted in the same order.
-                varmap[arr] = BSImpl.Const{VartypeT}(copy(buffer))
-            end
-            buffers[arr] = buffer
-        end
-        buffer[idx] = v
-        return
-    end
-
     for eq in eqs
-        if lookup(eq.lhs) !== COMMON_NOTHING
+        if lookup_observed(varmap, buffers, eq.lhs) !== COMMON_NOTHING
             SU.isconst(eq.rhs) && continue
-            lookup(eq.rhs) !== COMMON_NOTHING && continue
+            lookup_observed(varmap, buffers, eq.rhs) !== COMMON_NOTHING && continue
             bound_ps isa ROSymmapT && has_possibly_indexed_key(parent(bound_ps), eq.rhs) && continue
             Moshi.Match.@match eq.rhs begin
                 BSImpl.Term(; f, args) && if f isa SymbolicT end => nothing
                 BSImpl.Sym() => nothing
                 _ => continue
             end
-            write!(eq.rhs, eq.lhs)
+            write_observed!(varmap, buffers, eq.rhs, eq.lhs)
         else
-            write!(eq.lhs, eq.rhs)
+            write_observed!(varmap, buffers, eq.lhs, eq.rhs)
         end
     end
-    foreach(store_buffer!, collect(keys(buffers)))
+    for arr in collect(keys(buffers))
+        store_observed_buffer!(varmap, buffers, arr)
+    end
+    return
+end
+
+# Store the buffered element writes of the array `x` belongs to, if any, in `varmap`.
+function store_observed_buffer!(varmap::AtomicArrayDict{SymbolicT}, buffers::Dict{SymbolicT, Array{SymbolicT}}, x::SymbolicT)
+    arr, _ = split_indexed_var(x)
+    buffer = pop!(buffers, arr, nothing)
+    buffer === nothing && return
+    varmap[arr] = if all(SU.isconst, buffer)
+        BSImpl.Const{VartypeT}(unwrap_const.(buffer))
+    else
+        BSImpl.Const{VartypeT}(buffer)
+    end
+    return
+end
+
+# `get_possibly_indexed(varmap, x, COMMON_NOTHING)`, seeing the buffered element writes.
+function lookup_observed(varmap::AtomicArrayDict{SymbolicT}, buffers::Dict{SymbolicT, Array{SymbolicT}}, x::SymbolicT)
+    arr, isarr = split_indexed_var(x)
+    buffer = get(buffers, arr, nothing)
+    if buffer !== nothing
+        if isarr && ndims(x) == 0 && has_const_int_indices(x)
+            return buffer[get_stable_index(x)]
+        end
+        store_observed_buffer!(varmap, buffers, x)
+    end
+    return get_possibly_indexed(varmap, x, COMMON_NOTHING)
+end
+
+# `write_possibly_indexed_array!(varmap, k, v, COMMON_NOTHING)`, buffering element writes.
+function write_observed!(varmap::AtomicArrayDict{SymbolicT}, buffers::Dict{SymbolicT, Array{SymbolicT}}, k::SymbolicT, v::SymbolicT)
+    arr, isarr = split_indexed_var(k)
+    if !isarr || ndims(k) != 0
+        store_observed_buffer!(varmap, buffers, k)
+        write_possibly_indexed_array!(varmap, k, v, COMMON_NOTHING)
+        return
+    end
+    # As in `write_possibly_indexed_array!`, elements of an empty array are not
+    # written and do not create the key.
+    isempty(SU.stable_eachindex(arr)) && return
+    idx = get_stable_index(k)
+    buffer = get(buffers, arr, nothing)
+    if buffer === nothing
+        if haskey(varmap, arr)
+            buffer = collect(varmap[arr])
+        else
+            buffer = fill(COMMON_NOTHING, size(arr))
+            # Create the key now, as the unbuffered write would, so the keys of
+            # `varmap` are inserted in the same order.
+            varmap[arr] = BSImpl.Const{VartypeT}(copy(buffer))
+        end
+        buffers[arr] = buffer
+    end
+    buffer[idx] = v
     return
 end
 
