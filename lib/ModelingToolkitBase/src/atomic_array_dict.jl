@@ -145,8 +145,6 @@ Base.haskey(dd::AtomicArrayDict, k) = haskey(dd.dict, k)
 
 Base.getindex(dd::AtomicArrayDict, k) = dd.dict[k]
 
-
-
 function Base.setindex!(dd::AtomicArrayDict, v, k)
     k = unwrap(k)
     validate_atomic_array_key(k)
