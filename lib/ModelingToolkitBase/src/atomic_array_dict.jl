@@ -475,10 +475,13 @@ necessarily its immediate parent.
 """
 function nearest_present_ancestor(dd::AtomicArrayDict, k::SymbolicT)
     x = k
-    while iscall(x)
-        f = operation(x)
-        f isa Symbolics.SymbolicGetproperty || f === getindex || break
-        x = arguments(x)[1]::SymbolicT
+    while true
+        Moshi.Match.@match x begin
+            BSImpl.Term(; f, args) && if f isa Symbolics.SymbolicGetproperty || f === getindex end => begin
+                x = args[1]::SymbolicT
+            end
+            _ => break
+        end
         haskey(dd, x) && return x
     end
     return nothing

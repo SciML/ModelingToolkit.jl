@@ -1886,20 +1886,27 @@ applied symbolically.
 """
 function record_leaf_entry(leaf::SymbolicT, node::SymbolicT, value::SymbolicT)::SymbolicT
     isequal(leaf, node) && return value
-    iscall(leaf) || error(lazy"Cannot resolve $leaf as a projection of $node.")
-    f = operation(leaf)
-    args = arguments(leaf)
-    base = record_leaf_entry(args[1]::SymbolicT, node, value)
-    isconst = SU.isconst(base)
-    if f isa Symbolics.SymbolicGetproperty
-        isconst || return f(base)::SymbolicT
-        return BSImpl.Const{VartypeT}(getproperty(unwrap_const(base), Symbolics.field_name(f)::Symbol))
-    elseif f === getindex
-        idxs = unwrap_const.(@view args[2:end])
-        isconst || return base[idxs...]::SymbolicT
-        return BSImpl.Const{VartypeT}(unwrap_const(base)[idxs...])
+    return Moshi.Match.@match leaf begin
+        BSImpl.Term(; f, args) && if f isa Symbolics.SymbolicGetproperty end => begin
+            base = record_leaf_entry(args[1]::SymbolicT, node, value)
+            if SU.isconst(base)
+                BSImpl.Const{VartypeT}(
+                    getproperty(unwrap_const(base), Symbolics.field_name(f)::Symbol))
+            else
+                f(base)::SymbolicT
+            end
+        end
+        BSImpl.Term(; f, args) && if f === getindex end => begin
+            base = record_leaf_entry(args[1]::SymbolicT, node, value)
+            idxs = unwrap_const.(@view args[2:end])
+            if SU.isconst(base)
+                BSImpl.Const{VartypeT}(unwrap_const(base)[idxs...])
+            else
+                base[idxs...]::SymbolicT
+            end
+        end
+        _ => error(lazy"Cannot resolve $leaf as a projection of $node.")
     end
-    return error(lazy"Cannot resolve $leaf as a projection of $node.")
 end
 
 """
