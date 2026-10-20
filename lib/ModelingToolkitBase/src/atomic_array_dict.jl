@@ -174,7 +174,7 @@ otherwise.
 function as_atomic_dict_with_defaults(dict::AbstractDict{SymbolicT, SymbolicT}, default::SymbolicT)
     dd = AtomicArrayDict(empty(dict))
     # `root => [(index => value), ...]` for every entry written through an array element.
-    indexed_array_writes = empty(dict, SymbolicT, Vector{Pair{Any, SymbolicT}})
+    indexed_array_writes = empty(dict, SymbolicT, Vector{Pair{SU.StableIndex{Int}, SymbolicT}})
     record_vals = empty(dict, SymbolicT, Vector{SymbolicT})
     # `(root, node, value, leaf indices)` for every entry stored under a record.
     record_writes = Tuple{SymbolicT, SymbolicT, SymbolicT, Vector{Int}}[]
