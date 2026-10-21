@@ -2535,9 +2535,9 @@ version = "1.3.6+0"
 
 [[deps.OhMyThreads]]
 deps = ["BangBang", "ChunkSplitters", "ScopedValues", "StableTasks", "TaskLocalValues"]
-git-tree-sha1 = "ae638151254d159c4740d21a0820f17b7f74eb43"
+git-tree-sha1 = "7be087d99735a1a3fbcd9429569d013ece49b983"
 uuid = "67456a42-1dca-4109-a031-0a68de7e3ad5"
-version = "0.8.7"
+version = "0.8.8"
 weakdeps = ["Markdown", "ProgressMeter"]
 
     [deps.OhMyThreads.extensions]
