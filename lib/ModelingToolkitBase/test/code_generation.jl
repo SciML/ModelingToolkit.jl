@@ -67,6 +67,129 @@ using Test
     @test fn5(u0, p, 1.0) == 1.0
 end
 
+@testset "`generate_custom_function` trailing arguments" begin
+    for timedependent in (true, false), split in (true, false),
+            with_parameters in (true, false), T in (Float64, Float32)
+        @testset "$timedependent/$split/$with_parameters/$T" begin
+            if timedependent
+                @variables x(t) y(t)[1:2] z(t)[1:2, 1:2]
+            else
+                @variables x y[1:2] z[1:2, 1:2]
+            end
+            @parameters p1 = 2.0 p2[1:2] = [3.0, 5.0]
+            @variables dt a[1:2] b[1:2] c[1:2] delta
+            dvs = [x; collect(y); vec(collect(z))]
+            ps = with_parameters ? [p1, p2] : []
+            sys = timedependent ? System(Equation[], t, dvs, ps; name = :sys) :
+                System(Equation[], dvs, ps; name = :sys)
+            sys = complete(sys; split, add_initial_parameters = with_parameters)
+            ps = with_parameters ? [p1, p2, Initial(x)] : parameters(sys; initial_parameters = true)
+            p = if split
+                MTKParameters(
+                    sys, with_parameters ? [
+                            p1 => T(2), p2 => T[3, 5], x => T(7),
+                            y => T[11, 13], z => T[17 23; 19 29],
+                        ] : []
+                )
+            else
+                with_parameters ? Any[T(2), T[3, 5], T(7)] : T[]
+            end
+            u = T[2, 3, 5, 7, 11, 13, 17]
+            args = timedependent ? (u, p, T(3)) : (u, p)
+            parterm = with_parameters ? p1 + p2[2] + Initial(x) : 0
+            timeterm = timedependent ? t : 0
+            base = x + y[1] + z[2, 1] + parterm + timeterm
+            expected_base = T(16 + (with_parameters ? 14 : 0) + (timedependent ? 3 : 0))
+            extra_values = (T(0.5), T[19, 23], T[29, 31])
+            expected = [expected_base + T(40.5), T(0.5)]
+            for expression in (Val(false), Val(true))
+                @testset "$expression" begin
+                    plain = generate_custom_function(sys, base, dvs, ps; expression)
+                    plain = expression == Val(true) ? Core.eval(@__MODULE__, first(plain)) : plain
+                    @test Base.invokelatest(plain, args...) == expected_base
+                    scalar = generate_custom_function(
+                        sys, base + dt * a[1] + b[2], dvs, ps;
+                        expression, extra_args = (dt, a, b)
+                    )
+                    scalar = expression == Val(true) ? Core.eval(@__MODULE__, first(scalar)) : scalar
+                    pair = generate_custom_function(
+                        sys, [base + dt * a[1] + b[2], y[2] + z[1, 2] + dt * a[2] - b[1]],
+                        dvs, ps; expression, extra_args = (dt, a, b)
+                    )
+                    oop, iip = expression == Val(true) ? Core.eval.((@__MODULE__,), pair) : pair
+                    @test Base.invokelatest(scalar, args..., extra_values...) == expected[1]
+                    @test Base.invokelatest(oop, args..., extra_values...) == expected
+                    out = zeros(T, 2)
+                    Base.invokelatest(iip, out, args..., extra_values...)
+                    @test out == expected
+                    other = generate_custom_function(
+                        sys, base + c[2] * delta, dvs, ps; expression, extra_args = (c, delta)
+                    )
+                    other = expression == Val(true) ? Core.eval(@__MODULE__, first(other)) : other
+                    @test Base.invokelatest(other, args..., T[37, 41], T(2)) == expected_base + T(82)
+                    @test Base.invokelatest(scalar, args..., extra_values...) == expected[1]
+                    @test Base.invokelatest(oop, args..., extra_values...) == expected
+                    @test Base.invokelatest(plain, args...) == expected_base
+                    empty = generate_custom_function(sys, base, dvs, ps; expression, extra_args = ())
+                    empty = expression == Val(true) ? Core.eval(@__MODULE__, first(empty)) : empty
+                    @test Base.invokelatest(empty, args...) == expected_base
+                end
+            end
+        end
+    end
+end
+
+@testset "`generate_custom_function` cache argument order" begin
+    @variables x(t) cache dt a[1:2]
+    sys = complete(System(Equation[], t, [x], []; name = :sys); split = false, add_initial_parameters = false)
+    plain = generate_custom_function(sys, x + cache; cachesyms = (cache,), expression = Val(false))
+    @test plain([2.0], [], 3.0, 5.0) == 5.0
+    f = generate_custom_function(
+        sys, x + cache + t + dt * a[2]; cachesyms = (cache,),
+        extra_args = (dt, a), expression = Val(false)
+    )
+    @test f([2.0], [], 3.0, 5.0, 0.5, [7.0, 11.0]) == 15.5
+    @test plain([2.0], [], 3.0, 5.0) == 5.0
+    @variables y
+    static_sys = complete(System(Equation[], [y], []; name = :static_sys); add_initial_parameters = false)
+    static_plain = generate_custom_function(static_sys, y; cachesyms = (cache,), expression = Val(false))
+    @test static_plain([2.0], MTKParameters(static_sys, [])) == 2.0
+    static_extra = generate_custom_function(static_sys, y + dt; cachesyms = (cache,), extra_args = (dt,), expression = Val(false))
+    @test static_extra([2.0], MTKParameters(static_sys, []), 3.0) == 5.0
+end
+@testset "`generate_custom_function` array cache isolation" begin
+    for split in (true, false)
+        @testset "split=$split" begin
+            @variables x(t) cache_a[1:2] cache_b[1:2] step external[1:2]
+            @parameters rate = 2.0 weights[1:2] = [3.0, 5.0]
+            sys = complete(System(Equation[], t, [x], [rate, weights]; name = :sys); split, add_initial_parameters = false)
+            template = split ? MTKParameters(sys, []) : nothing
+            function cache_arguments(values)
+                p = split ? MTKParameters(template.tunable, template.initials, template.discrete, template.constant, template.nonnumeric, (values,)) : Any[2.0, [3.0, 5.0]]
+                return split ? ([2.0], p, 3.0) : ([2.0], p, values, 3.0)
+            end
+            base = x + rate + sum(weights) + t
+            f = generate_custom_function(sys, base + sum(cache_a); cachesyms = (unwrap.(collect(cache_a)),), expression = Val(false))
+            @test f(cache_arguments([7.0, 11.0])...) == 33.0
+            g = generate_custom_function(sys, base + sum(cache_b); cachesyms = (unwrap.(collect(cache_b)),), expression = Val(false))
+            @test g(cache_arguments([19.0, 23.0])...) == 57.0
+            @test f(cache_arguments([7.0, 11.0])...) == 33.0
+            h = generate_custom_function(
+                sys, base + sum(cache_a) + step * sum(external);
+                cachesyms = (unwrap.(collect(cache_a)),), extra_args = (step, external),
+                expression = Val(false)
+            )
+            @test h(cache_arguments([7.0, 11.0])..., 0.5, [29.0, 31.0]) == 63.0
+            @test g(cache_arguments([19.0, 23.0])...) == 57.0
+            explicit_empty = generate_custom_function(
+                sys, base + sum(cache_a); cachesyms = (unwrap.(collect(cache_a)),),
+                extra_args = (), expression = Val(false)
+            )
+            @test explicit_empty(cache_arguments([7.0, 11.0])...) == 33.0
+        end
+    end
+end
+
 @testset "Non-standard array variables" begin
     @variables x(t)
     @parameters p[0:2] (f::Function)(..)
