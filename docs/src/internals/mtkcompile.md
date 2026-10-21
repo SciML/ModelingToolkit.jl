@@ -390,6 +390,11 @@ rows they replace, so `calculate_massmatrix` and the DAE/ODE code generators lay
 equation out over the correct unknown slots. `row_to_equation_indices` maps graph rows
 back to equations for consumers such as `map_variables_to_equations`.
 
+Each `dirty_array_group!` call records why the group broke and at which element. With
+`preserve_array_equations = :strict`, a dirty group, or an array differential equation
+that was never grouped (`ts.ungrouped_array_eqs`), throws an
+`ArrayEquationNotPreservedError` carrying that information instead of being scalarized.
+
 Code generation for such a system substitutes `u ~ array_literal(u[1], …, u[n])` (the
 observed equation added for arrays that are part unknown, part observed) into the array
 equation, which would make the generated code `O(n)`. `build_function_wrapper` rewrites

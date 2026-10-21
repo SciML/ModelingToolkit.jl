@@ -58,7 +58,7 @@ function MTKBase.__mtkcompile(
             islinear || error("$brown isn't linear in $eq")
             new_eqs[i] = COMMON_ZERO ~ residual
             # The drift equation no longer matches the array equation (which has the noise).
-            MTKTearing.dirty_array_group!(state, i)
+            MTKTearing.dirty_array_group!(state, i, "its noise terms were extracted")
             push!(vals, coeff)
         end
         g = Matrix(sparse(Is, Js, vals))
