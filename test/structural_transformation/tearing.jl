@@ -313,3 +313,13 @@ end
 
     @test_nowarn ForwardDiff.gradient(loss, [1.0])
 end
+
+@testset "`respecialize` skips the buffers of inline linear SCCs" begin
+    reassemble_alg = StructuralTransformations.DefaultReassembleAlgorithm(; inline_linear_sccs = true, analytical_linear_scc_limit = 1)
+    @variables x(t)[1:3] y(t)[1:3]
+    @parameters p[1:3, 1:3]
+    @mtkcompile sys = System([D(x) ~ x, p * y ~ x], t) reassemble_alg = reassemble_alg
+    sys = respecialize(sys)
+    prob = ODEProblem(sys, [x => [1.0, 2.3, 5.7], p => rand(3, 3)], (0.0, 10.0))
+    @test prob.p.caches[1] isa Vector{ModelingToolkitBase.DiffCacheAllocatorAPIWrapper{Float64}}
+end
