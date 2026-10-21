@@ -44,3 +44,11 @@ should be a concretely typed `Vector`, not a tuple of tuples. Tuples force the w
 surrounding loop to specialize on the shape of each individual system, which is
 catastrophic for inference and compile time. Reserve tuples for values that genuinely
 need to be heterogeneous or statically sized in the *generated* code.
+
+## Local QA environments
+
+`Pkg.develop` can rewrite tracked `[sources]` entries in QA projects to absolute
+checkout paths (`test/qa/Project.toml` at the root or in a sublibrary). Record the
+pre-test diff and inspect it again after QA.
+Restore only paths introduced by local environment setup; preserve intentional
+dependency edits and pre-existing changes. Commit portable repository-relative paths.
