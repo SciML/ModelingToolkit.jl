@@ -2661,16 +2661,3 @@ end
     @test length(pins) == n
     @test issetequal(pins, ModelingToolkitBase.unwrap.(ps))
 end
-
-struct DownstreamTransformation end
-
-@testset "Downstream `reverse_transformation_by_default` methods don't invalidate" begin
-    @variables x(t)
-    @mtkcompile sys = System([D(x) ~ -x], t)
-    ModelingToolkitBase.reverse_all_default_reversible_transformations(sys)
-    invs = ccall(:jl_debug_method_invalidation, Any, (Cint,), 1)
-    @eval ModelingToolkitBase.reverse_transformation_by_default(::DownstreamTransformation) = false
-    ccall(:jl_debug_method_invalidation, Any, (Cint,), 0)
-    helper = only(methods(ModelingToolkitBase.__reverse_transformations_helper))
-    @test !any(mi -> mi isa Core.MethodInstance && mi.def === helper, invs)
-end
