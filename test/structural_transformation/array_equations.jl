@@ -187,17 +187,20 @@ end
     @parameters g L
     @named pend = System([D(q) ~ v, D(v) ~ T .* q .+ [0, -g], 0 ~ sum(q .^ 2) - L^2], t)
     @test_throws MTKT.ArrayEquationNotPreservedError mtkcompile(
-        pend; preserve_array_equations = :strict)
+        pend; preserve_array_equations = :strict
+    )
 end
 
 @testset "Array differential equations that cannot be grouped warn" begin
     @variables x(t)[1:3]
     @named sys = System([2 .* D(x) ~ -x], t)
     ssys = @test_logs (:warn, r"was scalarized because") mtkcompile(
-        sys; preserve_array_equations = true)
+        sys; preserve_array_equations = true
+    )
     @test length(equations(ssys)) == 3
     @test_throws MTKT.ArrayEquationNotPreservedError mtkcompile(
-        sys; preserve_array_equations = :strict)
+        sys; preserve_array_equations = :strict
+    )
 end
 
 @testset "Aliasing an array element keeps the array equation" begin
