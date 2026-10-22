@@ -860,8 +860,14 @@ struct ExplicitAffect{DVS, PS, UF, PF}
 end
 
 function (ea::ExplicitAffect)(integ)
-    isempty(ea.dvs_to_update) || ea.u_up!(integ)
-    isempty(ea.ps_to_update) || ea.p_up!(integ)
+    if isempty(ea.dvs_to_update) || isempty(ea.ps_to_update)
+        isempty(ea.dvs_to_update) || ea.u_up!(integ)
+        isempty(ea.ps_to_update) || ea.p_up!(integ)
+    else
+        u = copy(integ.u)
+        ea.u_up!(integ)
+        ea.p_up!((; u, p = integ.p, t = integ.t))
+    end
     return ea.reset_jumps && reset_aggregated_jumps!(integ)
 end
 
