@@ -144,12 +144,12 @@ function _analyze_statement(st)
 end
 
 # Right-hand sides that are cheaper to recompute in a helper than to pass to it.
-function _is_cheap_rhs(rhs, cheap::Set{Symbol}, fargs::Set{Symbol}, readonly)
+function _is_cheap_rhs(rhs, cheap::Set{Symbol}, fargs::Set{Symbol}, allow_ref::Bool)
     rhs isa Number && return true
     rhs isa Symbol && return rhs in fargs || rhs in cheap
     if rhs isa Expr && rhs.head === :ref
         return rhs.args[1] isa Symbol && (rhs.args[1] in fargs || rhs.args[1] in cheap) &&
-            readonly(rhs.args[1]) && all(a -> a isa Number, @view rhs.args[2:end])
+            allow_ref && all(a -> a isa Number, @view rhs.args[2:end])
     end
     return false
 end
@@ -164,108 +164,104 @@ function _has_unsafe_form(ex)
     return any(_has_unsafe_form, ex.args)
 end
 
-# Comparison functions: they return a `Bool`, so passing them an argument can neither mutate
-# it nor leak a reference to it.
-const _PREDICATES = (:>=, :<=, :>, :<, :(==), :!=, :isless, :isequal, :isnan, :isinf, :isfinite)
+# Functions that real generated code calls and that neither mutate their arguments nor
+# anything else. Only these may be called by a chunked function.
+const _PURE_NAMES = (
+    :+, :-, :*, :/, :^, :\, :inv, :abs, :abs2, :sqrt, :cbrt, :exp, :exp2, :exp10, :expm1,
+    :log, :log2, :log10, :log1p, :sin, :cos, :tan, :asin, :acos, :atan, :sinh, :cosh,
+    :tanh, :asinh, :acosh, :atanh, :sec, :csc, :cot, :sign, :signbit, :floor, :ceil,
+    :round, :trunc, :mod, :rem, :div, :fld, :cld, :min, :max, :ifelse, :hypot, :copysign,
+    :flipsign, :muladd, :fma, :literal_pow, :Val, :typeof, :>=, :<=, :>, :<, :(==), :!=,
+    :isless, :isequal, :isnan, :isinf, :isfinite, :!,
+)
 
-function _is_predicate(f)
-    f isa Symbol && return f in _PREDICATES
-    f isa Function && return parentmodule(f) === Base && nameof(f) in _PREDICATES
-    return false
+# The same functions as values, as they appear embedded in generated expressions, plus the
+# array constructors of SymbolicUtils and the sparse-Jacobian store.
+const _PURE_VALUES = let vals = Any[Val, typeof]
+    for name in _PURE_NAMES
+        name in (:Val, :typeof) && continue
+        isdefined(Base, name) && push!(vals, getfield(Base, name))
+    end
+    push!(vals, Base.copy)
+    for name in (:create_array, :array_literal)
+        isdefined(SU.Code, name) && push!(vals, getfield(SU.Code, name))
+        isdefined(SU, name) && push!(vals, getfield(SU, name))
+    end
+    vals
 end
 
-const _UNKNOWN_ROOT = Symbol("##unknown_root")
+_is_sparse_store(f) = f isa Function && nameof(f) === :set_nzval && parentmodule(f) === Symbolics
 
-# Whether `f` names a function (a symbol, `Mod.name`, a `GlobalRef`, or a function of Base
-# or Core embedded as a value) that by convention does not mutate its arguments. Other
-# embedded function objects are not recognized.
-function _is_pure_callee(f)
-    f isa Symbol && return !endswith(string(f), "!")
-    f isa GlobalRef && return !endswith(string(f.name), "!")
-    # Functions of Base and Core embedded as values, e.g. `Base.literal_pow` in `x^2` code.
-    f isa Union{Function, Type} && return parentmodule(f) in (Base, Core) && !endswith(string(nameof(f)), "!")
-    if f isa Expr && f.head === :. && length(f.args) == 2
-        return _is_pure_callee(f.args[1]) && f.args[2] isa QuoteNode && _is_pure_callee(f.args[2].value)
+# How a call is classified: `:pure`, `:store` (writes into an array) or `:bad`. A callee
+# written as a name is only trusted if no parameter or local of the function has that name.
+function _callee_kind(f, bound)
+    if f isa Symbol
+        return f in bound || !(f in _PURE_NAMES) ? :bad : :pure
+    elseif f isa Expr && f.head === :. && length(f.args) == 2
+        mod, name = f.args
+        ok = mod in (:Base, :NaNMath) && !(mod in bound) && name isa QuoteNode &&
+            name.value in _PURE_NAMES
+        return ok ? :pure : :bad
+    elseif f isa Expr && f.head === :curly && f.args[1] === :Val && !(:Val in bound)
+        return all(a -> !(a isa Expr || a isa Symbol), f.args[2:end]) ? :pure : :bad
+    elseif f isa GlobalRef
+        ok = nameof(f.mod) in (:Base, :Core, :NaNMath) && f.name in _PURE_NAMES
+        return ok ? :pure : :bad
+    elseif _is_sparse_store(f)
+        return :store
     end
-    return false
+    return any(v -> v === f, _PURE_VALUES) ? :pure : :bad
 end
 
 """
-Strict whitelist check that makes repeating `arg[constant]` reads in later helpers safe.
-Walks the whole body in evaluation order and only accepts a fixed set of expression heads.
-A function argument, or any name bound to one by a plain `name = arg` assignment, may only
-appear bare as the base or index of an `a[...]` read or store, as the whole right-hand side
-of an assignment that merely renames it, or as the function's final value. It may never be
-passed to a call other than a comparison, wrapped in another expression, or updated with `+=` and friends. Returns
-`nothing` if the body falls outside this, otherwise a predicate telling whether a name
-refers to an argument that no store in the body writes to.
+Strict whitelist scan of the body. Accepts only a fixed set of expression heads and calls
+to the functions above (or `Symbolics.set_nzval`), and rejects rebinding of arguments.
+Returns the index of the first statement that writes into an array (`a[...] = ...` or a
+sparse store), `0` if there is none, or `nothing` if the body is outside the whitelist.
+Because the pass reasons only about this order, aliasing between arguments or views does
+not matter: every read that a helper recomputes happens before the first write.
 """
-function _readonly_bases(stmts, fargs, n_defs)
-    root = Dict{Symbol, Symbol}()
-    mutated = Set{Symbol}()
-    rootof(s::Symbol) = s in fargs ? s : get(root, s, nothing)
-    value_root(ex) =
-    if ex isa Symbol
-        rootof(ex)
-    elseif ex isa Expr && ex.head === :(=) && ex.args[1] isa Symbol
-        rootof(ex.args[1])
-    elseif ex isa Expr && ex.head === :block
-        kids = filter(!Base.Fix2(isa, LineNumberNode), ex.args)
-        isempty(kids) ? nothing : value_root(last(kids))
-    elseif _is_inbounds_call(ex)
-        value_root(ex.args[end])
-    else
-        nothing
+function _first_store_index(stmts, fargs, bound)
+    first_store = 0
+    current = 0
+    function note_store!()
+        first_store == 0 && (first_store = current)
+        return true
     end
-    function visit(ex, bare_ok)
-        if ex isa Symbol
-            return bare_ok || !(ex in fargs || haskey(root, ex))
-        elseif !(ex isa Expr)
-            return true
-        end
+    function visit(ex)
+        ex isa Expr || return true
         h = ex.head
         if h === :ref
-            return all(a -> visit(a, true), ex.args)
+            return all(visit, ex.args)
         elseif h === :(=)
             lhs, rhs = ex.args
             if lhs isa Symbol
-                lhs in fargs && return false
-                visit(rhs, true) || return false
-                r = value_root(rhs)
-                if r !== nothing
-                    root[lhs] = get(n_defs, lhs, 0) == 1 ? r : _UNKNOWN_ROOT
-                elseif haskey(root, lhs)
-                    root[lhs] = _UNKNOWN_ROOT
-                end
-                return true
-            elseif lhs isa Expr && lhs.head === :ref && lhs.args[1] isa Symbol
-                visit(lhs, true) && visit(rhs, false) || return false
-                r = rootof(lhs.args[1])
-                r === _UNKNOWN_ROOT && return false
-                r === nothing || push!(mutated, r)
-                return true
+                return !(lhs in fargs) && visit(rhs)
+            elseif lhs isa Expr && lhs.head === :ref && visit(lhs) && visit(rhs)
+                return note_store!()
             end
             return false
         elseif h === :block
-            kids = filter(!Base.Fix2(isa, LineNumberNode), ex.args)
-            return all(i -> visit(kids[i], i == length(kids) && bare_ok), eachindex(kids))
+            return all(visit, ex.args)
         elseif h === :local
-            return all(a -> a isa Symbol || (a isa Expr && a.head === :(=) && visit(a, false)), ex.args)
+            return all(a -> a isa Symbol || (a isa Expr && a.head === :(=) && visit(a)), ex.args)
         elseif h === :call
-            _is_pure_callee(ex.args[1]) || return false
-            return all(a -> visit(a, _is_predicate(ex.args[1])), @view ex.args[2:end])
-        elseif h === :.
-            return all(a -> visit(a, false), ex.args)
-        elseif h in (:tuple, :vect, :curly, :if, :&&, :||, :comparison, :(::))
-            return all(a -> visit(a, false), ex.args)
+            kind = _callee_kind(ex.args[1], bound)
+            kind === :bad && return false
+            kind === :store && note_store!()
+            return all(visit, @view ex.args[2:end])
+        elseif h in (:., :tuple, :vect, :curly, :if, :&&, :||, :comparison, :(::))
+            return all(visit, ex.args)
         elseif _is_inbounds_call(ex)
-            return visit(ex.args[end], bare_ok)
+            return visit(ex.args[end])
         end
         return false
     end
-    ok = all(i -> visit(stmts[i], i == length(stmts)), eachindex(stmts))
-    ok || return nothing
-    return b -> (r = rootof(b); r !== nothing && r !== _UNKNOWN_ROOT && !(r in mutated))
+    for (i, st) in enumerate(stmts)
+        current = i
+        visit(st) || return nothing
+    end
+    return first_store
 end
 
 """
@@ -308,11 +304,18 @@ function _chunk_function_expr(fex::Expr, chunk_size::Int, threshold::Int, max_tr
     end
     # Rebinding an argument would need renaming across helpers.
     any(in(fargs), keys(n_defs)) && return fex
-    readonly = _readonly_bases(stmts, fargs, n_defs)
-    readonly === nothing && return fex
+    bound = union(fargs, keys(n_defs))
+    first_store = _first_store_index(stmts, fargs, bound)
+    first_store === nothing && return fex
+    last_use = Dict{Symbol, Int}()
+    for (i, info) in enumerate(infos), u in info.uses
+        last_use[u] = i
+    end
 
     # A cheap statement stays in the calling function and is also recomputed in any helper
-    # that needs it.
+    # that needs it. Recomputing a read of an argument is only sound if it still happens
+    # before the first write into any array, so such reads are only cheap if every
+    # statement using them precedes that write.
     cheap = Set{Symbol}()
     is_cheap = falses(length(infos))
     for (i, info) in enumerate(infos)
@@ -321,7 +324,11 @@ function _chunk_function_expr(fex::Expr, chunk_size::Int, threshold::Int, max_tr
         n_defs[d] == 1 || continue
         inner = info.expr
         inner = inner.head === :local ? inner.args[1] : inner
-        _is_cheap_rhs(inner.args[2], cheap, fargs, readonly) || continue
+        rhs = inner.args[2]
+        _is_cheap_rhs(rhs, cheap, fargs, true) || continue
+        if rhs isa Expr && rhs.head === :ref
+            first_store == 0 || get(last_use, d, 0) < first_store || continue
+        end
         push!(cheap, d)
         is_cheap[i] = true
     end
@@ -329,10 +336,6 @@ function _chunk_function_expr(fex::Expr, chunk_size::Int, threshold::Int, max_tr
     outlinable = [infos[i].movable && !is_cheap[i] && i < length(infos) for i in eachindex(infos)]
     count(outlinable) < threshold && return fex
 
-    last_use = Dict{Symbol, Int}()
-    for (i, info) in enumerate(infos), u in info.uses
-        last_use[u] = i
-    end
     cheap_stmt = Dict{Symbol, Int}(only(infos[i].defs) => i for i in eachindex(infos) if is_cheap[i])
     first_def = Dict{Symbol, Int}()
     for (i, info) in enumerate(infos), d in info.defs

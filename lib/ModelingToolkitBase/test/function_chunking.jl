@@ -86,6 +86,39 @@ end
         end
     )
     @test run(chunk_function_expr(compound, 1, 1), 2.0) == run(compound, 2.0) == 3.0
+    # Distinct names are not independent storage: the same array passed for both arguments.
+    same_array = :(
+        function (x, y)
+            a = x[1]
+            y[1] = 4
+            b = a + 1
+            b
+        end
+    )
+    v = [2.0]
+    w = [2.0]
+    @test run(chunk_function_expr(same_array, 1, 1), v, v) == run(same_array, w, w) == 3.0
+    # An embedded `Fix1` mutates through a Base function that does not end in `!`.
+    for chunk in (false, true)
+        arr = [2.0]
+        fix = Expr(
+            :function, Expr(:tuple, :x),
+            Expr(:block, :(a = x[1]), Expr(:call, Base.Fix1(pushfirst!, arr), 5.0), :(b = a + 1), :b)
+        )
+        fix = chunk ? chunk_function_expr(fix, 1, 1) : fix
+        @test run(fix, arr) == 3.0
+    end
+    # A parameter named like a whitelisted predicate is not that predicate.
+    shadowed = :(
+        function (x, isequal)
+            a = x[1]
+            isequal(x, 1)
+            b = a + 1
+            b
+        end
+    )
+    mutator = (v, k) -> (v[1] = 4.0; false)
+    @test run(chunk_function_expr(shadowed, 1, 1), [2.0], mutator) == run(shadowed, [2.0], mutator) == 3.0
     # Function objects embedded in the expression are not recognized as pure callees.
     mutate!(v) = (v[1] = 4.0; nothing)
     touch(v) = nothing
