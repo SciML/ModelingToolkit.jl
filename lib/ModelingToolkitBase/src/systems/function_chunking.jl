@@ -2,13 +2,20 @@
 Number of non-trivial statements above which `eval_or_rgf` outlines the body of a generated
 function into helper functions when `CompilerOptions.chunk_size` is left at its default.
 """
-const DEFAULT_CHUNK_THRESHOLD = 2000
+const DEFAULT_CHUNK_THRESHOLD = 20000
 
 """
 Number of statements per helper function when `CompilerOptions.chunk_size` is left at its
 default.
 """
 const DEFAULT_CHUNK_SIZE = 500
+
+"""
+Largest ratio of values returned by helpers to statements they contain for which automatic
+chunking goes ahead. Densely coupled bodies (e.g. 2D stencils sharing common subexpressions
+across the whole grid) return so many values that chunking costs more than it saves.
+"""
+const DEFAULT_MAX_TRAFFIC = 0.15
 
 # Heads that may appear inside the right-hand side of a statement that is safe to move into
 # a helper function: none of them introduce bindings.
@@ -157,55 +164,108 @@ function _has_unsafe_form(ex)
     return any(_has_unsafe_form, ex.args)
 end
 
-function _called_name(f)
-    f isa Symbol && return f
-    f isa GlobalRef && return f.name
-    f isa QuoteNode && return _called_name(f.value)
-    f isa Expr && f.head === :. && return _called_name(f.args[end])
-    return nothing
+# Comparison functions: they return a `Bool`, so passing them an argument can neither mutate
+# it nor leak a reference to it.
+const _PREDICATES = (:>=, :<=, :>, :<, :(==), :!=, :isless, :isequal, :isnan, :isinf, :isfinite)
+
+function _is_predicate(f)
+    f isa Symbol && return f in _PREDICATES
+    f isa Function && return parentmodule(f) === Base && nameof(f) in _PREDICATES
+    return false
 end
 
-# Marks the base of every indexed store; returns true if some statement may mutate in a way
-# that cannot be attributed to a base (`f!(...)`, broadcast assignment, field stores).
-function _note_mutations!(bases::Set{Symbol}, ex)
-    ex isa Expr || return false
-    unknown = false
-    if ex.head in (:(=), :(+=), :(-=), :(*=), :(/=), :(.=))
-        lhs = ex.args[1]
-        if lhs isa Expr && lhs.head === :ref && lhs.args[1] isa Symbol
-            push!(bases, lhs.args[1])
-        elseif lhs isa Expr
-            unknown = true
-        end
-        ex.head === :(.=) && (unknown = true)
-    elseif ex.head === :call
-        name = _called_name(ex.args[1])
-        name !== nothing && endswith(string(name), "!") && (unknown = true)
+const _UNKNOWN_ROOT = Symbol("##unknown_root")
+
+# Whether `f` names a function (a symbol, `Mod.name`, a `GlobalRef`, or a function of Base
+# or Core embedded as a value) that by convention does not mutate its arguments. Other
+# embedded function objects are not recognized.
+function _is_pure_callee(f)
+    f isa Symbol && return !endswith(string(f), "!")
+    f isa GlobalRef && return !endswith(string(f.name), "!")
+    # Functions of Base and Core embedded as values, e.g. `Base.literal_pow` in `x^2` code.
+    f isa Union{Function, Type} && return parentmodule(f) in (Base, Core) && !endswith(string(nameof(f)), "!")
+    if f isa Expr && f.head === :. && length(f.args) == 2
+        return _is_pure_callee(f.args[1]) && f.args[2] isa QuoteNode && _is_pure_callee(f.args[2].value)
     end
-    for a in ex.args
-        unknown |= _note_mutations!(bases, a)
-    end
-    return unknown
+    return false
 end
 
-# A predicate telling whether reading from the named argument (or alias of one) is safe to
-# repeat later, i.e. nothing in the function can write to it.
-function _readonly_bases(stmts, infos, fargs)
+"""
+Strict whitelist check that makes repeating `arg[constant]` reads in later helpers safe.
+Walks the whole body in evaluation order and only accepts a fixed set of expression heads.
+A function argument, or any name bound to one by a plain `name = arg` assignment, may only
+appear bare as the base or index of an `a[...]` read or store, as the whole right-hand side
+of an assignment that merely renames it, or as the function's final value. It may never be
+passed to a call other than a comparison, wrapped in another expression, or updated with `+=` and friends. Returns
+`nothing` if the body falls outside this, otherwise a predicate telling whether a name
+refers to an argument that no store in the body writes to.
+"""
+function _readonly_bases(stmts, fargs, n_defs)
     root = Dict{Symbol, Symbol}()
-    for (st, info) in zip(stmts, infos)
-        info.movable && length(info.defs) == 1 || continue
-        inner = st.head === :local ? st.args[1] : st
-        rhs = inner.args[2]
-        rhs isa Symbol || continue
-        (rhs in fargs || haskey(root, rhs)) && (root[only(info.defs)] = get(root, rhs, rhs))
+    mutated = Set{Symbol}()
+    rootof(s::Symbol) = s in fargs ? s : get(root, s, nothing)
+    value_root(ex) =
+    if ex isa Symbol
+        rootof(ex)
+    elseif ex isa Expr && ex.head === :(=) && ex.args[1] isa Symbol
+        rootof(ex.args[1])
+    elseif ex isa Expr && ex.head === :block
+        kids = filter(!Base.Fix2(isa, LineNumberNode), ex.args)
+        isempty(kids) ? nothing : value_root(last(kids))
+    elseif _is_inbounds_call(ex)
+        value_root(ex.args[end])
+    else
+        nothing
     end
-    bases = Set{Symbol}()
-    unknown = false
-    for st in stmts
-        unknown |= _note_mutations!(bases, st)
+    function visit(ex, bare_ok)
+        if ex isa Symbol
+            return bare_ok || !(ex in fargs || haskey(root, ex))
+        elseif !(ex isa Expr)
+            return true
+        end
+        h = ex.head
+        if h === :ref
+            return all(a -> visit(a, true), ex.args)
+        elseif h === :(=)
+            lhs, rhs = ex.args
+            if lhs isa Symbol
+                lhs in fargs && return false
+                visit(rhs, true) || return false
+                r = value_root(rhs)
+                if r !== nothing
+                    root[lhs] = get(n_defs, lhs, 0) == 1 ? r : _UNKNOWN_ROOT
+                elseif haskey(root, lhs)
+                    root[lhs] = _UNKNOWN_ROOT
+                end
+                return true
+            elseif lhs isa Expr && lhs.head === :ref && lhs.args[1] isa Symbol
+                visit(lhs, true) && visit(rhs, false) || return false
+                r = rootof(lhs.args[1])
+                r === _UNKNOWN_ROOT && return false
+                r === nothing || push!(mutated, r)
+                return true
+            end
+            return false
+        elseif h === :block
+            kids = filter(!Base.Fix2(isa, LineNumberNode), ex.args)
+            return all(i -> visit(kids[i], i == length(kids) && bare_ok), eachindex(kids))
+        elseif h === :local
+            return all(a -> a isa Symbol || (a isa Expr && a.head === :(=) && visit(a, false)), ex.args)
+        elseif h === :call
+            _is_pure_callee(ex.args[1]) || return false
+            return all(a -> visit(a, _is_predicate(ex.args[1])), @view ex.args[2:end])
+        elseif h === :.
+            return all(a -> visit(a, false), ex.args)
+        elseif h in (:tuple, :vect, :curly, :if, :&&, :||, :comparison, :(::))
+            return all(a -> visit(a, false), ex.args)
+        elseif _is_inbounds_call(ex)
+            return visit(ex.args[end], bare_ok)
+        end
+        return false
     end
-    mutated = Set{Symbol}(get(root, b, b) for b in bases)
-    return b -> !unknown && !(get(root, b, b) in mutated)
+    ok = all(i -> visit(stmts[i], i == length(stmts)), eachindex(stmts))
+    ok || return nothing
+    return b -> (r = rootof(b); r !== nothing && r !== _UNKNOWN_ROOT && !(r in mutated))
 end
 
 """
@@ -216,18 +276,19 @@ functions of about `chunk_size` statements, returning the rewritten function exp
 The helpers are local anonymous functions that capture nothing, so they are lowered and
 inferred separately from the calling function. Values that are cheap to recompute (literals and constant-index reads
 of arguments) are recomputed in each helper instead of being passed to it. Returns `fex`
-unchanged if it has fewer than `threshold` statements or an unrecognized shape.
+unchanged if it has fewer than `threshold` statements, an unrecognized shape, or if the
+helpers would return more than `max_traffic` values per statement they contain.
 """
-function chunk_function_expr(fex::Expr, chunk_size::Int, threshold::Int)
+function chunk_function_expr(fex::Expr, chunk_size::Int, threshold::Int, max_traffic::Real = Inf)
     # Chunking is an optimization: any shape the analysis trips over leaves `fex` as is.
     try
-        return _chunk_function_expr(fex, chunk_size, threshold)
+        return _chunk_function_expr(fex, chunk_size, threshold, max_traffic)
     catch
         return fex
     end
 end
 
-function _chunk_function_expr(fex::Expr, chunk_size::Int, threshold::Int)
+function _chunk_function_expr(fex::Expr, chunk_size::Int, threshold::Int, max_traffic::Real)
     fex.head === :function && length(fex.args) == 2 || return fex
     sig = fex.args[1]
     sig isa Expr && sig.head === :tuple && all(a -> a isa Symbol, sig.args) || return fex
@@ -247,7 +308,8 @@ function _chunk_function_expr(fex::Expr, chunk_size::Int, threshold::Int)
     end
     # Rebinding an argument would need renaming across helpers.
     any(in(fargs), keys(n_defs)) && return fex
-    readonly = _readonly_bases(stmts, infos, fargs)
+    readonly = _readonly_bases(stmts, fargs, n_defs)
+    readonly === nothing && return fex
 
     # A cheap statement stays in the calling function and is also recomputed in any helper
     # that needs it.
@@ -279,6 +341,7 @@ function _chunk_function_expr(fex::Expr, chunk_size::Int, threshold::Int)
 
     # Pieces are contiguous runs of outlinable statements, cut to about `chunk_size`.
     new_stmts = Any[]
+    traffic = outlined = 0
     i = 1
     n = length(infos)
     while i <= n
@@ -303,13 +366,17 @@ function _chunk_function_expr(fex::Expr, chunk_size::Int, threshold::Int)
             is_cheap[m] && push!(new_stmts, stmts[m])
         end
         for piece in Iterators.partition(run, piece_len)
-            append!(
-                new_stmts,
-                _outline_piece(length(new_stmts), inbounds, infos, stmts, piece, cheap, cheap_stmt, fargs, last_use, first_def)
+            helper, call, n_out = _outline_piece(
+                length(new_stmts), inbounds, infos, stmts, piece, cheap, cheap_stmt, fargs,
+                last_use, first_def
             )
+            push!(new_stmts, helper, call)
+            traffic += n_out
+            outlined += length(piece)
         end
         i = j + 1
     end
+    traffic > max_traffic * outlined && return fex
     return Expr(:function, fex.args[1], rebuild(new_stmts))
 end
 
@@ -364,9 +431,9 @@ function _outline_piece(id, inbounds, infos, stmts, piece, cheap, cheap_stmt, fa
     helper = Expr(:function, Expr(:tuple, inputs...), helper_body)
     name = Symbol("__mtk_chunk_", id)
     call = Expr(:call, name, inputs...)
-    isempty(outputs) && return (Expr(:(=), name, helper), call)
+    isempty(outputs) && return (Expr(:(=), name, helper), call, 0)
     lhs = length(outputs) == 1 ? only(outputs) : Expr(:tuple, outputs...)
-    return (Expr(:(=), name, helper), Expr(:(=), lhs, call))
+    return (Expr(:(=), name, helper), Expr(:(=), lhs, call), length(outputs))
 end
 
 # A helper must bind its own variables: assigning a name that the calling function also

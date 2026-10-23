@@ -23,8 +23,8 @@ Note that this feature is considered experimental.
 - `chunk_size::Int = -1`: Number of statements per helper function when the body of a very
   large generated function is split into several smaller functions, which keeps first-call
   compile time close to linear in the size of the function. `-1` splits only functions with
-  more than $DEFAULT_CHUNK_THRESHOLD statements, into helpers of $DEFAULT_CHUNK_SIZE
-  statements; `0` never splits; a positive value splits any function with more statements
+  more than $DEFAULT_CHUNK_THRESHOLD statements and only if the helpers pass few values to
+  each other, into helpers of $DEFAULT_CHUNK_SIZE statements; `0` never splits; a positive value splits any function with more statements
   than `chunk_size`.
 
 # Returns
@@ -394,7 +394,8 @@ function eval_or_rgf(
     if chunk_size != 0
         expr = chunk_function_expr(
             expr, chunk_size < 0 ? DEFAULT_CHUNK_SIZE : chunk_size,
-            chunk_size < 0 ? DEFAULT_CHUNK_THRESHOLD : chunk_size
+            chunk_size < 0 ? DEFAULT_CHUNK_THRESHOLD : chunk_size,
+            chunk_size < 0 ? DEFAULT_MAX_TRAFFIC : Inf
         )
     end
     if eval_expression

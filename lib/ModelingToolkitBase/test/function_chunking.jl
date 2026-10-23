@@ -24,6 +24,9 @@ using Test
     @test out_a == out_b
     @test (@allocated Base.invokelatest(f, out_a, x)) <= (@allocated Base.invokelatest(expected, out_b, x)) + 64
 
+    # Helpers that exchange many values are not worth it.
+    @test chunk_function_expr(fex, 10, 10, 0.0) == fex
+    @test chunk_function_expr(fex, 10, 10, Inf) == chunked
     # Below the threshold the expression is unchanged.
     @test chunk_function_expr(fex, 10, 10_000) == fex
     # Statements that rebind variables stay in the calling function.
@@ -60,6 +63,51 @@ end
         end
     )
     @test run(chunk_function_expr(mutating, 1, 1), [2.0]) == run(mutating, [2.0]) == 3.0
+    # Aliases of an argument that are rebound before a store.
+    alias_store = :(
+        function (x, y)
+            s = x[1]
+            a = x
+            a[1] = 4
+            a = y
+            b = s + 1
+            b
+        end
+    )
+    @test run(chunk_function_expr(alias_store, 1, 1), [2.0], [0.0]) ==
+        run(alias_store, [2.0], [0.0]) == 3.0
+    # Compound assignment to an argument.
+    compound = :(
+        function (x)
+            a = x
+            x += 1
+            b = a + 1
+            b
+        end
+    )
+    @test run(chunk_function_expr(compound, 1, 1), 2.0) == run(compound, 2.0) == 3.0
+    # Function objects embedded in the expression are not recognized as pure callees.
+    mutate!(v) = (v[1] = 4.0; nothing)
+    touch(v) = nothing
+    for fn in (mutate!, touch)
+        callee = Expr(
+            :function, Expr(:tuple, :x),
+            Expr(
+                :block, :(a = x[1]), Expr(:call, fn, :x), :(b = a + 1), :b
+            )
+        )
+        @test run(chunk_function_expr(callee, 1, 1), [2.0]) == run(callee, [2.0]) == 3.0
+    end
+    # A mutating callee given by name.
+    named = :(
+        function (x)
+            a = x[1]
+            mutate!(x)
+            b = a + 1
+            b
+        end
+    )
+    @test chunk_function_expr(named, 1, 1) == named
     # Rebinding a name.
     rebinding = :(
         function (x)
