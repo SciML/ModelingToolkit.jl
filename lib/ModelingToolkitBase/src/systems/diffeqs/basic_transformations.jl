@@ -1006,7 +1006,9 @@ Specialize nonnumeric parameters in `sys` by changing their symtype to a concret
 to a value. If the element is a parameter, it must have a default. Each specified parameter
 is updated to have the symtype of the value associated with it (either in `mapping` or in
 the defaults). This operation can only be performed on nonnumeric, non-array parameters. The
-defaults of respecialized parameters are set to the associated values.
+defaults of respecialized parameters are set to the associated values. A callable parameter,
+such as `(f::AbstractFoo)(..)` or `f(::Real)::Real`, keeps its call signature and takes the
+type of the value as its callable type.
 
 This operation can only be performed on `complete`d systems.
 
@@ -1094,6 +1096,9 @@ function respecialize(sys::AbstractSystem, mapping; all = false)
             op = SU.Sym{VartypeT}(nameof(op); type = SU.FnType{Tuple, T, Nothing}, shape = SU.shape(k))
             args = arguments(k)
             new_p = op(args...)
+        elseif SU.is_function_symbolic(k)
+            X, Y = SU.fntype_X_Y(symtype(k))
+            new_p = SSym(getname(k); type = SU.FnType{X, Y, T}, shape = SU.shape(k))
         else
             new_p = SSym(getname(k); type = T, shape = SU.shape(v))
         end
