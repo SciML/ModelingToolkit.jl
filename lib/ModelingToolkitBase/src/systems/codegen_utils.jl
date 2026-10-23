@@ -46,7 +46,7 @@ struct CompilerOptions
     chunk_size::Int
 end
 
-CompilerOptions(optlevel::Int, compile::Int, infer::Int) = CompilerOptions(optlevel, compile, infer, -1)
+CompilerOptions(optlevel, compile, infer) = CompilerOptions(optlevel, compile, infer, -1)
 
 function CompilerOptions(;
         optlevel::Int = -1, compile::Union{Int, Symbol} = :default,

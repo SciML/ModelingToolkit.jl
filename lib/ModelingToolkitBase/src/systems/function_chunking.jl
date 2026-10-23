@@ -320,6 +320,12 @@ function _chunk_function_expr(fex::Expr, chunk_size::Int, threshold::Int, max_tr
     # Pieces are contiguous runs of outlinable statements, cut to about `chunk_size`.
     new_stmts = Any[]
     traffic = outlined = 0
+    # Helper names must not collide with any name already used in the function.
+    used = _collect_symbols!(Symbol[], fex)
+    prefix = "__mtk_chunk_"
+    while any(u -> startswith(string(u), prefix), used)
+        prefix = "_" * prefix
+    end
     i = 1
     n = length(infos)
     while i <= n
@@ -345,7 +351,7 @@ function _chunk_function_expr(fex::Expr, chunk_size::Int, threshold::Int, max_tr
         end
         for piece in Iterators.partition(run, piece_len)
             helper, call, n_out = _outline_piece(
-                length(new_stmts), inbounds, infos, stmts, piece, cheap, cheap_stmt, fargs,
+                prefix, length(new_stmts), inbounds, infos, stmts, piece, cheap, cheap_stmt, fargs,
                 last_use, first_def
             )
             push!(new_stmts, helper, call)
@@ -358,7 +364,7 @@ function _chunk_function_expr(fex::Expr, chunk_size::Int, threshold::Int, max_tr
     return Expr(:function, fex.args[1], rebuild(new_stmts))
 end
 
-function _outline_piece(id, inbounds, infos, stmts, piece, cheap, cheap_stmt, fargs, last_use, first_def)
+function _outline_piece(prefix, id, inbounds, infos, stmts, piece, cheap, cheap_stmt, fargs, last_use, first_def)
     first_idx, last_idx = first(piece), last(piece)
     defined = Set{Symbol}()
     inputs = Symbol[]
@@ -407,7 +413,7 @@ function _outline_piece(id, inbounds, infos, stmts, piece, cheap, cheap_stmt, fa
     helper_body = Expr(:block, body...)
     inbounds && (helper_body = Expr(:macrocall, Symbol("@inbounds"), LineNumberNode(0), helper_body))
     helper = Expr(:function, Expr(:tuple, inputs...), helper_body)
-    name = Symbol("__mtk_chunk_", id)
+    name = Symbol(prefix, id)
     call = Expr(:call, name, inputs...)
     isempty(outputs) && return (Expr(:(=), name, helper), call, 0)
     lhs = length(outputs) == 1 ? only(outputs) : Expr(:tuple, outputs...)

@@ -187,6 +187,15 @@ end
         end
     )
     @test chunk_function_expr(named, 1, 1) == named
+    # Helper names never collide with existing bindings.
+    clash = :(
+        function (__mtk_chunk_0)
+            a = __mtk_chunk_0 + 1
+            b = a + 1
+            b
+        end
+    )
+    @test run(chunk_function_expr(clash, 1, 1), 2) == run(clash, 2) == 4
     # Rebinding a name.
     rebinding = :(
         function (x)
@@ -226,6 +235,8 @@ end
     # The 3-argument constructor still exists.
     @test CompilerOptions(1, 2, 3).chunk_size == -1
     @test CompilerOptions(-1, -1, -1) == CompilerOptions()
+    @test CompilerOptions(1, 2, true).infer == 1
+    @test CompilerOptions(Int32(1), Int32(2), Int32(0)) == CompilerOptions(1, 2, 0)
 end
 
 @testset "chunked generated functions match unchunked ones" begin
