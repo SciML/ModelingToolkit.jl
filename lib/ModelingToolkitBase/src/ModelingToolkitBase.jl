@@ -294,6 +294,7 @@ include("utils.jl")
 include("systems/index_cache.jl")
 include("systems/parameter_buffer.jl")
 include("systems/abstractsystem.jl")
+include("systems/function_chunking.jl")
 # codegen_utils.jl defines the codegen option structs (GeneratedFunctionOptions,
 # BuildFunctionWrapperOptions, CompilerOptions). It must precede any file whose method
 # *signatures* annotate those types (e.g. the `opts::GeneratedFunctionOptions` positional

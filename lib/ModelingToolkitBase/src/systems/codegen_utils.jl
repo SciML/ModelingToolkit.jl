@@ -6,7 +6,7 @@ const _COMPILE_OPTIONS = Dict{Symbol, Int}(
 )
 
 """
-    CompilerOptions(; optlevel = -1, compile = :default, infer = :default)
+    CompilerOptions(; optlevel = -1, compile = :default, infer = :default, chunk_size = -1)
 
 Options controlling the Julia compiler for generated functions.
 
@@ -20,6 +20,12 @@ Note that this feature is considered experimental.
   `:default`.
 - `infer::Union{Int, Bool, Symbol} = :default`: Type inference mode as 0 (off), 1 (on), or
   -1 (inherit). It also accepts `Bool` and `:default`.
+- `chunk_size::Int = -1`: Number of statements per helper function when the body of a very
+  large generated function is split into several smaller functions, which keeps first-call
+  compile time close to linear in the size of the function. `-1` splits only functions with
+  more than $DEFAULT_CHUNK_THRESHOLD statements, into helpers of $DEFAULT_CHUNK_SIZE
+  statements; `0` never splits; a positive value splits any function with more statements
+  than `chunk_size`.
 
 # Returns
 
@@ -37,11 +43,12 @@ struct CompilerOptions
     optlevel::Int
     compile::Int
     infer::Int
+    chunk_size::Int
 end
 
 function CompilerOptions(;
         optlevel::Int = -1, compile::Union{Int, Symbol} = :default,
-        infer::Union{Int, Bool, Symbol} = :default
+        infer::Union{Int, Bool, Symbol} = :default, chunk_size::Int = -1
     )
     _compile = if compile isa Symbol
         compile === :default ? -1 : get(_COMPILE_OPTIONS, compile) do
@@ -58,7 +65,7 @@ function CompilerOptions(;
     else
         infer
     end
-    return CompilerOptions(optlevel, _compile, _infer)
+    return CompilerOptions(optlevel, _compile, _infer, chunk_size)
 end
 
 _has_options(co::CompilerOptions) = co.optlevel != -1 || co.compile != -1 || co.infer != -1
@@ -380,6 +387,13 @@ function eval_or_rgf(
             end
             eval_module = _resolve_fallback_eval_module(compiler_options)
         end
+    end
+    chunk_size = compiler_options.chunk_size
+    if chunk_size != 0
+        expr = chunk_function_expr(
+            expr, chunk_size < 0 ? DEFAULT_CHUNK_SIZE : chunk_size,
+            chunk_size < 0 ? DEFAULT_CHUNK_THRESHOLD : chunk_size
+        )
     end
     if eval_expression
         return eval_module.eval(expr)
