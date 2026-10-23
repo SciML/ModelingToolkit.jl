@@ -143,14 +143,12 @@ function _analyze_statement(st)
     return _ChunkStatement(st, _collect_bound!(Symbol[], st), _collect_symbols!(Symbol[], st), false)
 end
 
-# Right-hand sides that are cheaper to recompute in a helper than to pass to it.
-function _is_cheap_rhs(rhs, cheap::Set{Symbol}, fargs::Set{Symbol}, allow_ref::Bool)
+# Right-hand sides that are duplicated into helpers instead of passed to them: literals and
+# plain renamings of function arguments. Values read from arguments are never recomputed, so
+# every read happens exactly where and when the original function performed it.
+function _is_cheap_rhs(rhs, cheap::Set{Symbol}, fargs::Set{Symbol})
     rhs isa Number && return true
     rhs isa Symbol && return rhs in fargs || rhs in cheap
-    if rhs isa Expr && rhs.head === :ref
-        return rhs.args[1] isa Symbol && (rhs.args[1] in fargs || rhs.args[1] in cheap) &&
-            allow_ref && all(a -> a isa Number, @view rhs.args[2:end])
-    end
     return false
 end
 
@@ -214,54 +212,39 @@ function _callee_kind(f, bound)
 end
 
 """
-Strict whitelist scan of the body. Accepts only a fixed set of expression heads and calls
-to the functions above (or `Symbolics.set_nzval`), and rejects rebinding of arguments.
-Returns the index of the first statement that writes into an array (`a[...] = ...` or a
-sparse store), `0` if there is none, or `nothing` if the body is outside the whitelist.
-Because the pass reasons only about this order, aliasing between arguments or views does
-not matter: every read that a helper recomputes happens before the first write.
+Strict whitelist scan of the body: only a fixed set of expression heads, calls (including
+broadcast calls) to the functions above or `Symbolics.set_nzval`, and no rebinding of
+arguments. Anything else, including broadcast assignment, makes the function unchunked.
 """
-function _first_store_index(stmts, fargs, bound)
-    first_store = 0
-    current = 0
-    function note_store!()
-        first_store == 0 && (first_store = current)
-        return true
-    end
+function _is_whitelisted(stmts, fargs, bound)
     function visit(ex)
         ex isa Expr || return true
         h = ex.head
-        if h === :ref
+        if h === :ref || h === :block
             return all(visit, ex.args)
         elseif h === :(=)
             lhs, rhs = ex.args
             if lhs isa Symbol
                 return !(lhs in fargs) && visit(rhs)
-            elseif lhs isa Expr && lhs.head === :ref && visit(lhs) && visit(rhs)
-                return note_store!()
             end
-            return false
-        elseif h === :block
-            return all(visit, ex.args)
+            return lhs isa Expr && lhs.head === :ref && visit(lhs) && visit(rhs)
         elseif h === :local
             return all(a -> a isa Symbol || (a isa Expr && a.head === :(=) && visit(a)), ex.args)
         elseif h === :call
-            kind = _callee_kind(ex.args[1], bound)
-            kind === :bad && return false
-            kind === :store && note_store!()
+            _callee_kind(ex.args[1], bound) === :bad && return false
             return all(visit, @view ex.args[2:end])
-        elseif h in (:., :tuple, :vect, :curly, :if, :&&, :||, :comparison, :(::))
+        elseif h === :. && length(ex.args) == 2 && ex.args[2] isa Expr && ex.args[2].head === :tuple
+            # broadcast call `f.(args...)`
+            _callee_kind(ex.args[1], bound) === :bad && return false
+            return all(visit, ex.args[2].args)
+        elseif h in (:tuple, :vect, :curly, :if, :&&, :||, :comparison, :(::))
             return all(visit, ex.args)
         elseif _is_inbounds_call(ex)
             return visit(ex.args[end])
         end
         return false
     end
-    for (i, st) in enumerate(stmts)
-        current = i
-        visit(st) || return nothing
-    end
-    return first_store
+    return all(visit, stmts)
 end
 
 """
@@ -304,18 +287,10 @@ function _chunk_function_expr(fex::Expr, chunk_size::Int, threshold::Int, max_tr
     end
     # Rebinding an argument would need renaming across helpers.
     any(in(fargs), keys(n_defs)) && return fex
-    bound = union(fargs, keys(n_defs))
-    first_store = _first_store_index(stmts, fargs, bound)
-    first_store === nothing && return fex
-    last_use = Dict{Symbol, Int}()
-    for (i, info) in enumerate(infos), u in info.uses
-        last_use[u] = i
-    end
+    _is_whitelisted(stmts, fargs, union(fargs, keys(n_defs))) || return fex
 
-    # A cheap statement stays in the calling function and is also recomputed in any helper
-    # that needs it. Recomputing a read of an argument is only sound if it still happens
-    # before the first write into any array, so such reads are only cheap if every
-    # statement using them precedes that write.
+    # A cheap statement stays in the calling function and is also duplicated into any helper
+    # that needs it.
     cheap = Set{Symbol}()
     is_cheap = falses(length(infos))
     for (i, info) in enumerate(infos)
@@ -324,11 +299,7 @@ function _chunk_function_expr(fex::Expr, chunk_size::Int, threshold::Int, max_tr
         n_defs[d] == 1 || continue
         inner = info.expr
         inner = inner.head === :local ? inner.args[1] : inner
-        rhs = inner.args[2]
-        _is_cheap_rhs(rhs, cheap, fargs, true) || continue
-        if rhs isa Expr && rhs.head === :ref
-            first_store == 0 || get(last_use, d, 0) < first_store || continue
-        end
+        _is_cheap_rhs(inner.args[2], cheap, fargs) || continue
         push!(cheap, d)
         is_cheap[i] = true
     end
@@ -336,6 +307,10 @@ function _chunk_function_expr(fex::Expr, chunk_size::Int, threshold::Int, max_tr
     outlinable = [infos[i].movable && !is_cheap[i] && i < length(infos) for i in eachindex(infos)]
     count(outlinable) < threshold && return fex
 
+    last_use = Dict{Symbol, Int}()
+    for (i, info) in enumerate(infos), u in info.uses
+        last_use[u] = i
+    end
     cheap_stmt = Dict{Symbol, Int}(only(infos[i].defs) => i for i in eachindex(infos) if is_cheap[i])
     first_def = Dict{Symbol, Int}()
     for (i, info) in enumerate(infos), d in info.defs

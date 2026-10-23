@@ -2,6 +2,14 @@ using ModelingToolkitBase, SciMLBase, ForwardDiff
 using ModelingToolkitBase: t_nounits as t, D_nounits as D, chunk_function_expr
 using Test
 
+# `getindex` with a side effect: reads must happen exactly once, where the original does them.
+mutable struct CountingVector
+    data::Vector{Float64}
+    reads::Int
+end
+Base.getindex(v::CountingVector, i::Int) = (v.reads += 1; v.data[i])
+Base.setindex!(v::CountingVector, x, i::Int) = (v.data[i] = x)
+
 @testset "chunk_function_expr" begin
     # `a_i` form a dependency chain so that every helper needs the previous one's results.
     stmts = Any[:(local k = 3), :(local u1 = x[1])]
@@ -86,6 +94,44 @@ end
         end
     )
     @test run(chunk_function_expr(compound, 1, 1), 2.0) == run(compound, 2.0) == 3.0
+    # An alias of a read must not be re-read after a later store.
+    alias_read = :(
+        function (x)
+            a = x[1]
+            b = a
+            x[1] = 4
+            c = b + 1
+            c
+        end
+    )
+    @test run(chunk_function_expr(alias_read, 1, 1), [2.0]) == run(alias_read, [2.0]) == 3.0
+    # Broadcast calls obey the same callee rules.
+    broadcast = :(
+        function (x, y, fn)
+            a = x[1]
+            fn.(y)
+            b = a + 1
+            b
+        end
+    )
+    bmut = v -> (x0[1] = 4.0; v)
+    x0 = [2.0]
+    @test run(chunk_function_expr(broadcast, 1, 1), x0, [1.0], bmut) == 3.0
+    x0 = [2.0]
+    @test run(broadcast, x0, [1.0], bmut) == 3.0
+    # Reads of an argument happen exactly once.
+    counted = :(
+        function (x)
+            a = x[1]
+            b = a + 1
+            c = b * 2
+            d = a + c
+            d
+        end
+    )
+    cv1, cv2 = CountingVector([2.0], 0), CountingVector([2.0], 0)
+    @test run(chunk_function_expr(counted, 1, 1), cv1) == run(counted, cv2)
+    @test cv1.reads == cv2.reads == 1
     # Distinct names are not independent storage: the same array passed for both arguments.
     same_array = :(
         function (x, y)
