@@ -7,3 +7,5 @@ include("shared/mtktestset.jl")
 @mtktestset("InitializationSystem Test", "initializationsystem.jl")
 @mtktestset("Initial Values Test", "initial_values.jl")
 @safetestset "Homotopy initialization (SCC bypass)" include("homotopy_initialization_scc.jl")
+
+@safetestset "Model-independent initialization data" include("model_independent_initialization.jl")
