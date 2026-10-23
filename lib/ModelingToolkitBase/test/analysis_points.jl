@@ -402,6 +402,29 @@ if @isdefined(ModelingToolkit)
         )
         @test mats.A[icx(ssys), icx(ssys)] ≈ -(1 + 0.3^2)
 
+        @testset "Input Jacobian of an input analysis point that is also a loop opening" begin
+            op1 = Dict(ncsys.icP.x => 0.3, ncsys.icC.x => 0.2)
+            mats, ssys, _ = linearize(
+                nosys, :plant_output, :ctrl_output;
+                loop_openings = [:plant_output], op = op1
+            )
+            @test mats.A[icx(ssys), icx(ssys)] ≈ -(1 + 0.3^2)
+            @test mats.B[icx(ssys), 1] ≈ -2 * 0.3 * 0.2 - 2
+
+            lin_fun, ssys = linearization_function(
+                nosys, :plant_output, :ctrl_output;
+                loop_openings = [:plant_output], op = op1
+            )
+            for plant_x in (0.6, 0.3)
+                mats, _ = linearize(
+                    ssys, lin_fun;
+                    op = Dict(ncsys.icP.x => plant_x, ncsys.icC.x => 0.2)
+                )
+                @test mats.A[icx(ssys), icx(ssys)] ≈ -(1 + plant_x^2)
+                @test mats.B[icx(ssys), 1] ≈ -2 * plant_x * 0.2 - 2
+            end
+        end
+
         # The driver may depend on a state variable without a value, which the
         # initialization determines together with the opened variable
         @component function ICIntegratingPlant(; name)
