@@ -48,13 +48,16 @@ run_expr(build_rhs(sys, rhss; chunk_size = 0)[2], reference, u, p, 0.0)
 end
 
 @testset "automatic mode leaves small functions alone" begin
-    oop, iip = build_rhs(sys, rhss)
+    oop, iip = build_rhs(sys, rhss; chunk_size = -1)
     @test count_helpers(iip) == 0
     @test oop == build_rhs(sys, rhss; chunk_size = 0)[1]
 end
 
-@testset "chunk_size = 0 never splits" begin
+@testset "chunking is off by default and with chunk_size = 0" begin
+    @test MTKB.BuildFunctionWrapperOptions().chunk_size == 0
+    @test count_helpers(build_rhs(sys, rhss)[2]) == 0
     @test count_helpers(build_rhs(sys, rhss; chunk_size = 0)[2]) == 0
+    @test (count_helpers(build_rhs(sys, rhss; chunk_size = 1)[2]) > 0) == CHUNKING_AVAILABLE
 end
 
 @testset "functions that cannot be split independently are left whole" begin
@@ -85,27 +88,36 @@ end
     pbig = MTKB.MTKParameters(bigsys, [only(parameters(bigsys)) => 0.7])
     ir = MTKB.SU.subset_ir(MTKB.get_irstructure(bigsys), [eq.rhs for eq in equations(bigsys)])
     @test length(ir) > MTKB.DEFAULT_CHUNK_THRESHOLD
+    big_rhss = [eq.rhs for eq in equations(bigsys)]
+    # generic build_function_wrapper callers are not chunked by default
+    @test count_helpers(build_rhs(bigsys, big_rhss)[2]) == 0
     expr_oop, expr_iip = MTKB.generate_rhs(bigsys, MTKB.GeneratedFunctionOptions(; expression = Val{true}))
     @test expect_chunked(expr_iip)
     expected = zeros(nbig)
-    run_expr(build_rhs(bigsys, [eq.rhs for eq in equations(bigsys)]; chunk_size = 0)[2], expected, ubig, pbig, 0.0)
+    run_expr(build_rhs(bigsys, big_rhss)[2], expected, ubig, pbig, 0.0)
     du = zeros(nbig)
     run_expr(expr_iip, du, ubig, pbig, 0.0)
     @test du == expected
+    prob = ODEProblem(bigsys, [bigsys.x => ubig, only(parameters(bigsys)) => 0.7], (0.0, 1.0))
+    du_prob = zeros(nbig)
+    prob.f(du_prob, ubig, prob.p, 0.0)
+    @test du_prob == expected
 end
 
-@testset "chunked function with separate buffers is bitwise equal to the unchunked one" begin
+@testset "aliased output still works without chunking; chunked with separate buffers is bitwise equal" begin
     @variables y(t)[1:4]
-    ring = mtkcompile(System([D(y[i]) ~ y[mod1(i + 1, 4)]^2 for i in 1:4], t; name = :separate))
+    ring = mtkcompile(System([D(y[i]) ~ y[mod1(i + 1, 4)]^2 for i in 1:4], t; name = :small))
     ring_rhss = [eq.rhs for eq in equations(ring)]
     ring_p = MTKB.MTKParameters(ring, [])
-    results = map((0, 1)) do chunk_size
-        iip = build_rhs(ring, ring_rhss; chunk_size)[2]
-        out = zeros(4)
-        returned = run_expr(iip, out, [1.0, 2.0, 3.0, 4.0], ring_p, 0.0)
-        @test returned === out
-        out
+    for kwargs in ((;), (; chunk_size = 0))
+        iip = build_rhs(ring, ring_rhss; kwargs...)[2]
+        buffer = [1.0, 2.0, 3.0, 4.0]
+        @test run_expr(iip, buffer, buffer, ring_p, 0.0) === buffer
+        @test buffer == [4.0, 9.0, 16.0, 1.0]
     end
-    @test results[1] == results[2] == [4.0, 9.0, 16.0, 1.0]
-    @test expect_chunked(build_rhs(ring, ring_rhss; chunk_size = 1)[2])
+    chunked = build_rhs(ring, ring_rhss; chunk_size = 1)[2]
+    @test expect_chunked(chunked)
+    out = zeros(4)
+    @test run_expr(chunked, out, [1.0, 2.0, 3.0, 4.0], ring_p, 0.0) === out
+    @test out == [4.0, 9.0, 16.0, 1.0]
 end
