@@ -561,10 +561,18 @@ function timevaring_initsys_process_op!(
                 push!(eqs_ics, subk ~ ik)
                 continue
             end
+            # Writing element-wise with `write_possibly_indexed_array!` copies the whole
+            # array for every element, which is quadratic. Fill a buffer and store it once.
+            buffer = collect(op[ik])
             for i in SU.stable_eachindex(k)
                 v[i] === COMMON_NOTHING && continue
                 push!(eqs_ics, subk[i] ~ ik[i])
-                write_possibly_indexed_array!(op, ik[i], v[i], COMMON_FALSE)
+                buffer[i] = v[i]
+            end
+            op[ik] = if all(SU.isconst, buffer)
+                BSImpl.Const{VartypeT}(unwrap_const.(buffer))
+            else
+                BSImpl.Const{VartypeT}(buffer)
             end
             continue
         end
