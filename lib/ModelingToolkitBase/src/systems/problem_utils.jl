@@ -213,6 +213,12 @@ function add_observed_equations!(varmap::AtomicArrayDict{SymbolicT}, eqs::Vector
             write_observed!(varmap, buffers, eq.lhs, eq.rhs)
         end
     end
+    flush_observed_buffers!(varmap, buffers)
+    return
+end
+
+# Store all buffered element writes in `varmap`.
+function flush_observed_buffers!(varmap::AtomicArrayDict{SymbolicT}, buffers::Dict{SymbolicT, Array{SymbolicT}})
     for arr in collect(keys(buffers))
         store_observed_buffer!(varmap, buffers, arr)
     end
@@ -2370,15 +2376,18 @@ function maybe_build_initialization_problem(
     end
     missingvars = collect(missingvars)
 
+    buffers = Dict{SymbolicT, Array{SymbolicT}}()
     for (i, v) in enumerate(unknowns(initsys))
-        write_possibly_indexed_array!(temp_op, v, SConst(_u0[i]), COMMON_NOTHING)
+        write_observed!(temp_op, buffers, v, SConst(_u0[i]))
     end
+    flush_observed_buffers!(temp_op, buffers)
     add_observed!(initsys, temp_op)
     left_merge!(temp_op, ModelingToolkitBase.guesses(sys))
     subber = Symbolics.FixpointSubstituter{true}(AADSubWrapper(temp_op))
     for p in missingvars
-        write_possibly_indexed_array!(op, p, subber(p), COMMON_NOTHING)
+        write_observed!(op, buffers, p, subber(p))
     end
+    flush_observed_buffers!(op, buffers)
 
     return (;
         initialization_data = SciMLBase.OverrideInitData(
