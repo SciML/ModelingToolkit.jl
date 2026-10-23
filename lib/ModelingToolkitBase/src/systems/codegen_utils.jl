@@ -6,7 +6,7 @@ const _COMPILE_OPTIONS = Dict{Symbol, Int}(
 )
 
 """
-    CompilerOptions(; optlevel = -1, compile = :default, infer = :default, chunk_size = -1)
+    CompilerOptions(; optlevel = -1, compile = :default, infer = :default)
 
 Options controlling the Julia compiler for generated functions.
 
@@ -20,12 +20,6 @@ Note that this feature is considered experimental.
   `:default`.
 - `infer::Union{Int, Bool, Symbol} = :default`: Type inference mode as 0 (off), 1 (on), or
   -1 (inherit). It also accepts `Bool` and `:default`.
-- `chunk_size::Int = -1`: Number of statements per helper function when the body of a very
-  large generated function is split into several smaller functions, which keeps first-call
-  compile time close to linear in the size of the function. `-1` splits only functions with
-  more than $DEFAULT_CHUNK_THRESHOLD statements and only if the helpers pass few values to
-  each other, into helpers of $DEFAULT_CHUNK_SIZE statements; `0` never splits; a positive value splits any function with more statements
-  than `chunk_size`.
 
 # Returns
 
@@ -43,14 +37,11 @@ struct CompilerOptions
     optlevel::Int
     compile::Int
     infer::Int
-    chunk_size::Int
 end
-
-CompilerOptions(optlevel, compile, infer) = CompilerOptions(optlevel, compile, infer, -1)
 
 function CompilerOptions(;
         optlevel::Int = -1, compile::Union{Int, Symbol} = :default,
-        infer::Union{Int, Bool, Symbol} = :default, chunk_size::Int = -1
+        infer::Union{Int, Bool, Symbol} = :default
     )
     _compile = if compile isa Symbol
         compile === :default ? -1 : get(_COMPILE_OPTIONS, compile) do
@@ -67,7 +58,7 @@ function CompilerOptions(;
     else
         infer
     end
-    return CompilerOptions(optlevel, _compile, _infer, chunk_size)
+    return CompilerOptions(optlevel, _compile, _infer)
 end
 
 _has_options(co::CompilerOptions) = co.optlevel != -1 || co.compile != -1 || co.infer != -1
@@ -390,7 +381,6 @@ function eval_or_rgf(
             eval_module = _resolve_fallback_eval_module(compiler_options)
         end
     end
-    expr = _chunk_for_compile(expr, compiler_options.chunk_size, eval_expression)
     if eval_expression
         return eval_module.eval(expr)
     else
@@ -399,44 +389,6 @@ function eval_or_rgf(
 end
 
 eval_or_rgf(::Nothing; kws...) = nothing
-
-# Cached result of probing whether the loaded RuntimeGeneratedFunctions can compile a function
-# containing a local function definition (as chunked helpers are). RuntimeGeneratedFunctions
-# 0.5.12 and 0.5.13 fail on Julia 1.12 with "syntax: malformed expression".
-const _RGF_LOCAL_FUNCTIONS = Ref{Union{Nothing, Bool}}(nothing)
-
-function _rgf_supports_local_functions()
-    supported = _RGF_LOCAL_FUNCTIONS[]
-    supported === nothing || return supported
-    probe = :(
-        function (x)
-            h = function (a)
-                b = a + 1
-                return b
-            end
-            return h(x)
-        end
-    )
-    supported = try
-        drop_expr(RuntimeGeneratedFunction(@__MODULE__, @__MODULE__, probe))(1) == 2
-    catch
-        false
-    end
-    _RGF_LOCAL_FUNCTIONS[] = supported
-    return supported
-end
-
-# Apply the chunking pass to `expr` according to `chunk_size` (see `CompilerOptions`), unless
-# the function will be compiled by an RuntimeGeneratedFunctions that cannot handle helpers.
-function _chunk_for_compile(expr::Expr, chunk_size::Int, eval_expression::Bool)
-    chunk_size == 0 && return expr
-    eval_expression || _rgf_supports_local_functions() || return expr
-    return chunk_function_expr(
-        expr, chunk_size < 0 ? DEFAULT_CHUNK_SIZE : chunk_size,
-        chunk_size < 0 ? DEFAULT_CHUNK_THRESHOLD : chunk_size,
-        chunk_size < 0 ? DEFAULT_MAX_TRAFFIC : Inf
-    )
-end
 
 function _inject_compiler_options_meta(expr::Expr, co::CompilerOptions)
     if expr.head === :function || expr.head === :->
@@ -687,6 +639,14 @@ function find_arrvars_is_atomic(ex::SymbolicT)
     return SU.default_is_atomic(ex) && Symbolics.isarraysymbolic(ex)
 end
 
+# Chunking of very large in-place functions, see the `chunk_size` option of
+# `BuildFunctionWrapperOptions`. Sizes are counted in reachable `IRStructure` statements.
+const DEFAULT_CHUNK_THRESHOLD = 20000
+const DEFAULT_CHUNK_SIZE = 500
+# Automatic chunking is skipped if the helpers' sub-IRs together are larger than this multiple
+# of the whole function's IR, i.e. if they would recompute too many shared subexpressions.
+const DEFAULT_MAX_CHUNK_DUPLICATION = 1.25
+
 """
     BuildFunctionWrapperOptions(; kwargs...)
 
@@ -748,6 +708,13 @@ composed `wrap_code`, the resolved `optimize`, and the `output_type`-derived
   argument.
 - `extra_assignments`: Extra `Assignment` statements to prefix to `expr`, after all other
   assignments.
+- `chunk_size`: Very large generated functions take superlinear time to compile, so when the
+  right-hand side is a vector whose reachable `IRStructure` has more than
+  $DEFAULT_CHUNK_THRESHOLD statements, the in-place function is split into helper functions that
+  each fill a slice of the output (the out-of-place function is left whole). `-1` does this
+  automatically, into helpers of about $DEFAULT_CHUNK_SIZE statements, unless the helpers would
+  recompute too many shared subexpressions; `0` never splits; a positive value splits any function
+  with more statements than `chunk_size` into helpers of about `chunk_size` statements.
 - `codegen_function_options`: A [`Symbolics.CodegenFunctionOptions`](@ref) holding the
   code-generation options forwarded to `codegen_function`. `build_function_wrapper` reads
   `wrap_code` and `optimize` from it and writes the transformed values back (the composed
@@ -773,6 +740,7 @@ struct BuildFunctionWrapperOptions
     wrap_mtkparameters::Bool
     extra_assignments::Vector{Assignment}
     n_param_buffers::Union{Nothing, Int}
+    chunk_size::Int
     codegen::Symbolics.CodegenFunctionOptions
 end
 
@@ -782,7 +750,7 @@ function BuildFunctionWrapperOptions(;
         histfn = DDE_HISTORY_FUN, histfn_symbolic = histfn,
         create_bindings = false, output_type = nothing, mkarray = nothing,
         wrap_mtkparameters = true, extra_assignments = Assignment[],
-        n_param_buffers = nothing,
+        n_param_buffers = nothing, chunk_size::Integer = -1,
         codegen_function_options::Symbolics.CodegenFunctionOptions = Symbolics.CodegenFunctionOptions()
     )
     # The constructor only accepts valid `build_function_wrapper` options; there is no
@@ -794,7 +762,8 @@ function BuildFunctionWrapperOptions(;
     return BuildFunctionWrapperOptions(
         p_start, p_end, compress_args, non_standard_param_layout, u_arg, wrap_delays,
         histfn, histfn_symbolic, create_bindings, output_type, mkarray,
-        wrap_mtkparameters, extra_assignments, n_param_buffers, codegen_function_options
+        wrap_mtkparameters, extra_assignments, n_param_buffers, chunk_size,
+        codegen_function_options
     )
 end
 
@@ -835,6 +804,64 @@ Base.@nospecializeinfer function build_function_wrapper(
     return build_function_wrapper(sys, expr, collect(Any, args), opts)
 end
 
+# Whether the loaded RuntimeGeneratedFunctions can compile a function containing a local
+# function definition, as chunked helpers are. Versions 0.5.12 and 0.5.13 fail on Julia 1.12
+# with "syntax: malformed expression". Cached after the first probe.
+const _RGF_LOCAL_FUNCTIONS = Ref{Union{Nothing, Bool}}(nothing)
+
+function _rgf_supports_local_functions()
+    supported = _RGF_LOCAL_FUNCTIONS[]
+    supported === nothing || return supported
+    probe = :(
+        function (x)
+            return (
+                function (a)
+                    b = a + 1
+                    return b
+                end
+            )(x)
+        end
+    )
+    supported = try
+        drop_expr(RuntimeGeneratedFunction(@__MODULE__, @__MODULE__, probe))(1) == 2
+    catch
+        false
+    end
+    _RGF_LOCAL_FUNCTIONS[] = supported
+    return supported
+end
+
+# Contiguous slices of the output vector `expr`, each reaching about `target` statements of
+# `ir` (the reachable IR of `expr`), or `nothing` if the function should not be chunked.
+function _chunk_ranges(ir::IRStructure{VartypeT}, expr, chunk_size::Int)
+    chunk_size == 0 && return nothing
+    expr isa AbstractVector{SymbolicT} || return nothing
+    nstmts = length(ir)
+    target = chunk_size < 0 ? DEFAULT_CHUNK_SIZE : chunk_size
+    nstmts > (chunk_size < 0 ? DEFAULT_CHUNK_THRESHOLD : target) || return nothing
+    per_chunk = max(1, fld(target * length(expr), nstmts))
+    ranges = [i:min(i + per_chunk - 1, length(expr)) for i in 1:per_chunk:length(expr)]
+    length(ranges) > 1 || return nothing
+    if chunk_size < 0
+        chunked = sum(r -> length(SU.subset_ir(ir, view(expr, r))), ranges)
+        chunked <= DEFAULT_MAX_CHUNK_DUPLICATION * nstmts || return nothing
+    end
+    return ranges
+end
+
+# Combine the in-place helper functions `helpers` (generated `:function` expressions with the
+# same signature) into one function with that signature which calls each of them in turn.
+function _call_chunks(helpers::Vector{Any})
+    signature = helpers[1].args[1]
+    all(arg -> arg isa Symbol, signature.args) || return nothing
+    body = Expr(:block)
+    for helper in helpers
+        push!(body.args, Expr(:call, helper, signature.args...))
+    end
+    push!(body.args, signature.args[1])
+    return Expr(:function, signature, body)
+end
+
 """
     build_function_wrapper(sys::AbstractSystem, expr, args, opts::BuildFunctionWrapperOptions)
 
@@ -854,8 +881,9 @@ Base.@nospecializeinfer function build_function_wrapper(
     (;
         p_start, p_end, compress_args, non_standard_param_layout, u_arg, wrap_delays,
         histfn_symbolic, create_bindings, output_type, mkarray, wrap_mtkparameters,
-        extra_assignments, n_param_buffers,
+        extra_assignments, n_param_buffers, chunk_size,
     ) = opts
+    orig_args = args
     # Resolve the `sys`/`args`-dependent defaults (left as `nothing` when constructing the
     # options without a `sys` in scope). `length(args)` here is the original argument count,
     # before `wrap_delays` may insert the history-function argument below.
@@ -919,6 +947,21 @@ Base.@nospecializeinfer function build_function_wrapper(
     # Subset the `IRStructure` so that optimization passes run on the minimal set of
     # expressions
     ir = SU.subset_ir(ir, stmts)
+
+    # A very large in-place function is split into helpers that each fill a slice of the output.
+    # Each helper is generated by this same function from its slice of `expr`, so it only reads
+    # its arguments and has its own minimal IR.
+    chunk_ranges = nothing
+    if opts.codegen.iip_config == (true, true) && !wrap_delays && !create_bindings &&
+            isempty(compress_args) && isempty(extra_assignments) &&
+            !(has_preface(sys) && preface(sys) !== nothing) &&
+            all(==(identity), opts.codegen.wrap_code) && opts.codegen.outputidxs === nothing &&
+            mkarray === nothing && output_type !== Tuple
+        chunk_ranges = _chunk_ranges(ir, expr, chunk_size)
+        if chunk_ranges !== nothing && !_rgf_supports_local_functions()
+            chunk_ranges = nothing
+        end
+    end
     # We don't use `replace_node!` here to insert the observed, and instead prefer to
     # substitute as done above. The issue arises due to array variables passed scalarized
     # to the function. Consider a case where `p1` and `p2` are array parameters, `p1 => p2`
@@ -1039,6 +1082,25 @@ Base.@nospecializeinfer function build_function_wrapper(
     # rest (`nanmath`, `checkbounds`, `iip_config`, ...), so `codegen_function` still sees a
     # single concrete `CodegenFunctionOptions` type and is compiled once.
     codegen_options = setproperties(opts.codegen, (; wrap_code, similarto, optimize))
+    if chunk_ranges !== nothing
+        helpers = Any[]
+        for range in chunk_ranges
+            helper_opts = setproperties(
+                opts, (;
+                    chunk_size = 0,
+                    codegen = setproperties(
+                        opts.codegen, (; iip_config = (false, true), outputidxs = collect(range))
+                    ),
+                )
+            )
+            push!(helpers, build_function_wrapper(sys, expr[range], orig_args, helper_opts)[2])
+        end
+        iip = _call_chunks(helpers)
+        if iip !== nothing
+            codegen_options = setproperties(codegen_options, (; iip_config = (true, false)))
+            return first(Symbolics.codegen_function(ir, expr, args, codegen_options)), iip
+        end
+    end
     return Symbolics.codegen_function(ir, expr, args, codegen_options)
 end
 
