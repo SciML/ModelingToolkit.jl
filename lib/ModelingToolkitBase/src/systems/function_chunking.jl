@@ -234,7 +234,9 @@ function _is_whitelisted(stmts, fargs, bound)
             end
             return lhs isa Expr && lhs.head === :ref && visit(lhs, false) && visit(rhs, false)
         elseif h === :local
-            return top && all(a -> a isa Symbol || (a isa Expr && a.head === :(=) && visit(a, top)), ex.args)
+            # Only `local name = expr`: a bare declaration would not initialize the name.
+            return top && length(ex.args) == 1 && ex.args[1] isa Expr &&
+                ex.args[1].head === :(=) && ex.args[1].args[1] isa Symbol && visit(ex.args[1], top)
         elseif h === :call
             _callee_kind(ex.args[1], bound) === :bad && return false
             return all(a -> visit(a, false), @view ex.args[2:end])

@@ -208,6 +208,61 @@ end
         end
     )
     @test run(chunk_function_expr(conditional, 1, 1), false) == run(conditional, false) == 1
+    # A bare `local` declaration does not initialize the name.
+    bare_local = :(
+        function (x)
+            local a
+            b = x ? a : 0
+            c = b + 1
+            c
+        end
+    )
+    @test run(chunk_function_expr(bare_local, 1, 1), false) == run(bare_local, false) == 1
+    # Other ways of declaring or binding names are left unchunked or behave identically.
+    nested_assign = :(
+        function (x)
+            local a = b = x + 1
+            c = a + b
+            c
+        end
+    )
+    @test run(chunk_function_expr(nested_assign, 1, 1), 2) == run(nested_assign, 2) == 6
+    for ex in (
+            :(
+                function (x)
+                    local a, b; c = x + 1; c
+                end
+            ),
+            :(
+                function (x)
+                    let a = x
+                        b = a + 1
+                    end; c = x + 1; c
+                end
+            ),
+            :(
+                function (x)
+                    (a, b) = (x, x); c = a + b; c
+                end
+            ),
+            :(
+                function (x)
+                    a::Float64 = x; c = a + 1; c
+                end
+            ),
+            :(
+                function (x)
+                    a = [x]; a[1] += 1; c = a[1] + 1; c
+                end
+            ),
+            :(
+                function (x)
+                    a = Ref(x); a.x = 1; c = a[] + 1; c
+                end
+            ),
+        )
+        @test chunk_function_expr(ex, 1, 1) == ex
+    end
     # Rebinding a name.
     rebinding = :(
         function (x)
