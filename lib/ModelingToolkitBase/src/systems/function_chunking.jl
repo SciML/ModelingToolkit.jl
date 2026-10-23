@@ -54,21 +54,22 @@ function _collect_lhs!(out, lhs)
 end
 
 # Descend through single-statement blocks and `@inbounds` to the first block that holds
-# several statements. Returns the statements and a function rebuilding the original nesting
-# around a replacement list of statements, or `nothing`.
-function _find_statement_block(ex)
+# several statements. Returns the statements, a function rebuilding the original nesting
+# around a replacement list of statements, and whether an `@inbounds` was passed on the way
+# (so that the statements run without bounds checks), or `nothing`.
+function _find_statement_block(ex, inbounds = false)
     if ex isa Expr && ex.head === :block
         kids = filter(!Base.Fix2(isa, LineNumberNode), ex.args)
-        length(kids) == 1 || return (kids, stmts -> Expr(:block, stmts...))
-        found = _find_statement_block(only(kids))
+        length(kids) == 1 || return (kids, stmts -> Expr(:block, stmts...), inbounds)
+        found = _find_statement_block(only(kids), inbounds)
         found === nothing && return nothing
-        stmts, rebuild = found
-        return stmts, s -> Expr(:block, rebuild(s))
+        stmts, rebuild, inb = found
+        return stmts, s -> Expr(:block, rebuild(s)), inb
     elseif _is_inbounds_call(ex) && ex.args[end] isa Expr && ex.args[end].head === :block
-        found = _find_statement_block(ex.args[end])
+        found = _find_statement_block(ex.args[end], true)
         found === nothing && return nothing
-        stmts, rebuild = found
-        return stmts, s -> Expr(ex.head, ex.args[1:(end - 1)]..., rebuild(s))
+        stmts, rebuild, inb = found
+        return stmts, s -> Expr(ex.head, ex.args[1:(end - 1)]..., rebuild(s)), inb
     end
     return nothing
 end
@@ -90,6 +91,7 @@ end
 # The final `x = @inbounds begin ...; y = z end` written by array codegen is spliced into
 # the statement list so that the stores can live next to the values they store.
 function _splice_tail(stmts)
+    isempty(stmts) && return stmts
     last_stmt = stmts[end]
     inner = last_stmt
     target = nothing
@@ -99,6 +101,7 @@ function _splice_tail(stmts)
     end
     (inner isa Expr && (inner.head === :block || _is_inbounds_call(inner))) || return stmts
     spliced = _splice_block!(Any[], inner)
+    isempty(spliced) && return stmts
     final = spliced[end]
     if target !== nothing
         final isa Expr && final.head === :(=) && final.args[1] isa Symbol || return stmts
@@ -134,14 +137,75 @@ function _analyze_statement(st)
 end
 
 # Right-hand sides that are cheaper to recompute in a helper than to pass to it.
-function _is_cheap_rhs(rhs, cheap::Set{Symbol}, fargs::Set{Symbol})
+function _is_cheap_rhs(rhs, cheap::Set{Symbol}, fargs::Set{Symbol}, readonly)
     rhs isa Number && return true
     rhs isa Symbol && return rhs in fargs || rhs in cheap
     if rhs isa Expr && rhs.head === :ref
         return rhs.args[1] isa Symbol && (rhs.args[1] in fargs || rhs.args[1] in cheap) &&
-            all(a -> a isa Number, @view rhs.args[2:end])
+            readonly(rhs.args[1]) && all(a -> a isa Number, @view rhs.args[2:end])
     end
     return false
+end
+
+# Forms whose scoping or side effects the pass does not model: closures, inner functions,
+# comprehensions and macros other than `@inbounds`.
+function _has_unsafe_form(ex)
+    ex isa Expr || return false
+    ex.head in (:->, :function, :do, :comprehension, :generator, :opaque_closure, :macro) && return true
+    ex.head === :macrocall && !_is_inbounds_call(ex) && return true
+    ex.head === :(=) && ex.args[1] isa Expr && ex.args[1].head === :call && return true
+    return any(_has_unsafe_form, ex.args)
+end
+
+function _called_name(f)
+    f isa Symbol && return f
+    f isa GlobalRef && return f.name
+    f isa QuoteNode && return _called_name(f.value)
+    f isa Expr && f.head === :. && return _called_name(f.args[end])
+    return nothing
+end
+
+# Marks the base of every indexed store; returns true if some statement may mutate in a way
+# that cannot be attributed to a base (`f!(...)`, broadcast assignment, field stores).
+function _note_mutations!(bases::Set{Symbol}, ex)
+    ex isa Expr || return false
+    unknown = false
+    if ex.head in (:(=), :(+=), :(-=), :(*=), :(/=), :(.=))
+        lhs = ex.args[1]
+        if lhs isa Expr && lhs.head === :ref && lhs.args[1] isa Symbol
+            push!(bases, lhs.args[1])
+        elseif lhs isa Expr
+            unknown = true
+        end
+        ex.head === :(.=) && (unknown = true)
+    elseif ex.head === :call
+        name = _called_name(ex.args[1])
+        name !== nothing && endswith(string(name), "!") && (unknown = true)
+    end
+    for a in ex.args
+        unknown |= _note_mutations!(bases, a)
+    end
+    return unknown
+end
+
+# A predicate telling whether reading from the named argument (or alias of one) is safe to
+# repeat later, i.e. nothing in the function can write to it.
+function _readonly_bases(stmts, infos, fargs)
+    root = Dict{Symbol, Symbol}()
+    for (st, info) in zip(stmts, infos)
+        info.movable && length(info.defs) == 1 || continue
+        inner = st.head === :local ? st.args[1] : st
+        rhs = inner.args[2]
+        rhs isa Symbol || continue
+        (rhs in fargs || haskey(root, rhs)) && (root[only(info.defs)] = get(root, rhs, rhs))
+    end
+    bases = Set{Symbol}()
+    unknown = false
+    for st in stmts
+        unknown |= _note_mutations!(bases, st)
+    end
+    mutated = Set{Symbol}(get(root, b, b) for b in bases)
+    return b -> !unknown && !(get(root, b, b) in mutated)
 end
 
 """
@@ -155,20 +219,35 @@ of arguments) are recomputed in each helper instead of being passed to it. Retur
 unchanged if it has fewer than `threshold` statements or an unrecognized shape.
 """
 function chunk_function_expr(fex::Expr, chunk_size::Int, threshold::Int)
+    # Chunking is an optimization: any shape the analysis trips over leaves `fex` as is.
+    try
+        return _chunk_function_expr(fex, chunk_size, threshold)
+    catch
+        return fex
+    end
+end
+
+function _chunk_function_expr(fex::Expr, chunk_size::Int, threshold::Int)
     fex.head === :function && length(fex.args) == 2 || return fex
     sig = fex.args[1]
     sig isa Expr && sig.head === :tuple && all(a -> a isa Symbol, sig.args) || return fex
     fargs = Set{Symbol}(sig.args)
     found = _find_statement_block(fex.args[2])
     found === nothing && return fex
-    stmts, rebuild = found
+    stmts, rebuild, inbounds = found
     isempty(stmts) && return fex
-    stmts = _splice_tail(stmts)
+    # The stores of array codegen sit in their own `@inbounds` block; only fold them into
+    # the statement list when the whole body already runs inside `@inbounds`.
+    inbounds && (stmts = _splice_tail(stmts))
+    any(_has_unsafe_form, stmts) && return fex
     infos = map(_analyze_statement, stmts)
     n_defs = Dict{Symbol, Int}()
     for info in infos, d in info.defs
         n_defs[d] = get(n_defs, d, 0) + 1
     end
+    # Rebinding an argument would need renaming across helpers.
+    any(in(fargs), keys(n_defs)) && return fex
+    readonly = _readonly_bases(stmts, infos, fargs)
 
     # A cheap statement stays in the calling function and is also recomputed in any helper
     # that needs it.
@@ -180,7 +259,7 @@ function chunk_function_expr(fex::Expr, chunk_size::Int, threshold::Int)
         n_defs[d] == 1 || continue
         inner = info.expr
         inner = inner.head === :local ? inner.args[1] : inner
-        _is_cheap_rhs(inner.args[2], cheap, fargs) || continue
+        _is_cheap_rhs(inner.args[2], cheap, fargs, readonly) || continue
         push!(cheap, d)
         is_cheap[i] = true
     end
@@ -226,7 +305,7 @@ function chunk_function_expr(fex::Expr, chunk_size::Int, threshold::Int)
         for piece in Iterators.partition(run, piece_len)
             append!(
                 new_stmts,
-                _outline_piece(length(new_stmts), infos, stmts, piece, cheap, cheap_stmt, fargs, last_use, first_def)
+                _outline_piece(length(new_stmts), inbounds, infos, stmts, piece, cheap, cheap_stmt, fargs, last_use, first_def)
             )
         end
         i = j + 1
@@ -234,7 +313,7 @@ function chunk_function_expr(fex::Expr, chunk_size::Int, threshold::Int)
     return Expr(:function, fex.args[1], rebuild(new_stmts))
 end
 
-function _outline_piece(id, infos, stmts, piece, cheap, cheap_stmt, fargs, last_use, first_def)
+function _outline_piece(id, inbounds, infos, stmts, piece, cheap, cheap_stmt, fargs, last_use, first_def)
     first_idx, last_idx = first(piece), last(piece)
     defined = Set{Symbol}()
     inputs = Symbol[]
@@ -267,6 +346,9 @@ function _outline_piece(id, infos, stmts, piece, cheap, cheap_stmt, fargs, last_
             end
         end
     end
+    # A helper cannot both take a variable as input and rebind it (`a = a + 1`); the caller
+    # of this function treats the error as "leave the function unchunked".
+    any(in(defined), inputs) && error("variable rebound from an earlier value")
     sort!(needed_cheap; by = c -> cheap_stmt[c])
     outputs = Symbol[]
     for m in piece, d in infos[m].defs
@@ -277,10 +359,9 @@ function _outline_piece(id, infos, stmts, piece, cheap, cheap_stmt, fargs, last_
     append!(body, _as_local(stmts[m]) for m in piece)
     ret = length(outputs) == 1 ? only(outputs) : Expr(:tuple, outputs...)
     push!(body, ret)
-    helper = Expr(
-        :function, Expr(:tuple, inputs...),
-        Expr(:macrocall, Symbol("@inbounds"), LineNumberNode(0), Expr(:block, body...))
-    )
+    helper_body = Expr(:block, body...)
+    inbounds && (helper_body = Expr(:macrocall, Symbol("@inbounds"), LineNumberNode(0), helper_body))
+    helper = Expr(:function, Expr(:tuple, inputs...), helper_body)
     name = Symbol("__mtk_chunk_", id)
     call = Expr(:call, name, inputs...)
     isempty(outputs) && return (Expr(:(=), name, helper), call)

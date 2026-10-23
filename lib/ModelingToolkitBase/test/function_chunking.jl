@@ -48,6 +48,59 @@ using Test
     @test chunk_function_expr(one_liner, 1, 1) == one_liner
 end
 
+@testset "chunk_function_expr is conservative" begin
+    run(ex, args...) = Base.invokelatest(eval(ex), args...)
+    # Constant-index reads must not be recomputed after the array was mutated.
+    mutating = :(
+        function (x)
+            a = x[1]
+            x[1] = 4
+            b = a + 1
+            b
+        end
+    )
+    @test run(chunk_function_expr(mutating, 1, 1), [2.0]) == run(mutating, [2.0]) == 3.0
+    # Rebinding a name.
+    rebinding = :(
+        function (x)
+            a = x + 1
+            a = a + 1
+            a
+        end
+    )
+    @test run(chunk_function_expr(rebinding, 1, 1), 1.0) == 3.0
+    # Closures capture variables that the liveness analysis cannot see.
+    closure = :(
+        function (x)
+            f = () -> a
+            a = x + 2
+            f()
+        end
+    )
+    @test chunk_function_expr(closure, 1, 1) == closure
+    # Empty blocks never throw.
+    for body in (Expr(:block), Expr(:block, Expr(:block)), Expr(:block, Expr(:macrocall, Symbol("@inbounds"), LineNumberNode(0), Expr(:block))))
+        empty_fn = Expr(:function, Expr(:tuple, :x), body)
+        @test chunk_function_expr(empty_fn, 1, 1) == empty_fn
+    end
+    # Bounds checks are only disabled in helpers if the original function disabled them.
+    body = Any[:(local $(Symbol(:a, i)) = x[$i] + 1) for i in 1:20]
+    push!(body, :(a20))
+    checked = Expr(:function, Expr(:tuple, :x), Expr(:block, body...))
+    chunked = chunk_function_expr(checked, 5, 5)
+    @test chunked != checked
+    @test !occursin("@inbounds", string(chunked))
+    @test_throws BoundsError run(chunked, zeros(3))
+    unchecked = Expr(
+        :function, Expr(:tuple, :x),
+        Expr(:macrocall, Symbol("@inbounds"), LineNumberNode(0), Expr(:block, body...))
+    )
+    @test occursin("@inbounds", string(chunk_function_expr(unchecked, 5, 5)))
+    # The 3-argument constructor still exists.
+    @test CompilerOptions(1, 2, 3).chunk_size == -1
+    @test CompilerOptions(-1, -1, -1) == CompilerOptions()
+end
+
 @testset "chunked generated functions match unchunked ones" begin
     n = 40
     @variables x(t)[1:n]
