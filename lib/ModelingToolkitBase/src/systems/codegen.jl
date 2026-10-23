@@ -2471,12 +2471,17 @@ passed to [`complete`](@ref), [`mtkcompile`](@ref), or [`@mtkcompile`](@ref), `p
 - `eval_module = @__MODULE__`: Module in which expressions are evaluated when
   `eval_expression = true`.
 - `cachesyms = ()`: Symbols supplied as cache arguments to the generated function.
+- `extra_args::Tuple = ()`: Independent scalar or array symbolic inputs appended after
+  the standard arguments, including time when present. These inputs are separate from
+  the system's parameters and cache arguments.
 - `kwargs...`: Code-generation options forwarded to `Symbolics.CodegenFunctionOptions`.
 
 # Returns
 
 - Generated expression(s) or callable function(s). Time-dependent functions accept
-  `f(u, p, t)` or `f(du, u, p, t)`; time-independent functions omit `t`.
+  `f(u, p, t, extra_args...)` or `f(du, u, p, t, extra_args...)`;
+  time-independent functions omit `t`. Each entry of `extra_args` corresponds to one
+  positional argument, in tuple order. An empty tuple adds no arguments.
 
 # Examples
 
@@ -2492,7 +2497,7 @@ f([1.0], MTKParameters(sys, []), 0.0)
 """
 function generate_custom_function(
         sys::AbstractSystem, exprs, dvs, ps, opts::GeneratedFunctionOptions;
-        cachesyms::Tuple = ()
+        cachesyms::Tuple = (), extra_args::Tuple = ()
     )
     (; eval_expression, eval_module) = opts
     expression = expression_val(opts)
@@ -2500,26 +2505,23 @@ function generate_custom_function(
         error("A completed system is required. Call `complete` or `mtkcompile` on the system.")
     end
     p = reorder_parameters(sys, unwrap.(ps))
-    isscalar = !(exprs isa AbstractArray)
-    fnexpr = if is_time_dependent(sys)
-        build_function_wrapper(
-            sys, exprs,
-            [Any[dvs]; p; collect(cachesyms); Any[get_iv(sys)]],
-            BuildFunctionWrapperOptions(;
-                u_arg = 1,
-                codegen_function_options = opts.codegen
-            )
-        )
-    else
-        build_function_wrapper(
-            sys, exprs,
-            [Any[dvs]; p],
-            BuildFunctionWrapperOptions(;
-                u_arg = 1,
-                codegen_function_options = opts.codegen
-            )
-        )
+    args = Any[dvs]
+    append!(args, p)
+    if is_time_dependent(sys)
+        append!(args, cachesyms)
     end
+    p_end = length(args)
+    if is_time_dependent(sys)
+        push!(args, get_iv(sys))
+    end
+    append!(args, extra_args)
+    fnexpr = build_function_wrapper(
+        sys, exprs, args,
+        BuildFunctionWrapperOptions(;
+            u_arg = 1, p_end, n_param_buffers = length(p),
+            codegen_function_options = opts.codegen
+        )
+    )
     if expression == Val{true}
         return fnexpr
     end

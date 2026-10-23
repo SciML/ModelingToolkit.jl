@@ -302,7 +302,7 @@ function generate_custom_function(
         sys::AbstractSystem, exprs, dvs = unknowns(sys),
         ps = parameters(sys; initial_parameters = true);
         expression = Val{true}, eval_expression = false, eval_module = @__MODULE__,
-        cachesyms::Tuple = (), kwargs...
+        cachesyms::Tuple = (), extra_args::Tuple = (), kwargs...
     )
     return generate_custom_function(
         sys, exprs, dvs, ps,
@@ -310,7 +310,7 @@ function generate_custom_function(
             expression, eval_expression, eval_module,
             codegen_function_options = Symbolics.CodegenFunctionOptions(; kwargs...)
         );
-        cachesyms
+        cachesyms, extra_args
     )
 end
 
