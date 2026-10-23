@@ -561,6 +561,15 @@ function Base.show(io::IO, mime::MIME"text/plain", lf::LinearizationFunction)
     return show(io, mime, lf.prob)
 end
 
+function _linearization_input_vals(linfun::LinearizationFunction, p)
+    linfun.num_inputs == 0 && return nothing
+    prepared = linfun.inputs_getter(linfun.prob)
+    solved = linfun.inputs_getter(
+        SymbolicIndexingInterface.ProblemState(; u = state_values(linfun.prob), p)
+    )
+    return convert.(eltype(prepared), solved)
+end
+
 """
     $(TYPEDSIGNATURES)
 
@@ -580,7 +589,6 @@ function (linfun::LinearizationFunction)(u, p, t)
     end
 
     fun = linfun.prob.f
-    input_vals = linfun.inputs_getter(linfun.prob)
     if u !== nothing # Handle systems without unknowns
         linfun.num_states == length(u) ||
             error("Number of unknown variables ($(linfun.num_states)) does not match the number of input unknowns ($(length(u)))")
@@ -603,6 +611,7 @@ function (linfun::LinearizationFunction)(u, p, t)
         if !success
             error("Initialization algorithm $(linfun.initializealg) failed with `unknowns = $u` and `p = $p`.")
         end
+        input_vals = _linearization_input_vals(linfun, p)
         fg_xz = linfun.uf_jac(u, DI.Constant(p), DI.Constant(t))
         h_xz = linfun.h_jac(u, DI.Constant(p), DI.Constant(t))
         fg_u = linfun.pf_jac(
@@ -614,6 +623,7 @@ function (linfun::LinearizationFunction)(u, p, t)
             error("Number of unknown variables (0) does not match the expected number of unknowns ($(linfun.num_states))")
         fg_xz = zeros(0, 0)
         h_xz = fg_u = zeros(0, length(linfun.num_inputs))
+        input_vals = _linearization_input_vals(linfun, p)
     end
     h_u = linfun.hp_jac(
         input_vals,
