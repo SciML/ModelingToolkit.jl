@@ -1,6 +1,6 @@
 using ModelingToolkitBase, SciMLBase, ForwardDiff
 using ModelingToolkitBase: t_nounits as t, D_nounits as D, chunk_function_expr
-using Test
+using Test, Random
 
 # `getindex` with a side effect: reads must happen exactly once, where the original does them.
 mutable struct CountingVector
@@ -340,4 +340,82 @@ end
     expr = generate_rhs(sys; expression = Val(true))[2]
     @test chunk_function_expr(expr, 500, 2000) == expr
     @test occursin("__mtk_chunk_", string(chunk_function_expr(expr, 50, 50)))
+end
+
+# Random straight-line functions over a small grammar: chunking must never change the result,
+# including which error is thrown when a name is read before it is bound.
+function random_function(rng)
+    names = [:a, :b, :c, :d]
+    defined = Symbol[]
+    # Mostly read names that are already bound, sometimes any name (an `UndefVarError`).
+    pick() = (isempty(defined) || rand(rng) < 0.1) ? rand(rng, names) : rand(rng, defined)
+    function expr(depth)
+        r = rand(rng)
+        if depth == 0 || r < 0.2
+            return rand(rng, (rand(rng, 1:3), rand(rng) + 0.5, pick(), rand(rng, [:y, :z])))
+        elseif r < 0.35
+            return :(out[$(rand(rng, 1:3))])
+        elseif r < 0.45
+            return pick()
+        elseif r < 0.4 + 0.02
+            inner = rand(rng, names)
+            return :(
+                begin
+                    $inner = $(expr(depth - 1))
+                    $inner + 1
+                end
+            )
+        else
+            return Expr(:call, rand(rng, (:+, :*, :-)), expr(depth - 1), expr(depth - 1))
+        end
+    end
+    stmts = Any[]
+    for _ in 1:rand(rng, 3:10)
+        r = rand(rng)
+        name = rand(rng, names)
+        if r < 0.45
+            push!(stmts, :(local $name = $(expr(2))))
+            push!(defined, name)
+        elseif r < 0.7
+            push!(stmts, :($name = $(expr(2))))
+            push!(defined, name)
+        elseif r < 0.85
+            push!(stmts, :(out[$(rand(rng, 1:3))] = $(expr(2))))
+        else
+            push!(stmts, :($name = $(rand(rng, [:out, :y, :z]))))
+            push!(defined, name)
+        end
+    end
+    push!(stmts, rand(rng, (:out, expr(2), expr(2))))
+    return Expr(:function, Expr(:tuple, :out, :y, :z), Expr(:block, stmts...))
+end
+
+function run_both(f, out0, y, z)
+    out = copy(out0)
+    try
+        r = Base.invokelatest(f, out, y, z)
+        return (:ok, r, out)
+    catch err
+        return (:error, typeof(err), out)
+    end
+end
+
+@testset "random straight-line functions" begin
+    rng = Random.Xoshiro(20261023)
+    n_chunked = n_ok = 0
+    for _ in 1:300
+        ex = random_function(rng)
+        size = rand(rng, 1:2)
+        chunked = chunk_function_expr(ex, size, size)
+        n_chunked += chunked != ex
+        res0 = run_both(eval(ex), [1.0, 2.0, 3.0], 0.5, 0.25)
+        res1 = run_both(eval(chunked), [1.0, 2.0, 3.0], 0.5, 0.25)
+        if !isequal(res0, res1)
+            @info "mismatch" ex chunked res0 res1
+        end
+        n_ok += chunked != ex && res0[1] === :ok
+        @test isequal(res0, res1)
+    end
+    @test n_chunked > 80
+    @test n_ok > 50
 end

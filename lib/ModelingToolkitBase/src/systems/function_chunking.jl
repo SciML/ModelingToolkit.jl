@@ -19,9 +19,7 @@ const DEFAULT_MAX_TRAFFIC = 0.15
 
 # Heads that may appear inside the right-hand side of a statement that is safe to move into
 # a helper function: none of them introduce bindings.
-const _CHUNKABLE_HEADS = (
-    :call, :ref, :., :tuple, :vect, :curly, :if, :&&, :||, :comparison, :(::),
-)
+const _CHUNKABLE_HEADS = (:call, :ref, :., :curly)
 
 _is_inbounds_call(ex) = ex isa Expr && ex.head === :macrocall && ex.args[1] === Symbol("@inbounds")
 
@@ -56,6 +54,21 @@ function _collect_lhs!(out, lhs)
         push!(out, lhs)
     elseif lhs isa Expr
         foreach(Base.Fix1(_collect_lhs!, out), lhs.args)
+    end
+    return out
+end
+
+# Symbols read by `ex`: like `_collect_symbols!`, but the target of a plain assignment is not
+# a read.
+function _collect_reads!(out::Vector{Symbol}, ex)
+    if ex isa Symbol
+        push!(out, ex)
+    elseif ex isa Expr
+        if ex.head === :(=) && ex.args[1] isa Symbol
+            _collect_reads!(out, ex.args[2])
+        else
+            foreach(Base.Fix1(_collect_reads!, out), ex.args)
+        end
     end
     return out
 end
@@ -212,9 +225,11 @@ function _callee_kind(f, bound)
 end
 
 """
-Strict whitelist scan of the body: only a fixed set of expression heads, calls (including
-broadcast calls) to the functions above or `Symbolics.set_nzval`, and no rebinding of
-arguments. Anything else, including broadcast assignment, makes the function unchunked.
+Strict whitelist scan of the body: only the expression heads that occur in generated
+functions (`=`, `local`, `block`, `ref`, `call`, broadcast calls and `@inbounds`), calls to the
+functions above or `Symbolics.set_nzval`, and no rebinding of arguments. Anything else, such
+as conditionals, tuples, type assertions or broadcast assignment, makes the function
+unchunked.
 """
 function _is_whitelisted(stmts, fargs, bound)
     # `top` is true while the expression is evaluated unconditionally as part of a top-level
@@ -244,8 +259,6 @@ function _is_whitelisted(stmts, fargs, bound)
             # broadcast call `f.(args...)`
             _callee_kind(ex.args[1], bound) === :bad && return false
             return all(a -> visit(a, false), ex.args[2].args)
-        elseif h in (:tuple, :vect, :curly, :if, :&&, :||, :comparison, :(::))
-            return all(a -> visit(a, false), ex.args)
         elseif _is_inbounds_call(ex)
             return visit(ex.args[end], top)
         end
@@ -295,6 +308,14 @@ function _chunk_function_expr(fex::Expr, chunk_size::Int, threshold::Int, max_tr
     # Rebinding an argument would need renaming across helpers.
     any(in(fargs), keys(n_defs)) && return fex
     _is_whitelisted(stmts, fargs, union(fargs, keys(n_defs))) || return fex
+    # Every local that is read must have been bound by an earlier statement.
+    first_def = Dict{Symbol, Int}()
+    for (i, info) in enumerate(infos), d in info.defs
+        get!(first_def, d, i)
+    end
+    for (i, st) in enumerate(stmts), r in _collect_reads!(Symbol[], st)
+        haskey(first_def, r) && first_def[r] >= i && return fex
+    end
 
     # A cheap statement stays in the calling function and is also duplicated into any helper
     # that needs it.
@@ -319,10 +340,6 @@ function _chunk_function_expr(fex::Expr, chunk_size::Int, threshold::Int, max_tr
         last_use[u] = i
     end
     cheap_stmt = Dict{Symbol, Int}(only(infos[i].defs) => i for i in eachindex(infos) if is_cheap[i])
-    first_def = Dict{Symbol, Int}()
-    for (i, info) in enumerate(infos), d in info.defs
-        get!(first_def, d, i)
-    end
 
     # Pieces are contiguous runs of outlinable statements, cut to about `chunk_size`.
     new_stmts = Any[]
