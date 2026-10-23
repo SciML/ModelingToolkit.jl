@@ -849,10 +849,22 @@ function _chunk_ranges(ir::IRStructure{VartypeT}, expr, chunk_size::Int)
     return ranges
 end
 
+# Whether `out` might share memory with an input array, looking inside tuples, arrays of
+# arrays and the buffers of an `MTKParameters`.
+_might_alias(out, input::AbstractArray) = Base.mightalias(out, input) ||
+    (eltype(input) <: AbstractArray && any(buffer -> _might_alias(out, buffer), input))
+_might_alias(out, inputs::Tuple) = any(input -> _might_alias(out, input), inputs)
+function _might_alias(out, ps::MTKParameters)
+    return _might_alias(out, (ps.tunable, ps.initials, ps.discrete, ps.constant, ps.nonnumeric, ps.caches))
+end
+_might_alias(out, ::Any) = false
+
 # The unchunked in-place function reads every input before it writes `out`, but the helpers
-# run one after the other. If `out` aliases an input the helpers write to a scratch array instead.
-_chunk_destination(out, inputs...) =
-    any(input -> input isa AbstractArray && Base.mightalias(out, input), inputs) ? similar(out) : out
+# run one after the other. If `out` might alias an input the helpers write to a copy of `out`
+# instead (a copy, since with `skipzeros` the helpers leave some entries untouched).
+function _chunk_destination(out, inputs...)
+    return _might_alias(out, inputs) ? copyto!(similar(out), out) : out
+end
 
 # Combine the in-place helper functions `helpers` (generated `:function` expressions with the
 # same signature) into one function with that signature which calls each of them in turn.

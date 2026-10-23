@@ -111,3 +111,33 @@ end
     @test results[2] == results[1]
     @test expect_chunked(build_rhs(ring, ring_rhss; chunk_size = 1)[2])
 end
+
+@testset "aliasing with a parameter buffer or with skipzeros" begin
+    @variables z(t)[1:4]
+    @parameters kk[1:4] = [1.0, 2.0, 3.0, 4.0]
+    kring = mtkcompile(System([D(z[i]) ~ kk[mod1(i + 1, 4)]^2 + z[i] for i in 1:4], t; name = :kring))
+    kring_rhss = [eq.rhs for eq in equations(kring)]
+    kring_p = MTKB.MTKParameters(kring, [])
+    for chunk_size in (0, 1)
+        iip = build_rhs(kring, kring_rhss; chunk_size)[2]
+        run_expr(iip, kring_p.tunable, zeros(4), kring_p, 0.0)
+        @test kring_p.tunable == [4.0, 9.0, 16.0, 1.0]
+        kring_p.tunable .= [1.0, 2.0, 3.0, 4.0]
+    end
+
+    # the first output is a structural zero that `skipzeros` leaves untouched
+    @variables w(t)[1:4]
+    ring = mtkcompile(System([D(w[i]) ~ w[mod1(i + 1, 4)]^2 for i in 1:4], t; name = :zring))
+    ring_p = MTKB.MTKParameters(ring, [])
+    zero_rhss = [eq.rhs for eq in equations(ring)]
+    zero_rhss[1] = MTKB.SConst(0)
+    zero_options = MTKB.Symbolics.CodegenFunctionOptions(; skipzeros = true)
+    results = map((0, 1)) do chunk_size
+        iip = build_rhs(ring, zero_rhss; chunk_size, codegen_function_options = zero_options)[2]
+        buffer = [10.0, 2.0, 3.0, 4.0]
+        returned = run_expr(iip, buffer, buffer, ring_p, 0.0)
+        (buffer, returned === buffer)
+    end
+    @test results[1] == ([10.0, 9.0, 16.0, 100.0], true)
+    @test results[2] == results[1]
+end
