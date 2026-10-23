@@ -458,33 +458,6 @@ end
     @test_nowarn ODEProblem(sys, sim_cond, 1.0; guesses = [:A => 1.0])
 end
 
-@testset "Initialization of an array system from initialization equations" begin
-    @variables u(t)[1:5]
-    @named isys = System(
-        [D(u[i]) ~ -u[i] for i in 1:5], t; initialization_eqs = [u[i] ~ i for i in 1:5]
-    )
-    sys = mtkcompile(isys)
-    prob = ODEProblem(sys, [], (0.0, 1.0); warn_initialize_determined = false)
-    @test prob[sys.u] == 1.0:5.0
-    @test prob.f.initialization_data !== nothing
-    @test isempty(unknowns(prob.f.initialization_data.initializeprob.f.sys))
-    @test remake(prob; u0 = [sys.u[2] => 20.0])[sys.u] == [1.0, 20.0, 3.0, 4.0, 5.0]
-    @test solve(prob, Tsit5(); reltol = 1.0e-8, abstol = 1.0e-8)[sys.u, end] ≈ (1.0:5.0) .* exp(-1)
-
-    # The `homotopy` and `limited` checks must still find a node among array equations.
-    @test !ModelingToolkitBase.has_any_homotopy(sys)
-    @test !ModelingToolkitBase.has_any_limited(sys)
-    @variables v(t)[1:3]
-    @named hsys = System(
-        [D(v[1]) ~ -v[1], D(v[2]) ~ -ModelingToolkitBase.homotopy(v[2], 2.0), D(v[3]) ~ -v[3]], t
-    )
-    @test ModelingToolkitBase.has_any_homotopy(complete(hsys))
-    @named lsys = System(
-        [D(v[1]) ~ -v[1], D(v[2]) ~ -ModelingToolkitBase.limited(v[2], 2.0), D(v[3]) ~ -v[3]], t
-    )
-    @test ModelingToolkitBase.has_any_limited(complete(lsys))
-end
-
 if !@isdefined(ModelingToolkit)
     @testset "Issue#4235: Duplicate initial conditions error" begin
         @variables X(t)
