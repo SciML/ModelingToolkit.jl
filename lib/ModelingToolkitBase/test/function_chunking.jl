@@ -24,6 +24,10 @@ end
 
 run_expr(ex, args...) = Base.invokelatest(eval(ex), args...)
 
+# Chunking is intentionally disabled when the loaded RuntimeGeneratedFunctions cannot compile helpers.
+const CHUNKING_AVAILABLE = MTKB._rgf_supports_local_functions()
+expect_chunked(ex) = CHUNKING_AVAILABLE ? count_helpers(ex) > 1 : count_helpers(ex) == 0
+
 count_helpers(ex) = count(a -> Meta.isexpr(a, :call) && Meta.isexpr(a.args[1], :function), ex.args[2].args)
 
 n = 200
@@ -36,7 +40,7 @@ run_expr(build_rhs(sys, rhss; chunk_size = 0)[2], reference, u, p, 0.0)
 
 @testset "explicit chunk_size splits the in-place function and matches" begin
     oop, iip = build_rhs(sys, rhss; chunk_size = 300)
-    @test count_helpers(iip) > 1
+    @test expect_chunked(iip)
     du = zeros(n)
     run_expr(iip, du, u, p, 0.0)
     @test du == reference
@@ -69,7 +73,7 @@ end
     eqs = [D(y[i]) ~ shared * y[i] for i in 1:20]
     sys2 = mtkcompile(System(eqs, t; name = :shared))
     rhss2 = [eq.rhs for eq in equations(sys2)]
-    @test count_helpers(build_rhs(sys2, rhss2; chunk_size = 20)[2]) > 1
+    @test expect_chunked(build_rhs(sys2, rhss2; chunk_size = 20)[2])
     ir = MTKB.SU.subset_ir(MTKB.get_irstructure(sys2), rhss2)
     @test MTKB._chunk_ranges(ir, rhss2, -1) === nothing
 end
@@ -82,10 +86,28 @@ end
     ir = MTKB.SU.subset_ir(MTKB.get_irstructure(bigsys), [eq.rhs for eq in equations(bigsys)])
     @test length(ir) > MTKB.DEFAULT_CHUNK_THRESHOLD
     expr_oop, expr_iip = MTKB.generate_rhs(bigsys, MTKB.GeneratedFunctionOptions(; expression = Val{true}))
-    @test count_helpers(expr_iip) > 1
+    @test expect_chunked(expr_iip)
     expected = zeros(nbig)
     run_expr(build_rhs(bigsys, [eq.rhs for eq in equations(bigsys)]; chunk_size = 0)[2], expected, ubig, pbig, 0.0)
     du = zeros(nbig)
     run_expr(expr_iip, du, ubig, pbig, 0.0)
     @test du == expected
+end
+
+@testset "chunked function matches the unchunked one when the output aliases the input" begin
+    @variables y(t)[1:4]
+    ring = mtkcompile(System([D(y[i]) ~ y[mod1(i + 1, 4)]^2 for i in 1:4], t; name = :alias))
+    ring_rhss = [eq.rhs for eq in equations(ring)]
+    ring_p = MTKB.MTKParameters(ring, [])
+    results = map((0, 1)) do chunk_size
+        iip = build_rhs(ring, ring_rhss; chunk_size)[2]
+        buffer = [1.0, 2.0, 3.0, 4.0]
+        run_expr(iip, buffer, buffer, ring_p, 0.0)
+        separate = zeros(4)
+        run_expr(iip, separate, [1.0, 2.0, 3.0, 4.0], ring_p, 0.0)
+        (buffer, separate)
+    end
+    @test results[1] == ([4.0, 9.0, 16.0, 1.0], [4.0, 9.0, 16.0, 1.0])
+    @test results[2] == results[1]
+    @test expect_chunked(build_rhs(ring, ring_rhss; chunk_size = 1)[2])
 end

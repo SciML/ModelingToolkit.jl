@@ -849,16 +849,23 @@ function _chunk_ranges(ir::IRStructure{VartypeT}, expr, chunk_size::Int)
     return ranges
 end
 
+# The unchunked in-place function reads every input before it writes `out`, but the helpers
+# run one after the other. If `out` aliases an input the helpers write to a scratch array instead.
+_chunk_destination(out, inputs...) =
+    any(input -> input isa AbstractArray && Base.mightalias(out, input), inputs) ? similar(out) : out
+
 # Combine the in-place helper functions `helpers` (generated `:function` expressions with the
 # same signature) into one function with that signature which calls each of them in turn.
 function _call_chunks(helpers::Vector{Any})
     signature = helpers[1].args[1]
     all(arg -> arg isa Symbol, signature.args) || return nothing
-    body = Expr(:block)
+    out, inputs = signature.args[1], signature.args[2:end]
+    dest = Symbol("##chunk_destination")
+    body = Expr(:block, :($dest = $(GlobalRef(@__MODULE__, :_chunk_destination))($out, $(inputs...))))
     for helper in helpers
-        push!(body.args, Expr(:call, helper, signature.args...))
+        push!(body.args, Expr(:call, helper, dest, inputs...))
     end
-    push!(body.args, signature.args[1])
+    push!(body.args, :($dest === $out || $(GlobalRef(Base, :copyto!))($out, $dest)), out)
     return Expr(:function, signature, body)
 end
 
