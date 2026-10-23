@@ -611,9 +611,9 @@ version = "0.6.3"
 
 [[deps.ControlSystemsBase]]
 deps = ["ForwardDiff", "Hungarian", "LinearAlgebra", "MacroTools", "MatrixEquations", "MatrixPencils", "Polynomials", "PrecompileTools", "Printf", "Random", "RecipesBase", "StaticArraysCore", "UUIDs"]
-git-tree-sha1 = "6998913e771902ff2ea2f89c27c42b8ca643298e"
+git-tree-sha1 = "733f396267f1519a81b952bf880be1b60fb11ebd"
 uuid = "aaaaaaaa-a6ca-5380-bf3e-84a91bcd477e"
-version = "1.25.1"
+version = "1.25.2"
 
     [deps.ControlSystemsBase.extensions]
     ControlSystemsBaseDSPExt = ["DSP"]
@@ -1451,9 +1451,9 @@ version = "1.5.0"
 
 [[deps.Git_LFS_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "246c7a13f927d780f3f77a029664cda98c5f0f22"
+git-tree-sha1 = "d310b22511a51569401e975194cc76077bcd3786"
 uuid = "020c3dae-16b3-5ae5-87b3-4cb189e250b2"
-version = "3.8.0+0"
+version = "3.8.1+0"
 
 [[deps.Git_jll]]
 deps = ["Artifacts", "Expat_jll", "JLLWrappers", "LibCURL_jll", "Libdl", "Libiconv_jll", "OpenSSL_jll", "PCRE2_jll", "Zlib_jll"]
@@ -1754,9 +1754,9 @@ version = "1.8.0"
 
 [[deps.JSON]]
 deps = ["Dates", "Logging", "Parsers", "PrecompileTools", "StructUtils", "UUIDs", "Unicode"]
-git-tree-sha1 = "9939eb6f799a963b3392ac4a1d49d3fc0646eb80"
+git-tree-sha1 = "ef46833ad806dc03d95dbe86db3d113965c461cd"
 uuid = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
-version = "1.11.0"
+version = "1.12.2"
 
     [deps.JSON.extensions]
     JSONArrowExt = ["ArrowTypes"]
@@ -2869,9 +2869,9 @@ version = "0.1.2"
 
 [[deps.Polynomials]]
 deps = ["LinearAlgebra", "OrderedCollections", "Setfield", "SparseArrays"]
-git-tree-sha1 = "9aa2cf5b3a0f55ef0ac4f26c8b92cc6d08b06fbf"
+git-tree-sha1 = "94d0e1856caee351ab1004ef726aa9a8230493b5"
 uuid = "f27b6e38-b328-58d1-80ce-0feddd5e7a45"
-version = "4.1.3"
+version = "4.1.4"
 weakdeps = ["ChainRulesCore", "FFTW", "Makie", "MutableArithmetics", "RecipesBase"]
 
     [deps.Polynomials.extensions]
@@ -3163,9 +3163,9 @@ version = "0.5.2+0"
 
 [[deps.RobustAndOptimalControl]]
 deps = ["ChainRulesCore", "ComponentArrays", "ControlSystemsBase", "DescriptorSystems", "Distributions", "GenericSchur", "LinearAlgebra", "MatrixEquations", "MatrixPencils", "MonteCarloMeasurements", "Optim", "Printf", "Random", "RecipesBase", "SparseArrays", "Statistics", "UUIDs", "UnPack"]
-git-tree-sha1 = "75f0685f905e3d9393c13334ac133847fbff29ca"
+git-tree-sha1 = "b0e8e81a6a39b0597c3dff44aa42ac40553dabf8"
 uuid = "21fd56a4-db03-40ee-82ee-a87907bee541"
-version = "0.4.53"
+version = "0.4.54"
 
     [deps.RobustAndOptimalControl.extensions]
     RobustAndOptimalControlLinearMPCExt = "LinearMPC"
@@ -3498,9 +3498,9 @@ version = "0.4.29"
 
 [[deps.SpecialFunctions]]
 deps = ["IrrationalConstants", "LogExpFunctions", "OpenLibm_jll", "OpenSpecFun_jll"]
-git-tree-sha1 = "429071b23f4c9a13fb6582f807cc2ef454082408"
+git-tree-sha1 = "88ef0d98204515bc53dd4aaea5f7788882d1b66c"
 uuid = "276daf66-3868-5448-9aa4-cd146d93841b"
-version = "2.9.0"
+version = "2.9.1"
 weakdeps = ["ChainRulesCore"]
 
     [deps.SpecialFunctions.extensions]
@@ -3519,9 +3519,14 @@ version = "0.1.2"
 
 [[deps.StarAlgebras]]
 deps = ["LinearAlgebra", "MutableArithmetics", "SparseArrays"]
-git-tree-sha1 = "235b1f9d287bbf34083b3d0829343a7942c0ad1c"
+git-tree-sha1 = "95c5ea2eef117ba1310ee14aa1737d3ea2d262ae"
 uuid = "0c0c59c1-dc5f-42e9-9a8b-b5dc384a6cd1"
-version = "0.3.0"
+version = "0.3.1"
+weakdeps = ["JuMP", "MathOptInterface"]
+
+    [deps.StarAlgebras.extensions]
+    StarAlgebrasJuMPExt = "JuMP"
+    StarAlgebrasMathOptInterfaceExt = "MathOptInterface"
 
 [[deps.StateSelection]]
 deps = ["BipartiteGraphs", "DocStringExtensions", "FindFirstFunctions", "Graphs", "LinearAlgebra", "OrderedCollections", "Setfield", "SparseArrays"]
@@ -3704,9 +3709,9 @@ version = "0.7.4"
 
 [[deps.StructUtils]]
 deps = ["Dates", "UUIDs"]
-git-tree-sha1 = "ad435e30854ed0f50f4b7f67edd71664afecc5d8"
+git-tree-sha1 = "044ed182312a8ad0f28437f048f3e1eae9093a80"
 uuid = "ec057cc2-7a8d-4b58-b3b3-92acb9f63b42"
-version = "2.10.0"
+version = "2.11.1"
 
     [deps.StructUtils.extensions]
     StructUtilsDataFramesExt = ["DataFrames"]
@@ -3897,9 +3902,9 @@ version = "1.4.0"
 
 [[deps.URIs]]
 deps = ["Serialization"]
-git-tree-sha1 = "0392e5e3c5327b90a487b0ff3e818c4aecd3660b"
+git-tree-sha1 = "50eda8011f098869a76da69a524ff59e0298711a"
 uuid = "5c2747f8-b7ea-4ff2-ba2e-563bfd36b1d4"
-version = "1.7.1"
+version = "1.7.2"
 
 [[deps.UUIDs]]
 deps = ["Random", "SHA"]
