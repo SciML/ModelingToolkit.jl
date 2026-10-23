@@ -419,3 +419,26 @@ end
     @test n_chunked > 80
     @test n_ok > 50
 end
+
+@testset "RuntimeGeneratedFunctions without local-function support" begin
+    M = ModelingToolkitBase
+    body = Any[:(local $(Symbol(:a, i)) = x + $i) for i in 1:6]
+    push!(body, :(a1 + a6))
+    fex = Expr(:function, Expr(:tuple, :x), Expr(:block, body...))
+    # The probe agrees with what the installed package can actually do.
+    @test M._rgf_supports_local_functions() isa Bool
+    chunked_rgf = M.eval_or_rgf(fex; compiler_options = CompilerOptions(chunk_size = 2))
+    @test chunked_rgf(1) == 9
+    saved = M._RGF_LOCAL_FUNCTIONS[]
+    try
+        M._RGF_LOCAL_FUNCTIONS[] = false
+        @test M._chunk_for_compile(fex, 2, false) === fex
+        @test M._chunk_for_compile(fex, 2, true) != fex
+        @test M.eval_or_rgf(fex; compiler_options = CompilerOptions(chunk_size = 2))(1) == 9
+        M._RGF_LOCAL_FUNCTIONS[] = true
+        @test M._chunk_for_compile(fex, 2, false) != fex
+        @test M._chunk_for_compile(fex, 0, false) === fex
+    finally
+        M._RGF_LOCAL_FUNCTIONS[] = saved
+    end
+end

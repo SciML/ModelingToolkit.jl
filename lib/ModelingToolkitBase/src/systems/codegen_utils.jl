@@ -390,14 +390,7 @@ function eval_or_rgf(
             eval_module = _resolve_fallback_eval_module(compiler_options)
         end
     end
-    chunk_size = compiler_options.chunk_size
-    if chunk_size != 0
-        expr = chunk_function_expr(
-            expr, chunk_size < 0 ? DEFAULT_CHUNK_SIZE : chunk_size,
-            chunk_size < 0 ? DEFAULT_CHUNK_THRESHOLD : chunk_size,
-            chunk_size < 0 ? DEFAULT_MAX_TRAFFIC : Inf
-        )
-    end
+    expr = _chunk_for_compile(expr, compiler_options.chunk_size, eval_expression)
     if eval_expression
         return eval_module.eval(expr)
     else
@@ -406,6 +399,44 @@ function eval_or_rgf(
 end
 
 eval_or_rgf(::Nothing; kws...) = nothing
+
+# Cached result of probing whether the loaded RuntimeGeneratedFunctions can compile a function
+# containing a local function definition (as chunked helpers are). RuntimeGeneratedFunctions
+# 0.5.12 and 0.5.13 fail on Julia 1.12 with "syntax: malformed expression".
+const _RGF_LOCAL_FUNCTIONS = Ref{Union{Nothing, Bool}}(nothing)
+
+function _rgf_supports_local_functions()
+    supported = _RGF_LOCAL_FUNCTIONS[]
+    supported === nothing || return supported
+    probe = :(
+        function (x)
+            h = function (a)
+                b = a + 1
+                return b
+            end
+            return h(x)
+        end
+    )
+    supported = try
+        drop_expr(RuntimeGeneratedFunction(@__MODULE__, @__MODULE__, probe))(1) == 2
+    catch
+        false
+    end
+    _RGF_LOCAL_FUNCTIONS[] = supported
+    return supported
+end
+
+# Apply the chunking pass to `expr` according to `chunk_size` (see `CompilerOptions`), unless
+# the function will be compiled by an RuntimeGeneratedFunctions that cannot handle helpers.
+function _chunk_for_compile(expr::Expr, chunk_size::Int, eval_expression::Bool)
+    chunk_size == 0 && return expr
+    eval_expression || _rgf_supports_local_functions() || return expr
+    return chunk_function_expr(
+        expr, chunk_size < 0 ? DEFAULT_CHUNK_SIZE : chunk_size,
+        chunk_size < 0 ? DEFAULT_CHUNK_THRESHOLD : chunk_size,
+        chunk_size < 0 ? DEFAULT_MAX_TRAFFIC : Inf
+    )
+end
 
 function _inject_compiler_options_meta(expr::Expr, co::CompilerOptions)
     if expr.head === :function || expr.head === :->
