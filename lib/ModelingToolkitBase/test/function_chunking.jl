@@ -196,6 +196,18 @@ end
         end
     )
     @test run(chunk_function_expr(clash, 1, 1), 2) == run(clash, 2) == 4
+    # A name assigned only in a branch is not definitely initialized.
+    conditional = :(
+        function (x)
+            if x
+                a = 1
+            end
+            b = x ? a : 0
+            c = b + 1
+            c
+        end
+    )
+    @test run(chunk_function_expr(conditional, 1, 1), false) == run(conditional, false) == 1
     # Rebinding a name.
     rebinding = :(
         function (x)

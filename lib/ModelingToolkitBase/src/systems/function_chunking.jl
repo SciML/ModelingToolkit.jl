@@ -217,34 +217,39 @@ broadcast calls) to the functions above or `Symbolics.set_nzval`, and no rebindi
 arguments. Anything else, including broadcast assignment, makes the function unchunked.
 """
 function _is_whitelisted(stmts, fargs, bound)
-    function visit(ex)
+    # `top` is true while the expression is evaluated unconditionally as part of a top-level
+    # statement; only there may a name be bound, so that every name a helper reads has
+    # definitely been assigned.
+    function visit(ex, top)
         ex isa Expr || return true
         h = ex.head
-        if h === :ref || h === :block
-            return all(visit, ex.args)
+        if h === :ref
+            return all(a -> visit(a, false), ex.args)
+        elseif h === :block
+            return all(a -> visit(a, top), ex.args)
         elseif h === :(=)
             lhs, rhs = ex.args
             if lhs isa Symbol
-                return !(lhs in fargs) && visit(rhs)
+                return top && !(lhs in fargs) && visit(rhs, top)
             end
-            return lhs isa Expr && lhs.head === :ref && visit(lhs) && visit(rhs)
+            return lhs isa Expr && lhs.head === :ref && visit(lhs, false) && visit(rhs, false)
         elseif h === :local
-            return all(a -> a isa Symbol || (a isa Expr && a.head === :(=) && visit(a)), ex.args)
+            return top && all(a -> a isa Symbol || (a isa Expr && a.head === :(=) && visit(a, top)), ex.args)
         elseif h === :call
             _callee_kind(ex.args[1], bound) === :bad && return false
-            return all(visit, @view ex.args[2:end])
+            return all(a -> visit(a, false), @view ex.args[2:end])
         elseif h === :. && length(ex.args) == 2 && ex.args[2] isa Expr && ex.args[2].head === :tuple
             # broadcast call `f.(args...)`
             _callee_kind(ex.args[1], bound) === :bad && return false
-            return all(visit, ex.args[2].args)
+            return all(a -> visit(a, false), ex.args[2].args)
         elseif h in (:tuple, :vect, :curly, :if, :&&, :||, :comparison, :(::))
-            return all(visit, ex.args)
+            return all(a -> visit(a, false), ex.args)
         elseif _is_inbounds_call(ex)
-            return visit(ex.args[end])
+            return visit(ex.args[end], top)
         end
         return false
     end
-    return all(visit, stmts)
+    return all(st -> visit(st, true), stmts)
 end
 
 """
