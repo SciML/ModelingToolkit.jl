@@ -2115,6 +2115,15 @@ struct SciMLProblemOptions{expression}
     is_steadystateprob::Bool
     return_operating_point::Bool
     init_compiler_options::CompilerOptions
+    """
+    Whether the initialization data is built for ahead-of-time compilation of the problem: the
+    initialization `NonlinearFunction` is rebuilt without its `sys` and symbolic `observed`
+    cache, and the `InitializationMetadata` without its symbolic fields (operating point,
+    guesses, additional equations). The data still initializes the problem and follows
+    parameter changes (`update_initializeprob!`); `remake` with new symbolic values is not
+    supported for such a problem.
+    """
+    strip_initialization_symbolics::Bool
 end
 
 function SciMLProblemOptions(
@@ -2138,6 +2147,7 @@ function SciMLProblemOptions(
         allow_incomplete::Bool = false, is_initializeprob::Bool = false,
         is_steadystateprob::Bool = false, return_operating_point::Bool = false,
         init_compiler_options::CompilerOptions = CompilerOptions(),
+        strip_initialization_symbolics::Bool = false,
     ) where {E}
     if !(guesses isa SymmapT)
         guesses = anydict(guesses)
@@ -2152,6 +2162,7 @@ function SciMLProblemOptions(
         circular_dependency_max_cycles, initsys_mtkcompile_kwargs, substitution_limit,
         use_scc, time_dependent_init, algebraic_only, missing_guess_value, allow_incomplete,
         is_initializeprob, is_steadystateprob, return_operating_point, init_compiler_options,
+        strip_initialization_symbolics,
     )
 end
 
@@ -2380,6 +2391,10 @@ function maybe_build_initialization_problem(
         write_possibly_indexed_array!(op, p, subber(p), COMMON_NOTHING)
     end
 
+    if opts.strip_initialization_symbolics
+        initializeprob, meta = strip_initialization_symbolics(initializeprob, meta)
+    end
+
     return (;
         initialization_data = SciMLBase.OverrideInitData(
             initializeprob, update_initializeprob!, initializeprobmap,
@@ -2387,6 +2402,46 @@ function maybe_build_initialization_problem(
         ),
     )
 end
+
+"""
+    $(TYPEDSIGNATURES)
+
+The initialization problem and metadata without the references an ahead-of-time compiler
+cannot serialize: the `NonlinearFunction` loses its `sys` and its `ObservedFunctionCache`
+(only used for symbolic indexing of the initialization solution), and the metadata keeps
+its functional fields (`oop_reconstruct_u0_p`, `get_updated_u0`, `set_initial_unknowns!`)
+with empty symbolic ones. Everything `get_initial_values` and `update_initializeprob!` use
+is kept.
+"""
+function strip_initialization_symbolics(initializeprob, meta::InitializationMetadata)
+    initializeprob = strip_problem_symbolics(initializeprob)
+    meta = InitializationMetadata(
+        empty(meta.op), empty(meta.guesses), Equation[], meta.use_scc,
+        meta.time_dependent_init, meta.oop_reconstruct_u0_p, meta.get_updated_u0,
+        meta.set_initial_unknowns!, meta.missing_guess_value
+    )
+    return initializeprob, meta
+end
+
+strip_function_symbolics(f) = SciMLBase.remake(f; sys = nothing, observed = SciMLBase.DEFAULT_OBSERVED_NO_TIME)
+
+function strip_problem_symbolics(prob::SCCNonlinearProblem)
+    probs = map(strip_problem_symbolics, prob.probs)
+    return SciMLBase.remake(prob; probs, f = strip_function_symbolics(prob.f), sys = nothing)
+end
+function strip_problem_symbolics(prob::NonlinearProblem)
+    return NonlinearProblem{SciMLBase.isinplace(prob)}(
+        strip_function_symbolics(prob.f), prob.u0, prob.p, prob.problem_type;
+        lb = prob.lb, ub = prob.ub, prob.kwargs...
+    )
+end
+function strip_problem_symbolics(prob::NonlinearLeastSquaresProblem)
+    return NonlinearLeastSquaresProblem{SciMLBase.isinplace(prob)}(
+        strip_function_symbolics(prob.f), prob.u0, prob.p;
+        lb = prob.lb, ub = prob.ub, prob.kwargs...
+    )
+end
+strip_problem_symbolics(prob) = prob
 
 initialization_specialization(::Type{SciMLBase.AutoDespecialize}) =
     SciMLBase.AutoDespecialize
@@ -2460,6 +2515,7 @@ Base.@nospecializeinfer function process_SciMLProblem(
         return_operating_point = false,
         compiler_options::CompilerOptions = CompilerOptions(),
         init_compiler_options::CompilerOptions = CompilerOptions(),
+        strip_initialization_symbolics = false,
         kwargs...
     )
     fn_opts = SciMLFunctionOptions(; t, eval_expression, eval_module, compiler_options, kwargs...)
@@ -2472,6 +2528,7 @@ Base.@nospecializeinfer function process_SciMLProblem(
         circular_dependency_max_cycles, initsys_mtkcompile_kwargs, substitution_limit,
         use_scc, time_dependent_init, algebraic_only, missing_guess_value, allow_incomplete,
         is_initializeprob, is_steadystateprob, return_operating_point, init_compiler_options,
+        strip_initialization_symbolics,
     )
 
     process_SciMLProblem(constructor, sys, op, opts; kwargs...)
