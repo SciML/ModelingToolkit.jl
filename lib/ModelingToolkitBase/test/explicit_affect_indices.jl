@@ -3,6 +3,12 @@ using ModelingToolkitBase: t_nounits as t, D_nounits as D
 using SymbolicUtils: BasicSymbolic
 using SymbolicIndexingInterface: variable_index
 
+# The problem's one continuous callback: alone, or in a `CallbackSet` with discrete ones.
+function continuous_callback(prob)
+    cb = prob.kwargs[:callback]
+    return cb isa SciMLBase.CallbackSet ? only(cb.continuous_callbacks) : cb
+end
+
 # Every object reachable from `x` that is a symbolic term. Modules and types are not entered.
 function symbolic_objects(x, seen = IdDict{Any, Nothing}(), found = Any[])
     (x isa Module || x isa Type || x isa Symbol || x isa String || isbits(x)) && return found
@@ -37,7 +43,7 @@ end
     )
     sys = mtkcompile(ball)
     prob = ODEProblem(sys, [], (0.0, 2.0); eval_expression = true, eval_module = @__MODULE__)
-    cb = only(prob.kwargs[:callback].continuous_callbacks)
+    cb = continuous_callback(prob)
     aff = cb.affect!
     @test aff isa ModelingToolkitBase.ExplicitAffect
     @test aff.dvs_to_update == [variable_index(sys, v)]
@@ -46,7 +52,7 @@ end
     sol = solve(prob, DefaultODEAlgorithm(); abstol = 1.0e-8, reltol = 1.0e-8)
     @test sol.retcode == ReturnCode.Success
     # the event fires at t = 1 and resets the velocity: v(1⁺) = -r v(1⁻) = 0.9 g
-    i = findfirst(==(1.0), sol.t)
+    i = findfirst(τ -> abs(τ - 1.0) < 1.0e-8, sol.t)
     @test i !== nothing
     @test sol[v][i + 1] ≈ 0.9 * 9.81 atol = 1.0e-6
     @test sol[v][i] ≈ -9.81 atol = 1.0e-6
@@ -60,13 +66,13 @@ end
     @named twoev = System(
         [D(x) ~ 1.0], t, [x], [c1, c2];
         continuous_events = [
-            SymbolicContinuousCallback([x ~ 0.5], [c1 ~ true]; discrete_parameters = [c1]),
-            SymbolicContinuousCallback([x ~ 1.5], [c2 ~ true]; discrete_parameters = [c2]),
+            ModelingToolkitBase.SymbolicContinuousCallback([x ~ 0.5], [c1 ~ true]; discrete_parameters = [c1]),
+            ModelingToolkitBase.SymbolicContinuousCallback([x ~ 1.5], [c2 ~ true]; discrete_parameters = [c2]),
         ]
     )
     sys = mtkcompile(twoev)
     prob = ODEProblem(sys, [], (0.0, 2.0); eval_expression = true, eval_module = @__MODULE__)
-    cb = only(prob.kwargs[:callback].continuous_callbacks)
+    cb = continuous_callback(prob)
     @test cb isa SciMLBase.VectorContinuousCallback
     @test cb.affect!.affects isa Tuple
     @test isconcretetype(typeof(cb.affect!.affects))
