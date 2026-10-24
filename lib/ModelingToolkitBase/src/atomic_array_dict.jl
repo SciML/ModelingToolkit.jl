@@ -322,6 +322,11 @@ end
 
 const AADSubWrapper{D} = AtomicArrayDictSubstitutionWrapper{D}
 
+# A constant array of plain numbers cannot contain `COMMON_SENTINEL` or `COMMON_NOTHING`.
+# Scanning it through symbolic `getindex` is O(length) with a large constant, so callers
+# use this to skip the scan.
+is_numeric_const_array(v::SymbolicT) = SU.isconst(v) && eltype(unwrap_const(v)) <: Number
+
 Base.get(def::Base.Callable, dd::AADSubWrapper, k) = def()
 function Base.get(def::Base.Callable, dd::AADSubWrapper, k::SymbolicT)
     res = get_possibly_indexed(dd.dict, k, dd.default; allow_symbolic_indices = true)
@@ -330,7 +335,7 @@ function Base.get(def::Base.Callable, dd::AADSubWrapper, k::SymbolicT)
         isarr && haskey(dd.dict, arr) && return k
         return def()
     end
-    if SU.is_array_shape(SU.shape(k)) && any(
+    if SU.is_array_shape(SU.shape(k)) && !is_numeric_const_array(res) && any(
             Base.Fix2(===, dd.default) ∘ Base.Fix1(getindex, res),
             SU.stable_eachindex(res)
         )

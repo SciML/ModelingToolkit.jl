@@ -2024,6 +2024,7 @@ function build_operating_point(sys::AbstractSystem, op; fast_path = false)
     map!(values(op)) do v
         v === COMMON_SENTINEL && return COMMON_NOTHING
         Symbolics.isarraysymbolic(v) || return v
+        is_numeric_const_array(v) && return v
         any(Base.Fix2(===, COMMON_SENTINEL) ∘ Base.Fix1(getindex, v), SU.stable_eachindex(v)) || return v
 
         new_v = map(SU.stable_eachindex(v)) do i
