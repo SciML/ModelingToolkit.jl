@@ -2765,8 +2765,15 @@ function process_kwargs(
     return merge(kwargs1, kwargs)
 end
 
+# Keywords that SciMLBase problems carry but that MTK derives from the system's structure.
+const STRUCTURAL_KWARGS = (:differential_vars, :mass_matrix)
+
 function filter_kwargs(kwargs)
     kwargs = Dict(kwargs)
+    dropped = filter(in(STRUCTURAL_KWARGS), collect(keys(kwargs)))
+    if !isempty(dropped)
+        @warn "Ignoring keyword argument(s) $(join(dropped, ", ")): the system derives them from its structure. Apply them with `remake(prob; ...)` on the returned problem instead."
+    end
     for key in keys(kwargs)
         key in SciMLBase.allowedkeywords || delete!(kwargs, key)
     end
