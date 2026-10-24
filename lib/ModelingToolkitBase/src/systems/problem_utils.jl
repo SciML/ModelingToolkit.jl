@@ -595,30 +595,116 @@ Performs symbolic substitution on the values in `varmap` for the keys in `vars`,
 in `varmap`, it is ignored.
 """
 function evaluate_varmap!(varmap::AbstractDict{SymbolicT, SymbolicT}, vars; limit = 100, allow_symbolic = false)
+    # Array keys whose substitution changed nothing; no rule can apply to them later.
+    settled = Set{SymbolicT}()
     for k in vars
         arr, _ = split_indexed_var(unwrap(k))
+        arr in settled && continue
         v = get(varmap, arr, COMMON_NOTHING)
         v === COMMON_NOTHING && continue
         SU.isconst(v) && continue
-        varmap[arr] = fixpoint_sub(v, varmap; maxiters = limit, fold = Val(true), warn_maxiters = !allow_symbolic)
+        newv = fixpoint_sub(v, varmap; maxiters = limit, fold = Val(true), warn_maxiters = !allow_symbolic)
+        varmap[arr] = newv
+        isequal(newv, v) && push!(settled, arr)
     end
     return
+end
+
+"""
+    $(TYPEDEF)
+
+Wrapper over an `AtomicArrayDictSubstitutionWrapper` that holds element writes to array
+values in per-array buffers and stores each buffer back as a whole array only when that
+array is next read through the wrapper, or on `flush_pending_writes!`. Writing `n`
+elements of one array through the wrapped dictionary copies and rehashes the array each
+time, which is quadratic in its length.
+"""
+struct PendingWritesWrapper{D} <: AbstractDict{SymbolicT, SymbolicT}
+    base::AtomicArrayDictSubstitutionWrapper{D}
+    buffers::Dict{SymbolicT, Array{SymbolicT}}
+end
+
+PendingWritesWrapper(base::AtomicArrayDictSubstitutionWrapper) = PendingWritesWrapper(base, Dict{SymbolicT, Array{SymbolicT}}())
+
+function flush_pending_writes!(dd::PendingWritesWrapper, arr::SymbolicT)
+    buffer = pop!(dd.buffers, arr, nothing)
+    buffer === nothing && return dd
+    dd.base.dict[arr] = if all(SU.isconst, buffer)
+        BSImpl.Const{VartypeT}(unwrap_const.(buffer))
+    else
+        BSImpl.Const{VartypeT}(buffer)
+    end
+    return dd
+end
+
+function flush_pending_writes!(dd::PendingWritesWrapper)
+    for arr in collect(keys(dd.buffers))
+        flush_pending_writes!(dd, arr)
+    end
+    return dd
+end
+
+Base.get(def::Base.Callable, dd::PendingWritesWrapper, k) = get(def, dd.base, k)
+function Base.get(def::Base.Callable, dd::PendingWritesWrapper, k::SymbolicT)
+    isempty(dd.buffers) || flush_pending_writes!(dd, split_indexed_var(k)[1])
+    return get(def, dd.base, k)
+end
+Base.get(dd::PendingWritesWrapper, k, default) = get(Returns(default), dd, k)
+Base.haskey(dd::PendingWritesWrapper, k) = haskey(dd.base, k)
+Base.length(dd::PendingWritesWrapper) = length(dd.base)
+Base.iterate(dd::PendingWritesWrapper, args...) = iterate(dd.base, args...)
+
+# The buffer of `arr` if `k` is a scalar element `arr[idxs...]` with constant integer
+# indices of an array with a value of known shape, else `nothing`.
+function pending_element_buffer!(dd::PendingWritesWrapper, k::SymbolicT)
+    return Moshi.Match.@match k begin
+        BSImpl.Term(; f, args) && if f === getindex && has_const_int_indices(k) end => begin
+            SU.is_array_shape(SU.shape(k)) && return nothing
+            arr = args[1]
+            buffer = get(dd.buffers, arr, nothing)
+            buffer === nothing || return buffer
+            val = get(dd.base.dict, arr, COMMON_NOTHING)
+            val === COMMON_NOTHING && return nothing
+            shape = SU.shape(val)
+            SU.is_array_shape(shape) && !(shape isa SU.Unknown) || return nothing
+            return dd.buffers[arr] = collect(val)
+        end
+        _ => return nothing
+    end
 end
 
 function evaluate_varmap!(
         ir::IRStructure{SymReal}, varmap::AtomicArrayDictSubstitutionWrapper, vars;
         limit = 100, allow_symbolic = false
     )
+    pending = PendingWritesWrapper(varmap)
     subber = Symbolics.FixpointSubstituter(
-        SU.IRSubstituter{true}(ir, varmap; filterer = Symbolics.FPSubFilterer{Nothing}());
+        SU.IRSubstituter{true}(ir, pending; filterer = Symbolics.FPSubFilterer{Nothing}());
         maxiters = limit, warn_maxiters = !allow_symbolic
     )
     for k in vars
+        k = unwrap(k)
+        buffer = pending_element_buffer!(pending, k)
+        if buffer !== nothing
+            idx = get_stable_index(k)
+            v = buffer[idx]
+            if v !== varmap.default
+                if !SU.isconst(v)
+                    newv = subber(v)
+                    # substitution flushes the buffer if it reads this array
+                    pending_element_buffer!(pending, k)[idx] = newv
+                end
+                continue
+            end
+        end
+        # holes and every other kind of key take the ordinary path
+        flush_pending_writes!(pending)
         v = get(varmap, k, COMMON_NOTHING)
         v === COMMON_NOTHING && continue
         SU.isconst(v) && continue
         varmap[k] = subber(v)
     end
+    flush_pending_writes!(pending)
     return
 end
 
