@@ -86,7 +86,7 @@ const NONPUBLIC_QUALIFIED_ACCESSES = (
     # SymbolicIndexingInterface
     :supports_tuple_observed,
     # SciMLBase
-    :allowedkeywords, :anyeltypedual, :diagnose_symbolic_instability,
+    :allowedkeywords, :anyeltypedual, :DEFAULT_OBSERVED_NO_TIME, :diagnose_symbolic_instability,
     :DISCRETE_INPLACE_DEFAULT, :FINALIZE_DEFAULT, :INITIALIZE_DEFAULT,
     # JumpProcesses
     :NullAggregator,
