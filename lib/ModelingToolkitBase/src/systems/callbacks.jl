@@ -845,8 +845,9 @@ Invokes `u_up!` to update state variables and `p_up!` to update discrete paramet
 optionally resets aggregated jumps. Created by [`compile_explicit_affect`](@ref).
 
 # Fields
-- `dvs_to_update`: symbolic unknowns modified by this affect (emptiness is checked at call time)
-- `ps_to_update`: symbolic discrete parameters modified by this affect
+- `dvs_to_update`: indices (in `unknowns(sys)`) of the unknowns modified by this affect
+  (emptiness is checked at call time)
+- `ps_to_update`: `ParameterIndex`es of the discrete parameters modified by this affect
 - `reset_jumps`: if `true`, call `reset_aggregated_jumps!` after the update
 - `u_up!`: compiled in-place function that writes updated state into the integrator
 - `p_up!`: compiled in-place function that writes updated parameters into the integrator
@@ -1583,7 +1584,12 @@ Base.@nospecializeinfer function compile_explicit_affect(
     u_up! = eval_or_rgf(u_up!; eval_expression, eval_module)
     p_up! = eval_or_rgf(p_up!; eval_expression, eval_module)
 
-    return ExplicitAffect(dvs_to_update, ps_to_update, reset_jumps, u_up!, p_up!)
+    # The affect is what the integrator carries at run time; it needs to know whether unknowns
+    # or parameters are written, not which symbolic variables they are, so the two sets are kept
+    # as the indices they resolve to and the callback holds no symbolic terms.
+    u_to_update = [variable_index(sys, v) for v in dvs_to_update]
+    p_to_update = [parameter_index(sys, p) for p in ps_to_update]
+    return ExplicitAffect(u_to_update, p_to_update, reset_jumps, u_up!, p_up!)
 end
 
 """
