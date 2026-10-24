@@ -296,7 +296,7 @@ function narrow_buffer_type(
     )
     type = Union{}
     for arr in buffer
-        if isconcretetype(eltype(arr))
+        if !isempty(arr) && isconcretetype(eltype(arr))
             type = promote_type(type, eltype(arr))
             continue
         end

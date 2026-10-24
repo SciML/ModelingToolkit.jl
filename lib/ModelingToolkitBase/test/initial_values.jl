@@ -548,3 +548,10 @@ end
     @test !haskey(op, x)
     @test SU.unwrap_const(op[p]) == 2.0
 end
+
+@testset "`narrow_buffer_type` ignores empty arrays when promoting" begin
+    big = 2^53 + 1
+    narrowed = ModelingToolkitBase.narrow_buffer_type(AbstractVector[Float64[], [big]])
+    @test narrowed[2][1] === big
+    @test eltype(narrowed[2]) == Int
+end
