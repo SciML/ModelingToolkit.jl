@@ -62,12 +62,12 @@ end
 # that every affect call is a call of a concrete type, and the events fire as before.
 @testset "VectorContinuousCallback affects are typed" begin
     @variables x(t) = 0.0
-    @parameters c1::Bool = false c2::Bool = false
+    @discretes c1(t) = 0.0 c2(t) = 0.0
     @named twoev = System(
         [D(x) ~ 1.0], t, [x], [c1, c2];
         continuous_events = [
-            ModelingToolkitBase.SymbolicContinuousCallback([x ~ 0.5], [c1 ~ true]; discrete_parameters = [c1]),
-            ModelingToolkitBase.SymbolicContinuousCallback([x ~ 1.5], [c2 ~ true]; discrete_parameters = [c2]),
+            ModelingToolkitBase.SymbolicContinuousCallback([x ~ 0.5], [c1 ~ 1.0]; discrete_parameters = [c1]),
+            ModelingToolkitBase.SymbolicContinuousCallback([x ~ 1.5], [c2 ~ 1.0]; discrete_parameters = [c2]),
         ]
     )
     sys = mtkcompile(twoev)
@@ -79,6 +79,6 @@ end
     @test isempty(symbolic_objects(cb))
     sol = solve(prob, DefaultODEAlgorithm(); abstol = 1.0e-8, reltol = 1.0e-8)
     @test sol.retcode == ReturnCode.Success
-    @test sol.ps[c1] == true && sol.ps[c2] == true
+    @test sol.ps[c1][end] == 1.0 && sol.ps[c2][end] == 1.0
     @test sol(0.25)[1] ≈ 0.25 atol = 1.0e-8
 end
