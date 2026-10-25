@@ -76,6 +76,14 @@ end
     @test cb isa SciMLBase.VectorContinuousCallback
     @test cb.affect!.affects isa Tuple
     @test isconcretetype(typeof(cb.affect!.affects))
+    # the affect for each event is called statically: no dynamic call is left at the call site
+    integ = init(prob, DefaultODEAlgorithm())
+    affects = cb.affect!.affects
+    ci = only(code_typed(ModelingToolkitBase.apply_nth_affect, (typeof(affects), Int, typeof(integ)); optimize = true)).first
+    dynamic = filter(ci.code) do st
+        st isa Expr && st.head === :call && st.args[1] isa GlobalRef && st.args[1].name === :apply_affect_if_real
+    end
+    @test isempty(dynamic)
     @test isempty(symbolic_objects(cb))
     sol = solve(prob, DefaultODEAlgorithm(); abstol = 1.0e-8, reltol = 1.0e-8)
     @test sol.retcode == ReturnCode.Success
