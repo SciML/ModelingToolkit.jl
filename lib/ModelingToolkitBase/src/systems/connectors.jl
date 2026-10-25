@@ -952,9 +952,10 @@ function generate_connection_equations_and_stream_connections(
                 is_o = isoutput(vert)
                 all_io &= is_i || is_o
                 all_io || break
-                if cvert.isouter && is_i && outer_input === 0
+                isouter = cset[i].isouter
+                if isouter && is_i && outer_input === 0
                     outer_input = i
-                elseif !cvert.isouter && is_o && inner_output === 0
+                elseif !isouter && is_o && inner_output === 0
                     inner_output = i
                 end
             end
