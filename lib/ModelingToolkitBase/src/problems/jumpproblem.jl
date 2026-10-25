@@ -49,7 +49,7 @@
             )
             f = (du, u, p, t) -> (du .= 0; nothing)
             df = ODEFunction{true, spec}(f; sys, observed = observedfun)
-            prob = ODEProblem{true}(df, u0, tspan, p; kwargs...)
+            prob = ODEProblem{true}(df, u0, tspan, p; filter_kwargs(kwargs)...)
         end
     else
         _f, u0,
@@ -67,7 +67,7 @@
             f; sys = sys, observed = observedfun,
             initialization_data = get(_f.kwargs, :initialization_data, nothing)
         )
-        prob = DiscreteProblem(df, u0, tspan, p; kwargs...)
+        prob = DiscreteProblem(df, u0, tspan, p; filter_kwargs(kwargs)...)
     end
 
     # Create SymbolicTstops for all paths and forward via JumpProblem kwargs.

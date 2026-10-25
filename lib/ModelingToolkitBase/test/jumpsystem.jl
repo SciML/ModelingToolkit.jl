@@ -1697,3 +1697,30 @@ end
     @test sol[A][end] < sol[A][1]
     @test all(sol[Bobs] .≈ 2 .* sol[B])
 end
+
+@testset "vr_aggregator is not forwarded to the inner problem" begin
+    @variables A(t)
+    @parameters k
+    vrj = VariableRateJump(k * (1 + sin(t)), [A ~ Pre(A) + 1])
+    @named vrjsys = JumpSystem([vrj], t, [A], [k])
+    vrjsys = complete(vrjsys)
+    for vr_aggregator in (VR_FRM(), VR_Direct(), VR_DirectFW())
+        jprob = JumpProblem(vrjsys, [A => 0, k => 1.0], (0.0, 10.0); vr_aggregator, rng)
+        @test jprob.prob isa ODEProblem
+        @test !haskey(jprob.prob.kwargs, :vr_aggregator)
+        sol = solve(jprob, Tsit5())
+        @test SciMLBase.successful_retcode(sol)
+        @test sol[A][end] > 0
+    end
+
+    crj = ConstantRateJump(k * A, [A ~ Pre(A) - 1])
+    @named crjsys = JumpSystem([crj], t, [A], [k])
+    crjsys = complete(crjsys)
+    jprob = JumpProblem(
+        crjsys, [A => 100, k => 0.1], (0.0, 10.0);
+        aggregator = Direct(), vr_aggregator = VR_Direct(), rng
+    )
+    @test jprob.prob isa DiscreteProblem
+    @test !haskey(jprob.prob.kwargs, :vr_aggregator)
+    @test SciMLBase.successful_retcode(solve(jprob, SSAStepper()))
+end
