@@ -106,7 +106,10 @@ end
     affects = cb.affect!.affects
     sig = (typeof(affects), Int, typeof(integ))
     @test has_dynamic_call(dynamic_nth_affect, sig)
-    @test !has_dynamic_call(ModelingToolkitBase.apply_nth_affect, sig)
+    # asserted on the Julia versions `juliac --trim` supports; older versions' optimized code differs
+    if VERSION >= v"1.12"
+        @test !has_dynamic_call(ModelingToolkitBase.apply_nth_affect, sig)
+    end
     @test isempty(symbolic_objects(cb))
     sol = solve(prob, DefaultODEAlgorithm(); abstol = 1.0e-8, reltol = 1.0e-8)
     @test sol.retcode == ReturnCode.Success
