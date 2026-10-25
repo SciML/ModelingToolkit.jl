@@ -3,6 +3,30 @@ using ModelingToolkitBase: t_nounits as t, D_nounits as D
 using SymbolicUtils: BasicSymbolic
 using SymbolicIndexingInterface: variable_index
 
+# Whether `f`'s optimized code for `sig` makes a call that isn't resolved statically.
+function has_dynamic_call(f, sig)
+    code = only(code_typed(f, sig; optimize = true)).first.code
+    late = (:invokelatest, :_call_latest, :_call_in_world)
+    return any(code) do st
+        st isa Expr || return false
+        if st.head === :call
+            g = st.args[1]
+            g isa GlobalRef || return true
+            g.name in late && return true
+            v = getglobal(g.mod, g.name)
+            return !(v isa Core.Builtin || v isa Core.IntrinsicFunction)
+        elseif st.head === :invoke
+            ci = st.args[1]
+            mi = ci isa Core.CodeInstance ? ci.def : ci
+            return mi.def isa Method && mi.def.name in late
+        end
+        return false
+    end
+end
+# a dispatcher whose affect type is unknown to inference
+dynamic_nth_affect(affects, k, integ) =
+    ModelingToolkitBase.apply_affect_if_real(Base.inferencebarrier(affects[k]), integ)
+
 # The problem's one continuous callback: alone, or in a `CallbackSet` with discrete ones.
 function continuous_callback(prob)
     cb = prob.kwargs[:callback]
@@ -76,14 +100,13 @@ end
     @test cb isa SciMLBase.VectorContinuousCallback
     @test cb.affect!.affects isa Tuple
     @test isconcretetype(typeof(cb.affect!.affects))
-    # the affect for each event is called statically: no dynamic call is left at the call site
+    # the affect for each event is called statically: the dispatcher's optimized code has no call through
+    # a value, no generic-function `:call` and no `invokelatest` (checked against a deliberately dynamic one)
     integ = init(prob, DefaultODEAlgorithm())
     affects = cb.affect!.affects
-    ci = only(code_typed(ModelingToolkitBase.apply_nth_affect, (typeof(affects), Int, typeof(integ)); optimize = true)).first
-    dynamic = filter(ci.code) do st
-        st isa Expr && st.head === :call && st.args[1] isa GlobalRef && st.args[1].name === :apply_affect_if_real
-    end
-    @test isempty(dynamic)
+    sig = (typeof(affects), Int, typeof(integ))
+    @test has_dynamic_call(dynamic_nth_affect, sig)
+    @test !has_dynamic_call(ModelingToolkitBase.apply_nth_affect, sig)
     @test isempty(symbolic_objects(cb))
     sol = solve(prob, DefaultODEAlgorithm(); abstol = 1.0e-8, reltol = 1.0e-8)
     @test sol.retcode == ReturnCode.Success
