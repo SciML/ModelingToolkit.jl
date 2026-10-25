@@ -1,8 +1,16 @@
+const JUMPPROBLEM_SPECIALIZATION_DOCS = """
+Unlike the other problem constructors, `JumpProblem` defaults to
+`specialize = SciMLBase.FullSpecialize`. JumpProcesses' aggregators need concrete
+parameters: under `SciMLBase.AutoDespecialize`, most of them throw when the jumps are
+coupled to an ODE, and the others run much slower. Passing a specialization other than
+`SciMLBase.FullSpecialize` is deprecated.
+"""
+
 # `tspan` has no default here, unlike every other time-dependent problem constructor:
 # `JumpProcesses` already defines `JumpProblem(prob, jumps...)`, so a two-argument method
 # with an untyped `op` is ambiguous with it (Aqua reports 14 ambiguities).
-"""$(problem_docstring(JumpProcesses.JumpProblem, "inner SciMLFunction", true; init = false, tspan_default = false))"""
-@fallback_iip_specialize function JumpProcesses.JumpProblem{iip, spec}(
+"""$(problem_docstring(JumpProcesses.JumpProblem, "inner SciMLFunction", true; init = false, tspan_default = false, extra_body = JUMPPROBLEM_SPECIALIZATION_DOCS))"""
+@fallback_iip_specialize SciMLBase.FullSpecialize function JumpProcesses.JumpProblem{iip, spec}(
         sys::System, op, tspan::Union{Tuple, Nothing};
         check_compatibility = true, eval_expression = false, eval_module = @__MODULE__,
         checkbounds = false, aggregator = JumpProcesses.NullAggregator(),
@@ -10,6 +18,14 @@
     ) where {iip, spec}
     check_complete(sys, JumpProblem)
     check_compatibility && check_compatible_system(JumpProblem, sys)
+    if spec !== SciMLBase.FullSpecialize
+        Base.depwarn(
+            "`JumpProblem{iip, $spec}(sys::System, ...)` is deprecated: `JumpProblem` " *
+                "for a `System` will only support `SciMLBase.FullSpecialize`, its default. " *
+                "Use `JumpProblem(sys, op, tspan)` or `JumpProblem{iip}(sys, op, tspan)`.",
+            :JumpProblem
+        )
+    end
     if haskey(kwargs, :tstops)
         throw(
             ArgumentError(

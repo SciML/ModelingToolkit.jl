@@ -1724,3 +1724,42 @@ end
     @test !haskey(jprob.prob.kwargs, :vr_aggregator)
     @test SciMLBase.successful_retcode(solve(jprob, SSAStepper()))
 end
+
+@testset "JumpProblem defaults to FullSpecialize" begin
+    @variables X(t) = 10.0 Z(t) = 1.0
+    @parameters k = 1.0 b = 1.0
+    @brownians w
+    maj = SymbolicMassActionJump(k, [X => 1], [X => -1])
+    crj = ConstantRateJump(k * X / (1 + X), [X ~ Pre(X) + 1])
+    vrj = VariableRateJump(k * (1 + sin(t)), [Z ~ Pre(Z) + 1])
+    @mtkcompile odesys = System([D(X) ~ 0, D(Z) ~ b - k * Z], t; jumps = [maj, crj])
+    @mtkcompile sdesys = System([D(X) ~ 0, D(Z) ~ b - k * Z + w], t; jumps = [maj, crj])
+    @mtkcompile vrjsys = System([D(Z) ~ b - k * Z], t; jumps = [vrj])
+    tspan = (0.0, 5.0)
+
+    full = SciMLBase.FullSpecialize
+    @test SciMLBase.specialization(JumpProblem(odesys, [], tspan; rng).prob.f) === full
+    @test SciMLBase.specialization(JumpProblem{true}(odesys, [], tspan; rng).prob.f) === full
+    @test SciMLBase.specialization(JumpProblem(sdesys, [], tspan; rng).prob.f) === full
+    # VR_FRM rebuilds the ODE function, so check the VRJ system with VR_Direct
+    jprob = JumpProblem(vrjsys, [], tspan; vr_aggregator = VR_Direct(), rng)
+    @test SciMLBase.specialization(jprob.prob.f) === full
+
+    # FunctionWrapper-based aggregators type their wrappers on `typeof(prob.p)`, so they
+    # threw a `MethodError` when solving ODE-coupled problems under `AutoDespecialize`.
+    for aggregator in (DirectFW(), SortingDirect(), NRM(), RSSA(), RSSACR(), Coevolve())
+        jprob = JumpProblem(odesys, [], tspan; aggregator, rng)
+        @test SciMLBase.successful_retcode(solve(jprob, Tsit5()))
+    end
+    for vr_aggregator in (VR_Direct(), VR_DirectFW())
+        jprob = JumpProblem(vrjsys, [], tspan; vr_aggregator, rng)
+        @test SciMLBase.successful_retcode(solve(jprob, Tsit5()))
+    end
+
+    # Other specializations are deprecated but still honored
+    jprob = @test_deprecated JumpProblem{true, SciMLBase.AutoDespecialize}(
+        odesys, [], tspan; aggregator = Direct(), rng
+    )
+    @test SciMLBase.specialization(jprob.prob.f) === SciMLBase.AutoDespecialize
+    @test SciMLBase.successful_retcode(solve(jprob, Tsit5()))
+end
