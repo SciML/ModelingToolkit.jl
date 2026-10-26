@@ -69,6 +69,7 @@ end
             @safetestset "Precompiled Modules Test" include("precompile_test.jl")
             @safetestset "DAE Jacobians Test" include("dae_jacobian.jl")
             @safetestset "Array equations reach `DAEProblem`" include("array_equation_dae.jl")
+            @safetestset "Shaped opaque parameters" include("shaped_parameters.jl")
             @safetestset "Jacobian Sparsity" include("jacobiansparsity.jl")
             @safetestset "Modelingtoolkitize Test" include("modelingtoolkitize.jl")
             @safetestset "Constants Test" include("constants.jl")
