@@ -90,3 +90,15 @@ end
             vec([2.0 * (i + 10j) for i in 1:2, j in 1:3])
     end
 end
+
+@testset "array expression values keep their substitution rules" begin
+    @variables x(t)[1:2] y(t)[1:2]
+    sys = complete(System([D(x) ~ -x, D(y) ~ -y], t, [x, y], []; name = :xysys))
+    ir = MTKB.get_irstructure(sys)
+    vars = Symbolics.unwrap.(collect(x))
+    op() = Dict{Any, Any}(x => 2y, 2y => [3.0, 4.0])
+    @test MTKB.varmap_to_vars(op(), vars; allow_symbolic = true) == [3.0, 4.0]
+    # master's IR substituter leaves the second element `2y[2]` unresolved; this pins
+    # that the first read of an array expression still reaches the rule for it
+    @test MTKB.varmap_to_vars(op(), vars; ir, allow_symbolic = true)[1] == 3.0
+end

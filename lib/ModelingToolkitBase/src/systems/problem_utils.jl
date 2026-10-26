@@ -655,7 +655,7 @@ Base.length(dd::PendingWritesWrapper) = length(dd.base)
 Base.iterate(dd::PendingWritesWrapper, args...) = iterate(dd.base, args...)
 
 # The buffer of `arr` if `k` is a scalar element `arr[idxs...]` with constant integer
-# indices of an array with a value of known shape, else `nothing`.
+# indices of an array whose value is a constant array or an array literal, else `nothing`.
 function pending_element_buffer!(dd::PendingWritesWrapper, k::SymbolicT)
     return Moshi.Match.@match k begin
         BSImpl.Term(; f, args) && if f === getindex && has_const_int_indices(k) end => begin
@@ -665,6 +665,10 @@ function pending_element_buffer!(dd::PendingWritesWrapper, k::SymbolicT)
             buffer === nothing || return buffer
             val = get(dd.base.dict, arr, COMMON_NOTHING)
             val === COMMON_NOTHING && return nothing
+            # other array expressions keep `(expr)[i]` on first read so that rules for
+            # `expr` still apply
+            SU.isconst(val) || SU.iscall(val) && SU.operation(val) === SU.array_literal ||
+                return nothing
             shape = SU.shape(val)
             SU.is_array_shape(shape) && !(shape isa SU.Unknown) || return nothing
             return dd.buffers[arr] = collect(val)
