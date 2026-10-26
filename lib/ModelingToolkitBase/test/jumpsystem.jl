@@ -1679,6 +1679,22 @@ end
     )
 end
 
+@testset "JumpProblems built from the same system have the same type" begin
+    @parameters β γ
+    @variables S(t) I(t) R(t)
+    j₁ = ConstantRateJump(β * S * I, [S ~ Pre(S) - 1, I ~ Pre(I) + 1])
+    j₂ = VariableRateJump(γ * I * (1 + t / 100), [I ~ Pre(I) - 1, R ~ Pre(R) + 1])
+    op = [S => 999, I => 1, R => 0, β => 0.1 / 1000, γ => 0.01]
+    # a new type for each build makes the solver recompile for each new problem
+    for jumps in ([j₁], [j₁, j₂])
+        @named js = JumpSystem(jumps, t, [S, I, R], [β, γ])
+        js = complete(js)
+        jprob1 = JumpProblem(js, op, (0.0, 250.0); aggregator = Direct())
+        jprob2 = JumpProblem(js, op, (0.0, 250.0); aggregator = Direct())
+        @test typeof(jprob1) == typeof(jprob2)
+    end
+end
+
 @testset "Implicit affect on an SSA integrator" begin
     @parameters d
     @variables A(t) B(t) Bobs(t)

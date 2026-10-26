@@ -2234,3 +2234,23 @@ end
         @test sol.ps[d] == ref.ps[d]
     end
 end
+
+@testset "ODEProblems built from the same system have the same type" begin
+    @variables x(t)
+    @parameters a t1
+    @mtkcompile sys1 = System(
+        [D(x) ~ -a * x], t; discrete_events = [[1.0] => [x ~ Pre(x) + 1]],
+        continuous_events = [[x ~ 0.5] => [x ~ Pre(x) + 1]]
+    )
+    # symbolic tstops are also compiled into a generated function
+    @mtkcompile sys2 = System(
+        [D(x) ~ -a * x], t, [x], [a, t1];
+        discrete_events = [(t == t1) => [x ~ Pre(x) + 1]], tstops = [[t1]]
+    )
+    # a new type for each build makes the solver recompile for each new problem
+    for (sys, op) in ((sys1, [x => 1.0, a => 1.0]), (sys2, [x => 1.0, a => 1.0, t1 => 2.0]))
+        prob1 = ODEProblem(sys, op, (0.0, 5.0))
+        prob2 = ODEProblem(sys, op, (0.0, 5.0))
+        @test typeof(prob1) == typeof(prob2)
+    end
+end

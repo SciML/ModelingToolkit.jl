@@ -1408,6 +1408,12 @@ function wrap_vector_optional_affect(funs, default)
     return VectorOptionalAffect(funs)
 end
 
+# Name of the integrator argument of generated affect functions. A fixed sentinel, not a
+# `gensym`: `RuntimeGeneratedFunction` types include the argument names, so a `gensym` gives
+# each compiled affect a new type, and every problem built from the same system recompiles
+# the solver. Named like `MTKUNKNOWNS_ARG` and `MTKPARAMETERS_ARG`.
+const MTKINTEGRATOR_ARG = :___mtkintegrator___
+
 """
     add_integrator_header(sys, integrator, out) -> (oop_wrap, iip_wrap)
 
@@ -1418,7 +1424,7 @@ resulting affect function is directly callable with an integrator rather than ex
 `(u, p, t)` arguments.
 """
 function add_integrator_header(
-        sys::AbstractSystem, integrator = gensym(:MTKIntegrator), out = :u
+        sys::AbstractSystem, integrator = MTKINTEGRATOR_ARG, out = :u
     )
     return expr -> Func(
             [DestructuredArgs(expr.args, integrator, inds = [:u, :p, :t])], [],
@@ -1551,7 +1557,7 @@ Base.@nospecializeinfer function compile_explicit_affect(
         indexin((@view lhss[is_p]), ps)
     end
     _ps = reorder_parameters(sys, ps)
-    integ = gensym(:MTKIntegrator)
+    integ = MTKINTEGRATOR_ARG
 
     u_up,
         u_up! = build_function_wrapper(
