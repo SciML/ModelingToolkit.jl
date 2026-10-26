@@ -493,10 +493,15 @@ function ArrayInterface.ismutable(
         }
     ) where {T, I, D, C, N, H}
     return ArrayInterface.ismutable(T) || ArrayInterface.ismutable(I) ||
-        any(ArrayInterface.ismutable, fieldtypes(D)) ||
+        any(buffer_ismutable, fieldtypes(D)) ||
         any(ArrayInterface.ismutable, fieldtypes(C)) ||
         any(ArrayInterface.ismutable, fieldtypes(N))
 end
+
+# `ArrayInterface.ismutable` has no rule for `BlockedArray` and falls back to `true`, even
+# when the data it wraps is an `SVector`. A discrete buffer is as mutable as its data.
+buffer_ismutable(::Type{B}) where {B} = ArrayInterface.ismutable(B)
+buffer_ismutable(::Type{<:BlockedArray{T, N, R}}) where {T, N, R} = buffer_ismutable(R)
 
 function SymbolicIndexingInterface.parameter_values(p::MTKParameters, pind::ParameterIndex)
     return _ducktyped_parameter_values(p, pind)
@@ -581,9 +586,25 @@ function SymbolicIndexingInterface.set_parameter!(
 end
 
 function restore_static_buffers(oldbufs::Tuple, newbufs::Tuple)
-    return ntuple(Val(length(newbufs))) do i
-        similar_type.(oldbufs[i], eltype(newbufs[i]))(newbufs[i])
+    return map(restore_static_buffer, oldbufs, newbufs)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Convert `newbuf`, rebuilt from the immutable `oldbuf` with `similar`, back to `oldbuf`'s
+static array type, keeping `newbuf`'s (possibly promoted) eltype. Mutable storage, such as
+a `Vector` held by a nonnumeric buffer, is returned as is.
+"""
+restore_static_buffer(oldbuf, newbuf) = newbuf
+function restore_static_buffer(oldbuf::StaticArray, newbuf)
+    if eltype(oldbuf) <: AbstractArray
+        newbuf = map(restore_static_buffer, oldbuf, newbuf)
     end
+    return similar_type(oldbuf, eltype(newbuf))(newbuf)
+end
+function restore_static_buffer(oldbuf::BlockedArray, newbuf::BlockedArray)
+    return BlockedArray(restore_static_buffer(parent(oldbuf), parent(newbuf)), axes(oldbuf))
 end
 
 function narrow_buffer_type_and_fallback_undefs(
@@ -975,7 +996,7 @@ end
                     Expr(
                         :tuple,
                         (
-                            :($similar_type($(fieldtype(D, i)), $(discretesT[i]))(discretes[$i]))
+                            :($restore_static_buffer(oldbuf.discrete[$i], discretes[$i]))
                                 for i in 1:length(discretesT)
                         )...
                     )
