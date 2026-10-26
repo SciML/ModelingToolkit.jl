@@ -458,6 +458,18 @@ foofn(x) = 4
 
     @parameters foo::AbstractFoo
     @test_throws ["does not exist"] respecialize(sys, [foo => Bar()])
+
+    # `MTKParameters` creates the value of a buffer added by `add_diffcache`, so it has no default.
+    sysd, buffer = ModelingToolkitBase.add_diffcache(sys1, 4)
+    sysd = complete(sysd)
+    initial_conditions(sysd)[p2] = Baz()
+    sys2 = respecialize(sysd, [p => Bar()]; all = true)
+    delete!(initial_conditions(sysd), p2)
+    ps = ModelingToolkitBase.get_ps(sys2)
+    @test any(isequal(buffer), ps)
+    @test symtype(ps[findfirst(isequal(rp2), ps)]) <: Baz
+    prob = ODEProblem(sys2, [q => [Bar(), Bar()], r => 1], (0.0, 1.0))
+    @test prob.p.caches[1] isa Vector{ModelingToolkitBase.DiffCacheAllocatorAPIWrapper{Float64}}
 end
 
 @testset "`truncate_constant_floats`" begin
