@@ -1013,7 +1013,8 @@ This operation can only be performed on `complete`d systems.
 # Keyword arguments
 
 - `all`: Specialize all nonnumeric parameters in the system. This will error if any such
-  parameter does not have a default.
+  parameter does not have a default. Buffers added by `add_diffcache` are left as they are,
+  since `MTKParameters` creates their values.
 """
 function respecialize(sys::AbstractSystem, mapping; all = false)
     if !iscomplete(sys)
@@ -1038,10 +1039,12 @@ function respecialize(sys::AbstractSystem, mapping; all = false)
 
     extras = Union{SymbolicT, Pair}[]
     if all
+        diffcaches = SU.getmetadata(sys, DiffCacheParams, Dict{SymbolicT, Int}())::Dict{SymbolicT, Int}
         for x in filter(!is_variable_numeric, get_ps(sys))
             if any(y -> isequal(x, y) || y isa Pair && isequal(x, y[1]), mapping) ||
                     symbolic_type(x) === ArraySymbolic() ||
-                    iscall(x) && operation(x) === getindex
+                    iscall(x) && operation(x) === getindex ||
+                    haskey(diffcaches, x)
                 continue
             end
             push!(extras, x)

@@ -1765,6 +1765,29 @@ end
 """
     $TYPEDSIGNATURES
 
+Return `true` if `x` is an indexed array symbolic whose indices are all constant
+integers (suitable for [`get_stable_index`](@ref)). Symbolic or non-integer
+indices return `false`.
+"""
+function has_const_int_indices(x::SymbolicT)
+    return Moshi.Match.@match x begin
+        BSImpl.Term(; f, args) && if f === getindex end => begin
+            for i in 2:length(args)
+                idx = unwrap_const(args[i])
+                idx isa Integer || return false
+            end
+            return true
+        end
+        BSImpl.Term(; f, args) && if f isa Operator && length(args) == 1 end => begin
+            return has_const_int_indices(args[1]::SymbolicT)
+        end
+        _ => return false
+    end
+end
+
+"""
+    $TYPEDSIGNATURES
+
 Merge `b` into `a`, but error if `a` already contains that key. Return the modified `a`.
 """
 function no_override_merge!(a::AbstractDict, b::AbstractDict)

@@ -1,6 +1,6 @@
 name = "ModelingToolkit"
 uuid = "961ee093-0014-501f-94e3-6117800e7a78"
-version = "11.45.3"
+version = "11.45.5"
 authors = ["Yingbo Ma <mayingbo5@gmail.com>", "Chris Rackauckas <accounts@chrisrackauckas.com> and contributors"]
 
 [deps]
@@ -149,7 +149,7 @@ DiffEqCallbacks = "4, 5, 6"
 Distributed = "1"
 DynamicQuantities = "1"
 JumpProcesses = "10"
-Latexify = "0.16"
+Latexify = "0.16.6"
 Random = "1"
 RecursiveArrayTools = "4"
 ReferenceTests = "0.10"

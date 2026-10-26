@@ -579,5 +579,6 @@ function __init__()
     return nothing
 end
 
+include("despecialize.jl")
 include("precompile.jl")
 end # module
