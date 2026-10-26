@@ -767,7 +767,7 @@ matrices, operating_point = solve(prob)
 matrices.A == [-1.0;;]
 ```
 """
-function CommonSolve.solve(prob::LinearizationProblem; allow_input_derivatives = false)
+Base.@inline function CommonSolve.solve(prob::LinearizationProblem; allow_input_derivatives = false)
     u0 = state_values(prob)
     p = parameter_values(prob)
     t = current_time(prob)
