@@ -1809,14 +1809,15 @@ end
     v1 = [3.0, 0.5]
     v2 = [12.0, 0.25]
 
-    # hybrid ODE integrator without variable-rate jumps: `DespecializedParameters`
+    # hybrid ODE integrator without variable-rate jumps, under an explicit (deprecated)
+    # `AutoDespecialize`: `DespecializedParameters`
     hybrid = mtkcompile(
         System(
             [D(A) ~ 0, D(B) ~ 0, D(C) ~ -d * C], t, [A, B, C], [k1, k2, d];
             jumps, name = :hybrid
         )
     )
-    jprob = JumpProblem(
+    jprob = @test_deprecated JumpProblem{true, SciMLBase.AutoDespecialize}(
         hybrid, [A => 20, B => 10, C => 1.0, k1 => v1[1], k2 => v1[2], d => 1.0],
         (0.0, 1.0)
     )
@@ -1910,10 +1911,10 @@ end
     @named vrjsys = JumpSystem([vrj], t, [A], [k])
     vrjsys = complete(vrjsys)
     for vr_aggregator in (VR_FRM(), VR_Direct(), VR_DirectFW())
-        jprob = JumpProblem(vrjsys, [A => 0, k => 1.0], (0.0, 10.0); vr_aggregator, rng)
+        jprob = JumpProblem(vrjsys, [A => 0, k => 1.0], (0.0, 10.0); vr_aggregator)
         @test jprob.prob isa ODEProblem
         @test !haskey(jprob.prob.kwargs, :vr_aggregator)
-        sol = solve(jprob, Tsit5())
+        sol = solve(jprob, Tsit5(); rng)
         @test SciMLBase.successful_retcode(sol)
         @test sol[A][end] > 0
     end
@@ -1923,11 +1924,11 @@ end
     crjsys = complete(crjsys)
     jprob = JumpProblem(
         crjsys, [A => 100, k => 0.1], (0.0, 10.0);
-        aggregator = Direct(), vr_aggregator = VR_Direct(), rng
+        aggregator = Direct(), vr_aggregator = VR_Direct()
     )
     @test jprob.prob isa DiscreteProblem
     @test !haskey(jprob.prob.kwargs, :vr_aggregator)
-    @test SciMLBase.successful_retcode(solve(jprob, SSAStepper()))
+    @test SciMLBase.successful_retcode(solve(jprob, SSAStepper(); rng))
 end
 
 @testset "JumpProblem defaults to FullSpecialize" begin
@@ -1943,28 +1944,28 @@ end
     tspan = (0.0, 5.0)
 
     full = SciMLBase.FullSpecialize
-    @test SciMLBase.specialization(JumpProblem(odesys, [], tspan; rng).prob.f) === full
-    @test SciMLBase.specialization(JumpProblem{true}(odesys, [], tspan; rng).prob.f) === full
-    @test SciMLBase.specialization(JumpProblem(sdesys, [], tspan; rng).prob.f) === full
+    @test SciMLBase.specialization(JumpProblem(odesys, [], tspan).prob.f) === full
+    @test SciMLBase.specialization(JumpProblem{true}(odesys, [], tspan).prob.f) === full
+    @test SciMLBase.specialization(JumpProblem(sdesys, [], tspan).prob.f) === full
     # VR_FRM rebuilds the ODE function, so check the VRJ system with VR_Direct
-    jprob = JumpProblem(vrjsys, [], tspan; vr_aggregator = VR_Direct(), rng)
+    jprob = JumpProblem(vrjsys, [], tspan; vr_aggregator = VR_Direct())
     @test SciMLBase.specialization(jprob.prob.f) === full
 
     # FunctionWrapper-based aggregators type their wrappers on `typeof(prob.p)`, so they
     # threw a `MethodError` when solving ODE-coupled problems under `AutoDespecialize`.
     for aggregator in (DirectFW(), SortingDirect(), NRM(), RSSA(), RSSACR(), Coevolve())
-        jprob = JumpProblem(odesys, [], tspan; aggregator, rng)
-        @test SciMLBase.successful_retcode(solve(jprob, Tsit5()))
+        jprob = JumpProblem(odesys, [], tspan; aggregator)
+        @test SciMLBase.successful_retcode(solve(jprob, Tsit5(); rng))
     end
     for vr_aggregator in (VR_Direct(), VR_DirectFW())
-        jprob = JumpProblem(vrjsys, [], tspan; vr_aggregator, rng)
-        @test SciMLBase.successful_retcode(solve(jprob, Tsit5()))
+        jprob = JumpProblem(vrjsys, [], tspan; vr_aggregator)
+        @test SciMLBase.successful_retcode(solve(jprob, Tsit5(); rng))
     end
 
     # Other specializations are deprecated but still honored
     jprob = @test_deprecated JumpProblem{true, SciMLBase.AutoDespecialize}(
-        odesys, [], tspan; aggregator = Direct(), rng
+        odesys, [], tspan; aggregator = Direct()
     )
     @test SciMLBase.specialization(jprob.prob.f) === SciMLBase.AutoDespecialize
-    @test SciMLBase.successful_retcode(solve(jprob, Tsit5()))
+    @test SciMLBase.successful_retcode(solve(jprob, Tsit5(); rng))
 end
