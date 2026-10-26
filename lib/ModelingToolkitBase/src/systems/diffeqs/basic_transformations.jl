@@ -998,6 +998,8 @@ Shorthand for `respecialize(sys, []; all = true)`
 """
 respecialize(sys::AbstractSystem) = respecialize(sys, []; all = true)
 
+_with_callable_type(::Type{<:FnType{X, Y}}, ::Type{T}) where {X, Y, T} = FnType{X, Y, T}
+
 """
     $(TYPEDSIGNATURES)
 
@@ -1097,8 +1099,7 @@ function respecialize(sys::AbstractSystem, mapping; all = false)
             args = arguments(k)
             new_p = op(args...)
         elseif SU.is_function_symbolic(k)
-            X, Y = SU.fntype_X_Y(symtype(k))
-            new_p = SSym(getname(k); type = SU.FnType{X, Y, T}, shape = SU.shape(k))
+            new_p = SSym(getname(k); type = _with_callable_type(symtype(k), T), shape = SU.shape(k))
         else
             new_p = SSym(getname(k); type = T, shape = SU.shape(v))
         end
