@@ -2209,8 +2209,10 @@ function maybe_build_initialization_problem(
     end
 
     orig_op = copy(op)
+    # The outer problem constructor already warns about these keywords.
+    init_kwargs = (; (k => v for (k, v) in kwargs if !(k in STRUCTURAL_KWARGS))...)
     initializeprob = ModelingToolkitBase.InitializationProblem{iip, specialize}(
-        sys, t, op, opts; guesses, fast_path = true, kwargs...
+        sys, t, op, opts; guesses, fast_path = true, init_kwargs...
     )
     initsys = initializeprob.f.sys::System
     needs_remake = false

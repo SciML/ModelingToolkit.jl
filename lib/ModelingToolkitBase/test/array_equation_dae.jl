@@ -220,3 +220,12 @@ end
     )
     @test prob2.differential_vars == prob.differential_vars
 end
+
+@testset "structural keyword warns exactly once with default initialization" begin
+    sys, u, t, D = heat_array_system(5)
+    op = vcat([u[i] => 0.0 for i in 1:5], [D(u[i]) => 0.0 for i in 1:5])
+    logs, _ = Test.collect_test_logs() do
+        DAEProblem(sys, op, (0.0, 0.1); differential_vars = fill(true, 5))
+    end
+    @test count(l -> occursin("differential_vars", l.message), logs) == 1
+end
