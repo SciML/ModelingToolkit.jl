@@ -1,12 +1,8 @@
 MTKBase.singular_check(ts::TearingState) = StateSelection.singular_check(ts)
 
 function MTKBase.get_initialization_problem_type(
-        sys::System, isys::System;
-        verbose = DEFAULT_MTK_VERBOSE,
-        warn_initialize_determined = nothing,
-        use_scc = true, kwargs...
+        sys::System, isys::System, verbosity::MTKVerbosity; use_scc = true, kwargs...
     )
-    verbosity = MTKBase._initialization_type_verbosity(verbose, warn_initialize_determined)
     neqs = length(equations(isys))
     nunknown = length(unknowns(isys))
     ts = get_tearing_state(isys)::TearingState
@@ -145,7 +141,7 @@ analysis.nullity, analysis.redundancy
 function analyze_initialization_jacobian(
         prob; rtol = 1.0e-8, atol = 0.0, threshold = 1.0e-3, verbose = true, autodiff = nothing
     )
-    verbose = _process_verbose_param(verbose)
+    verbose = MTKVerbosity(verbose)
     empty_result = (;
         jacobian = nothing, singular_values = Float64[], rank = 0,
         nullity = 0, redundancy = 0, underdetermined_unknowns = Pair[],
@@ -208,37 +204,50 @@ function analyze_initialization_jacobian(
         [(eqs === nothing ? i : eqs[i]) => row_w[i] for i in 1:nrows if row_w[i] > threshold];
         by = last, rev = true
     )
-    if _toggle_enabled(verbose, :initialization_analysis)
-        println("Initialization Jacobian rank analysis")
-        println("  residual Jacobian: $(nrows)×$(ncols), rank ≈ $rank, nullity ≈ $nullity, redundancy ≈ $redundancy")
-        if !isempty(S)
-            k = min(5, length(S))
-            println(
-                "  smallest $k singular value(s): ",
-                round.(S[(end - k + 1):end], sigdigits = 3)
-            )
-        end
-        if nullity == 0
-            println("  Full column rank at u0 — no underdetermined unknowns.")
-        else
-            println("  Underdetermined unknowns (participation ∈ [0, 1]):")
-            for (s, w) in underdetermined_unknowns
-                println("    ", lpad(string(round(w, digits = 4)), 8), "  ", s)
-            end
-        end
-        if redundancy == 0
-            println("  Full row rank at u0 — no redundant equations.")
-        else
-            println("  Redundant equations (participation ∈ [0, 1]):")
-            for (e, w) in redundant_equations
-                println("    ", lpad(string(round(w, digits = 4)), 8), "  ", e)
-            end
-        end
+    @SciMLMessage(verbose, :initialization_analysis) do
+        _initialization_analysis_report(
+            nrows, ncols, rank, nullity, redundancy, S,
+            underdetermined_unknowns, redundant_equations
+        )
     end
     return (;
         jacobian = J, singular_values = S, rank, nullity, redundancy,
         underdetermined_unknowns, redundant_equations,
     )
+end
+
+# The human-readable report of `analyze_initialization_jacobian`.
+function _initialization_analysis_report(
+        nrows, ncols, rank, nullity, redundancy, S,
+        underdetermined_unknowns, redundant_equations
+    )
+    io = IOBuffer()
+    println(io, "Initialization Jacobian rank analysis")
+    println(io, "  residual Jacobian: $(nrows)×$(ncols), rank ≈ $rank, nullity ≈ $nullity, redundancy ≈ $redundancy")
+    if !isempty(S)
+        k = min(5, length(S))
+        println(
+            io, "  smallest $k singular value(s): ",
+            round.(S[(end - k + 1):end], sigdigits = 3)
+        )
+    end
+    if nullity == 0
+        println(io, "  Full column rank at u0 — no underdetermined unknowns.")
+    else
+        println(io, "  Underdetermined unknowns (participation ∈ [0, 1]):")
+        for (s, w) in underdetermined_unknowns
+            println(io, "    ", lpad(string(round(w, digits = 4)), 8), "  ", s)
+        end
+    end
+    if redundancy == 0
+        print(io, "  Full row rank at u0 — no redundant equations.")
+    else
+        print(io, "  Redundant equations (participation ∈ [0, 1]):")
+        for (e, w) in redundant_equations
+            print(io, "\n    ", lpad(string(round(w, digits = 4)), 8), "  ", e)
+        end
+    end
+    return String(take!(io))
 end
 
 # Symbolic equations of an initialization problem, in residual order, or `nothing` if not

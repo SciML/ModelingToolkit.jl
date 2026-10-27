@@ -149,11 +149,7 @@ end
     @mtkcompile sys = System([D(x) ~ -x, D(y) ~ -y], t)
     op = Dict(unwrap(x) => 2unwrap(y), unwrap(y) => 2unwrap(x))
     tspan = (0.0, 1.0)
-    make(kws...) = try
-        ODEProblem(sys, op, tspan; kws...)
-    catch
-        nothing # the cyclic ICs may error after the warning; only the logs matter
-    end
+    make(kws...) = ODEProblem(sys, op, tspan; kws...)
     @test_logs min_level = Logging.Warn make()
     @test_logs (:warn, r"Cycles in unknowns") match_mode = :any make(
         :verbose => MTKVerbosity(Detailed())
@@ -318,9 +314,10 @@ end
     )
 end
 
-@connector function UnbalancedPin(; name)
+# `balanced = true` gives a balanced instance of the same connector type
+@connector function UnbalancedPin(; name, balanced = false)
     @variables v(t) w(t) i(t) [connect = Flow]
-    return System(Equation[], t, [v, w, i], []; name)
+    return System(Equation[], t, balanced ? [v, i] : [v, w, i], []; name)
 end
 
 @connector function QuietUnbalancedPin(; name)
@@ -335,24 +332,22 @@ end
     # creating a connector does not warn
     @test_logs min_level = Logging.Warn UnbalancedPin(; name = :p)
     @variables x(t)
-    function compile(pin; kws...)
-        model = System(
-            [D(x) ~ -x], t; name = :model,
-            systems = [pin(; name = :p), pin(; name = :q)]
-        )
-        try
-            mtkcompile(model; kws...)
-        catch
-            nothing # the unconnected pins make the model unbalanced; only the logs matter
+    # a balanced model: the flow variable of an unconnected pin is zero, and the
+    # other variables of a pin get an equation here
+    function n_unbalanced_warnings(pins...; kws...)
+        eqs = [D(x) ~ -x]
+        for pin in pins, u in unknowns(pin)
+            ModelingToolkitBase.get_connection_type(u) === ModelingToolkitBase.Flow && continue
+            push!(eqs, getproperty(pin, ModelingToolkitBase.getname(u)) ~ 1.0)
         end
-        return nothing
-    end
-    function n_unbalanced_warnings(pin; kws...)
+        model = System(eqs, t; name = :model, systems = collect(pins))
         logs, _ = Test.collect_test_logs(min_level = Logging.Warn) do
-            compile(pin; kws...)
+            mtkcompile(model; kws...)
         end
         return count(log -> occursin("flow variables, yet", string(log.message)), logs)
     end
+    n_unbalanced_warnings(pin::Function; kws...) =
+        n_unbalanced_warnings(pin(; name = :p), pin(; name = :q); kws...)
     # `mtkcompile` warns once for each connector type
     @test n_unbalanced_warnings(UnbalancedPin) == 1
     @test n_unbalanced_warnings(UnbalancedPin; verbose = false) == 0
@@ -361,6 +356,11 @@ end
     ) == 0
     # the author of a connector can silence it
     @test n_unbalanced_warnings(QuietUnbalancedPin) == 0
+    # a balanced instance does not hide an unbalanced instance of the same type
+    bad = UnbalancedPin(; name = :bad)
+    good = UnbalancedPin(; name = :good, balanced = true)
+    @test n_unbalanced_warnings(bad, good) == 1
+    @test n_unbalanced_warnings(good, bad) == 1
 end
 
 @testset "affect_default_independent_variable toggle" begin

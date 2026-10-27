@@ -172,22 +172,21 @@ function linearization_function(
         loop_opening_params = SymbolicT[],
         kwargs...
     )
-    verbosity = _route_problem_verbose(verbose)
-    verbosity = _deprecated_override_toggle(
-        verbosity, warn_empty_op, :warn_empty_op, :linearization_function,
-        :empty_operating_point => WarnLevel
-    )
-    verbosity = _deprecated_override_toggle(
-        verbosity, warn_initialize_determined,
-        :warn_initialize_determined, :linearization_function,
-        _INITIALIZE_DETERMINED_TOGGLES...
-    )
+    verbosity = verbose === nothing ? MTKVerbosity() : MTKVerbosity(verbose)
+    if warn_empty_op !== nothing
+        Base.depwarn(
+            "The `warn_empty_op` keyword is deprecated, use `verbose = MTKVerbosity(empty_operating_point = ...)` instead.",
+            :linearization_function
+        )
+    end
     op = Dict(op)
     if isempty(op)
-        @SciMLMessage(
-            "An empty operating point was passed to `linearization_function`. An operating point containing the variables that will be changed in `linearize` should be provided. Disable this warning by passing `verbose = MTKVerbosity(empty_operating_point = SciMLLogging.Silent)`.",
-            verbosity, :empty_operating_point
-        )
+        msg = "An empty operating point was passed to `linearization_function`. An operating point containing the variables that will be changed in `linearize` should be provided. Disable this warning by passing `verbose = MTKVerbosity(empty_operating_point = SciMLLogging.Silent)`."
+        if warn_empty_op === nothing
+            @SciMLMessage(msg, verbosity, :empty_operating_point)
+        elseif warn_empty_op
+            @warn msg
+        end
     end
     inputs isa AbstractVector || (inputs = [inputs])
     outputs isa AbstractVector || (outputs = [outputs])
@@ -232,7 +231,9 @@ function linearization_function(
 
     prob = ODEProblem{true}(
         sys, merge(op, anydict(p)), (t, t); allow_incomplete = true,
-        algebraic_only = true, guesses, missing_guess_value, verbose = verbosity
+        algebraic_only = true, guesses, missing_guess_value, verbose = verbosity,
+        # the problem constructor applies and deprecates this keyword
+        warn_initialize_determined
     )
     initial_idxs_for_unknowns = ParameterIndex{SciMLStructures.Initials, Int}[]
     for v in unknowns(sys)

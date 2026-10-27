@@ -20,7 +20,7 @@ function tearing(
         reassemble_alg::ReassembleAlgorithm = DefaultReassembleAlgorithm(),
         fully_determined = true,
         # Not forwarded: StateSelection and MTKTearing do not accept `verbose`.
-        verbose::MTKVerbosity = DEFAULT_MTK_VERBOSE,
+        verbose::MTKVerbosity = MTKVerbosity(),
         kwargs...
     )
     tearing_result, extras = tearing(state; kwargs...)
@@ -62,7 +62,7 @@ function dummy_derivative(
         reassemble_alg::ReassembleAlgorithm = DefaultReassembleAlgorithm(),
         fully_determined = true,
         # Not forwarded: StateSelection and MTKTearing do not accept `verbose`.
-        verbose::MTKVerbosity = DEFAULT_MTK_VERBOSE,
+        verbose::MTKVerbosity = MTKVerbosity(),
         kwargs...
     )
     jac = let state = state

@@ -62,7 +62,7 @@ end
 Convenience wrapper for `find_perfect_aliases!`.
 """
 function eliminate_perfect_aliases!(
-        state::TearingState; verbose::MTKVerbosity = DEFAULT_MTK_VERBOSE
+        state::TearingState; verbose::MTKVerbosity = MTKVerbosity()
     )
     StateSelection.complete!(state.structure)
     eqs_to_rm = Int[]
@@ -258,7 +258,7 @@ which variables are aliased to some other variables. Keys of `aliases` are prese
 """
 function find_perfect_aliases!(
         state::TearingState, eqs_to_rm::Vector{Int}, vars_to_rm::Vector{Int},
-        verbose::MTKVerbosity = DEFAULT_MTK_VERBOSE
+        verbose::MTKVerbosity = MTKVerbosity()
     )
     (; sys, fullvars, structure) = state
     (; graph, solvable_graph, var_to_diff, state_priorities) = structure
@@ -882,12 +882,8 @@ end
 
 function alias_elimination!(
         state::TearingState;
-        verbose::MTKVerbosity = DEFAULT_MTK_VERBOSE,
-        print_underconstrained_variables = nothing, kwargs...
-    )
-    verbose = _deprecated_override_toggle(
-        verbose, print_underconstrained_variables, :print_underconstrained_variables,
-        :mtkcompile, :underconstrained_variables => InfoLevel
+        verbose::MTKVerbosity = MTKVerbosity(),
+        report_underconstrained::Bool = true, kwargs...
     )
     StateSelection.complete!(state.structure)
     eqs_to_rm = Int[]
@@ -905,7 +901,7 @@ function alias_elimination!(
     variable_underconstrained! = IgnoreUnderconstrainedVariable()
     mm = StateSelection.structural_singularity_removal!(state; variable_underconstrained!, kwargs...)
 
-    if !isempty(variable_underconstrained!.underconstrained)
+    if report_underconstrained && !isempty(variable_underconstrained!.underconstrained)
         @SciMLMessage(verbose, :underconstrained_variables) do
             underconstrained_vars = state.fullvars[variable_underconstrained!.underconstrained]
             "Found underconstrained variables in the system: $underconstrained_vars"

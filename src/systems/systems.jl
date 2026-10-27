@@ -3,7 +3,7 @@ function MTKBase.__mtkcompile(
         inputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
         outputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
         disturbance_inputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
-        sort_eqs = true, verbose::MTKVerbosity = DEFAULT_MTK_VERBOSE,
+        sort_eqs = true, verbose::MTKVerbosity = MTKVerbosity(),
         kwargs...
     )
     sys, statemachines = extract_top_level_statemachines(sys)
@@ -131,7 +131,7 @@ function MTKBase.__mtkcompile(
 end
 
 function MTKBase.simplify_sde_system(
-        sys::System; verbose::MTKVerbosity = DEFAULT_MTK_VERBOSE, kwargs...
+        sys::System; verbose::MTKVerbosity = MTKVerbosity(), kwargs...
     )
     return __mtkcompile(sys; verbose, kwargs...)
 end

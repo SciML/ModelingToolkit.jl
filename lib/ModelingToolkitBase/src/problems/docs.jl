@@ -43,10 +43,13 @@ $INITIALIZEPROB_KWARGS
 - `p_constructor`: A function to apply to each array buffer created when constructing the
   parameter object.
 - `verbose`: Controls diagnostic output during problem construction. Accepts an
-  [`MTKVerbosity`](@ref) specifier (consumed by ModelingToolkit and **not** placed in
-  `prob.kwargs`), a `SciMLLogging` preset or `Bool` (consumed by ModelingToolkit *and*
-  forwarded to the solver via `prob.kwargs`, as before), or a solver verbosity specifier
-  (forwarded untouched).
+  [`MTKVerbosity`](@ref) specifier (used by ModelingToolkit; only its solver
+  sub-specifier for the problem type is placed in `prob.kwargs`), a `SciMLLogging` preset
+  or `Bool` (used by ModelingToolkit *and* forwarded to the solver via `prob.kwargs`, as
+  before), or a solver verbosity specifier (forwarded untouched). For
+  `InitializationProblem`, the forwarded value is the solver verbosity of the returned
+  problem; for other problems, the `initialization_verbosity` of an `MTKVerbosity` is the
+  solver verbosity of the initialization problem.
 - `warn_cyclic_dependency`: (deprecated) Whether to emit a warning listing out cycles in
   initial conditions provided for unknowns and parameters. Use `verbose` and the
   `cyclic_dependency` toggle of [`MTKVerbosity`](@ref) instead; when explicitly passed,

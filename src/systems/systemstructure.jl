@@ -132,7 +132,7 @@ function mtkcompile!(
         inputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
         outputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
         disturbance_inputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
-        verbose::MTKVerbosity = DEFAULT_MTK_VERBOSE,
+        verbose::MTKVerbosity = MTKVerbosity(),
         kwargs...
     )
     if !is_time_dependent(state.sys)
@@ -232,7 +232,7 @@ function _mtkcompile!(
         outputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
         disturbance_inputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
         eliminate_mm_zeros = true,
-        verbose::MTKVerbosity = DEFAULT_MTK_VERBOSE,
+        verbose::MTKVerbosity = MTKVerbosity(),
         kwargs...
     )
     if fully_determined isa Bool
@@ -292,12 +292,9 @@ function _mtkcompile_worker!(
         sys = pantelides_reassemble(state, var_eq_matching)
         state = TearingState(sys)
         sys, mm = alias_elimination!(
-            state; fully_determined, kwargs...,
+            state; fully_determined, verbose, kwargs...,
             # `_mtkcompile!` already reported the underconstrained variables
-            verbose = _override_toggle(
-                verbose, false, :underconstrained_variables => InfoLevel
-            ),
-            print_underconstrained_variables = nothing,
+            report_underconstrained = false,
         )
         state.mm = mm
         sys = ModelingToolkit.dummy_derivative(

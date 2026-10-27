@@ -542,7 +542,10 @@ function SciMLBase.SCCNonlinearProblem{iip, specialize}(
     ts = get_tearing_state(sys)
     sched = get_schedule(sys)
     if sched === nothing
-        verbosity = _problem_verbosity(kwargs)
+        verbose = get(kwargs, :verbose, nothing)
+        # other values of `verbose` are for the solver
+        verbosity = verbose isa Union{MTKVerbosity, AbstractVerbosityPreset, Bool} ?
+            MTKVerbosity(verbose) : MTKVerbosity()
         @SciMLMessage(
             "System is simplified but does not have a schedule. This should not happen.",
             verbosity, :missing_scc_schedule
@@ -715,8 +718,12 @@ function SciMLBase.SCCNonlinearProblem{iip, specialize}(
     u0_constructor = get_p_constructor(u0_constructor, typeof(u0), u0_eltype)
     # `SCCNonlinearProblem` has no `kwargs` of its own: the SCC solve merges the
     # `kwargs` of each block, so the solve-time `verbose` goes on the nonlinear blocks.
-    subprob_kwargs = haskey(kwargs, :verbose) ?
-        _solver_kwargs(NonlinearProblem, (; verbose = kwargs[:verbose])) : (;)
+    subprob_kwargs = if haskey(kwargs, :verbose)
+        verbose = kwargs[:verbose]
+        (; verbose = verbose isa MTKVerbosity ? verbose.nonlinear_verbosity : verbose)
+    else
+        (;)
+    end
     subprobs = []
     subber = Symbolics.FixpointSubstituter{true}(AtomicArrayDictSubstitutionWrapper(op))
     for (i, (f, vscc)) in enumerate(zip(nlfuns, decomposition.var_sccs))

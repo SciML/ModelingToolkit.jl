@@ -180,8 +180,9 @@ end
 
 Emit the `unbalanced_connector` diagnostic for each connector in the hierarchy of `sys`
 that has a different number of flow and regular variables. `mtkcompile` calls this with
-its `verbose`, so the diagnostic shows once for each connector type. A connector whose own
-stored verbosity (see `System(...; verbose)`) silences the toggle is skipped.
+its `verbose`, so the diagnostic shows once for each unbalanced connector type. A
+connector whose own stored verbosity (see `System(...; verbose)`) silences the toggle is
+skipped.
 """
 function warn_unbalanced_connectors(sys::AbstractSystem, verbose::MTKVerbosity)
     _toggle_enabled(verbose, :unbalanced_connector) || return nothing
@@ -197,11 +198,13 @@ function warn_unbalanced_connectors(sys::AbstractSystem, verbose::MTKVerbosity)
         gui = get_gui_metadata(s)
         key = gui === nothing ? nameof(s) : gui.type
         key in seen && continue
-        push!(seen, key)
         # the author of a connector can silence it with `System(...; verbose)`
         _toggle_enabled(_system_verbosity(s), :unbalanced_connector) || continue
         _, n_flow, n_regular = connector_variable_counts(s)
         n_flow == n_regular && continue
+        # record the type only when it emits, so a balanced instance of the same
+        # connector type does not hide an unbalanced one
+        push!(seen, key)
         @SciMLMessage(verbose, :unbalanced_connector) do
             "Connector $key contains $n_flow flow variables, yet $n_regular regular " *
                 "(non-flow, non-stream, non-input, non-output) variables. " *

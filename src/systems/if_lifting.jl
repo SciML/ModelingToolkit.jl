@@ -24,7 +24,7 @@ struct CondRewriter{V <: MTKVerbosity}
     verbose::V
 end
 
-function CondRewriter(iv, verbose::MTKVerbosity = DEFAULT_MTK_VERBOSE)
+function CondRewriter(iv, verbose::MTKVerbosity = MTKVerbosity())
     return CondRewriter(iv, Dict{Any, @NamedTuple{dependency, expression}}(), verbose)
 end
 
@@ -566,7 +566,7 @@ before it runs `additional_passes`. `IfLifting(sys, verbose::MTKVerbosity)` uses
     This is an experimental simplification pass. It may have bugs. Please open issues with
     MWEs for any bugs encountered while using this.
 """
-IfLifting(sys::System) = IfLifting(sys, _system_verbosity(sys))
+IfLifting(sys::System) = IfLifting(sys, getmetadata(sys, MTKVerbosityCtx, MTKVerbosity()))
 
 function IfLifting(sys::System, verbose::MTKVerbosity)
     if !is_time_dependent(sys)

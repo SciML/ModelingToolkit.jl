@@ -163,6 +163,7 @@ functions accepts an `MTKVerbosity`. See [Controlling verbosity](@ref) for examp
 
 ```@docs
 MTKVerbosity
+ModelingToolkitBase.MTKVerbosityCtx
 ```
 
 It is also possible (though not always advisable) to build numerical problems from systems without

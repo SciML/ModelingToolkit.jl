@@ -3,6 +3,7 @@ using ModelingToolkit: t_nounits as t, D_nounits as D, unwrap, topsort_equations
 using SciMLLogging: SciMLLogging, MessageLevel, Silent, InfoLevel, WarnLevel,
     None, Minimal, Standard, Detailed, All
 using SciMLBase: SCCNonlinearProblem
+using NonlinearSolve: NonlinearVerbosity
 const MTKBase = ModelingToolkit.MTKBase
 
 # The warnings of `f()` other than deprecation warnings.
@@ -29,6 +30,36 @@ end
     @test verb.underconstrained_variables == Silent
     @test verb.if_lifting_condition_grammar == Silent
     @test verb.observed_equation_cycle == Silent
+end
+
+@testset "MTKVerbosity from a verbose keyword value" begin
+    verb = MTKVerbosity(state_priority_tie = Silent)
+    @test MTKVerbosity(verb) === verb
+    @test MTKVerbosity(true) == MTKVerbosity()
+    @test MTKVerbosity(false) == MTKVerbosity(None())
+end
+
+@testset "Explicit initialization solver verbosity" begin
+    # a direct `InitializationProblem` call gives a solver `verbose` to the problem
+    @variables x(t) y(t)
+    @named raw = System([D(x) ~ -x, y ~ x^3 + x], t; guesses = [x => 1.0])
+    sys = mtkcompile(raw)
+    for v in (
+            NonlinearVerbosity(None()), Detailed(), None(), false,
+        )
+        ip = InitializationProblem(sys, 0.0, [y => 2.0]; use_scc = false, verbose = v)
+        @test ip.kwargs[:verbose] === v
+    end
+    # an `MTKVerbosity` gives its `initialization_verbosity`
+    ip = InitializationProblem(
+        sys, 0.0, [y => 2.0]; use_scc = false,
+        verbose = MTKVerbosity(initialization_verbosity = Detailed())
+    )
+    @test ip.kwargs[:verbose] === Detailed()
+    # the toggles of a preset still apply
+    @test_logs min_level = Logging.Debug InitializationProblem(
+        sys, 0.0, [y => 2.0]; use_scc = false, verbose = None()
+    )
 end
 
 @testset "_process_verbose_param" begin
@@ -144,6 +175,33 @@ end
     @test_logs min_level = Logging.Info analyze_initialization_jacobian(
         prob; verbose = MTKVerbosity(initialization_analysis = SciMLLogging.Silent)
     )
+
+    # the report of a nonempty analysis also goes through the logger
+    @variables x(t) y(t)
+    @mtkcompile circle = System([D(x) ~ y, 0 ~ x^2 + y^2 - 1], t)
+    prob = ODEProblem(
+        circle, [], (0.0, 1.0); guesses = [x => 0.6, y => 0.8],
+        verbose = MTKVerbosity(initialization = Silent)
+    )
+    report = r"Initialization Jacobian rank analysis"
+    @test_logs (:info, report) analyze_initialization_jacobian(prob)
+    # `ErrorLevel` logs the report, and then SciMLLogging throws it
+    errverb = MTKVerbosity(initialization_analysis = SciMLLogging.ErrorLevel)
+    logs, _ = Test.collect_test_logs(min_level = Logging.Error) do
+        @test_throws ErrorException analyze_initialization_jacobian(
+            prob; verbose = errverb
+        )
+    end
+    @test only(logs).level == Logging.Error
+    @test occursin(report, string(only(logs).message))
+    # a logger that filters the level gets no records, and nothing is printed
+    logs, _ = Test.collect_test_logs(min_level = Logging.Warn) do
+        analyze_initialization_jacobian(prob)
+    end
+    @test isempty(logs)
+    @test_logs min_level = Logging.Debug analyze_initialization_jacobian(
+        prob; verbose = false
+    )
 end
 
 @testset "scc_initialization_unavailable toggle" begin
@@ -241,7 +299,7 @@ end
     @test seen[] === :default
     # a pass reads the verbosity that `mtkcompile` stores on the system
     stored = Ref{Any}(nothing)
-    readpass(sys) = (stored[] = MTKBase._system_verbosity(sys); sys)
+    readpass(sys) = (stored[] = getmetadata(sys, MTKBase.MTKVerbosityCtx, nothing); sys)
     mtkcompile(sys; additional_passes = [readpass], verbose = None())
     @test stored[] == MTKVerbosity(None())
 end

@@ -385,7 +385,7 @@ const SILENT_MTK_VERBOSE = MTKVerbosity(None())
 
 Metadata key for the [`MTKVerbosity`](@ref) that is stored on a system. The `verbose`
 keyword of `System` and [`mtkcompile`](@ref) set it. Diagnostics that have no `verbose`
-keyword of their own read it with `_system_verbosity`.
+keyword of their own read it with `getmetadata(sys, MTKVerbosityCtx, MTKVerbosity())`.
 """
 struct MTKVerbosityCtx end
 
@@ -406,6 +406,11 @@ function _set_system_verbosity(sys, verbose::MTKVerbosity)
     getmetadata(sys, MTKVerbosityCtx, nothing) === verbose && return sys
     return setmetadata(sys, MTKVerbosityCtx, verbose)
 end
+
+# `MTKVerbosity(verbose)` accepts every value that a `verbose = ...` keyword of
+# ModelingToolkit documents: an `MTKVerbosity`, a preset, or a `Bool`.
+MTKVerbosity(verbose::MTKVerbosity) = verbose
+MTKVerbosity(verbose::Bool) = verbose ? DEFAULT_MTK_VERBOSE : SILENT_MTK_VERBOSE
 
 @inline _process_verbose_param(verbose::MTKVerbosity) = verbose
 @inline _process_verbose_param(preset::AbstractVerbosityPreset) = MTKVerbosity(preset)
@@ -520,6 +525,20 @@ function _deprecated_override_toggle(
         caller
     )
     return _override_toggle(verb, flag, pairs...)
+end
+
+# `verb` with `solver` as its `initialization_verbosity`. `nothing` and an `MTKVerbosity`
+# do not change `verb`.
+function _with_initialization_solver_verbosity(
+        verb::MTKVerbosity, ::Union{Nothing, MTKVerbosity}
+    )
+    return verb
+end
+function _with_initialization_solver_verbosity(verb::MTKVerbosity{E}, solver) where {E}
+    vals = map(fieldnames(typeof(verb))) do f
+        f === :initialization_verbosity ? solver : getfield(verb, f)
+    end
+    return MTKVerbosity{E}(vals...)
 end
 
 # The `verbose` of the inner initialization problem: the toggles of `verb`, with its

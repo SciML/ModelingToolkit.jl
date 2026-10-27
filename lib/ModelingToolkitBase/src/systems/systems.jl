@@ -114,7 +114,10 @@ once — calling `mtkcompile` on an already-compiled system throws
   `Standard()`, `false` to `None()`). `nothing` uses the verbosity stored on `sys` by
   `System(...; verbose)`, or `Standard()` if there is none. The compiled system stores
   the result. Functions in `additional_passes` can read it with
-  `ModelingToolkitBase._system_verbosity(sys)`.
+  `getmetadata(sys, ModelingToolkitBase.MTKVerbosityCtx, MTKVerbosity())`.
+- `print_underconstrained_variables = nothing`: (deprecated) Use the
+  `underconstrained_variables` toggle of `verbose` instead. When explicitly passed, it
+  overrides that toggle.
 
 Remaining keyword arguments are forwarded to the internal compilation passes.
 
@@ -143,9 +146,14 @@ function mtkcompile(
         sys::System; additional_passes = (),
         inputs = SymbolicT[], outputs = SymbolicT[],
         disturbance_inputs = SymbolicT[],
-        split = true, homotopy = true, verbose = nothing, kwargs...
+        split = true, homotopy = true, verbose = nothing,
+        print_underconstrained_variables = nothing, kwargs...
     )
     verbose = verbose === nothing ? _system_verbosity(sys) : _process_verbose_param(verbose)
+    verbose = _deprecated_override_toggle(
+        verbose, print_underconstrained_variables, :print_underconstrained_variables,
+        :mtkcompile, :underconstrained_variables => InfoLevel
+    )
     isscheduled(sys) && throw(RepeatedStructuralSimplificationError())
     warn_unbalanced_connectors(sys, verbose)
     if !homotopy

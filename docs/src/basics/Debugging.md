@@ -148,6 +148,8 @@ the initialization problem's solve (default `Minimal()`), and accepts a preset o
 `NonlinearVerbosity`; then it uses `linear_verbosity`. The ModelingToolkit diagnostics of
 the initialization problem use the toggles of the outer `MTKVerbosity`. The
 [`MTKVerbosity`](@ref) docstring lists the solver sub-specifiers for each problem family.
+If you call `InitializationProblem` directly, a preset, a `Bool`, or a solver specifier
+in `verbose` is the solver verbosity of the problem that it returns.
 
 The boolean keywords `warn_initialize_determined`, `warn_cyclic_dependency`,
 `warn_empty_op`, and `print_underconstrained_variables` (of `mtkcompile`) are deprecated
@@ -161,7 +163,7 @@ Some diagnostics run where no `verbose` keyword is available: the checks in the 
 constructor, callback affects, `remake`, and `IfLifting` and other `additional_passes`.
 These use the verbosity that is stored in the metadata of the system. Set it with the `verbose` keyword of `System`. The author of
 a connector can also silence the `unbalanced_connector` check, which `mtkcompile` does
-once for each connector type, for that connector:
+once for each unbalanced connector type, for that connector:
 
 ```julia
 @connector function Pin(; name)
@@ -175,7 +177,8 @@ end
 `remake` on a problem of `mtkcompile(sys; verbose = false)` is also quiet. If
 `mtkcompile` gets no `verbose`, it uses the value stored on its input system. Other
 functions that have their own `verbose` keyword, such as problem constructors and
-`substitute`, do not read the stored value.
+`substitute`, do not read the stored value. A custom pass can read the stored value with
+`getmetadata(sys, ModelingToolkitBase.MTKVerbosityCtx, MTKVerbosity())`.
 
 ```@docs; canonical = false
 MTKVerbosity

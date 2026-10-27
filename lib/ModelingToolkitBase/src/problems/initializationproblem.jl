@@ -434,6 +434,9 @@ pluralize(n::Integer, word::AbstractString) = n == 1 ? word : word * "s"
         kwargs...
     ) where {iip, specialize}
     fn_opts = SciMLFunctionOptions(; eval_expression, eval_module)
+    # The returned problem is the initialization problem, so a solver `verbose` (a
+    # preset, a `Bool` or a solver specifier) is its solver verbosity.
+    verbose = _with_initialization_solver_verbosity(_route_problem_verbose(verbose), verbose)
     opts = SciMLProblemOptions(
         sys;
         fn_opts, verbose, warn_initialize_determined, initialization_eqs, fully_determined,
@@ -477,17 +480,6 @@ function underdetermined_initialization_message(neqs::Integer, nunknown::Integer
     """
 end
 
-# The verbosity of `get_initialization_problem_type`, with its deprecated
-# `warn_initialize_determined` keyword applied.
-function _initialization_type_verbosity(verbose, warn_initialize_determined)
-    return _deprecated_override_toggle(
-        _route_problem_verbose(verbose), warn_initialize_determined,
-        :warn_initialize_determined, :get_initialization_problem_type,
-        :overdetermined_initialization => WarnLevel,
-        :underdetermined_initialization => WarnLevel,
-    )
-end
-
 """
     $TYPEDSIGNATURES
 
@@ -497,12 +489,27 @@ affine init system, `NonlinearLeastSquaresProblem` for a non-square one, and —
 one — the type selected by `get_nonlinear_problem_type(isys)`: `SciMLBase.HomotopyProblem`
 when `isys` contains Modelica `homotopy(actual, simplified)` nodes, otherwise
 `NonlinearProblem`.
+
+This method converts `verbose` and the deprecated `warn_initialize_determined` keyword to
+an `MTKVerbosity`, and then calls the method that takes the `MTKVerbosity` as a third
+argument. Add methods to that method, not to this one.
 """
 function get_initialization_problem_type(
         sys::AbstractSystem, isys::AbstractSystem;
         verbose = DEFAULT_MTK_VERBOSE, warn_initialize_determined = nothing, kwargs...
     )
-    verbosity = _initialization_type_verbosity(verbose, warn_initialize_determined)
+    verbosity = _deprecated_override_toggle(
+        _route_problem_verbose(verbose), warn_initialize_determined,
+        :warn_initialize_determined, :get_initialization_problem_type,
+        :overdetermined_initialization => WarnLevel,
+        :underdetermined_initialization => WarnLevel,
+    )
+    return get_initialization_problem_type(sys, isys, verbosity; kwargs...)
+end
+
+function get_initialization_problem_type(
+        sys::AbstractSystem, isys::AbstractSystem, verbosity::MTKVerbosity; kwargs...
+    )
     neqs = length(equations(isys))
     nunknown = length(unknowns(isys))
 
