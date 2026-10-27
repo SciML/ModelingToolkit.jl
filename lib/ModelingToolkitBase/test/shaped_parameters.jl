@@ -4,12 +4,14 @@ using Symbolics
 using SymbolicUtils
 using SciMLBase
 using SparseArrays, LinearAlgebra
+using SymbolicIndexingInterface: getp
 using OrdinaryDiffEqBDF: DFBDF
 using DiffEqBase: BrownFullBasicInit
 
 struct BlockOp
     A::SparseMatrixCSC{Float64, Int}
 end
+Base.size(op::BlockOp) = size(op.A)
 apply_op(op::BlockOp, x::AbstractVector) = op.A * x
 @register_array_symbolic apply_op(op::BlockOp, x::AbstractVector) begin
     size = (size(op, 1),)
@@ -86,4 +88,34 @@ end
     @test SciMLBase.successful_retcode(sol)
     @test length(sol[w][end]) == nw
     @test sol.u[end] ≈ exp(-Matrix(Kfull)) * [u0; w0] rtol = 1.0e-5
+end
+
+@testset "declared shape is validated against supplied values" begin
+    struct NoSizeOp
+        c::Float64
+    end
+    @variables u(t)[1:6]
+    Kop = shaped_parameter(:Kop, BlockOp, 4, 6)
+    Nop = shaped_parameter(:Nop, NoSizeOp, 4, 6)
+    @named sys = System([zeros(6) ~ D(u) + u], t, [u], [Kop, Nop])
+    csys = complete(sys)
+    good = BlockOp(sprand(4, 6, 0.5))
+    badrows = BlockOp(sprand(5, 6, 0.5))
+    badcols = BlockOp(sprand(4, 5, 0.5))
+    u0 = Dict(u => zeros(6), D(u) => zeros(6))
+    for bad in (badrows, badcols)
+        @test_throws DimensionMismatch DAEProblem(
+            csys, merge(u0, Dict(Kop => bad, Nop => NoSizeOp(1.0))), (0.0, 1.0);
+            build_initializeprob = false
+        )
+    end
+    prob = DAEProblem(
+        csys, merge(u0, Dict(Kop => good, Nop => NoSizeOp(1.0))), (0.0, 1.0);
+        build_initializeprob = false
+    )
+    @test getp(prob, Nop)(prob) == NoSizeOp(1.0)
+    @test_throws DimensionMismatch remake(prob; p = [Kop => badrows])
+    @test_throws DimensionMismatch remake(prob; p = [Kop => badcols])
+    prob2 = remake(prob; p = [Kop => BlockOp(sprand(4, 6, 0.2))])
+    @test getp(prob2, Kop)(prob2) isa BlockOp
 end
