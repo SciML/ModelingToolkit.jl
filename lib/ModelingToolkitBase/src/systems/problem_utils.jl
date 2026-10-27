@@ -2861,6 +2861,8 @@ resolve_iip(::Type{Both}, @nospecialize(op)) = !(op isa StaticArray)
 Macro for writing problem/function constructors. Expects a function definition with type
 parameters for `iip` and `specialize`. Generates fallbacks with
 `specialize = SciMLBase.AutoDespecialize` and `iip = Both` (resolved at construction time).
+A different default specialization can be given as the first argument, e.g.
+`@fallback_iip_specialize SciMLBase.FullSpecialize function ...`.
 """
 # Unwrap `@nospecialize(arg)` to get the underlying argument expression.
 # Returns the argument unchanged if not wrapped in @nospecialize.
@@ -2873,6 +2875,14 @@ function _unwrap_nospecialize(arg)
 end
 
 macro fallback_iip_specialize(ex)
+    return fallback_iip_specialize_expr(ex, SciMLBase.AutoDespecialize)
+end
+
+macro fallback_iip_specialize(default_spec, ex)
+    return fallback_iip_specialize_expr(ex, default_spec)
+end
+
+function fallback_iip_specialize_expr(ex, default_spec)
     @assert Meta.isexpr(ex, :function)
     # fnname is ODEProblem{iip, spec}(args...) where {iip, spec}
     # body is function body
@@ -2933,9 +2943,9 @@ macro fallback_iip_specialize(ex)
     fnname_name, curly_args... = fnname_curly.args
     @assert curly_args == where_args
 
-    # callexpr_iip is `ODEProblem{iip, AutoDespecialize}(call_args...)`
+    # callexpr_iip is `ODEProblem{iip, default_spec}(call_args...)`
     callexpr_iip = Expr(
-        :call, Expr(:curly, fnname_name, curly_args[1], SciMLBase.AutoDespecialize), call_args...
+        :call, Expr(:curly, fnname_name, curly_args[1], default_spec), call_args...
     )
     # `ODEProblem{iip}`
     fnname_iip = Expr(:curly, fnname_name, curly_args[1])

@@ -1809,14 +1809,15 @@ end
     v1 = [3.0, 0.5]
     v2 = [12.0, 0.25]
 
-    # hybrid ODE integrator without variable-rate jumps: `DespecializedParameters`
+    # hybrid ODE integrator without variable-rate jumps, under an explicit (deprecated)
+    # `AutoDespecialize`: `DespecializedParameters`
     hybrid = mtkcompile(
         System(
             [D(A) ~ 0, D(B) ~ 0, D(C) ~ -d * C], t, [A, B, C], [k1, k2, d];
             jumps, name = :hybrid
         )
     )
-    jprob = JumpProblem(
+    jprob = @test_deprecated JumpProblem{true, SciMLBase.AutoDespecialize}(
         hybrid, [A => 20, B => 10, C => 1.0, k1 => v1[1], k2 => v1[2], d => 1.0],
         (0.0, 1.0)
     )
@@ -1901,4 +1902,70 @@ end
     @test SciMLBase.successful_retcode(sol)
     @test sol[A][end] < sol[A][1]
     @test all(sol[Bobs] .≈ 2 .* sol[B])
+end
+
+@testset "vr_aggregator is not forwarded to the inner problem" begin
+    @variables A(t)
+    @parameters k
+    vrj = VariableRateJump(k * (1 + sin(t)), [A ~ Pre(A) + 1])
+    @named vrjsys = JumpSystem([vrj], t, [A], [k])
+    vrjsys = complete(vrjsys)
+    for vr_aggregator in (VR_FRM(), VR_Direct(), VR_DirectFW())
+        jprob = JumpProblem(vrjsys, [A => 0, k => 1.0], (0.0, 10.0); vr_aggregator)
+        @test jprob.prob isa ODEProblem
+        @test !haskey(jprob.prob.kwargs, :vr_aggregator)
+        sol = solve(jprob, Tsit5(); rng)
+        @test SciMLBase.successful_retcode(sol)
+        @test sol[A][end] > 0
+    end
+
+    crj = ConstantRateJump(k * A, [A ~ Pre(A) - 1])
+    @named crjsys = JumpSystem([crj], t, [A], [k])
+    crjsys = complete(crjsys)
+    jprob = JumpProblem(
+        crjsys, [A => 100, k => 0.1], (0.0, 10.0);
+        aggregator = Direct(), vr_aggregator = VR_Direct()
+    )
+    @test jprob.prob isa DiscreteProblem
+    @test !haskey(jprob.prob.kwargs, :vr_aggregator)
+    @test SciMLBase.successful_retcode(solve(jprob, SSAStepper(); rng))
+end
+
+@testset "JumpProblem defaults to FullSpecialize" begin
+    @variables X(t) = 10.0 Z(t) = 1.0
+    @parameters k = 1.0 b = 1.0
+    @brownians w
+    maj = SymbolicMassActionJump(k, [X => 1], [X => -1])
+    crj = ConstantRateJump(k * X / (1 + X), [X ~ Pre(X) + 1])
+    vrj = VariableRateJump(k * (1 + sin(t)), [Z ~ Pre(Z) + 1])
+    @mtkcompile odesys = System([D(X) ~ 0, D(Z) ~ b - k * Z], t; jumps = [maj, crj])
+    @mtkcompile sdesys = System([D(X) ~ 0, D(Z) ~ b - k * Z + w], t; jumps = [maj, crj])
+    @mtkcompile vrjsys = System([D(Z) ~ b - k * Z], t; jumps = [vrj])
+    tspan = (0.0, 5.0)
+
+    full = SciMLBase.FullSpecialize
+    @test SciMLBase.specialization(JumpProblem(odesys, [], tspan).prob.f) === full
+    @test SciMLBase.specialization(JumpProblem{true}(odesys, [], tspan).prob.f) === full
+    @test SciMLBase.specialization(JumpProblem(sdesys, [], tspan).prob.f) === full
+    # VR_FRM rebuilds the ODE function, so check the VRJ system with VR_Direct
+    jprob = JumpProblem(vrjsys, [], tspan; vr_aggregator = VR_Direct())
+    @test SciMLBase.specialization(jprob.prob.f) === full
+
+    # FunctionWrapper-based aggregators type their wrappers on `typeof(prob.p)`, so they
+    # threw a `MethodError` when solving ODE-coupled problems under `AutoDespecialize`.
+    for aggregator in (DirectFW(), SortingDirect(), NRM(), RSSA(), RSSACR(), Coevolve())
+        jprob = JumpProblem(odesys, [], tspan; aggregator)
+        @test SciMLBase.successful_retcode(solve(jprob, Tsit5(); rng))
+    end
+    for vr_aggregator in (VR_Direct(), VR_DirectFW())
+        jprob = JumpProblem(vrjsys, [], tspan; vr_aggregator)
+        @test SciMLBase.successful_retcode(solve(jprob, Tsit5(); rng))
+    end
+
+    # Other specializations are deprecated but still honored
+    jprob = @test_deprecated JumpProblem{true, SciMLBase.AutoDespecialize}(
+        odesys, [], tspan; aggregator = Direct()
+    )
+    @test SciMLBase.specialization(jprob.prob.f) === SciMLBase.AutoDespecialize
+    @test SciMLBase.successful_retcode(solve(jprob, Tsit5(); rng))
 end
