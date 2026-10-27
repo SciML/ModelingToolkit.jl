@@ -2786,13 +2786,20 @@ function (st::SymbolicTstops)(p, tspan)
     end
 end
 
+# Names of the `tspan` arguments of the generated tstops function. Fixed sentinels, not
+# `gensym`s, like the `INITMAP_*` names: `RuntimeGeneratedFunction` types include the
+# argument names, so a `gensym` gives each problem built from the same system a new type,
+# and the solver recompiles.
+const TSTOPS_T0 = :__mtk_tstops_t0
+const TSTOPS_T1 = :__mtk_tstops_t1
+
 function SymbolicTstops(sys::AbstractSystem, opts::GeneratedFunctionOptions)
     expression = expression_val(opts)
     (; eval_expression, eval_module) = opts
     tstops = symbolic_tstops(sys)
     isempty(tstops) && return nothing
-    t0 = gensym(:t0)
-    t1 = gensym(:t1)
+    t0 = TSTOPS_T0
+    t1 = TSTOPS_T1
     tstops = map(tstops) do val
         if is_array_of_symbolics(val) || val isa AbstractArray
             collect(val)
