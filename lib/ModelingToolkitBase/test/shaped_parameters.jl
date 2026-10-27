@@ -139,3 +139,13 @@ end
     @test_throws DimensionMismatch remake(prob; p = [K => spzeros(5, 6)])
     @test getp(prob, K)(remake(prob; p = [K => sprand(4, 6, 0.3)])) isa T
 end
+
+@testset "parameters without a declared shape are not size-checked" begin
+    @parameters legacy::BlockOp any_p::Any
+    @variables u(t)[1:2]
+    @named sys = System([zeros(2) ~ D(u) + u], t, [u], [legacy, any_p])
+    csys = complete(sys)
+    ps = MTKParameters(csys, Dict(legacy => BlockOp(sprand(2, 3, 0.5)), any_p => ones(2)))
+    @test getp(csys, legacy)(ps) isa BlockOp
+    @test getp(csys, any_p)(ps) == ones(2)
+end

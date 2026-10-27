@@ -634,7 +634,7 @@ end
 function validate_opaque_shape(p, stype, val)
     stype <: Number && return nothing
     declared = SU.shape(p)
-    declared isa SU.Unknown && return nothing
+    (declared isa SU.Unknown || isempty(declared)) && return nothing
     applicable(size, val) || return nothing
     size(val) == Tuple(map(length, declared)) || throw(InvalidParameterSizeException(p, val))
     return nothing
