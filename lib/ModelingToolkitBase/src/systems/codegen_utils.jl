@@ -725,6 +725,7 @@ struct BuildFunctionWrapperOptions
     wrap_mtkparameters::Bool
     extra_assignments::Vector{Assignment}
     n_param_buffers::Union{Nothing, Int}
+    override_ir::Union{IRStructure{VartypeT}, Nothing}
     codegen::Symbolics.CodegenFunctionOptions
 end
 
@@ -734,7 +735,7 @@ function BuildFunctionWrapperOptions(;
         histfn = DDE_HISTORY_FUN, histfn_symbolic = histfn,
         create_bindings = false, output_type = nothing, mkarray = nothing,
         wrap_mtkparameters = true, extra_assignments = Assignment[],
-        n_param_buffers = nothing,
+        n_param_buffers = nothing, override_ir = nothing,
         codegen_function_options::Symbolics.CodegenFunctionOptions = Symbolics.CodegenFunctionOptions()
     )
     # The constructor only accepts valid `build_function_wrapper` options; there is no
@@ -746,7 +747,8 @@ function BuildFunctionWrapperOptions(;
     return BuildFunctionWrapperOptions(
         p_start, p_end, compress_args, non_standard_param_layout, u_arg, wrap_delays,
         histfn, histfn_symbolic, create_bindings, output_type, mkarray,
-        wrap_mtkparameters, extra_assignments, n_param_buffers, codegen_function_options
+        wrap_mtkparameters, extra_assignments, n_param_buffers, override_ir,
+        codegen_function_options
     )
 end
 
@@ -806,7 +808,7 @@ Base.@nospecializeinfer function build_function_wrapper(
     (;
         p_start, p_end, compress_args, non_standard_param_layout, u_arg, wrap_delays,
         histfn_symbolic, create_bindings, output_type, mkarray, wrap_mtkparameters,
-        extra_assignments, n_param_buffers,
+        extra_assignments, n_param_buffers, override_ir,
     ) = opts
     # Resolve the `sys`/`args`-dependent defaults (left as `nothing` when constructing the
     # options without a `sys` in scope). `length(args)` here is the original argument count,
@@ -860,8 +862,12 @@ Base.@nospecializeinfer function build_function_wrapper(
     end
 
     ir_info = get_ir_info(sys)
-    ir = get_irstructure(sys)
-    expr = ir_info.obs_subber(expr)
+    ir = @something(override_ir, get_irstructure(sys))
+    # Can't use `obs_subber` with expressions from a completely different `IRStructure`,
+    # it might not even be canonical.
+    if override_ir === nothing
+        expr = ir_info.obs_subber(expr)
+    end
     stmts = SU.IRStructureSearchBuffer(ir, Set{SymbolicT}())
     SU.search_variables!(stmts, expr; is_atomic = Returns(true))
     for subexpr in stmts
