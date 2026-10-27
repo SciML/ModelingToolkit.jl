@@ -83,6 +83,7 @@ end
         @safetestset "Guess Propagation" include("guess_propagation.jl")
         @safetestset "InitializationSystem Test" include("initializationsystem.jl")
         @safetestset "Initial Values Test" include("initial_values.jl")
+        @safetestset "strip_initialization_symbolics" include("strip_initialization_symbolics.jl")
     end
 
     if GROUP == "All" || GROUP == "InterfaceII"
