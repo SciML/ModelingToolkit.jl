@@ -152,6 +152,7 @@ function MTKParameters(
             disc_buffer[idx.buffer_idx][idx.idx_in_buffer] = val
         elseif haskey(ic.constant_idx, sym)
             i, j = ic.constant_idx[sym]
+            validate_opaque_shape(unwrap(sym), symtype(unwrap(sym)), val)
             const_buffer[i][j] = val
         elseif haskey(ic.nonnumeric_idx, sym)
             i, j = ic.nonnumeric_idx[sym]
@@ -628,10 +629,10 @@ function validate_parameter_type(ic::IndexCache, p, idx::ParameterIndex, val)
     return nothing
 end
 
-# Opaque parameters declared with `shaped_parameter` carry a shape that is not checked by
-# the type. Values that do not define `size` are accepted.
+# Parameters declared with `shaped_parameter` carry a shape that the type does not check.
+# Values that do not define `size` are accepted.
 function validate_opaque_shape(p, stype, val)
-    (stype <: AbstractArray || stype <: Number) && return nothing
+    stype <: Number && return nothing
     declared = SU.shape(p)
     declared isa SU.Unknown && return nothing
     applicable(size, val) || return nothing

@@ -1,5 +1,5 @@
 using ModelingToolkitBase, Test
-using ModelingToolkitBase: unwrap, complete, shaped_parameter
+using ModelingToolkitBase: unwrap, complete, shaped_parameter, MTKParameters
 using Symbolics
 using SymbolicUtils
 using SciMLBase
@@ -118,4 +118,24 @@ end
     @test_throws DimensionMismatch remake(prob; p = [Kop => badcols])
     prob2 = remake(prob; p = [Kop => BlockOp(sprand(4, 6, 0.2))])
     @test getp(prob2, Kop)(prob2) isa BlockOp
+end
+
+@testset "declared shape is validated for sparse matrix parameters" begin
+    T = SparseMatrixCSC{Float64, Int}
+    @variables u(t)[1:6]
+    K = shaped_parameter(:K, T, 4, 6)
+    @named sys = System([zeros(6) ~ D(u) + u], t, [u], [K])
+    csys = complete(sys)
+    u0 = Dict(u => zeros(6), D(u) => zeros(6))
+    for bad in (spzeros(5, 6), spzeros(4, 5))
+        @test_throws DimensionMismatch MTKParameters(csys, Dict(K => bad))
+        @test_throws DimensionMismatch DAEProblem(
+            csys, merge(u0, Dict(K => bad)), (0.0, 1.0); build_initializeprob = false
+        )
+    end
+    prob = DAEProblem(
+        csys, merge(u0, Dict(K => spzeros(4, 6))), (0.0, 1.0); build_initializeprob = false
+    )
+    @test_throws DimensionMismatch remake(prob; p = [K => spzeros(5, 6)])
+    @test getp(prob, K)(remake(prob; p = [K => sprand(4, 6, 0.3)])) isa T
 end
