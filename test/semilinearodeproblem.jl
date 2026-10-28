@@ -234,3 +234,25 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
         end
     end
 end
+
+@testset "Issue #4257: SemilinearODEProblem with quadratic terms (Lorenz)" begin
+    @variables x(t) = 0.1 y(t) = 0.1 z(t) = 0.1
+    @parameters σ = 10.0 ρ = 28.0 β = 8 / 3
+
+    eqs = [
+        D(x) ~ σ * (y - x),
+        D(y) ~ x * (ρ - z) - y,
+        D(z) ~ x * y - β * z,
+    ]
+
+    @mtkcompile sys = System(eqs, t)
+    tspan = (0.0, 10.0)
+
+    prob = SemilinearODEProblem(sys, nothing, tspan)
+    sol = solve(prob, KenCarp47())
+    @test SciMLBase.successful_retcode(sol)
+
+    ref_prob = ODEProblem(sys, nothing, tspan)
+    ref_sol = solve(ref_prob, Vern9(); abstol = 1.0e-12, reltol = 1.0e-12)
+    @test sol(1.0) ≈ ref_sol(1.0) atol = 1.0e-4 rtol = 1.0e-4
+end
