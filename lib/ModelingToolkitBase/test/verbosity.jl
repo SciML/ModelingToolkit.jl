@@ -315,9 +315,9 @@ end
 end
 
 # `balanced = true` gives a balanced instance of the same connector type
-@connector function UnbalancedPin(; name, balanced = false)
+@connector function UnbalancedPin(; name, balanced = false, verbose = MTKVerbosity())
     @variables v(t) w(t) i(t) [connect = Flow]
-    return System(Equation[], t, balanced ? [v, i] : [v, w, i], []; name)
+    return System(Equation[], t, balanced ? [v, i] : [v, w, i], []; name, verbose)
 end
 
 @connector function QuietUnbalancedPin(; name)
@@ -361,6 +361,9 @@ end
     good = UnbalancedPin(; name = :good, balanced = true)
     @test n_unbalanced_warnings(bad, good) == 1
     @test n_unbalanced_warnings(good, bad) == 1
+    quiet = UnbalancedPin(; name = :quiet, verbose = MTKVerbosity(None()))
+    @test n_unbalanced_warnings(quiet, bad) == 1
+    @test n_unbalanced_warnings(bad, quiet) == 1
 end
 
 @testset "affect_default_independent_variable toggle" begin

@@ -195,10 +195,17 @@ end
     @test only(logs).level == Logging.Error
     @test occursin(report, string(only(logs).message))
     # a logger that filters the level gets no records, and nothing is printed
-    logs, _ = Test.collect_test_logs(min_level = Logging.Warn) do
-        analyze_initialization_jacobian(prob)
+    mktemp() do _, io
+        logs, _ = redirect_stdout(io) do
+            Test.collect_test_logs(min_level = Logging.Warn) do
+                analyze_initialization_jacobian(prob)
+            end
+        end
+        @test isempty(logs)
+        flush(io)
+        seekstart(io)
+        @test isempty(read(io, String))
     end
-    @test isempty(logs)
     @test_logs min_level = Logging.Debug analyze_initialization_jacobian(
         prob; verbose = false
     )
