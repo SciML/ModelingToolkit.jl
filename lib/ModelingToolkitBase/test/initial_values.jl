@@ -6,6 +6,8 @@ using OrdinaryDiffEq
 using DataInterpolations
 using StaticArrays
 using SymbolicIndexingInterface
+using SparseArrays, LinearAlgebra
+import SymbolicUtils as SU
 using Test
 
 missing_guess_value = if @isdefined(ModelingToolkit)
@@ -515,4 +517,43 @@ if !@isdefined(ModelingToolkit)
         pbuf = ProblemState(; u = prob.u0, p = prob.p, t = 0.0)
         @test fn(pbuf) == collect(1.0:5.0)
     end
+end
+
+@testset "`build_operating_point` array values and sentinels" begin
+    @variables x(t)
+    @parameters p q[1:3] K[1:50, 1:50]
+    @named sys = System([D(x) ~ -p * x], t)
+    sys = complete(sys)
+
+    # constant numeric array values pass through untouched
+    Kval = sparse(1.0I, 50, 50)
+    dense = rand(50, 50)
+    op = ModelingToolkitBase.build_operating_point(sys, Dict(x => 1.0, K => Kval))
+    @test SU.unwrap_const(op[K]) == Kval
+    op = ModelingToolkitBase.build_operating_point(sys, Dict(x => 1.0, K => dense))
+    @test SU.unwrap_const(op[K]) == dense
+
+    # sentinels inside symbolic array values are still replaced by `nothing` placeholders
+    sentinel_arr = ModelingToolkitBase.SymbolicT[
+        SU.Const{ModelingToolkitBase.VartypeT}(1.0), ModelingToolkitBase.COMMON_SENTINEL,
+        SU.Const{ModelingToolkitBase.VartypeT}(3.0),
+    ]
+    inputs = ModelingToolkitBase.anydict(Dict(x => 1.0))
+    inputs[q] = SU.Const{ModelingToolkitBase.VartypeT}(sentinel_arr)
+    op = ModelingToolkitBase.build_operating_point(sys, inputs; fast_path = true)
+    @test op[q][2] === ModelingToolkitBase.COMMON_NOTHING
+    @test SU.unwrap_const(op[q][1]) == 1.0
+    @test SU.unwrap_const(op[q][3]) == 3.0
+
+    # an explicit `nothing` value is dropped entirely
+    op = ModelingToolkitBase.build_operating_point(sys, Dict(x => nothing, p => 2.0))
+    @test !haskey(op, x)
+    @test SU.unwrap_const(op[p]) == 2.0
+end
+
+@testset "`narrow_buffer_type` ignores empty arrays when promoting" begin
+    big = 2^53 + 1
+    narrowed = ModelingToolkitBase.narrow_buffer_type(AbstractVector[Float64[], [big]])
+    @test narrowed[2][1] === big
+    @test eltype(narrowed[2]) == Int
 end
