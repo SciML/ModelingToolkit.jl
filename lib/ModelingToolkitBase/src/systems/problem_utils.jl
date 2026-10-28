@@ -610,50 +610,6 @@ function evaluate_varmap!(varmap::AbstractDict{SymbolicT, SymbolicT}, vars; limi
     return
 end
 
-"""
-    $(TYPEDEF)
-
-Wrapper over an `AtomicArrayDictSubstitutionWrapper` that holds element writes to array
-values in per-array buffers and stores each buffer back as a whole array only when that
-array is next read through the wrapper, or on `flush_pending_writes!`. Writing `n`
-elements of one array through the wrapped dictionary copies and rehashes the array each
-time, which is quadratic in its length.
-"""
-struct PendingWritesWrapper{D} <: AbstractDict{SymbolicT, SymbolicT}
-    base::AtomicArrayDictSubstitutionWrapper{D}
-    buffers::Dict{SymbolicT, Array{SymbolicT}}
-end
-
-PendingWritesWrapper(base::AtomicArrayDictSubstitutionWrapper) = PendingWritesWrapper(base, Dict{SymbolicT, Array{SymbolicT}}())
-
-function flush_pending_writes!(dd::PendingWritesWrapper, arr::SymbolicT)
-    buffer = pop!(dd.buffers, arr, nothing)
-    buffer === nothing && return dd
-    dd.base.dict[arr] = if all(SU.isconst, buffer)
-        BSImpl.Const{VartypeT}(unwrap_const.(buffer))
-    else
-        BSImpl.Const{VartypeT}(buffer)
-    end
-    return dd
-end
-
-function flush_pending_writes!(dd::PendingWritesWrapper)
-    for arr in collect(keys(dd.buffers))
-        flush_pending_writes!(dd, arr)
-    end
-    return dd
-end
-
-Base.get(def::Base.Callable, dd::PendingWritesWrapper, k) = get(def, dd.base, k)
-function Base.get(def::Base.Callable, dd::PendingWritesWrapper, k::SymbolicT)
-    isempty(dd.buffers) || flush_pending_writes!(dd, split_indexed_var(k)[1])
-    return get(def, dd.base, k)
-end
-Base.get(dd::PendingWritesWrapper, k, default) = get(Returns(default), dd, k)
-Base.haskey(dd::PendingWritesWrapper, k) = haskey(dd.base, k)
-Base.length(dd::PendingWritesWrapper) = length(dd.base)
-Base.iterate(dd::PendingWritesWrapper, args...) = iterate(dd.base, args...)
-
 # The buffer of `arr` if `k` is a scalar element `arr[idxs...]` with constant integer
 # indices of an array whose value is a constant array or an array literal, else `nothing`.
 function pending_element_buffer!(dd::PendingWritesWrapper, k::SymbolicT)
