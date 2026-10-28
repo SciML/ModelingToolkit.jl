@@ -2774,7 +2774,7 @@ function filter_kwargs(kwargs)
     kwargs = Dict(kwargs)
     dropped = filter(in(STRUCTURAL_KWARGS), collect(keys(kwargs)))
     if !isempty(dropped)
-        @warn "Ignoring keyword argument(s) $(join(dropped, ", ")): the system derives them from its structure. Apply them with `remake(prob; ...)` on the returned problem instead."
+        @warn lazy"Ignoring keyword argument(s) $(join(dropped, ", ")): the system derives them from its structure. Apply them with `remake(prob; ...)` on the returned problem instead."
     end
     for key in keys(kwargs)
         key in SciMLBase.allowedkeywords || delete!(kwargs, key)
