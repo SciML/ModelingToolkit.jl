@@ -639,6 +639,107 @@ function find_arrvars_is_atomic(ex::SymbolicT)
     return SU.default_is_atomic(ex) && Symbolics.isarraysymbolic(ex)
 end
 
+is_array_literal_term(ex::SymbolicT) = iscall(ex) && operation(ex) === SU.array_literal
+
+"""
+    $(TYPEDSIGNATURES)
+
+Whether any observed equation of `sys` defines an array variable as an `array_literal` of
+its elements (see [`add_array_observed!`](@ref)). Such definitions are what
+[`compress_array_literals`](@ref) turns back into `view`s of the argument buffers.
+"""
+function has_array_literal_observed(sys::AbstractSystem)
+    for eq in observed(sys)
+        is_array_literal_term(eq.rhs) && return true
+    end
+    return false
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Rewrite `array_literal` terms in `expr` whose elements are consecutive entries of one of
+the (destructured) vector arguments `args` into `vcat`s of `view`s into that argument.
+`argument_name(i)` is the name of the `i`-th argument in the generated code.
+
+After `mtkcompile` an array unknown whose elements are partly unknowns and partly observed
+(e.g. `u` with boundary conditions `u[1] ~ 0`, `u[n] ~ 0`) is defined by the observed
+equation `u ~ array_literal((n,), u[1], ..., u[n])`. Substituting it into an array equation
+such as `D(u[2:(n - 1)]) ~ lap(u)` leaves `array_literal`s with `n` scalar arguments, and
+hence generated code of size `O(n)`. Replacing each maximal run of consecutive buffer
+elements with a `view` makes the generated code independent of `n`.
+"""
+function compress_array_literals(@nospecialize(expr), args::Vector{Any}, argument_name)
+    elem_to_buf = Dict{SymbolicT, Tuple{SymbolicT, Int}}()
+    for (i, arg) in enumerate(args)
+        arg isa AbstractVector || continue
+        symbolic_type(arg) == NotSymbolic() || continue
+        name = argument_name(i)
+        bufsym = name === :___mtkunknowns___ ? MTKUNKNOWNS_ARG :
+            SSym(name; type = Vector{Real}, shape = SU.Unknown(1))
+        for (j, el) in enumerate(arg)
+            el = unwrap(el)
+            el isa SymbolicT || continue
+            elem_to_buf[el] = (bufsym, j)
+        end
+    end
+    isempty(elem_to_buf) && return expr
+    literals = Set{SymbolicT}()
+    SU.search_variables!(literals, expr; is_atomic = is_array_literal_term, recurse = iscall)
+    isempty(literals) && return expr
+    subs = Dict{SymbolicT, SymbolicT}()
+    for lit in literals
+        compressed = compress_array_literal(lit, elem_to_buf)
+        compressed === nothing && continue
+        subs[lit] = compressed
+    end
+    isempty(subs) && return expr
+    return SU.substitute(expr, subs)
+end
+
+function compress_array_literal(
+        lit::SymbolicT, elem_to_buf::Dict{SymbolicT, Tuple{SymbolicT, Int}}
+    )
+    args = arguments(lit)
+    sz = unwrap_const(args[1])
+    # Only vectors: `vcat` of the pieces below reproduces the literal exactly.
+    sz isa Tuple{Int} || return nothing
+    pieces = SArgsT()
+    nviews = 0
+    k = 2
+    while k <= length(args)
+        loc = get(elem_to_buf, args[k], nothing)
+        if loc === nothing
+            push!(pieces, args[k])
+            k += 1
+            continue
+        end
+        buf, j = loc
+        m = k + 1
+        while m <= length(args)
+            loc2 = get(elem_to_buf, args[m], nothing)
+            (loc2 !== nothing && loc2[1] === buf && loc2[2] == j + (m - k)) || break
+            m += 1
+        end
+        len = m - k
+        if len >= 2
+            push!(
+                pieces, STerm(
+                    view, SArgsT((buf, SConst(j:(j + len - 1))));
+                    type = Vector{Real}, shape = SU.ShapeVecT((1:len,))
+                )
+            )
+            nviews += 1
+        else
+            push!(pieces, args[k])
+        end
+        k = m
+    end
+    iszero(nviews) && return nothing
+    # `vcat` of a single `view` still copies, so the result never aliases a buffer.
+    return STerm(vcat, pieces; type = symtype(lit), shape = SU.shape(lit))
+end
+
 """
     BuildFunctionWrapperOptions(; kwargs...)
 
@@ -862,6 +963,9 @@ Base.@nospecializeinfer function build_function_wrapper(
     ir_info = get_ir_info(sys)
     ir = get_irstructure(sys)
     expr = ir_info.obs_subber(expr)
+    if has_array_literal_observed(sys)
+        expr = compress_array_literals(expr, args, u_argument_name)
+    end
     stmts = SU.IRStructureSearchBuffer(ir, Set{SymbolicT}())
     SU.search_variables!(stmts, expr; is_atomic = Returns(true))
     for subexpr in stmts

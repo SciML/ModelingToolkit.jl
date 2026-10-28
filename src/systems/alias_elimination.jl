@@ -136,13 +136,17 @@ end
 Pick the target variable for an alias group. Irreducible variables must remain as
 unknowns, so one of them is chosen as the target when the group contains any. Otherwise
 the variable with the highest `state_priority` wins; all other group members are
-eliminated in favour of the target. When positive priorities are tied, emit a warning and prefer the
+eliminated in favour of the target. Among those, an element of `array_elems` (the elements of
+intact array differential equations) is preferred, since eliminating it would leave its row
+solved for another variable's derivative and break the array equation apart. When positive
+priorities are otherwise tied, emit a warning and prefer the
 variable appearing in the most equations (visualization-only variables appear in a single alias
 equation, while physics variables appear in many dynamics equations); if that is also
 tied, one of the tied variables is chosen arbitrarily.
 """
 function pick_alias_target(
-        state::TearingState, group_vars::Vector{Int}, irreducibles::AtomicSetT
+        state::TearingState, group_vars::Vector{Int}, irreducibles::AtomicSetT,
+        array_elems::Set{SymbolicT} = Set{SymbolicT}()
     )
     (; fullvars, structure) = state
     (; graph, canonical_ranks, state_priorities) = structure
@@ -153,6 +157,8 @@ function pick_alias_target(
     irr_idx === nothing || return group_vars[irr_idx]
     max_priority = maximum(Base.Fix1(getindex, state_priorities), group_vars)
     candidates = filter(v -> state_priorities[v] == max_priority, group_vars)
+    arr_idx = findfirst(v -> fullvars[v] in array_elems, candidates)
+    arr_idx === nothing || return candidates[arr_idx]
     if length(candidates) > 1 && max_priority > 0
         if max_priority >= 100
             tied_names = getindex.(Ref(fullvars), candidates)
@@ -263,6 +269,13 @@ function find_perfect_aliases!(
     eqs = collect(equations(state))
     original_eqs = state.original_eqs
     irreducibles = get_irreducibles(sys)
+    array_elems = Set{SymbolicT}()
+    for grp in state.array_groups
+        grp.dirty && continue
+        for dx in grp.lhs_vars
+            push!(array_elems, only(arguments(dx)))
+        end
+    end
 
     # Weighted union-find tracking each variable's sign relative to its
     # component's current root. `parent[v]` is always the root.
@@ -363,7 +376,7 @@ function find_perfect_aliases!(
         end
         # For consistent groups pick a target (survives as unknown) and rebase
         # parities relative to it via `target_p`.
-        target = pick_alias_target(state, group_vars, irreducibles)
+        target = pick_alias_target(state, group_vars, irreducibles, array_elems)
         group_target[root] = target
         target_p = parity[target]
         for v in group_vars
