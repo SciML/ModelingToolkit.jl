@@ -771,14 +771,18 @@ struct InputDerivativeError <: Exception
 end
 
 function Base.showerror(io::IO, err::InputDerivativeError)
-    print(io,
-        "Input derivatives appeared in expressions (-g_z\\g_u != 0), the following inputs appeared differentiated: [")
+    print(
+        io,
+        "Input derivatives appeared in expressions (-g_z\\g_u != 0), the following inputs appeared differentiated: ["
+    )
     for i in eachindex(err.inputs)
         i == firstindex(err.inputs) || print(io, ", ")
         print(io, err.inputs[i])
     end
-    print(io,
-        "]. Call `linearize` with keyword argument `allow_input_derivatives = true` to allow this and have the returned `B` matrix be of double width (")
+    print(
+        io,
+        "]. Call `linearize` with keyword argument `allow_input_derivatives = true` to allow this and have the returned `B` matrix be of double width ("
+    )
     print(io, 2 * err.num_inputs)
     print(io, "), where the last ")
     print(io, err.num_inputs)
