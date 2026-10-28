@@ -51,11 +51,6 @@ function build_expr_from_coeffs_vars!(
     )
     resize!(add_buffer, length(coeffs))
     for (i, (cf, var)) in enumerate(zip(coeffs, vars))
-        # `BigInt` coefficients come from `structural_singularity_removal_bigint_fallback!` and
-        # would promote the generated code to `BigFloat`.
-        if cf isa BigInt && isfinite(Float64(cf))
-            cf = Float64(cf)
-        end
         add_buffer[i] = cf * fullvars[var]
     end
     return SU.add_worker(VartypeT, add_buffer)
@@ -885,37 +880,51 @@ end
 Run `StateSelection.structural_singularity_removal!` on `state`. The linear subsystem is
 factorized with checked `Int` arithmetic, whose Bareiss intermediates grow like the minors of
 the matrix and overflow for e.g. 2D stencils. On `OverflowError`, redo the factorization on
-the same subsystem with `BigInt` coefficients.
+the same subsystem with `BigInt` coefficients, and rethrow if the reduced rows do not fit in `Int`.
 """
 function structural_singularity_removal_bigint_fallback!(
         state::TearingState; variable_underconstrained!, kwargs...
     )
+    local overflow
     try
         return StateSelection.structural_singularity_removal!(state; variable_underconstrained!, kwargs...)
     catch err
         err isa OverflowError || rethrow()
+        overflow = err
     end
     mm = StateSelection.linear_subsys_adjmat!(state; kwargs...)
     mm = CLIL.SparseMatrixCLIL{BigInt, Int}(
         mm.nparentrows, mm.ncols, mm.nzrows, mm.row_cols, [BigInt.(vals) for vals in mm.row_vals]
     )
     mm, _ = StateSelection.structural_singularity_removal!(state, mm, Val{true}(); variable_underconstrained!)
+    # Rounding a coefficient would change the solution set, so give up if one does not fit.
+    narrowed = narrow_to_int_exactly(mm)
+    narrowed === nothing && throw(overflow)
+    mm = narrowed
     (; graph, solvable_graph) = state.structure
     for (ei, e) in enumerate(mm.nzrows)
         BipartiteGraphs.set_neighbors!(graph, e, mm.row_cols[ei])
         solvable_graph isa BipartiteGraph{Int, Nothing} && BipartiteGraphs.set_neighbors!(solvable_graph, e, mm.row_cols[ei])
     end
-    # Every row is homogeneous, so dividing it by the gcd of its entries keeps the system
-    # equivalent, and avoids needlessly promoting the generated code to `BigInt`.
+    return mm
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Divide every row of the homogeneous system `mm` by the gcd of its entries, which keeps the
+system equivalent, and return it as an `Int` matrix. Return `nothing` if an entry still does
+not fit in `Int`.
+"""
+function narrow_to_int_exactly(mm::CLIL.SparseMatrixCLIL{BigInt, Int})
+    row_vals = Vector{Int}[]
     for vals in mm.row_vals
-        isempty(vals) && continue
-        g = gcd(vals)
-        isone(g) || (vals .= div.(vals, g))
+        g = isempty(vals) ? one(BigInt) : gcd(vals)
+        reduced = div.(vals, g)
+        all(v -> typemin(Int) <= v <= typemax(Int), reduced) || return nothing
+        push!(row_vals, Int.(reduced))
     end
-    all(vals -> all(typemin(Int) .<= vals .<= typemax(Int)), mm.row_vals) || return mm
-    return CLIL.SparseMatrixCLIL{Int, Int}(
-        mm.nparentrows, mm.ncols, mm.nzrows, mm.row_cols, [Int.(vals) for vals in mm.row_vals]
-    )
+    return CLIL.SparseMatrixCLIL{Int, Int}(mm.nparentrows, mm.ncols, mm.nzrows, mm.row_cols, row_vals)
 end
 
 function alias_elimination!(
