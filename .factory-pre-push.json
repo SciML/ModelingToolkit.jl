@@ -1,0 +1,12 @@
+{
+    "formatters": {
+        ".jl": [
+            "julia",
+            "-e",
+            "using Runic; exit(Runic.main(ARGS))",
+            "--",
+            "--check",
+            "{files}"
+        ]
+    }
+}
