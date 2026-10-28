@@ -51,6 +51,11 @@ function build_expr_from_coeffs_vars!(
     )
     resize!(add_buffer, length(coeffs))
     for (i, (cf, var)) in enumerate(zip(coeffs, vars))
+        # `BigInt` coefficients come from `structural_singularity_removal_bigint_fallback!` and
+        # would promote the generated code to `BigFloat`.
+        if cf isa BigInt && isfinite(Float64(cf))
+            cf = Float64(cf)
+        end
         add_buffer[i] = cf * fullvars[var]
     end
     return SU.add_worker(VartypeT, add_buffer)
@@ -874,6 +879,45 @@ function __eliminate_zero_variables!(state::TearingState, mm::CLIL.SparseMatrixC
     return zero_vars, zero_eqs, eqs_to_substitute, protected_vars, protected_eqs
 end
 
+"""
+    $TYPEDSIGNATURES
+
+Run `StateSelection.structural_singularity_removal!` on `state`. The linear subsystem is
+factorized with checked `Int` arithmetic, whose Bareiss intermediates grow like the minors of
+the matrix and overflow for e.g. 2D stencils. On `OverflowError`, redo the factorization on
+the same subsystem with `BigInt` coefficients.
+"""
+function structural_singularity_removal_bigint_fallback!(
+        state::TearingState; variable_underconstrained!, kwargs...
+    )
+    try
+        return StateSelection.structural_singularity_removal!(state; variable_underconstrained!, kwargs...)
+    catch err
+        err isa OverflowError || rethrow()
+    end
+    mm = StateSelection.linear_subsys_adjmat!(state; kwargs...)
+    mm = CLIL.SparseMatrixCLIL{BigInt, Int}(
+        mm.nparentrows, mm.ncols, mm.nzrows, mm.row_cols, [BigInt.(vals) for vals in mm.row_vals]
+    )
+    mm, _ = StateSelection.structural_singularity_removal!(state, mm, Val{true}(); variable_underconstrained!)
+    (; graph, solvable_graph) = state.structure
+    for (ei, e) in enumerate(mm.nzrows)
+        BipartiteGraphs.set_neighbors!(graph, e, mm.row_cols[ei])
+        solvable_graph isa BipartiteGraph{Int, Nothing} && BipartiteGraphs.set_neighbors!(solvable_graph, e, mm.row_cols[ei])
+    end
+    # Every row is homogeneous, so dividing it by the gcd of its entries keeps the system
+    # equivalent, and avoids needlessly promoting the generated code to `BigInt`.
+    for vals in mm.row_vals
+        isempty(vals) && continue
+        g = gcd(vals)
+        isone(g) || (vals .= div.(vals, g))
+    end
+    all(vals -> all(typemin(Int) .<= vals .<= typemax(Int)), mm.row_vals) || return mm
+    return CLIL.SparseMatrixCLIL{Int, Int}(
+        mm.nparentrows, mm.ncols, mm.nzrows, mm.row_cols, [Int.(vals) for vals in mm.row_vals]
+    )
+end
+
 function alias_elimination!(
         state::TearingState;
         print_underconstrained_variables = false, kwargs...
@@ -892,7 +936,7 @@ function alias_elimination!(
     # continues to remove redundant equations, since it is essential for adding analysis points
     # to existing connections.
     variable_underconstrained! = IgnoreUnderconstrainedVariable()
-    mm = StateSelection.structural_singularity_removal!(state; variable_underconstrained!, kwargs...)
+    mm = structural_singularity_removal_bigint_fallback!(state; variable_underconstrained!, kwargs...)
 
     if print_underconstrained_variables
         underconstrained_vars = state.fullvars[variable_underconstrained!.underconstrained]

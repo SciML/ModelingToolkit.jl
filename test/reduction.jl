@@ -945,3 +945,30 @@ end
     # Everything is identically zero
     @test isempty(equations(sys))
 end
+
+@testset "Bareiss elimination of a 2D Laplace stencil overflows `Int`" begin
+    # Integer-valued stencil coefficients make the `Int` Bareiss factorization of the
+    # linear subsystem overflow; `alias_elimination!` must retry with `BigInt`.
+    function laplace_system(n, c)
+        h = 1 / (n - 1)
+        @variables u[1:n, 1:n]
+        eqs = Equation[]
+        for i in 1:n, j in 1:n
+            if i in (1, n) || j in (1, n)
+                push!(eqs, u[i, j] ~ (i - 1) * h * (j - 1) * h)
+            else
+                push!(eqs, 0 ~ c * (u[i + 1, j] + u[i - 1, j] + u[i, j + 1] + u[i, j - 1] - 4u[i, j]))
+            end
+        end
+        @named sys = System(eqs, nothing, vec(collect(u)), [])
+        return sys, u, h
+    end
+    for (n, c) in ((5, 16), (7, 1), (9, 1))
+        sys, u, h = laplace_system(n, c)
+        simp = mtkcompile(sys)
+        @test isempty(unknowns(simp))
+        prob = NonlinearProblem(simp, Dict(vec(collect(u)) .=> 0.0))
+        sol = solve(prob, NewtonRaphson())
+        @test all(isapprox(sol[u[i, j]], (i - 1) * h * (j - 1) * h; atol = 1.0e-8) for i in 1:n, j in 1:n)
+    end
+end
