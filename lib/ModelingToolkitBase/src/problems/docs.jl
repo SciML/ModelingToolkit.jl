@@ -75,7 +75,8 @@ const INTERNAL_INITIALIZEPROB_KWARGS = """
 - `time_dependent_init`: Whether to build a time-dependent initialization for the problem. A
   time-dependent initialization solves for a consistent `u0`, whereas a time-independent one
   only runs parameter initialization.
-- `algebraic_only`: Whether to build the initialization problem using only algebraic equations.
+- `algebraic_only`: Whether to build the initialization problem without the initialization
+  equations of the system. Equations passed via `initialization_eqs` are used regardless.
 - `allow_incomplete`: Whether to allow incomplete initialization problems.
 """
 
