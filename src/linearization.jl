@@ -725,6 +725,34 @@ function Base.getproperty(prob::LinearizationProblem, x::Symbol)
 end
 
 """
+    InputDerivativeError
+
+Input derivatives occur while `allow_input_derivatives` is `false`.
+`inputs` contains the differentiated inputs, and `num_inputs` is the total input dimension.
+"""
+struct InputDerivativeError <: Exception
+    inputs::Vector{SymbolicT}
+    num_inputs::Int
+end
+
+function Base.showerror(io::IO, err::InputDerivativeError)
+    print(io,
+        "Input derivatives appeared in expressions (-g_z\\g_u != 0), the following inputs appeared differentiated: [")
+    for i in eachindex(err.inputs)
+        i == firstindex(err.inputs) || print(io, ", ")
+        print(io, err.inputs[i])
+    end
+    print(io,
+        "]. Call `linearize` with keyword argument `allow_input_derivatives = true` to allow this and have the returned `B` matrix be of double width (")
+    print(io, 2 * err.num_inputs)
+    print(io, "), where the last ")
+    print(io, err.num_inputs)
+    print(io, " inputs are the derivatives of the first ")
+    print(io, err.num_inputs)
+    return print(io, " inputs.")
+end
+
+"""
     $(TYPEDSIGNATURES)
 
 Numerically linearize `prob` at its current operating point.
@@ -749,9 +777,10 @@ containing the state vector `x`, parameter values `p`, and independent-variable 
 
 # Throws
 
-- `ErrorException`: If the current operating point cannot be initialized, if the algebraic
-  Jacobian `g_z` is singular (indicating an index-greater-than-one DAE), or if input
-  derivatives occur while `allow_input_derivatives` is `false`.
+- `ErrorException`: If the current operating point cannot be initialized or the algebraic
+  Jacobian `g_z` is singular (indicating an index-greater-than-one DAE).
+- [`InputDerivativeError`](@ref): If input derivatives occur while
+  `allow_input_derivatives` is `false`.
 
 # Examples
 
@@ -806,7 +835,7 @@ function CommonSolve.solve(prob::LinearizationProblem; allow_input_derivatives =
         if !iszero(Bs)
             if !allow_input_derivatives
                 der_inds = findall(vec(any(!=(0), Bs, dims = 1)))
-                error("Input derivatives appeared in expressions (-g_z\\g_u != 0), the following inputs appeared differentiated: $(prob.f.inputs[der_inds]). Call `linearize` with keyword argument `allow_input_derivatives = true` to allow this and have the returned `B` matrix be of double width ($(2nu)), where the last $nu inputs are the derivatives of the first $nu inputs.")
+                throw(InputDerivativeError(prob.f.inputs[der_inds], nu))
             end
             B = [B [zeros(nx, nu); Bs]]
             D = [D zeros(ny, nu)]

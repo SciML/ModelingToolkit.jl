@@ -5,7 +5,8 @@
 In ModelingToolkit.jl version 9, the parameter vector was replaced with a custom
 `MTKParameters` object. ModelingToolkit problems use
 [`SciMLBase.AutoDespecialize`](https://docs.sciml.ai/SciMLBase/stable/interfaces/Problems/)
-by default. Supporting solvers expose a
+by default, except `JumpProblem`, which uses `SciMLBase.FullSpecialize`. Supporting
+solvers expose a
 [`SciMLBase.DespecializedParameters`](https://docs.sciml.ai/SciMLBase/stable/interfaces/Problems/) wrapper
 around the `MTKParameters` object while solving so compiled code can be reused across
 parameter layouts. The internals of `MTKParameters` are intentionally undocumented and

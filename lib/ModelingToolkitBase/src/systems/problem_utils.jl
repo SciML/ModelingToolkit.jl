@@ -192,21 +192,90 @@ variable to an expression representing its value. In case `varmap` already conta
 entry for `eq.lhs`, insert the reverse mapping if `eq.rhs` is not a number.
 """
 function add_observed_equations!(varmap::AtomicArrayDict{SymbolicT}, eqs::Vector{Equation}, bound_ps::Union{Nothing, ROSymmapT} = nothing)
+    # `write_possibly_indexed_array!` rebuilds the whole array for every element written,
+    # which is quadratic for the element-wise observed equations of a scalarized array.
+    # Element writes are collected in a buffer per array and stored once. Later equations
+    # may read elements written earlier, so element reads of a buffered array are served
+    # from the buffer, and any other access to the array stores the buffer first.
+    buffers = Dict{SymbolicT, Array{SymbolicT}}()
     for eq in eqs
-        if get_possibly_indexed(varmap, eq.lhs, COMMON_NOTHING) !== COMMON_NOTHING
+        if lookup_observed(varmap, buffers, eq.lhs) !== COMMON_NOTHING
             SU.isconst(eq.rhs) && continue
-            get_possibly_indexed(varmap, eq.rhs, COMMON_NOTHING) !== COMMON_NOTHING && continue
+            lookup_observed(varmap, buffers, eq.rhs) !== COMMON_NOTHING && continue
             bound_ps isa ROSymmapT && has_possibly_indexed_key(parent(bound_ps), eq.rhs) && continue
             Moshi.Match.@match eq.rhs begin
                 BSImpl.Term(; f, args) && if f isa SymbolicT end => nothing
                 BSImpl.Sym() => nothing
                 _ => continue
             end
-            write_possibly_indexed_array!(varmap, eq.rhs, eq.lhs, COMMON_NOTHING)
+            write_observed!(varmap, buffers, eq.rhs, eq.lhs)
         else
-            write_possibly_indexed_array!(varmap, eq.lhs, eq.rhs, COMMON_NOTHING)
+            write_observed!(varmap, buffers, eq.lhs, eq.rhs)
         end
     end
+    flush_observed_buffers!(varmap, buffers)
+    return
+end
+
+# Store all buffered element writes in `varmap`.
+function flush_observed_buffers!(varmap::AtomicArrayDict{SymbolicT}, buffers::Dict{SymbolicT, Array{SymbolicT}})
+    for arr in collect(keys(buffers))
+        store_observed_buffer!(varmap, buffers, arr)
+    end
+    return
+end
+
+# Store the buffered element writes of the array `x` belongs to, if any, in `varmap`.
+function store_observed_buffer!(varmap::AtomicArrayDict{SymbolicT}, buffers::Dict{SymbolicT, Array{SymbolicT}}, x::SymbolicT)
+    arr, _ = split_indexed_var(x)
+    buffer = pop!(buffers, arr, nothing)
+    buffer === nothing && return
+    varmap[arr] = if all(SU.isconst, buffer)
+        BSImpl.Const{VartypeT}(unwrap_const.(buffer))
+    else
+        BSImpl.Const{VartypeT}(buffer)
+    end
+    return
+end
+
+# `get_possibly_indexed(varmap, x, COMMON_NOTHING)`, seeing the buffered element writes.
+function lookup_observed(varmap::AtomicArrayDict{SymbolicT}, buffers::Dict{SymbolicT, Array{SymbolicT}}, x::SymbolicT)
+    arr, isarr = split_indexed_var(x)
+    buffer = get(buffers, arr, nothing)
+    if buffer !== nothing
+        if isarr && ndims(x) == 0 && has_const_int_indices(x)
+            return buffer[get_stable_index(x)]
+        end
+        store_observed_buffer!(varmap, buffers, x)
+    end
+    return get_possibly_indexed(varmap, x, COMMON_NOTHING)
+end
+
+# `write_possibly_indexed_array!(varmap, k, v, COMMON_NOTHING)`, buffering element writes.
+function write_observed!(varmap::AtomicArrayDict{SymbolicT}, buffers::Dict{SymbolicT, Array{SymbolicT}}, k::SymbolicT, v::SymbolicT)
+    arr, isarr = split_indexed_var(k)
+    if !isarr || ndims(k) != 0
+        store_observed_buffer!(varmap, buffers, k)
+        write_possibly_indexed_array!(varmap, k, v, COMMON_NOTHING)
+        return
+    end
+    # As in `write_possibly_indexed_array!`, elements of an empty array are not
+    # written and do not create the key.
+    isempty(SU.stable_eachindex(arr)) && return
+    idx = get_stable_index(k)
+    buffer = get(buffers, arr, nothing)
+    if buffer === nothing
+        if haskey(varmap, arr)
+            buffer = collect(varmap[arr])
+        else
+            buffer = fill(COMMON_NOTHING, size(arr))
+            # Create the key now, as the unbuffered write would, so the keys of
+            # `varmap` are inserted in the same order.
+            varmap[arr] = BSImpl.Const{VartypeT}(copy(buffer))
+        end
+        buffers[arr] = buffer
+    end
+    buffer[idx] = v
     return
 end
 
@@ -2307,15 +2376,18 @@ function maybe_build_initialization_problem(
     end
     missingvars = collect(missingvars)
 
+    buffers = Dict{SymbolicT, Array{SymbolicT}}()
     for (i, v) in enumerate(unknowns(initsys))
-        write_possibly_indexed_array!(temp_op, v, SConst(_u0[i]), COMMON_NOTHING)
+        write_observed!(temp_op, buffers, v, SConst(_u0[i]))
     end
+    flush_observed_buffers!(temp_op, buffers)
     add_observed!(initsys, temp_op)
     left_merge!(temp_op, ModelingToolkitBase.guesses(sys))
     subber = Symbolics.FixpointSubstituter{true}(AADSubWrapper(temp_op))
     for p in missingvars
-        write_possibly_indexed_array!(op, p, subber(p), COMMON_NOTHING)
+        write_observed!(op, buffers, p, subber(p))
     end
+    flush_observed_buffers!(op, buffers)
 
     return (;
         initialization_data = SciMLBase.OverrideInitData(
@@ -2723,13 +2795,20 @@ function (st::SymbolicTstops)(p, tspan)
     end
 end
 
+# Names of the `tspan` arguments of the generated tstops function. Fixed sentinels, not
+# `gensym`s, like the `INITMAP_*` names: `RuntimeGeneratedFunction` types include the
+# argument names, so a `gensym` gives each problem built from the same system a new type,
+# and the solver recompiles.
+const TSTOPS_T0 = :__mtk_tstops_t0
+const TSTOPS_T1 = :__mtk_tstops_t1
+
 function SymbolicTstops(sys::AbstractSystem, opts::GeneratedFunctionOptions)
     expression = expression_val(opts)
     (; eval_expression, eval_module) = opts
     tstops = symbolic_tstops(sys)
     isempty(tstops) && return nothing
-    t0 = gensym(:t0)
-    t1 = gensym(:t1)
+    t0 = TSTOPS_T0
+    t1 = TSTOPS_T1
     tstops = map(tstops) do val
         if is_array_of_symbolics(val) || val isa AbstractArray
             collect(val)
@@ -2798,6 +2877,8 @@ resolve_iip(::Type{Both}, @nospecialize(op)) = !(op isa StaticArray)
 Macro for writing problem/function constructors. Expects a function definition with type
 parameters for `iip` and `specialize`. Generates fallbacks with
 `specialize = SciMLBase.AutoDespecialize` and `iip = Both` (resolved at construction time).
+A different default specialization can be given as the first argument, e.g.
+`@fallback_iip_specialize SciMLBase.FullSpecialize function ...`.
 """
 # Unwrap `@nospecialize(arg)` to get the underlying argument expression.
 # Returns the argument unchanged if not wrapped in @nospecialize.
@@ -2810,6 +2891,14 @@ function _unwrap_nospecialize(arg)
 end
 
 macro fallback_iip_specialize(ex)
+    return fallback_iip_specialize_expr(ex, SciMLBase.AutoDespecialize)
+end
+
+macro fallback_iip_specialize(default_spec, ex)
+    return fallback_iip_specialize_expr(ex, default_spec)
+end
+
+function fallback_iip_specialize_expr(ex, default_spec)
     @assert Meta.isexpr(ex, :function)
     # fnname is ODEProblem{iip, spec}(args...) where {iip, spec}
     # body is function body
@@ -2870,9 +2959,9 @@ macro fallback_iip_specialize(ex)
     fnname_name, curly_args... = fnname_curly.args
     @assert curly_args == where_args
 
-    # callexpr_iip is `ODEProblem{iip, AutoDespecialize}(call_args...)`
+    # callexpr_iip is `ODEProblem{iip, default_spec}(call_args...)`
     callexpr_iip = Expr(
-        :call, Expr(:curly, fnname_name, curly_args[1], SciMLBase.AutoDespecialize), call_args...
+        :call, Expr(:curly, fnname_name, curly_args[1], default_spec), call_args...
     )
     # `ODEProblem{iip}`
     fnname_iip = Expr(:curly, fnname_name, curly_args[1])
