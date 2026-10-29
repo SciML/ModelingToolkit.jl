@@ -380,11 +380,20 @@ function _hold_opened_signals(op, loop_opening_params, loop_opening_drivers, ics
     eqs = Equation[]
     isempty(loop_opening_params) && return op, held, eqs
     op_keys = Set{SymbolicT}(unwrap(k) for k in keys(op))
+    unspecified(v) = !(v in op_keys) && isequal(get(ics, v, COMMON_NOTHING), COMMON_NOTHING)
+    opened = Set{SymbolicT}(loop_opening_params)
     defaults = Dict{SymbolicT, SymbolicT}()
     for (p, driver) in zip(loop_opening_params, loop_opening_drivers)
-        p in op_keys && continue
-        isequal(get(ics, p, COMMON_NOTHING), COMMON_NOTHING) || continue
-        defaults[p] = COMMON_MISSING
+        arr, isarr = split_indexed_var(p)
+        unspecified(p) && unspecified(arr) || continue
+        if isarr
+            # A solvable parameter is an entire array, so the elements of an array are
+            # only held if all of them are opened
+            all(in(opened), collect(arr)) || continue
+            defaults[arr] = COMMON_MISSING
+        else
+            defaults[p] = COMMON_MISSING
+        end
         push!(eqs, p ~ driver)
         push!(held, p)
     end

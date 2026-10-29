@@ -452,6 +452,39 @@ if @isdefined(ModelingToolkit)
             op = Dict(complete(intsys).icP.phi => 0.5)
         )
         @test mats.A[icx(ssys), icx(ssys)] ≈ -(1 + 0.5^2)
+
+        @testset "Inputs of get_looptransfer that are elements of an array variable" begin
+            # The plant is nonlinear in its input, so the entries of `B` reveal the
+            # values of the inputs that replace the broken connections
+            @component function ArrayInputPlant(; name)
+                @variables begin
+                    x(t)[1:2] = [1.0, 2.0]
+                    u(t)[1:2], [input = true]
+                    y(t)[1:2], [output = true]
+                end
+                System([[D(x[i]) ~ -x[i] + u[i]^2 for i in 1:2]; [y[i] ~ x[i] for i in 1:2]], t; name)
+            end
+            @component function ScalarGain(; name)
+                @parameters k = 2.0
+                @variables e(t) [input = true] u(t) [output = true]
+                System([u ~ -k * e], t; name)
+            end
+            @named plant = ArrayInputPlant()
+            @named c1 = ScalarGain()
+            @named c2 = ScalarGain()
+            arrsys = System(
+                [
+                    connect(c1.u, :u1, plant.u[1]), connect(c2.u, :u2, plant.u[2]),
+                    connect(plant.y[1], c1.e), connect(plant.y[2], c2.e),
+                ], t; systems = [plant, c1, c2], name = :arrsys
+            )
+            mats, ssys = get_looptransfer(arrsys, [:u1, :u2])
+            # `C * B` does not depend on the choice of state variables. With u = -k * x,
+            # the plant contributes 2u and the gains -k.
+            k = 2.0
+            x0 = [1.0, 2.0]
+            @test mats.C * mats.B ≈ diagm(-k .* 2 .* (-k .* x0))
+        end
     end
 
     @testset "Symbolic loop-opening op values resolve from the solution" begin
