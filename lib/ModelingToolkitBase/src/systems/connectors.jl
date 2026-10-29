@@ -146,11 +146,22 @@ Domain connectors have a single `Flow` unknown. Stream connectors have a single
 a "regular" connector.
 """
 function connector_type(sys::AbstractSystem)
-    unkvars = get_unknowns(sys)
+    n_stream, n_flow, _ = connector_variable_counts(sys)
+    (n_stream > 0 && n_flow > 1) &&
+        error("There are multiple flow variables in the stream connector $(nameof(sys))!")
+    if n_flow == 1 && length(get_unknowns(sys)) == 1
+        return DomainConnector()
+    end
+    return n_stream > 0 ? StreamConnector() : RegularConnector()
+end
+
+# The numbers of stream, flow, and regular (not input, output, stream, or flow) unknowns
+# of the connector `sys`.
+function connector_variable_counts(sys::AbstractSystem)
     n_stream = 0
     n_flow = 0
-    n_regular = 0 # unknown that is not input, output, stream, or flow.
-    for s in unkvars
+    n_regular = 0
+    for s in get_unknowns(sys)
         vtype = get_connection_type(s)
         if vtype === Stream
             isarray(s) && error(lazy"Array stream variables are not supported. Got $s.")
@@ -161,18 +172,47 @@ function connector_type(sys::AbstractSystem)
             n_regular += 1
         end
     end
-    (n_stream > 0 && n_flow > 1) &&
-        error("There are multiple flow variables in the stream connector $(nameof(sys))!")
-    if n_flow == 1 && length(unkvars) == 1
-        return DomainConnector()
+    return n_stream, n_flow, n_regular
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Emit the `unbalanced_connector` diagnostic for each connector in the hierarchy of `sys`
+that has a different number of flow and regular variables. `mtkcompile` calls this with
+its `verbose`, so the diagnostic shows once for each unbalanced connector type. A
+connector whose own stored verbosity (see `System(...; verbose)`) silences the toggle is
+skipped.
+"""
+function warn_unbalanced_connectors(sys::AbstractSystem, verbose::MTKVerbosity)
+    _toggle_enabled(verbose, :unbalanced_connector) || return nothing
+    seen = Set{Union{GlobalRef, Symbol}}()
+    stack = AbstractSystem[sys]
+    while !isempty(stack)
+        s = pop!(stack)
+        append!(stack, get_systems(s))
+        isconnector(s) || continue
+        get_connector_type(s) isa DomainConnector && continue
+        isframe(s) && continue
+        # connectors from the same `@connector` function have the same `gui_metadata`
+        gui = get_gui_metadata(s)
+        key = gui === nothing ? nameof(s) : gui.type
+        key in seen && continue
+        # the author of a connector can silence it with `System(...; verbose)`
+        _toggle_enabled(_system_verbosity(s), :unbalanced_connector) || continue
+        _, n_flow, n_regular = connector_variable_counts(s)
+        n_flow == n_regular && continue
+        # record the type only when it emits, so a balanced instance of the same
+        # connector type does not hide an unbalanced one
+        push!(seen, key)
+        @SciMLMessage(verbose, :unbalanced_connector) do
+            "Connector $key contains $n_flow flow variables, yet $n_regular regular " *
+                "(non-flow, non-stream, non-input, non-output) variables. " *
+                "This could lead to imbalanced model that are difficult to debug. " *
+                "Consider marking some of the regular variables as input/output variables."
+        end
     end
-    if n_flow != n_regular && !isframe(sys)
-        @warn "$(nameof(sys)) contains $n_flow flow variables, yet $n_regular regular " *
-            "(non-flow, non-stream, non-input, non-output) variables. " *
-            "This could lead to imbalanced model that are difficult to debug. " *
-            "Consider marking some of the regular variables as input/output variables."
-    end
-    return n_stream > 0 ? StreamConnector() : RegularConnector()
+    return nothing
 end
 
 is_domain_connector(s) = isconnector(s) && get_connector_type(s) === DomainConnector()

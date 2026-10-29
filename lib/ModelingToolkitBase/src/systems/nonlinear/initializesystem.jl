@@ -766,9 +766,11 @@ function _remake_initialization_data_impl(
     floatT = float_type_from_varmap(op)
     u0_constructor = get_u0_constructor(identity, typeof(newu0), floatT, false)
     p_constructor = get_p_constructor(identity, typeof(newu0), floatT)
+    # `remake` has no `verbose` keyword, so use the verbosity stored on the system.
     opts = SciMLProblemOptions(
         sys;
         fn_opts = SciMLFunctionOptions(), floatT, u0_constructor, p_constructor,
+        verbose = _system_verbosity(sys),
         use_scc, initialization_eqs, time_dependent_init, allow_incomplete = true,
         check_initialization_units = false, missing_guess_value = meta.missing_guess_value,
         circular_dependency_max_cycle_length = length(all_symbols(sys)),

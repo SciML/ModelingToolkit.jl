@@ -1,10 +1,13 @@
 using ModelingToolkitBase
+import SciMLLogging
 using ModelingToolkitBase: homotopy, has_any_homotopy, get_nonlinear_problem_type,
     get_initialization_problem_type, InitializationProblem,
     t_nounits as t, D_nounits as D
 using SciMLBase
 using NonlinearSolve   # HomotopySweep / HomotopyPolyAlgorithm (re-exported) + inner solvers
 using Test
+
+const QUIET_INIT = MTKVerbosity(initialization = SciMLLogging.Silent)
 
 # When the (square) initialization system carries Modelica `homotopy(actual, simplified)`
 # nodes, `InitializationProblem` routes to a `SciMLBase.HomotopyProblem` (solved by
@@ -19,7 +22,7 @@ using Test
 
     # x is pinned by u0 ⇒ the init system for y is square (1 eq, 1 unknown) and carries
     # the homotopy node, so the selected init problem type is HomotopyProblem.
-    iprob = InitializationProblem(sys, 0.0, [x => 1.0]; warn_initialize_determined = false)
+    iprob = InitializationProblem(sys, 0.0, [x => 1.0]; verbose = QUIET_INIT)
     @test iprob isa SciMLBase.HomotopyProblem
 
     # solving the init problem walks the out-of-basin guess y=12 to the true root y=3
@@ -33,7 +36,7 @@ end
     @mtkcompile sys = System(
         [D(x) ~ -x, 0 ~ atan(z - 3)], t; guesses = [z => 0.5]
     )
-    iprob = InitializationProblem(sys, 0.0, [x => 1.0]; warn_initialize_determined = false)
+    iprob = InitializationProblem(sys, 0.0, [x => 1.0]; verbose = QUIET_INIT)
     @test iprob isa SciMLBase.NonlinearProblem
     @test !(iprob isa SciMLBase.HomotopyProblem)
 end
@@ -60,10 +63,10 @@ end
     # The init `op` is a varmap (never a StaticArray), so a bare `HomotopyProblem(isys, op)`
     # would always read as in-place; the branch must instead honor the caller's `{iip}`,
     # matching the sibling `NonlinearProblem{iip}` path.
-    iip_prob = InitializationProblem{true}(sys, 0.0, [x => 1.0]; warn_initialize_determined = false)
+    iip_prob = InitializationProblem{true}(sys, 0.0, [x => 1.0]; verbose = QUIET_INIT)
     @test iip_prob isa SciMLBase.HomotopyProblem
     @test SciMLBase.isinplace(iip_prob)
-    oop_prob = InitializationProblem{false}(sys, 0.0, [x => 1.0]; warn_initialize_determined = false)
+    oop_prob = InitializationProblem{false}(sys, 0.0, [x => 1.0]; verbose = QUIET_INIT)
     @test oop_prob isa SciMLBase.HomotopyProblem
     @test !SciMLBase.isinplace(oop_prob)
     # the out-of-place problem still solves by continuation
@@ -83,7 +86,7 @@ end
     )
     isys = ModelingToolkitBase.mtkcompile(isys)
     @test has_any_homotopy(isys)
-    @test get_initialization_problem_type(hsys, isys; warn_initialize_determined = false) ===
+    @test get_initialization_problem_type(hsys, isys; verbose = QUIET_INIT) ===
         SciMLBase.HomotopyProblem
     @test get_nonlinear_problem_type(isys) === SciMLBase.HomotopyProblem
 end

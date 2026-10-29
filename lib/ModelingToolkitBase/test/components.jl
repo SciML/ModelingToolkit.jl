@@ -1,4 +1,5 @@
 using Test
+import SciMLLogging
 using ModelingToolkitBase, OrdinaryDiffEq
 using OrdinaryDiffEqRosenbrock, OrdinaryDiffEqBDF
 using ModelingToolkitBase: get_component_type, complete
@@ -160,7 +161,8 @@ if @isdefined(ModelingToolkit)
         @test length(equations(sys)) == 2
         u0 = unknowns(sys) .=> 0
         @test_nowarn ODEProblem(
-            sys, [], (0, 10.0), guesses = u0, warn_initialize_determined = false
+            sys, [], (0, 10.0), guesses = u0,
+            verbose = MTKVerbosity(initialization = SciMLLogging.Silent)
         )
         prob = DAEProblem(sys, D.(unknowns(sys)) .=> 0, (0, 0.5), guesses = u0)
         sol = solve(prob, DFBDF())
