@@ -647,7 +647,7 @@ function evaluate_varmap!(
         buffer = pending_element_buffer!(pending, k)
         if buffer !== nothing
             idx = get_stable_index(k)
-            v = buffer[idx]
+            v = buffer[idx]::SymbolicT
             if v !== varmap.default
                 if !SU.isconst(v)
                     newv = subber(v)
