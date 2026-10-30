@@ -589,7 +589,7 @@ function add_initialization_parameters(sys::AbstractSystem; split = true, _unhac
         end
     end
 
-    initials = collect(all_initialvars)
+    initials = split ? collect(all_initialvars) : scalarized_vars(all_initialvars)
     for (i, v) in enumerate(initials)
         initials[i] = Initial()(v)
     end

@@ -722,7 +722,7 @@ already contain that key.
 """
 function add_initials!(sys::AbstractSystem, op::SymmapT)
     for p in get_ps(sys)
-        haskey(op, p) && continue
+        get_possibly_indexed(op, p, COMMON_NOTHING) === COMMON_NOTHING || continue
         Moshi.Match.@match p begin
             BSImpl.Term(; f, args) && if f isa Initial end => begin
                 write_possibly_indexed_array!(op, p, COMMON_FALSE, COMMON_FALSE)
