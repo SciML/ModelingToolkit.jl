@@ -445,7 +445,9 @@ end
     @named sys = System([connect(comp2.output, comp1.input)], t; systems = [comp1, comp2])
     eq = only(equations(expand_connections(sys)))
     # as opposed to `output.u ~ input.u`
-    @test isequal(eq, comp2.output.u ~ comp1.input.u)
+    @test isequal(eq, comp1.input.u ~ comp2.output.u)
+    @test isinput(eq.lhs)
+    @test isoutput(eq.rhs)
 
     # test causal ordering of true causal cset
     @named input = RealInput()
