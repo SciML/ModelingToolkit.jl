@@ -84,6 +84,7 @@ end
         @safetestset "Guess Propagation" include("guess_propagation.jl")
         @safetestset "InitializationSystem Test" include("initializationsystem.jl")
         @safetestset "Initial Values Test" include("initial_values.jl")
+        @safetestset "Nonnumeric parameter reconstruction" include("nonnumeric_reconstruction.jl")
     end
 
     if GROUP == "All" || GROUP == "InterfaceII"

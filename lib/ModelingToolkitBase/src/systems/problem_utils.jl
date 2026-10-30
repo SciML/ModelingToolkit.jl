@@ -1317,14 +1317,12 @@ function MTKParametersReconstructor(
         Returns(())
     else
         ic = get_index_cache(dstsys)
-        buftypes = Tuple(
-            map(ic.nonnumeric_buffer_sizes) do bufsize
-                Vector{bufsize.type}
-            end
-        )
         # nonnumerics retain the assigned buffer type without narrowing
-        Base.Fix1(broadcast, _p_constructor) ∘
-            Base.Fix1(Broadcast.BroadcastFunction(call), buftypes) ∘ Tuple ∘ CopyParamsByTemplate(srcsys, syms[5]; kwargs...)
+        getters = Tuple(
+            NonnumericBufferGetter{Vector{bufsize.type}}(CopyParamsByTemplate(srcsys, buf; kwargs...))
+                for (bufsize, buf) in zip(ic.nonnumeric_buffer_sizes, syms[5])
+        )
+        NonnumericBuffersGetter(getters, _p_constructor)
     end
 
     # `DiffCache` buffers live in `caches` and are taken from the destination, not `src`.
@@ -1341,6 +1339,34 @@ end
 function call(f, args...)
     return f(args...)
 end
+
+"""
+    $(TYPEDEF)
+
+Getter for one nonnumeric buffer of an `MTKParametersReconstructor`: the values `getter` returns,
+converted to the buffer's type `T`.
+"""
+struct NonnumericBufferGetter{T, G}
+    getter::G
+end
+
+NonnumericBufferGetter{T}(getter::G) where {T, G} = NonnumericBufferGetter{T, G}(getter)
+
+(b::NonnumericBufferGetter{T})(src) where {T} = T(b.getter(src))
+
+"""
+    $(TYPEDEF)
+
+The nonnumeric portion of an `MTKParametersReconstructor`: a tuple of `NonnumericBufferGetter`s,
+one per nonnumeric buffer of the destination, each result passed to `p_constructor`. The result
+is a tuple of known length and types.
+"""
+struct NonnumericBuffersGetter{G <: Tuple, P}
+    getters::G
+    p_constructor::P
+end
+
+(nb::NonnumericBuffersGetter)(src) = map(g -> nb.p_constructor(g(src)), nb.getters)
 
 """
     $(TYPEDSIGNATURES)
