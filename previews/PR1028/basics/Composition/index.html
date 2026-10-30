@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Composing Models and Building Reusable Components · ModelingToolkit.jl</title><link rel="canonical" href="https://mtk.sciml.ai/stable/basics/Composition/"/><link href="https://fonts.googleapis.com/css?family=Lato|Roboto+Mono" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.11.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.11.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.11.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.11.1/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link href="../../assets/favicon.ico" rel="icon" type="image/x-icon"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><a class="docs-logo" href="../../"><img src="../../assets/logo.png" alt="ModelingToolkit.jl logo"/></a><div class="docs-package-name"><span class="docs-autofit">ModelingToolkit.jl</span></div><form class="docs-search" action="../../search/"><input class="docs-search-query" id="documenter-search-query" name="q" type="text" placeholder="Search docs"/></form><ul class="docs-menu"><li><a class="tocitem" href="../../">Home</a></li><li><span class="tocitem">Symbolic Modeling Tutorials</span><ul><li><a class="tocitem" href="../../tutorials/ode_modeling/">Composing Ordinary Differential Equations</a></li><li><a class="tocitem" href="../../tutorials/acausal_components/">Acausal Component-Based Modeling the RC Circuit</a></li><li><a class="tocitem" href="../../tutorials/higher_order/">Automatic Transformation of Nth Order ODEs to 1st Order ODEs</a></li><li><a class="tocitem" href="../../tutorials/tearing_parallelism/">Exposing More Parallelism By Tearing Algebraic Equations in ODESystems</a></li><li><a class="tocitem" href="../../tutorials/nonlinear/">Modeling Nonlinear Systems</a></li><li><a class="tocitem" href="../../tutorials/optimization/">Modeling Optimization Problems</a></li><li><a class="tocitem" href="../../tutorials/stochastic_diffeq/">Modeling with Stochasticity</a></li><li><a class="tocitem" href="../../tutorials/nonlinear_optimal_control/">Nonlinear Optimal Control</a></li></ul></li><li><span class="tocitem">ModelingToolkitize Tutorials</span><ul><li><a class="tocitem" href="../../mtkitize_tutorials/modelingtoolkitize/">Automatically Accelerating ODEProblem Code</a></li><li><a class="tocitem" href="../../mtkitize_tutorials/modelingtoolkitize_index_reduction/">Automated Index Reduction of DAEs</a></li></ul></li><li><span class="tocitem">Basics</span><ul><li><a class="tocitem" href="../AbstractSystem/">The AbstractSystem Interface</a></li><li><a class="tocitem" href="../ContextualVariables/">Contextual Variable Types</a></li><li class="is-active"><a class="tocitem" href>Composing Models and Building Reusable Components</a><ul class="internal"><li><a class="tocitem" href="#Simple-Model-Composition-Example-1"><span>Simple Model Composition Example</span></a></li><li><a class="tocitem" href="#Basics-of-Model-Composition-1"><span>Basics of Model Composition</span></a></li><li><a class="tocitem" href="#Structural-Simplify-1"><span>Structural Simplify</span></a></li><li><a class="tocitem" href="#Inheritance-and-Combine-(TODO)-1"><span>Inheritance and Combine (TODO)</span></a></li><li><a class="tocitem" href="#Tearing-Problem-Construction-1"><span>Tearing Problem Construction</span></a></li><li><a class="tocitem" href="#Automatic-Model-Promotion-(TODO)-1"><span>Automatic Model Promotion (TODO)</span></a></li></ul></li><li><a class="tocitem" href="../Validation/">Model Validation and Units</a></li><li><a class="tocitem" href="../DependencyGraphs/">Dependency Graphs</a></li><li><a class="tocitem" href="../FAQ/">Frequently Asked Questions</a></li></ul></li><li><span class="tocitem">System Types</span><ul><li><a class="tocitem" href="../../systems/ODESystem/">ODESystem</a></li><li><a class="tocitem" href="../../systems/SDESystem/">SDESystem</a></li><li><a class="tocitem" href="../../systems/JumpSystem/">JumpSystem</a></li><li><a class="tocitem" href="../../systems/NonlinearSystem/">NonlinearSystem</a></li><li><a class="tocitem" href="../../systems/OptimizationSystem/">OptimizationSystem</a></li><li><a class="tocitem" href="../../systems/ControlSystem/">ControlSystem</a></li><li><a class="tocitem" href="../../systems/ReactionSystem/">ReactionSystem</a></li><li><a class="tocitem" href="../../systems/PDESystem/">PDESystem</a></li></ul></li><li><a class="tocitem" href="../../comparison/">Comparison of ModelingToolkit vs Equation-Based Modeling Languages</a></li><li><a class="tocitem" href="../../internals/">Internal Details</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Basics</a></li><li class="is-active"><a href>Composing Models and Building Reusable Components</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Composing Models and Building Reusable Components</a></li></ul></nav><div class="docs-right"><a class="docs-edit-link" href="https://github.com/SciML/ModelingToolkit.jl/blob/master/docs/src/basics/Composition.md" title="Edit on GitHub"><span class="docs-icon fab"></span><span class="docs-label is-hidden-touch">Edit on GitHub</span></a><a class="docs-settings-button fas fa-cog" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-sidebar-button fa fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a></div></header><article class="content" id="documenter-page"><h1 id="components-1"><a class="docs-heading-anchor" href="#components-1">Composing Models and Building Reusable Components</a><a class="docs-heading-anchor-permalink" href="#components-1" title="Permalink"></a></h1><p>The symbolic models of ModelingToolkit can be composed together to easily build large models. The composition is lazy and only instantiated at the time of conversion to numerical models, allowing a more performant way in terms of computation time and memory.</p><h2 id="Simple-Model-Composition-Example-1"><a class="docs-heading-anchor" href="#Simple-Model-Composition-Example-1">Simple Model Composition Example</a><a class="docs-heading-anchor-permalink" href="#Simple-Model-Composition-Example-1" title="Permalink"></a></h2><p>The following is an example of building a model in a library with an optional forcing function, and allowing the user to specify the forcing later. Here, the library author defines a component named <code>decay</code>. The user then builds two <code>decay</code> components and connects them, saying the forcing term of <code>decay1</code> is a constant while the forcing term of <code>decay2</code> is the value of the state variable <code>x</code>.</p><pre><code class="language-julia">using ModelingToolkit
+
+function decay(;name)
+  @parameters t a
+  @variables x(t) f(t)
+  D = Differential(t)
+  ODESystem([
+      D(x) ~ -a*x + f
+    ];
+    name=name)
+end
+
+@named decay1 = decay()
+@named decay2 = decay()
+
+@parameters t
+D = Differential(t)
+@named connected = ODESystem([
+                        decay2.f ~ decay1.x
+                        D(decay1.f) ~ 0
+                      ], t, systems=[decay1, decay2])
+
+equations(connected)
+
+#4-element Vector{Equation}:
+# Differential(t)(decay1₊f(t)) ~ 0
+# decay2₊f(t) ~ decay1₊x(t)
+# Differential(t)(decay1₊x(t)) ~ decay1₊f(t) - (decay1₊a*(decay1₊x(t)))
+# Differential(t)(decay2₊x(t)) ~ decay2₊f(t) - (decay2₊a*(decay2₊x(t)))
+
+simplified_sys = structural_simplify(connected)
+
+equations(simplified_sys)
+
+#3-element Vector{Equation}:
+# Differential(t)(decay1₊f(t)) ~ 0
+# Differential(t)(decay1₊x(t)) ~ decay1₊f(t) - (decay1₊a*(decay1₊x(t)))
+# Differential(t)(decay2₊x(t)) ~ decay1₊x(t) - (decay2₊a*(decay2₊x(t)))</code></pre><p>Now we can solve the system:</p><pre><code class="language-julia">x0 = [
+  decay1.x =&gt; 1.0
+  decay1.f =&gt; 0.0
+  decay2.x =&gt; 1.0
+]
+p = [
+  decay1.a =&gt; 0.1
+  decay2.a =&gt; 0.2
+]
+
+using DifferentialEquations
+prob = ODEProblem(simplified_sys, x0, (0.0, 100.0), p)
+sol = solve(prob, Tsit5())
+sol[decay2.f]</code></pre><h2 id="Basics-of-Model-Composition-1"><a class="docs-heading-anchor" href="#Basics-of-Model-Composition-1">Basics of Model Composition</a><a class="docs-heading-anchor-permalink" href="#Basics-of-Model-Composition-1" title="Permalink"></a></h2><p>Every <code>AbstractSystem</code> has a <code>system</code> keyword argument for specifying subsystems. A model is the composition of itself and its subsystems. For example, if we have:</p><pre><code class="language-julia">@named sys = ODESystem(eqs,indepvar,states,ps,system=[subsys])</code></pre><p>the <code>equations</code> of <code>sys</code> is the concatenation of <code>get_eqs(sys)</code> and <code>equations(subsys)</code>, the states are the concatenation of their states, etc. When the <code>ODEProblem</code> or <code>ODEFunction</code> is generated from this system, it will build and compile the functions associated with this composition.</p><p>The new equations within the higher level system can access the variables in the lower level system by namespacing via the <code>nameof(subsys)</code>. For example, let&#39;s say there is a variable <code>x</code> in <code>states</code> and a variable <code>x</code> in <code>subsys</code>. We can declare that these two variables are the same by specifying their equality: <code>x ~ subsys.x</code> in the <code>eqs</code> for <code>sys</code>. This algebraic relationship can then be simplified by transformations like <code>structural_simplify</code> which will be described later.</p><h3 id="Numerics-with-Composed-Models-1"><a class="docs-heading-anchor" href="#Numerics-with-Composed-Models-1">Numerics with Composed Models</a><a class="docs-heading-anchor-permalink" href="#Numerics-with-Composed-Models-1" title="Permalink"></a></h3><p>These composed models can then be directly transformed into their associated <code>SciMLProblem</code> type using the standard constructors. When this is done, the initial conditions and parameters must be specified in their namespaced form. For example:</p><pre><code class="language-julia">u0 = [
+  x =&gt; 2.0
+  subsys.x =&gt; 2.0
+]</code></pre><p>Note that any default values within the given subcomponent will be used if no override is provided at construction time. If any values for initial conditions or parameters are unspecified an error will be thrown.</p><p>When the model is numerically solved, the solution can be accessed via its symbolic values. For example, if <code>sol</code> is the <code>ODESolution</code>, one can use <code>sol[x]</code> and <code>sol[subsys.x]</code> to access the respective timeseries in the solution. All other indexing rules stay the same, so <code>sol[x,1:5]</code> accesses the first through fifth values of <code>x</code>. Note that this can be done even if the variable <code>x</code> is eliminated from the system from transformations like <code>alias_elimination</code> or <code>tearing</code>: the variable will be lazily reconstructed on demand.</p><h3 id="Variable-scope-and-parameter-expressions-1"><a class="docs-heading-anchor" href="#Variable-scope-and-parameter-expressions-1">Variable scope and parameter expressions</a><a class="docs-heading-anchor-permalink" href="#Variable-scope-and-parameter-expressions-1" title="Permalink"></a></h3><p>In some scenarios, it could be useful for model parameters to be expressed in terms of other parameters, or shared between common subsystems. To fascilitate this, ModelingToolkit supports sybmolic expressions in default values, and scoped variables.</p><p>With symbolic parameters, it is possible to set the default value of a parameter or initial condition to an expression of other variables.</p><pre><code class="language-julia"># ...
+sys = ODESystem(
+    # ...
+    # directly in the defauls argument
+    defaults=Pair{Num, Any}[
+    x =&gt; u,
+    y =&gt; σ,
+    z =&gt; u-0.1,
+])
+# by assigning to the parameter
+sys.y = u*1.1</code></pre><p>In a hierarchical system, variables of the subsystem get namespaced by the name of the system they are in. This prevents naming clashes, but also enforces that every state and parameter is local to the subsystem it is used in. In some cases it might be desirable to have variables and parameters that are shared between subsystems, or even global. This can be accomplished as follows.</p><pre><code class="language-julia">@variables a b c d
+
+# a is a local variable
+b = ParentScope(b) # b is a variable that belongs to one level up in the hierarchy
+c = ParentScope(ParentScope(c)) # ParentScope can be nested
+d = GlobalScope(d) # global variables will never be namespaced</code></pre><h2 id="Structural-Simplify-1"><a class="docs-heading-anchor" href="#Structural-Simplify-1">Structural Simplify</a><a class="docs-heading-anchor-permalink" href="#Structural-Simplify-1" title="Permalink"></a></h2><p>In many cases, the nicest way to build a model may leave a lot of unnecessary variables. Thus one may want to remove these equations before numerically solving. The <code>structural_simplify</code> function removes these trivial equality relationships and trivial singularity equations, i.e. equations which result in <code>0~0</code> expressions, in over-specified systems.</p><h2 id="Inheritance-and-Combine-(TODO)-1"><a class="docs-heading-anchor" href="#Inheritance-and-Combine-(TODO)-1">Inheritance and Combine (TODO)</a><a class="docs-heading-anchor-permalink" href="#Inheritance-and-Combine-(TODO)-1" title="Permalink"></a></h2><p>Model inheritance can be done in two ways: explicitly or implicitly. The explicit way is to shadow variables with equality expressions. For example, let&#39;s assume we have three separate systems which we want to compose to a single one. This is how one could explicitly forward all states and parameters to the higher level system:</p><pre><code class="language-julia">using ModelingToolkit, OrdinaryDiffEq, Plots
+
+## Library code
+
+@parameters t
+D = Differential(t)
+
+@variables S(t), I(t), R(t)
+N = S + I + R
+@parameters β,γ
+
+@named seqn = ODESystem([D(S) ~ -β*S*I/N])
+@named ieqn = ODESystem([D(I) ~ β*S*I/N-γ*I])
+@named reqn = ODESystem([D(R) ~ γ*I])
+
+@named sir = ODESystem([   
+                    S ~ ieqn.S,
+                    I ~ seqn.I,
+                    R ~ ieqn.R,
+                    ieqn.S ~ seqn.S,
+                    seqn.I ~ ieqn.I,
+                    seqn.R ~ reqn.R,
+                    ieqn.R ~ reqn.R,
+                    reqn.I ~ ieqn.I], t, [S,I,R], [β,γ],
+                    systems=[seqn,ieqn,reqn],
+                    default_p = [
+                        seqn.β =&gt; β
+                        ieqn.β =&gt; β
+                        ieqn.γ =&gt; γ
+                        reqn.γ =&gt; γ
+                    ])</code></pre><p>Note that the states are forwarded by an equality relationship, while the parameters are forwarded through a relationship in their default values. The user of this model can then solve this model simply by specifying the values at the highest level:</p><pre><code class="language-julia">sireqn_simple = structural_simplify(sir)
+
+equations(sireqn_simple)
+
+# 3-element Vector{Equation}:
+#Differential(t)(seqn₊S(t)) ~ -seqn₊β*ieqn₊I(t)*seqn₊S(t)*(((ieqn₊I(t)) + (reqn₊R(t)) + (seqn₊S(t)))^-1)
+#Differential(t)(ieqn₊I(t)) ~ ieqn₊β*ieqn₊I(t)*seqn₊S(t)*(((ieqn₊I(t)) + (reqn₊R(t)) + (seqn₊S(t)))^-1) - (ieqn₊γ*(ieqn₊I(t)))
+#Differential(t)(reqn₊R(t)) ~ reqn₊γ*ieqn₊I(t)
+
+## User Code
+
+u0 = [seqn.S =&gt; 990.0,
+      ieqn.I =&gt; 10.0,
+      reqn.R =&gt; 0.0]
+
+p = [
+    β =&gt; 0.5
+    γ =&gt; 0.25
+]
+
+tspan = (0.0,40.0)
+prob = ODEProblem(sireqn_simple,u0,tspan,p,jac=true)
+sol = solve(prob,Tsit5())
+sol[reqn.R]</code></pre><p>However, one can similarly simplify this process of inheritance by using <code>combine</code> which concatenates all of the vectors within the systems. For example, we could equivalently have done:</p><pre><code class="language-julia">@named sir = combine([seqn,ieqn,reqn])</code></pre><h2 id="Tearing-Problem-Construction-1"><a class="docs-heading-anchor" href="#Tearing-Problem-Construction-1">Tearing Problem Construction</a><a class="docs-heading-anchor-permalink" href="#Tearing-Problem-Construction-1" title="Permalink"></a></h2><p>Some system types, specifically <code>ODESystem</code> and <code>NonlinearSystem</code>, can be further reduced if <code>structural_simplify</code> has already been applied to them. This is done by using the alternative problem constructors, <code>ODAEProblem</code> and <code>BlockNonlinearProblem</code> respectively. In these cases, the constructor uses the knowledge of the strongly connected components calculated during the process of simplification as the basis for building pre-simplified nonlinear systems in the implicit solving. In summary: these problems are structurally modified, but could be more efficient and more stable.</p><h2 id="Automatic-Model-Promotion-(TODO)-1"><a class="docs-heading-anchor" href="#Automatic-Model-Promotion-(TODO)-1">Automatic Model Promotion (TODO)</a><a class="docs-heading-anchor-permalink" href="#Automatic-Model-Promotion-(TODO)-1" title="Permalink"></a></h2><p>In many cases one might want to compose models of different types. For example, one may want to include a <code>NonlinearSystem</code> as a set of algebraic equations within an <code>ODESystem</code>, or one may want to use an <code>ODESystem</code> as a subsystem of an <code>SDESystem</code>. In these cases, the compostion works automatically by promoting the model via <code>promote_system</code>. System promotions exist in the cases where a mathematically-trivial definition of the promotion exists.</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../ContextualVariables/">« Contextual Variable Types</a><a class="docs-footer-nextpage" href="../Validation/">Model Validation and Units »</a></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> on <span class="colophon-date" title="Saturday 5 June 2021 22:43">Saturday 5 June 2021</span>. Using Julia version 1.6.1.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
