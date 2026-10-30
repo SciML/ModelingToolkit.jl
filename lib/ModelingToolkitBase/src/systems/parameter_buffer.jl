@@ -152,9 +152,11 @@ function MTKParameters(
             disc_buffer[idx.buffer_idx][idx.idx_in_buffer] = val
         elseif haskey(ic.constant_idx, sym)
             i, j = ic.constant_idx[sym]
+            validate_opaque_shape(unwrap(sym), symtype(unwrap(sym)), val)
             const_buffer[i][j] = val
         elseif haskey(ic.nonnumeric_idx, sym)
             i, j = ic.nonnumeric_idx[sym]
+            validate_opaque_shape(unwrap(sym), symtype(unwrap(sym)), val)
             nonnumeric_buffer[i][j] = val
         elseif !isequal(default_toterm(sym), sym)
             done = set_value(default_toterm(sym), val)
@@ -626,7 +628,20 @@ function validate_parameter_type(ic::IndexCache, p, idx::ParameterIndex, val)
     else
         SU.Unknown(-1)
     end
-    return validate_parameter_type(ic, stype, sz, p, idx, val)
+    validate_parameter_type(ic, stype, sz, p, idx, val)
+    validate_opaque_shape(p, stype, val)
+    return nothing
+end
+
+# Parameters declared with `shaped_parameter` carry a shape that the type does not check.
+# Values that do not define `size` are accepted.
+function validate_opaque_shape(p, stype, val)
+    stype <: Number && return nothing
+    declared = SU.shape(p)
+    (declared isa SU.Unknown || isempty(declared)) && return nothing
+    applicable(size, val) || return nothing
+    size(val) == Tuple(map(length, declared)) || throw(InvalidParameterSizeException(p, val))
+    return nothing
 end
 
 function validate_parameter_type(ic::IndexCache, idx::ParameterIndex, val)
