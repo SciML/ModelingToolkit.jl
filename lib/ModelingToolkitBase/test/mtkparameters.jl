@@ -307,11 +307,12 @@ VVDual = Vector{<:Vector{<:ForwardDiff.Dual}}
     @test parameter_values(ps, idx) === Int32(3)
     # Julia 1.10 widens the union of the five element types to `Any`.
     @test only(Base.return_types(parameter_values, (typeof(ps), typeof(idx)))) !== Any skip = VERSION < v"1.11"
-    write!(ps, val, idx) = set_parameter!(ps, val, idx)
-    write!(ps, Int32(100_000), idx)
+    # Measured inside a function, so that only `set_parameter!` is counted. A dynamic
+    # dispatch in it would box the value.
+    write_allocs(ps, val, idx) = @allocated set_parameter!(ps, val, idx)
+    write_allocs(ps, Int32(100_000), idx)
     @test parameter_values(ps, idx) === Int32(100_000)
-    # A dynamic dispatch would box the value.
-    @test (@allocated write!(ps, Int32(200_000), idx)) == 0
+    @test write_allocs(ps, Int32(200_000), idx) == 0
     @test parameter_values(ps, idx) === Int32(200_000)
 end
 
