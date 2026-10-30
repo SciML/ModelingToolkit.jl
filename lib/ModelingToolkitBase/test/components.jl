@@ -483,6 +483,26 @@ end
     end
 end
 
+@testset "Causal `Equality` cset with an outer connector, in any argument order" begin
+    # the inner output is the only source; every other member is equated to it
+    orders = [
+        (:outer, :src, :dst), (:outer, :dst, :src), (:src, :outer, :dst),
+        (:src, :dst, :outer), (:dst, :outer, :src), (:dst, :src, :outer),
+    ]
+    @testset "$order" for order in orders
+        @named src = System(Equation[], t; systems = [RealOutput(; name = :output)])
+        @named dst = System(Equation[], t; systems = [RealInput(; name = :input)])
+        @named output = RealOutput()
+        connectors = Dict(:outer => output, :src => src.output, :dst => dst.input)
+        @named sys = System(
+            [connect((connectors[k] for k in order)...)], t; systems = [src, dst, output]
+        )
+        eqs = equations(expand_connections(sys))
+        @test length(eqs) == 2
+        @test all(eq -> isequal(eq.rhs, src.output.u), eqs)
+    end
+end
+
 @testset "Source information propagation through `expand_connections`" begin
     @named rc_model = RCModel()
     sys, source_info = expand_connections(rc_model, Val(true))
