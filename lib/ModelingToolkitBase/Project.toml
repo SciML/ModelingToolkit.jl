@@ -93,7 +93,7 @@ MTKInfiniteOptExt = "InfiniteOpt"
 MTKJuliaFormatterExt = "JuliaFormatter"
 MTKLabelledArraysExt = "LabelledArrays"
 MTKLatexifyExt = "Latexify"
-MTKMooncakeExt = "Mooncake"
+MTKMooncakeExt = ["ChainRulesCore", "Mooncake"]
 MTKPyomoDynamicOptExt = ["Pyomo", "PythonCall"]
 MTKTrackerExt = "Tracker"
 
