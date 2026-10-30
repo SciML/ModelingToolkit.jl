@@ -1,0 +1,429 @@
+using ModelingToolkitBase
+using ModelingToolkitBase: t_nounits as t, D_nounits as D
+using Symbolics
+using OrdinaryDiffEq
+using SymbolicIndexingInterface
+using SciMLBase
+using LinearAlgebra
+using Test
+
+# A record of scalars, and a record containing a record. Both concrete, as struct
+# variables require.
+struct Pair2
+    x::Real
+    y::Real
+end
+struct Nested
+    x::Real
+    f::Pair2
+end
+struct ArrField
+    v::Vector{Float64}
+    w::Float64
+end
+@symstruct Pair2
+@symstruct Nested
+@symstruct ArrField begin
+    shape(:v) = [1:2]
+end
+struct MatField
+    m::Matrix{Float64}
+    w::Float64
+end
+@symstruct MatField begin
+    shape(:m) = [1:2, 1:2]
+end
+
+@testset "declaration and field access" begin
+    @variables s(t)::Pair2 n(t)::Nested
+
+    @test s isa Symbolics.SymStruct{Pair2}
+    @test Symbolics.symtype(Symbolics.unwrap(s)) === Pair2
+    @test Symbolics.symtype(Symbolics.unwrap(s.x)) === Real
+
+    # A field access is a projection of the one variable, not a free-standing variable,
+    # so variable search reports the leaves rather than inventing new roots.
+    @test issetequal(
+        Symbolics.unwrap.([s.x, s.y]),
+        collect(Symbolics.SymStruct{Pair2}(Symbolics.unwrap(s)))
+    )
+
+    # Nesting composes, and leaf enumeration flattens through it in declaration order.
+    @test isequal(Symbolics.unwrap(n.f.x), collect(Symbolics.SymStruct{Nested}(Symbolics.unwrap(n)))[2])
+    @test length(Symbolics.SymStruct{Nested}(Symbolics.unwrap(n))) == 3
+end
+
+@testset "flat record integrates" begin
+    @variables s(t)::Pair2
+    # s.x' = -s.x, s.y' = s.x  =>  s.x = e^-t, s.y = 1 - e^-t
+    sys = mtkcompile(System([D(s.x) ~ -s.x, D(s.y) ~ s.x], t, [s], []; name = :flat))
+
+    # The record is one unknown before compilation; its leaves are the states after.
+    @test issetequal(unknowns(sys), Symbolics.unwrap.([s.x, s.y]))
+
+    # Late initial conditions may name fields: a field may be an observed, or otherwise
+    # need a condition of its own for initialization to be determined.
+    prob = ODEProblem(sys, [s.x => 1.0, s.y => 0.0], (0.0, 1.0))
+    # No algebraic equations, so this must stay a plain ODE.
+    @test prob.f.mass_matrix === I
+
+    sol = solve(prob, Tsit5())
+    @test SciMLBase.successful_retcode(sol)
+    @test sol[s.x][end]≈exp(-1) rtol=1e-5
+    @test sol[s.y][end]≈1 - exp(-1) rtol=1e-5
+end
+
+@testset "nested record integrates" begin
+    @variables n(t)::Nested
+    # n.x'   = n.x + t         => n.x   = 2e^t - t - 1
+    # n.f.x' = n.x + n.f.x + 1 => n.f.x = e^t + 2t*e^t + t + 1
+    # n.f.y' = n.f.y           => n.f.y = 3e^t
+    eqs = [D(n.x) ~ n.x + t
+           D(n.f.x) ~ n.x + n.f.x + 1
+           D(n.f.y) ~ n.f.y]
+    sys = mtkcompile(System(eqs, t, [n], []; name = :nested))
+
+    @test issetequal(unknowns(sys), Symbolics.unwrap.([n.x, n.f.x, n.f.y]))
+
+    prob = ODEProblem(sys, [n.x => 1.0, n.f.x => 2.0, n.f.y => 3.0], (0.0, 1.0))
+    sol = solve(prob, Tsit5())
+    @test SciMLBase.successful_retcode(sol)
+    @test sol[n.x][end]≈2exp(1) - 2 rtol=1e-5
+    @test sol[n.f.x][end]≈3exp(1) + 2 rtol=1e-5
+    @test sol[n.f.y][end]≈3exp(1) rtol=1e-5
+end
+
+@testset "unknowns are inferred from field accesses" begin
+    @variables n(t)::Nested
+    eqs = [D(n.x) ~ -n.x, D(n.f.x) ~ n.x, D(n.f.y) ~ n.f.y]
+    # No unknowns passed: they must be discovered from the equations, at leaf granularity.
+    sys = mtkcompile(System(eqs, t; name = :inferred))
+    @test issetequal(unknowns(sys), Symbolics.unwrap.([n.x, n.f.x, n.f.y]))
+end
+
+@testset "initial conditions" begin
+    @variables n(t)::Nested
+    eqs = [D(n.x) ~ n.x, D(n.f.x) ~ n.f.x, D(n.f.y) ~ n.f.y]
+    sys = mtkcompile(System(eqs, t, [n], []; name = :ics))
+    idx = Base.Fix1(variable_index, sys)
+
+    # A whole-record value is split field-wise, as an array value is split element-wise.
+    whole = ODEProblem(sys, [n => Nested(1, Pair2(2, 3))], (0.0, 1.0))
+    @test whole.u0[idx(n.x)] == 1
+    @test whole.u0[idx(n.f.x)] == 2
+    @test whole.u0[idx(n.f.y)] == 3
+
+    # Field-wise late initial conditions are equivalent.
+    leafwise = ODEProblem(
+        sys, [n.x => 1.0, n.f.x => 2.0, n.f.y => 3.0], (0.0, 1.0))
+    @test leafwise.u0 == whole.u0
+
+    # A field entry overrides the record it came from, by specificity rather than by the
+    # order the entries happen to be iterated in.
+    override = ODEProblem(
+        sys, [n => Nested(1, Pair2(2, 3)), n.f.y => 99.0], (0.0, 1.0))
+    @test override.u0[idx(n.f.y)] == 99
+    @test override.u0[idx(n.x)] == 1
+end
+
+@testset "records are stored atomically" begin
+    @variables n(t)::Nested
+    sys = System([D(n.x) ~ n.x, D(n.f.x) ~ n.f.x, D(n.f.y) ~ n.f.y], t, [n], []; name = :at)
+
+    # However a record is written, the system stores it under one key - so there is one
+    # place to look for the value of any field of it.
+    ics = ModelingToolkitBase.get_initial_conditions(sys)
+    empty!(ics)
+    ics[n] = Nested(1, Pair2(2, 3))
+    @test isequal(only(collect(keys(ics))), Symbolics.unwrap(n))
+
+    # A field is filled into that record rather than stored beside it.
+    ModelingToolkitBase.write_possibly_indexed_array!(
+        ics, Symbolics.unwrap(n.f.y), Symbolics.unwrap(Symbolics.wrap(99.0)),
+        ModelingToolkitBase.COMMON_NOTHING)
+    @test isequal(only(collect(keys(ics))), Symbolics.unwrap(n))
+    read_leaf = v -> ModelingToolkitBase.unwrap_const(
+        ModelingToolkitBase.get_possibly_indexed(
+            ics, Symbolics.unwrap(v), ModelingToolkitBase.COMMON_NOTHING))
+    @test read_leaf(n.f.y) == 99.0
+    @test read_leaf(n.x) == 1
+end
+
+@testset "a record projection is not a key a system can be given" begin
+    # The same rule symbolic arrays follow: a map handed to `System` may be keyed on `x`
+    # but not on `x[1]`, so the system never holds a value for a field in a second place.
+    @variables n(t)::Nested m(t)[1:2] av(t)::ArrField
+    eqs = [D(n.x) ~ n.x, D(n.f.x) ~ n.f.x, D(n.f.y) ~ n.f.y]
+    for kw in (:initial_conditions, :guesses, :bindings)
+        @test_throws ModelingToolkitBase.RecordFieldKeyError System(
+            eqs, t, [n], []; kw => [n.f.y => 1.0], name = :a)
+        @test_throws ModelingToolkitBase.IndexedArrayKeyError System(
+            [D(m) ~ m], t, [m], []; kw => [m[1] => 1.0], name = :a)
+    end
+    # A field that is itself an array is a projection at either depth.
+    arreqs = [D(av.v[1]) ~ av.v[1], D(av.v[2]) ~ av.v[2], D(av.w) ~ av.w]
+    @test_throws ModelingToolkitBase.RecordFieldKeyError System(
+        arreqs, t, [av], []; initial_conditions = [av.v => [1.0, 2.0]], name = :a)
+    @test_throws ModelingToolkitBase.RecordFieldKeyError System(
+        arreqs, t, [av], []; initial_conditions = [av.v[1] => 1.0], name = :a)
+
+    # The record itself is a key, and so is a whole array.
+    sys = System(eqs, t, [n], []; initial_conditions = [n => Nested(1, Pair2(2, 3))], name = :a)
+    @test isequal(
+        only(collect(keys(ModelingToolkitBase.initial_conditions(sys)))), Symbolics.unwrap(n))
+end
+
+@testset "initial conditions for a numeric-array field" begin
+    # A record whose field is a numeric array. Its leaves are `av.v[1]`, `av.v[2]`, but a
+    # numeric array is already atomic on its own, so the operating point stops at `av.v`
+    # — the same granularity `Initial` uses.
+    @variables av(t)::ArrField
+    eqs = [D(av.v[1]) ~ -av.v[1], D(av.v[2]) ~ -2av.v[2], D(av.w) ~ -av.w]
+    sys = mtkcompile(System(eqs, t, [av], []; name = :arrfield))
+    idx = Base.Fix1(variable_index, sys)
+
+    @test issetequal(unknowns(sys), Symbolics.unwrap.([av.v[1], av.v[2], av.w]))
+
+    # The record is given its value whole, array field and all.
+    whole = ODEProblem(sys, [av => ArrField([1.0, 2.0], 3.0)], (0.0, 1.0))
+    @test whole.u0[idx(av.v[1])] == 1.0
+    @test whole.u0[idx(av.v[2])] == 2.0
+    @test whole.u0[idx(av.w)] == 3.0
+
+    # Every way of naming the same late initial condition agrees: whole record, whole
+    # field, and individual elements.
+    fieldwise = ODEProblem(sys, [av.v => [1.0, 2.0], av.w => 3.0], (0.0, 1.0))
+    elementwise = ODEProblem(
+        sys, [av.v[1] => 1.0, av.v[2] => 2.0, av.w => 3.0], (0.0, 1.0))
+    @test whole.u0 == fieldwise.u0 == elementwise.u0
+
+    # Precedence is by specificity: an element beats the field it belongs to, which beats
+    # the whole record.
+    override = ODEProblem(
+        sys, [av => ArrField([1.0, 2.0], 3.0), av.v[2] => 99.0], (0.0, 1.0))
+    @test override.u0[idx(av.v[1])] == 1.0
+    @test override.u0[idx(av.v[2])] == 99.0
+    @test override.u0[idx(av.w)] == 3.0
+
+    sol = solve(whole, Tsit5())
+    @test SciMLBase.successful_retcode(sol)
+    @test sol[av.v[1]][end]≈exp(-1) rtol=1e-5
+    @test sol[av.v[2]][end]≈2exp(-2) rtol=1e-5
+    @test sol[av.w][end]≈3exp(-1) rtol=1e-5
+end
+
+@testset "matrix-valued field keeps its shape" begin
+    # Leaves are laid out in linear order, so reassembling a multidimensional field has to
+    # restore its shape rather than hand back a flat vector.
+    @variables q(t)::MatField
+    eqs = vcat([D(q.m[i, j]) ~ -q.m[i, j] for i in 1:2, j in 1:2]..., D(q.w) ~ -q.w)
+    sys = mtkcompile(System(eqs, t, [q], []; name = :matfield))
+    idx = Base.Fix1(variable_index, sys)
+
+    m0 = [1.0 3.0; 2.0 4.0]
+    prob = ODEProblem(sys, [q => MatField(m0, 5.0)], (0.0, 1.0))
+    for i in 1:2, j in 1:2
+        @test prob.u0[idx(q.m[i, j])] == m0[i, j]
+    end
+    @test prob.u0[idx(q.w)] == 5.0
+end
+
+@testset "symbolic indexing" begin
+    @variables n(t)::Nested
+    sys = mtkcompile(System(
+        [D(n.x) ~ -n.x, D(n.f.x) ~ n.x, D(n.f.y) ~ n.f.y], t, [n], []; name = :sii))
+    prob = ODEProblem(sys, [n.x => 1.0, n.f.x => 2.0, n.f.y => 3.0], (0.0, 1.0))
+
+    for (leaf, val) in ((n.x, 1.0), (n.f.x, 2.0), (n.f.y, 3.0))
+        @test is_variable(sys, leaf)
+        @test variable_index(sys, leaf) isa Int
+        @test prob[leaf] == val
+    end
+    # Distinct leaves must occupy distinct slots.
+    @test allunique(variable_index.((sys,), [n.x, n.f.x, n.f.y]))
+    # Derivatives of a leaf resolve to the state introduced for them.
+    @test is_variable(sys, n.f.y) && !is_variable(sys, D(n.f.y))
+end
+
+@testset "namespacing" begin
+    @variables s(t)::Pair2
+    @named inner = System([D(s.x) ~ -s.x, D(s.y) ~ s.x], t, [s], [])
+    @named outer = System(Equation[], t, [], []; systems = [inner])
+    # The name belongs to the record; the field access is structural.
+    @test isequal(Symbolics.unwrap(outer.inner.s.x), Symbolics.unwrap(getproperty(outer.inner, :s).x))
+    @test occursin("inner", string(Symbolics.unwrap(outer.inner.s.x)))
+end
+
+# A record holding an array of records, so an access path interleaves fields and indices
+# (`h.x[1].y`) rather than grouping them.
+struct Leaf
+    y::Real
+    z::Real
+end
+struct Holder
+    x::Vector{Leaf}
+end
+@symstruct Leaf
+@symstruct Holder begin
+    shape(:x) = [1:2]
+end
+
+@testset "access paths interleave fields and indices" begin
+    @variables h(t)::Holder n(t)::Nested u(t)[1:2] w(t)
+    SI = Symbolics.SymbolicUtils.StableIndex
+
+    # The whole chain resolves to the record, in either order.
+    @test isequal(
+        ModelingToolkitBase.split_field_access(Symbolics.unwrap(n.f.x)),
+        (Symbolics.unwrap(n), true))
+    @test isequal(
+        ModelingToolkitBase.split_field_access(Symbolics.unwrap(h.x[1].y)),
+        (Symbolics.unwrap(h), true))
+
+    # Paths are recorded outermost last, so the index sits where it was written.
+    @test isequal(ModelingToolkitBase.get_struct_access(Symbolics.unwrap(n.f.x)), [:f, :x])
+    @test isequal(
+        ModelingToolkitBase.get_struct_access(Symbolics.unwrap(h.x[1].y)),
+        [:x, SI([1]), :y])
+
+    # Commutes with operators, as `split_indexed_var` does.
+    @test isequal(
+        ModelingToolkitBase.split_field_access(Symbolics.unwrap(D(h.x[2].z)))[1],
+        D(Symbolics.unwrap(h)))
+    @test isequal(
+        ModelingToolkitBase.get_struct_access(Symbolics.unwrap(D(h.x[2].z))),
+        [:x, SI([2]), :z])
+
+    # Plain arrays still resolve to the array; plain scalars are not access paths.
+    @test isequal(
+        ModelingToolkitBase.split_field_access(Symbolics.unwrap(u[1])),
+        (Symbolics.unwrap(u), true))
+    @test isequal(
+        ModelingToolkitBase.split_field_access(Symbolics.unwrap(w)),
+        (Symbolics.unwrap(w), false))
+end
+
+@testset "record of records-array integrates" begin
+    @variables h(t)::Holder
+    eqs = [D(h.x[1].y) ~ -h.x[1].y, D(h.x[1].z) ~ h.x[1].y,
+           D(h.x[2].y) ~ -h.x[2].y, D(h.x[2].z) ~ h.x[2].y]
+    sys = mtkcompile(System(eqs, t, [h], []; name = :holder))
+    @test issetequal(
+        unknowns(sys),
+        Symbolics.unwrap.([h.x[1].y, h.x[1].z, h.x[2].y, h.x[2].z])
+    )
+
+    prob = ODEProblem(
+        sys,
+        [h.x[1].y => 1.0, h.x[1].z => 0.0, h.x[2].y => 2.0, h.x[2].z => 0.0],
+        (0.0, 1.0)
+    )
+    sol = solve(prob, Tsit5())
+    @test SciMLBase.successful_retcode(sol)
+    @test sol[h.x[1].y][end]≈exp(-1) rtol=1e-5
+    @test sol[h.x[2].y][end]≈2exp(-1) rtol=1e-5
+end
+
+@testset "array variables are unaffected" begin
+    @variables u(t)[1:2]
+    @parameters q[1:2]
+    sys = mtkcompile(System([D(u[1]) ~ q[1] * u[2], D(u[2]) ~ -q[2] * u[1]], t, [u], [q]; name = :arr))
+    prob = ODEProblem(sys, [u => [1.0, 0.0], q => [2.0, 3.0]], (0.0, 1.0))
+    @test prob[u] == [1.0, 0.0]
+    @test prob[u[1]] == 1.0
+    @test prob.ps[q] == [2.0, 3.0]
+    @test SciMLBase.successful_retcode(solve(prob, Tsit5()))
+end
+
+@testset "a struct connector expands to one equation per field" begin
+    @connector function Pair2Output(; name)
+        @variables bus(t)::Pair2, [output = true]
+        return System(Equation[], t, [bus], []; name)
+    end
+    @connector function Pair2Input(; name)
+        @variables bus(t)::Pair2, [input = true]
+        return System(Equation[], t, [bus], []; name)
+    end
+    @component function Src(; name)
+        @variables h(t)
+        @named outp = Pair2Output()
+        eqs = [D(h) ~ -1.0, outp.bus.x ~ h, outp.bus.y ~ 2h]
+        return System(eqs, t; name, systems = [outp], initialization_eqs = [h ~ 1.0])
+    end
+    @component function Sink(; name)
+        @variables e(t)
+        @named inp = Pair2Input()
+        return System([D(e) ~ inp.bus.x + inp.bus.y], t; name, systems = [inp])
+    end
+
+    @named src = Src()
+    @named snk = Sink()
+    @named sys = System([connect(src.outp, snk.inp)], t; systems = [src, snk],
+        initialization_eqs = [snk.e ~ 0.0])
+
+    # A whole-record connection has no arithmetic, so it must not survive connector
+    # expansion as a single equation - `canonicalize_eq!` would fail to build `rhs - lhs`.
+    esys, _ = ModelingToolkitBase.expand_connections(sys, Val(true))
+    @test !any(eq -> Symbolics.issymstruct(Symbolics.unwrap(eq.lhs)), equations(esys))
+
+    ssys = mtkcompile(sys)
+    prob = ODEProblem(ssys, [], (0.0, 1.0))
+    # The connection leaves algebraic equations between the two ports, so this is a
+    # mass-matrix system rather than a plain ODE.
+    @test SciMLBase.successful_retcode(solve(prob, Rodas5P()))
+end
+
+@testset "record entries with symbolic leaves are kept" begin
+    @variables af(t)::ArrField q(t)
+    # One entry of the array field is symbolic. The whole field must still be recorded:
+    # previously the entry was silently dropped, losing the concrete entry with it.
+    d = Dict{ModelingToolkitBase.SymbolicT, ModelingToolkitBase.SymbolicT}(
+        Symbolics.unwrap(af.v[1]) => Symbolics.unwrap(q),
+        Symbolics.unwrap(af.v[2]) => Symbolics.unwrap(Symbolics.wrap(2.0)))
+    out = ModelingToolkitBase.as_atomic_dict_with_defaults(
+        d, ModelingToolkitBase.COMMON_NOTHING)
+    @test !isempty(out)
+    # Stored under the record, with the symbolic entry intact and the field never written
+    # left unfilled. Previously the whole entry was dropped, losing the concrete one too.
+    @test haskey(out, Symbolics.unwrap(af))
+    @test Symbolics.is_record_literal(out[Symbolics.unwrap(af)])
+    read_leaf = v -> ModelingToolkitBase.get_possibly_indexed(
+        out, Symbolics.unwrap(v), ModelingToolkitBase.COMMON_NOTHING)
+    @test isequal(read_leaf(af.v[1]), Symbolics.unwrap(q))
+    @test ModelingToolkitBase.unwrap_const(read_leaf(af.v[2])) == 2.0
+end
+
+@testset "a stored record merges with later field writes" begin
+    @variables r(t)::Nested
+    sys = mtkcompile(System(
+        [D(r.x) ~ -r.x, D(r.f.x) ~ -r.f.x, D(r.f.y) ~ -r.f.y], t, [r], []; name = :mrg))
+
+    # Two of three fields given up front, the third left unfilled - as an array holds
+    # `[1.0, 2.0, nothing]`.
+    ics = ModelingToolkitBase.get_initial_conditions(sys)
+    empty!(ics)
+    for (f, val) in ((r.x, 1.0), (r.f.x, 2.0))
+        ModelingToolkitBase.write_possibly_indexed_array!(
+            ics, Symbolics.unwrap(f), Symbolics.unwrap(Symbolics.wrap(val)),
+            ModelingToolkitBase.COMMON_NOTHING)
+    end
+
+    # A later write overrides one of them and supplies the one that was missing. What the
+    # problem says wins, except where it says nothing, which is where the stored record is
+    # asked - the rule `left_merge!` already applies to arrays.
+    prob = ODEProblem(sys, [r.x => 9.0, r.f.y => 3.0], (0.0, 1.0))
+    @test prob[r.x] == 9.0
+    @test prob[r.f.x] == 2.0
+    @test prob[r.f.y] == 3.0
+end
+
+@testset "`record_node_value` assembles a literal from symbolic leaves" begin
+    @variables pr(t)::Pair2 q(t)
+    root = Symbolics.unwrap(pr)
+    val = ModelingToolkitBase.record_node_value(root, root, Any[Symbolics.unwrap(q), 2.0])
+    # No `Pair2` value can hold a symbolic, so the result is a symbolic struct literal.
+    @test Symbolics.is_record_literal(val)
+    @test Symbolics.symtype(val) === Pair2
+    # Fully concrete leaves still build the real value.
+    @test ModelingToolkitBase.record_node_value(root, root, Any[1.0, 2.0]) == Pair2(1.0, 2.0)
+end

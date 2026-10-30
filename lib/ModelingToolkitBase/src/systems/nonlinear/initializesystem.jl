@@ -138,6 +138,13 @@ function generate_initializesystem_timevarying(
     else
         build_operating_point(sys, op)
     end
+
+    # Initialization works in leaves; storage keeps records whole. Translate here, once,
+    # rather than at each place below that asks for `Initial` of a key. Both maps are
+    # normalized by now, which is what this needs - `op` can arrive as a vector of pairs.
+    expand_record_keys!(op)
+    expand_record_keys!(guesses)
+
     subber = get_ir_info(_sys).obs_subber
     obsvars = as_atomic_array_set(observables(_sys))
     initsys_sort_system_bindings!(subber, init_vars_set, init_ps, obsvars, eqs_ics, binds, op, guesses)
@@ -368,6 +375,12 @@ function generate_initializesystem_timeindependent(
         build_operating_point(sys, op)
     end
 
+    # Initialization works in leaves; storage keeps records whole. Translate here, once,
+    # rather than at each place below that asks for `Initial` of a key. Both maps are
+    # normalized by now, which is what this needs - `op` can arrive as a vector of pairs.
+    expand_record_keys!(op)
+    expand_record_keys!(guesses)
+
     valid_initial_parameters = AtomicArraySet{OrderedDict{SymbolicT, Nothing}}()
     # Iterate over a copy: the loop inserts `Initial` keys into `op`. An insertion can rehash
     # the `Dict`, which moves its keys to new slots, and an iteration in progress then yields
@@ -558,7 +571,12 @@ function timevaring_initsys_process_op!(
             # will be passed to the `NonlinearProblem` constructor, and guesses will not take
             # priority over it. So instead of adding `Initial(x) => v` as a guess, add `x => v`.
             op[ik] = k
-            left_merge!(guesses, AtomicArrayDict(k => v))
+            rroot, isrec = record_key_root(k)
+            if isrec && !isequal(rroot, k)
+                merge_record_field!(guesses, k, v)
+            else
+                left_merge!(guesses, AtomicArrayDict(k => v))
+            end
             if !SU.is_array_shape(shk)
                 push!(eqs_ics, subk ~ ik)
                 continue
