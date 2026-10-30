@@ -60,11 +60,11 @@ function check_symbolic_ad_allowed(sys::AbstractSystem)
 end
 
 __new_irstructure() = IRStructure{VartypeT}()
-__new_irstructure_tlv() = TaskLocalValue{IRStructure{VartypeT}}(__new_irstructure)
+__new_irstructure_tlv() = PerTaskValue{IRStructure{VartypeT}}(__new_irstructure)
 const IRStructureTLVT = typeof(__new_irstructure_tlv())
 
 __new_mutable_cache() = MutableCacheT()
-__new_mutable_cache_tlv() = TaskLocalValue{MutableCacheT}(__new_mutable_cache)
+__new_mutable_cache_tlv() = PerTaskValue{MutableCacheT}(__new_mutable_cache)
 const MutableCacheTLVT = typeof(__new_mutable_cache_tlv())
 
 """
@@ -339,9 +339,9 @@ struct System <: IntermediateDeprecationSystem
     maybe_zeros::AtomicSetT
     """
     $INTERNAL_FIELD_WARNING
-    The `IRStructure` used for efficient symbolic manipulation, stored in a `TaskLocalValue`.
+    The `IRStructure` used for efficient symbolic manipulation, stored in a `PerTaskValue`.
     """
-    irstructure_tlv::TaskLocalValue{IRStructure{VartypeT}}
+    irstructure_tlv::IRStructureTLVT
     """
     $INTERNAL_FIELD_WARNING
     Whether the system has been simplified by `mtkcompile`.
