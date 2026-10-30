@@ -295,6 +295,27 @@ end
 VDual = Vector{<:ForwardDiff.Dual}
 VVDual = Vector{<:Vector{<:ForwardDiff.Dual}}
 
+@testset "A portion with many buffer types is indexed without dynamic dispatch" begin
+    # One `Constants` buffer per element type, five in all. Indexed with a runtime number,
+    # a tuple of that many buffers gives a buffer of unknown type.
+    @parameters i8::Int8 i16::Int16 i32::Int32 i64::Int64 u32::UInt32
+    @named manybufs = System(Equation[], t, [], [i8, i16, i32, i64, u32])
+    manybufs = complete(manybufs)
+    ps = MTKParameters(manybufs, Dict(i8 => 1, i16 => 2, i32 => 3, i64 => 4, u32 => 5))
+    @test length(ps.constant) == 5
+    idx = parameter_index(manybufs, i32)
+    @test parameter_values(ps, idx) === Int32(3)
+    # Julia 1.10 widens the union of the five element types to `Any`.
+    @test only(Base.return_types(parameter_values, (typeof(ps), typeof(idx)))) !== Any skip = VERSION < v"1.11"
+    # Measured inside a function, so that only `set_parameter!` is counted. A dynamic
+    # dispatch in it would box the value.
+    write_allocs(ps, val, idx) = @allocated set_parameter!(ps, val, idx)
+    write_allocs(ps, Int32(100_000), idx)
+    @test parameter_values(ps, idx) === Int32(100_000)
+    @test write_allocs(ps, Int32(200_000), idx) == 0
+    @test parameter_values(ps, idx) === Int32(200_000)
+end
+
 @testset "Parameter type validation" begin
     abstract type AbstractFooT end
     struct Foo{T} <: AbstractFooT
