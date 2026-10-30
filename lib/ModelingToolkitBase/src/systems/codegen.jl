@@ -122,9 +122,59 @@ function residual_allocator_arg(arg)
     return SSym(name; type = Any, shape = SU.ShapeVecT())
 end
 
-function residual_allocator_term(args)
+"""
+    PromotedZeros{T}()
+
+Residual allocator returning `zeros(T, sz)`.
+"""
+struct PromotedZeros{T} end
+(::PromotedZeros{T})(sz) where {T} = zeros(T, sz)
+
+numeric_eltype(::Type{T}) where {T <: Number} = T
+numeric_eltype(::Type{<:AbstractArray{T}}) where {T} = T <: Number ? T : Union{}
+numeric_eltype(::Type{<:MTKParameters{T}}) where {T} = numeric_eltype(T)
+numeric_eltype(::Type) = Union{}
+
+"""
+    promoted_residual_eltype(args...)
+
+Promote `Float64` with the numeric element types of `args`, ignoring non-numeric arguments
+such as callable parameters. The result depends only on the argument types.
+"""
+@inline function promoted_residual_eltype(args...)
+    return promote_type(Float64, map(numeric_eltype ∘ typeof, args)...)
+end
+
+"""
+    promoted_zeros(args...)
+
+Return a `PromotedZeros` allocator for `promoted_residual_eltype(args...)`.
+"""
+@inline promoted_zeros(args...) = PromotedZeros{promoted_residual_eltype(args...)}()
+
+"""
+    branch_on_residual_eltype(default, promoted)
+
+Combine two generated out-of-place functions with identical signatures into one that runs
+`default` when `promoted_residual_eltype` of its arguments is `Float64` and
+`promoted` otherwise. The condition depends only on argument types, so the compiler
+removes the untaken branch.
+"""
+function branch_on_residual_eltype(default::Expr, promoted::Expr)
+    Meta.isexpr(default, :function) && Meta.isexpr(default.args[1], :tuple) ||
+        throw(ArgumentError("Expected a generated `function` expression."))
+    eltype_call = Expr(:call, promoted_residual_eltype)
+    append!(eltype_call.args, default.args[1].args)
+    cond = Expr(:call, ===, eltype_call, Float64)
+    return Expr(
+        :function, default.args[1],
+        Expr(:block, Expr(:if, cond, default.args[2], promoted.args[2]))
+    )
+end
+
+function residual_allocator_term(args, allocator = similar_for_residual)
     return STerm(
-        similar_for_residual, map(residual_allocator_arg, args);
+        allocator, map(residual_allocator_arg, args);
         type = SU.FnType{Tuple, Any, Any},
         shape = SU.ShapeVecT(),
     )
@@ -143,13 +193,26 @@ function inject_similar_for_residual(body, alloc_term)
     end
 end
 
-function wrap_oop_similar_for_residual(fn)
+function wrap_oop_similar_for_residual(fn, allocator = similar_for_residual)
     fn isa Func || return fn
     isempty(fn.args) && return fn
-    alloc_term = residual_allocator_term(fn.args)
+    alloc_term = residual_allocator_term(fn.args, allocator)
     return Func(
         fn.args, fn.kwargs, inject_similar_for_residual(fn.body, alloc_term),
         fn.pre
+    )
+end
+
+function with_residual_allocator(codegen_opts, allocator)
+    oop_wrap, iip_wrap = codegen_opts.wrap_code
+    return setproperties(
+        codegen_opts,
+        (;
+            wrap_code = (
+                Base.Fix2(wrap_oop_similar_for_residual, allocator) ∘ oop_wrap,
+                iip_wrap,
+            ),
+        )
     )
 end
 
@@ -304,21 +367,26 @@ function generate_rhs(
 
     u_arg = scalar ? -1 : (implicit_dae ? 2 : 1)
     codegen_opts = opts.codegen
-    if !implicit_dae && assemble_residuals && rhss isa SymbolicT &&
-            Code.supports_with_allocator(rhss)
-        # `ArrayMaker` otherwise allocates a `Float64` buffer out of place.
-        oop_wrap, iip_wrap = codegen_opts.wrap_code
-        codegen_opts = setproperties(
-            codegen_opts,
-            (; wrap_code = (wrap_oop_similar_for_residual ∘ oop_wrap, iip_wrap))
+    # `ArrayMaker` otherwise allocates a `Float64` buffer out of place.
+    alloc_residual = assemble_residuals && rhss isa SymbolicT &&
+        Code.supports_with_allocator(rhss)
+    if alloc_residual && !implicit_dae
+        codegen_opts = with_residual_allocator(codegen_opts, similar_for_residual)
+    end
+    wrapper_opts = function (codegen_function_options)
+        return BuildFunctionWrapperOptions(;
+            p_start, extra_assignments = copy(extra_assignments), u_arg, n_param_buffers,
+            p_end_kw..., codegen_function_options
         )
     end
-    res = build_function_wrapper(
-        sys, rhss, collect(Any, args), BuildFunctionWrapperOptions(;
-            p_start, extra_assignments, u_arg, n_param_buffers, p_end_kw...,
-            codegen_function_options = codegen_opts
-        )
-    )
+    res = build_function_wrapper(sys, rhss, collect(Any, args), wrapper_opts(codegen_opts))
+    if alloc_residual && implicit_dae
+        # Keep the default lowering for `Float64` arguments and only allocate through
+        # `promoted_zeros` when an argument (e.g. a `Dual`) needs a wider eltype.
+        promoted_opts = wrapper_opts(with_residual_allocator(codegen_opts, promoted_zeros))
+        promoted = build_function_wrapper(sys, rhss, collect(Any, args), promoted_opts)
+        res = (branch_on_residual_eltype(res[1], promoted[1]), res[2])
+    end
     nargs = length(args) - length(p) + 1
     if is_dde(sys)
         p_start += 1
