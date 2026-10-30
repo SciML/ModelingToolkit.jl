@@ -2234,8 +2234,10 @@ function maybe_build_initialization_problem(
     end
 
     orig_op = copy(op)
+    # The outer problem constructor already warns about these keywords.
+    init_kwargs = (; (k => v for (k, v) in kwargs if !(k in STRUCTURAL_KWARGS))...)
     initializeprob = ModelingToolkitBase.InitializationProblem{iip, specialize}(
-        sys, t, op, opts; guesses, fast_path = true, kwargs...
+        sys, t, op, opts; guesses, fast_path = true, init_kwargs...
     )
     initsys = initializeprob.f.sys::System
     needs_remake = false
@@ -2798,8 +2800,15 @@ function process_kwargs(
     return merge(kwargs1, kwargs)
 end
 
+# Keywords that SciMLBase problems carry but that MTK derives from the system's structure.
+const STRUCTURAL_KWARGS = (:differential_vars, :mass_matrix)
+
 function filter_kwargs(kwargs)
     kwargs = Dict(kwargs)
+    dropped = filter(in(STRUCTURAL_KWARGS), collect(keys(kwargs)))
+    if !isempty(dropped)
+        @warn LazyString("Ignoring keyword argument(s) ", join(dropped, ", ")), ": the system derives them from its structure. Apply them with `remake(prob; ...)` on the returned problem instead.")
+    end
     for key in keys(kwargs)
         key in SciMLBase.allowedkeywords || delete!(kwargs, key)
     end

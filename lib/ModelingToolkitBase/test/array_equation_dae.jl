@@ -209,3 +209,23 @@ end
     @test SciMLBase.successful_retcode(sol)
     @test maximum(abs, sol.u[end] .- [exp(-pi^2 * 0.1) * sinpi(x) for x in xs]) < 1.0e-2
 end
+
+@testset "structural keywords passed to DAEProblem are dropped with a warning" begin
+    sys, u, t, D = heat_array_system(5)
+    op = vcat([u[i] => 0.0 for i in 1:5], [D(u[i]) => 0.0 for i in 1:5])
+    prob = DAEProblem(sys, op, (0.0, 0.1); build_initializeprob = false)
+    prob2 = @test_logs (:warn, r"differential_vars") DAEProblem(
+        sys, op, (0.0, 0.1); build_initializeprob = false,
+        differential_vars = fill(true, 5)
+    )
+    @test prob2.differential_vars == prob.differential_vars
+end
+
+@testset "structural keyword warns exactly once with default initialization" begin
+    sys, u, t, D = heat_array_system(5)
+    op = vcat([u[i] => 0.0 for i in 1:5], [D(u[i]) => 0.0 for i in 1:5])
+    logs, _ = Test.collect_test_logs() do
+        DAEProblem(sys, op, (0.0, 0.1); differential_vars = fill(true, 5))
+    end
+    @test count(l -> occursin("differential_vars", l.message), logs) == 1
+end
