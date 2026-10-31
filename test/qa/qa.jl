@@ -145,7 +145,8 @@ const REEXPORTED_API = (
     :liouville_transform, :LocalScope,
     :maybe_zeros, :MiscSystemData, :MissingGuessValue, :ModelingToolkitBase,
     :modelingtoolkitize, :modified_unknowns!, :mtkcompile, :MTKParameters,
-    :MTKVariableTypeCtx, :namespace_equations, :noise_to_brownians, :NonlinearSystem,
+    :MTKVariableTypeCtx, :MTKVerbosity, :MTKVerbosityCtx, :namespace_equations,
+    :noise_to_brownians, :NonlinearSystem,
     :observables, :observed, :ODESystem, :open_loop, :OptimizationSystem, :outputs,
     :parameters, :parameters_toplevel, :ParentScope, :PDESystem, :Pre, :ProblemTypeCtx,
     :PyomoCollocation, :PyomoDynamicOptProblem, :renamespace, :reorder_dimension_by_tunables,
@@ -205,6 +206,8 @@ const REEXPORTED_API = (
     :SDEProblem, :SolverStepClock, :SteadyStateProblem, :TimeDomain,
     # CommonSolve: `solve` is the entry point of every documented workflow.
     :solve,
+    # SciMLLogging: the module, so that `SciMLLogging.Silent` etc. work for `MTKVerbosity`.
+    :SciMLLogging,
     # JumpProcesses: `JumpProblem` is constructed from a `System` with jumps.
     :JumpProblem,
     # BipartiteGraphs: `BipartiteGraph` is re-exported by ModelingToolkitBase for the

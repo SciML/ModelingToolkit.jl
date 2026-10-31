@@ -1,4 +1,5 @@
 using ModelingToolkit, ADTypes, Test
+import SciMLLogging
 using NonlinearSolve
 using Symbolics: value
 using CommonSolve: solve
@@ -305,7 +306,10 @@ closed_loop = System(
     ]
 )
 
-@test_nowarn linearize(closed_loop, :r, :y; warn_empty_op = false)
+@test_nowarn linearize(
+    closed_loop, :r, :y;
+    verbose = MTKVerbosity(empty_operating_point = SciMLLogging.Silent)
+)
 
 # https://discourse.julialang.org/t/mtk-change-in-linearize/115760/3
 @component function Tank_noi(; name, ρ = 1, A = 5, K = 5, h_ς = 3)
@@ -396,7 +400,7 @@ end
     @named tank_noi = Tank_noi()
     @unpack md_i, h, m = tank_noi
     m_ss = 2.4000000003229878
-    @test_warn ["empty operating point", "warn_empty_op"] linearize(
+    @test_warn ["empty operating point", "empty_operating_point"] linearize(
         tank_noi, [md_i], [h]; p = [md_i => 1.0, m => m_ss]
     )
 end
@@ -465,4 +469,24 @@ end
     @test size(lsys.B) == (0, 0)
     @test size(lsys.C) == (1, 0)
     @test size(lsys.D) == (1, 0)
+end
+
+@testset "Input Jacobians use initialized inputs" begin
+    @variables x(t) = 1.0 u(t) [input = true] y(t) [output = true]
+    @named sys = System([D(x) ~ -x + u^2, y ~ x], t)
+    op = Dict(y => 4.0, D(x) => 0.0, u => missing, x => nothing)
+    mats, _, extras = linearize(
+        sys, [u], [y]; op, guesses = Dict(u => 1.0, x => 1.0),
+        initialization_abstol = 1.0e-12, initialization_reltol = 1.0e-12
+    )
+    @test mats.A ≈ [-1.0;;]
+    @test mats.B ≈ [4.0;;] atol = 1.0e-10
+    @test extras.x ≈ [4.0]
+end
+
+@testset "Input Jacobians without unknowns use supplied inputs" begin
+    @variables u(t) [input = true] y(t) [output = true]
+    @named sys = System([y ~ u^2], t)
+    linfun, _ = linearization_function(sys, [u], [y]; op = Dict(u => 3.0))
+    @test only(linfun(nothing, [u => 5.0], 0.0).h_u) ≈ 10.0
 end

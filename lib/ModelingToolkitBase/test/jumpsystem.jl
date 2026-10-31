@@ -76,7 +76,7 @@ u₀map = [S => 999, I => 1, R => 0]
 parammap = [β => 0.1 / 1000, γ => 0.01]
 jprob = JumpProblem(
     js2, [u₀map; parammap], tspan; aggregator = Direct(),
-    save_positions = (false, false), rng
+    save_positions = (false, false)
 )
 p = parameter_values(jprob)
 @test jprob.prob isa DiscreteProblem
@@ -85,7 +85,7 @@ function getmean(jprob, Nsims; use_stepper = true)
     m = 0.0
     for i in 1:Nsims
         i % 200 == 0 && @info i
-        sol = use_stepper ? solve(jprob, SSAStepper()) : solve(jprob)
+        sol = use_stepper ? solve(jprob, SSAStepper(); rng) : solve(jprob; rng)
         m += sol[end, end]
     end
     return m / Nsims
@@ -93,7 +93,7 @@ end
 m = getmean(jprob, Nsims)
 
 # test auto-alg selection works
-jprobb = JumpProblem(js2, [u₀map; parammap], tspan; save_positions = (false, false), rng)
+jprobb = JumpProblem(js2, [u₀map; parammap], tspan; save_positions = (false, false))
 mb = getmean(jprobb, Nsims; use_stepper = false)
 @test abs(m - mb) / m < 0.01
 
@@ -103,18 +103,18 @@ obs = [S2 ~ 2 * S]
 js2b = complete(js2b)
 jprob = JumpProblem(
     js2b, [u₀map; parammap], tspan; aggregator = Direct(),
-    save_positions = (false, false), rng
+    save_positions = (false, false)
 )
 @test jprob.prob isa DiscreteProblem
-sol = solve(jprob, SSAStepper(); saveat = tspan[2] / 10)
+sol = solve(jprob, SSAStepper(); saveat = tspan[2] / 10, rng)
 @test all(2 .* sol[S] .== sol[S2])
 
 # test save_positions is working
 jprob = JumpProblem(
     js2, [u₀map; parammap], tspan; aggregator = Direct(),
-    save_positions = (false, false), rng
+    save_positions = (false, false)
 )
-sol = solve(jprob, SSAStepper(); saveat = 1.0)
+sol = solve(jprob, SSAStepper(); saveat = 1.0, rng)
 @test all((sol.t) .== collect(0.0:tspan[2]))
 
 #test the MT JumpProblem rates/affects are correct
@@ -150,7 +150,7 @@ function a2!(integrator)
 end
 j2 = ConstantRateJump(r2, a2!)
 jset = JumpSet((), (j1, j2), nothing, nothing)
-jprob = JumpProblem(prob, Direct(), jset; save_positions = (false, false), rng)
+jprob = JumpProblem(prob, Direct(), jset; save_positions = (false, false))
 m2 = getmean(jprob, Nsims)
 
 # test JumpSystem solution agrees with direct version
@@ -161,7 +161,7 @@ maj1 = SymbolicMassActionJump(2 * β / 2, [S => 1, I => 1], [S => -1, I => 1])
 maj2 = SymbolicMassActionJump(γ, [I => 1], [I => -1, R => 1])
 @named js3 = JumpSystem([maj1, maj2], t, [S, I, R], [β, γ])
 js3 = complete(js3)
-jprob = JumpProblem(js3, [u₀map; parammap], tspan; aggregator = Direct(), rng)
+jprob = JumpProblem(js3, [u₀map; parammap], tspan; aggregator = Direct())
 @test jprob.prob isa DiscreteProblem
 m3 = getmean(jprob, Nsims)
 @test abs(m - m3) / m < 0.01
@@ -169,11 +169,11 @@ m3 = getmean(jprob, Nsims)
 # maj jump test with various dep graphs
 @named js3b = JumpSystem([maj1, maj2], t, [S, I, R], [β, γ])
 js3b = complete(js3b)
-jprobb = JumpProblem(js3b, [u₀map; parammap], tspan; aggregator = NRM(), rng)
+jprobb = JumpProblem(js3b, [u₀map; parammap], tspan; aggregator = NRM())
 @test jprobb.prob isa DiscreteProblem
 m4 = getmean(jprobb, Nsims)
 @test abs(m - m4) / m < 0.01
-jprobc = JumpProblem(js3b, [u₀map; parammap], tspan; aggregator = RSSA(), rng)
+jprobc = JumpProblem(js3b, [u₀map; parammap], tspan; aggregator = RSSA())
 @test jprobc.prob isa DiscreteProblem
 m4 = getmean(jprobc, Nsims)
 @test abs(m - m4) / m < 0.01
@@ -184,7 +184,7 @@ maj2 = SymbolicMassActionJump(γ, [S => 1], [S => -1])
 @named js4 = JumpSystem([maj1, maj2], t, [S], [β, γ])
 js4 = complete(js4)
 jprob = JumpProblem(
-    js4, [S => 999, β => 100.0, γ => 0.01], (0, 1000.0); aggregator = Direct(), rng
+    js4, [S => 999, β => 100.0, γ => 0.01], (0, 1000.0); aggregator = Direct()
 )
 @test jprob.prob isa DiscreteProblem
 m4 = getmean(jprob, Nsims)
@@ -196,10 +196,10 @@ maj2 = SymbolicMassActionJump(γ, [S => 2], [S => -1])
 @named js4 = JumpSystem([maj1, maj2], t, [S], [β, γ])
 js4 = complete(js4)
 jprob = JumpProblem(
-    js4, [S => 999, β => 100.0, γ => 0.01], (0, 1000.0); aggregator = Direct(), rng
+    js4, [S => 999, β => 100.0, γ => 0.01], (0, 1000.0); aggregator = Direct()
 )
 @test jprob.prob isa DiscreteProblem
-sol = solve(jprob, SSAStepper());
+sol = solve(jprob, SSAStepper(); rng);
 
 # issue #819
 @testset "Combined system name collisions" begin
@@ -223,10 +223,13 @@ end
     u₀ = [A => 100, B => 0]
     tspan = (0.0, 2000.0)
     jprob = JumpProblem(
-        js5, [u₀; p], tspan; aggregator = Direct(), save_positions = (false, false), rng
+        js5, [u₀; p], tspan; aggregator = Direct(), save_positions = (false, false)
     )
     @test jprob.prob isa DiscreteProblem
-    @test all(jprob.massaction_jump.scaled_rates .== [1.0, 0.0])
+    # The definition stores no rates: the aggregator's working rates are filled at `init`.
+    @test jprob.massaction_jump.scaled_rates === nothing
+    init(jprob, SSAStepper())
+    @test jprob.discrete_jump_aggregation.maj_rates == [1.0, 0.0]
 
     pcondit(u, t, integrator) = t == 1000.0
     function paffect!(integrator)
@@ -235,7 +238,7 @@ end
         reset_aggregated_jumps!(integrator)
     end
     cb = DiscreteCallback(pcondit, paffect!)
-    sol = solve(jprob, SSAStepper(); tstops = [1000.0], callback = cb)
+    sol = solve(jprob, SSAStepper(); tstops = [1000.0], callback = cb, rng)
     @test sol.u[end][1] == 100
 end
 
@@ -334,10 +337,10 @@ end
     vrj = VariableRateJump(k * (sin(t) + 1), [A ~ Pre(A) + 1, C ~ Pre(C) + 2])
     js = complete(JumpSystem([vrj], t, [A, C], [k]; name = :js, observed = [B ~ C * A]))
     jprob = JumpProblem(
-        js, [A => 0, C => 0, k => 1], (0.0, 10.0); aggregator = Direct(), rng
+        js, [A => 0, C => 0, k => 1], (0.0, 10.0); aggregator = Direct()
     )
     @test jprob.prob isa ODEProblem
-    sol = solve(jprob, Tsit5())
+    sol = solve(jprob, Tsit5(); rng)
 
     # test observed and symbolic indexing work
     @test all(sol[:A] .* sol[:C] .== sol[:B])
@@ -346,7 +349,7 @@ end
     tv = range(0.0, 10.0; step = 1.0)
     cmean = zeros(11)
     for n in 1:N
-        sol = solve(jprob, Tsit5(); save_everystep = false, saveat = dt)
+        sol = solve(jprob, Tsit5(); save_everystep = false, saveat = dt, rng)
         cmean += Array(sol(tv; idxs = :C))
     end
     cmean ./= N
@@ -359,10 +362,10 @@ end
     end
     vrj2 = VariableRateJump(vrjrate, vrjaffect!)
     oprob2 = ODEProblem((du, u, p, t) -> (du .= 0; nothing), [0, 0], (0.0, 10.0), (1.0,))
-    jprob2 = JumpProblem(oprob2, Direct(), vrj2; rng)
+    jprob2 = JumpProblem(oprob2, Direct(), vrj2)
     cmean2 = zeros(11)
     for n in 1:N
-        sol2 = solve(jprob2, Tsit5(); saveat = dt)
+        sol2 = solve(jprob2, Tsit5(); saveat = dt, rng)
         cmean2 += Array(sol2(tv; idxs = 2))
     end
     cmean2 ./= N
@@ -453,7 +456,6 @@ end
 # PDMP test
 @testset "PDMP test" begin
     seed = 1111
-    Random.seed!(rng, seed)
     @variables X(t) Y(t)
     @parameters k1 k2
     vrj1 = VariableRateJump(k1 * X, [X ~ Pre(X) - 1]; save_positions = (false, false))
@@ -468,14 +470,14 @@ end
     k2val = 20.0
     p = [k1 => k1val, k2 => k2val]
     tspan = (0.0, 10.0)
-    jprob = JumpProblem(jsys, [u0; p], tspan; rng, save_positions = (false, false))
+    jprob = JumpProblem(jsys, [u0; p], tspan; save_positions = (false, false))
 
     times = range(0.0, tspan[2], length = 100)
     Nsims = 4000
     Xv = zeros(length(times))
     Yv = zeros(length(times))
     for n in 1:Nsims
-        sol = solve(jprob, Tsit5(); saveat = times, seed)
+        sol = solve(jprob, Tsit5(); saveat = times, rng = StableRNG(seed))
         Xv .+= sol[1, :]
         Yv .+= sol[2, :]
         seed += 1
@@ -494,7 +496,6 @@ end
 # that mixes ODEs and jump types, and then contin events
 @testset "ODEs + Jumps + Continuous events" begin
     seed = 1111
-    Random.seed!(rng, seed)
     @variables X(t) Y(t)
     @parameters α β
     vrj = VariableRateJump(β * X, [X ~ Pre(X) - 1]; save_positions = (false, false))
@@ -507,13 +508,13 @@ end
     u0map = [X => p.X₀, Y => p.Y₀]
     pmap = [α => p.α, β => p.β]
     tspan = (0.0, 20.0)
-    jprob = JumpProblem(jsys, [u0map; pmap], tspan; rng, save_positions = (false, false))
+    jprob = JumpProblem(jsys, [u0map; pmap], tspan; save_positions = (false, false))
     times = range(0.0, tspan[2], length = 100)
     Nsims = 4000
     Xv = zeros(length(times))
     Yv = zeros(length(times))
     for n in 1:Nsims
-        sol = solve(jprob, Tsit5(); saveat = times, seed)
+        sol = solve(jprob, Tsit5(); saveat = times, rng = StableRNG(seed))
         Xv .+= sol[1, :]
         Yv .+= sol[2, :]
         seed += 1
@@ -547,11 +548,11 @@ end
     )
     jsys = complete(jsys)
     tspan = (0.0, 200.0)
-    jprob = JumpProblem(jsys, [u0map; pmap], tspan; rng, save_positions = (false, false))
+    jprob = JumpProblem(jsys, [u0map; pmap], tspan; save_positions = (false, false))
     Xsamp = 0.0
     Nsims = 4000
     for n in 1:Nsims
-        sol = solve(jprob, Tsit5(); saveat = tspan[2], seed)
+        sol = solve(jprob, Tsit5(); saveat = tspan[2], rng = StableRNG(seed))
         @test sol.retcode == ReturnCode.Terminated
         Xsamp += sol[1, end]
         seed += 1
@@ -621,14 +622,14 @@ end
     jsys = complete(jsys)
 
     # Create JumpProblem
-    jprob = JumpProblem(jsys, [:X => 10.0, :a => 1.0, :b => 0.01], (0.0, 3.0); rng)
+    jprob = JumpProblem(jsys, [:X => 10.0, :a => 1.0, :b => 0.01], (0.0, 3.0))
 
     # Callback should NOT be stored in the underlying problem (only in JumpProblem)
     @test !haskey(jprob.prob.kwargs, :callback)
     @test haskey(jprob.kwargs, :callback)
 
     # Solve and verify discrete event fires exactly once
-    sol = solve(jprob, Tsit5())
+    sol = solve(jprob, Tsit5(); rng)
     X_before = sol(0.99; idxs = X)
     X_after = sol(1.01; idxs = X)
     change = X_after - X_before
@@ -657,14 +658,14 @@ end
     jsys = complete(jsys)
 
     # Create JumpProblem (starting at X=10, with a=10 so X grows quickly)
-    jprob = JumpProblem(jsys, [:X => 10.0, :a => 10.0, :b => 0.001], (0.0, 3.0); rng)
+    jprob = JumpProblem(jsys, [:X => 10.0, :a => 10.0, :b => 0.001], (0.0, 3.0))
 
     # Callback should NOT be stored in the underlying problem (only in JumpProblem)
     @test !haskey(jprob.prob.kwargs, :callback)
     @test haskey(jprob.kwargs, :callback)
 
     # Solve - the continuous event should fire when X crosses 15.0
-    sol = solve(jprob, Tsit5())
+    sol = solve(jprob, Tsit5(); rng)
 
     # After crossing 15.0, X should jump by 5.0 (to ~20.0), not by 10.0 (which would be ~25.0)
     # With a=10, X reaches 15 at t≈0.5, then jumps to ~20, continues growing
@@ -692,7 +693,7 @@ end
         # With save_positions=(false, false) and saveat, should get exact number of points
         jprob = JumpProblem(
             jsys, [A => 100, k => 1.0], (0.0, 10.0);
-            aggregator = Direct(), save_positions = (false, false), rng
+            aggregator = Direct(), save_positions = (false, false)
         )
         @test jprob.prob isa DiscreteProblem
 
@@ -701,7 +702,7 @@ end
 
         # Solve with saveat and verify no extra points from jumps
         times = 0.0:1.0:10.0
-        sol = solve(jprob, SSAStepper(); saveat = times)
+        sol = solve(jprob, SSAStepper(); saveat = times, rng)
         @test length(sol.t) == length(times)
         @test all(sol.t .== collect(times))
     end
@@ -716,7 +717,7 @@ end
 
         jprob = JumpProblem(
             jsys, [A => 100, k => 0.1], (0.0, 10.0);
-            aggregator = Direct(), save_positions = (false, false), rng
+            aggregator = Direct(), save_positions = (false, false)
         )
         @test jprob.prob isa DiscreteProblem
 
@@ -724,7 +725,7 @@ end
         @test jprob.discrete_jump_aggregation.save_positions == (false, false)
 
         times = 0.0:1.0:10.0
-        sol = solve(jprob, SSAStepper(); saveat = times)
+        sol = solve(jprob, SSAStepper(); saveat = times, rng)
         @test length(sol.t) == length(times)
     end
 
@@ -741,7 +742,7 @@ end
         # This previously errored because save_positions was passed to ODEProblem
         jprob = JumpProblem(
             jsys, [A => 0, k => 1.0], (0.0, 10.0);
-            aggregator = Direct(), save_positions = (false, false), rng
+            aggregator = Direct(), save_positions = (false, false)
         )
         @test jprob.prob isa ODEProblem
 
@@ -749,7 +750,7 @@ end
         @test !haskey(jprob.prob.kwargs, :save_positions)
 
         # Should solve without error
-        sol = solve(jprob, Tsit5())
+        sol = solve(jprob, Tsit5(); rng)
         @test SciMLBase.successful_retcode(sol)
     end
 
@@ -764,7 +765,7 @@ end
 
         jprob = JumpProblem(
             jsys, [X => 10.0, a => 1.0, b => 0.1], (0.0, 10.0);
-            save_positions = (false, false), rng
+            save_positions = (false, false)
         )
         @test jprob.prob isa ODEProblem
 
@@ -774,11 +775,11 @@ end
         # Verify save_positions reaches the discrete aggregator
         @test jprob.discrete_jump_aggregation.save_positions == (false, false)
 
-        sol = solve(jprob, Tsit5())
+        sol = solve(jprob, Tsit5(); rng)
         @test SciMLBase.successful_retcode(sol)
 
         times = 0.0:1.0:10.0
-        sol = solve(jprob, Tsit5(); saveat = times)
+        sol = solve(jprob, Tsit5(); saveat = times, rng)
         @test length(sol.t) == length(times)
     end
 
@@ -798,7 +799,7 @@ end
 
         jprob = JumpProblem(
             jsys, [X => 0.0, Y => 10, a => 0.1, b => 0.5, c => 0.1, d => 1.0], (0.0, 10.0);
-            save_positions = (false, false), rng
+            save_positions = (false, false)
         )
         @test jprob.prob isa ODEProblem
 
@@ -808,12 +809,12 @@ end
         # Verify save_positions reaches the discrete aggregator (for CRJs/MAJs)
         @test jprob.discrete_jump_aggregation.save_positions == (false, false)
 
-        sol = solve(jprob, Tsit5())
+        sol = solve(jprob, Tsit5(); rng)
         @test SciMLBase.successful_retcode(sol)
 
         # With all jumps having save_positions=(false,false), saveat should give exact points
         times = 0.0:1.0:10.0
-        sol = solve(jprob, Tsit5(); saveat = times)
+        sol = solve(jprob, Tsit5(); saveat = times, rng)
         @test length(sol.t) == length(times)
     end
 
@@ -826,7 +827,7 @@ end
         jsys = complete(jsys)
 
         # No save_positions specified - should default to (true, true) for discrete aggregator
-        jprob = JumpProblem(jsys, [A => 100, k => 1.0], (0.0, 10.0); rng)
+        jprob = JumpProblem(jsys, [A => 100, k => 1.0], (0.0, 10.0))
 
         @test jprob.discrete_jump_aggregation.save_positions == (true, true)
     end
@@ -857,13 +858,13 @@ end
         # Create JumpProblem - should create SDEProblem
         op = [X => 10.0, k => 1.0]
         tspan = (0.0, 1.0)
-        jprob = JumpProblem(sys, op, tspan; rng)
+        jprob = JumpProblem(sys, op, tspan)
 
         # The underlying problem should be SDEProblem, not ODEProblem
         @test jprob.prob isa SDEProblem
 
         # Should be solvable without error
-        sol = solve(jprob, SOSRI())
+        sol = solve(jprob, SOSRI(); rng)
         @test SciMLBase.successful_retcode(sol)
     end
 
@@ -882,11 +883,11 @@ end
 
         op = [X => 5.0, k => 0.5]
         tspan = (0.0, 1.0)
-        jprob = JumpProblem(sys, op, tspan; rng)
+        jprob = JumpProblem(sys, op, tspan)
 
         @test jprob.prob isa SDEProblem
 
-        sol = solve(jprob, SOSRI())
+        sol = solve(jprob, SOSRI(); rng)
         @test SciMLBase.successful_retcode(sol)
     end
 
@@ -905,11 +906,11 @@ end
 
         op = [X => 5.0, k => 0.5]
         tspan = (0.0, 1.0)
-        jprob = JumpProblem(sys, op, tspan; rng)
+        jprob = JumpProblem(sys, op, tspan)
 
         @test jprob.prob isa SDEProblem
 
-        sol = solve(jprob, SOSRI())
+        sol = solve(jprob, SOSRI(); rng)
         @test SciMLBase.successful_retcode(sol)
     end
 
@@ -929,11 +930,11 @@ end
 
         op = [X => 10.0, Y => 5.0, k1 => 1.0, k2 => 0.5]
         tspan = (0.0, 1.0)
-        jprob = JumpProblem(sys, op, tspan; rng)
+        jprob = JumpProblem(sys, op, tspan)
 
         @test jprob.prob isa SDEProblem
 
-        sol = solve(jprob, SOSRI())
+        sol = solve(jprob, SOSRI(); rng)
         @test SciMLBase.successful_retcode(sol)
     end
 
@@ -954,12 +955,12 @@ end
 
         op = [X => 5.0, k => 0.5]
         tspan = (0.0, 1.0)
-        jprob = JumpProblem(sys, op, tspan; rng)
+        jprob = JumpProblem(sys, op, tspan)
 
         # Should be ODEProblem since there are no brownians
         @test jprob.prob isa ODEProblem
 
-        sol = solve(jprob, Tsit5())
+        sol = solve(jprob, Tsit5(); rng)
         @test SciMLBase.successful_retcode(sol)
     end
 end
@@ -988,13 +989,13 @@ end
         # Create JumpProblem once, use seed parameter to vary randomness
         jprob = JumpProblem(
             sys, [X => 0.0, sig => sig_val, lam => lam_val, delta => delta_val],
-            (0.0, T); rng, save_positions = (false, false)
+            (0.0, T); save_positions = (false, false)
         )
 
         seed = 1111
         Xfinal = zeros(Nsims)
         for i in 1:Nsims
-            sol = solve(jprob, SOSRI(); save_everystep = false, seed)
+            sol = solve(jprob, SOSRI(); save_everystep = false, rng = StableRNG(seed))
             Xfinal[i] = sol[X, end]
             seed += 1
         end
@@ -1033,13 +1034,13 @@ end
         # Create JumpProblem once for symbolic version
         jprob_sym = JumpProblem(
             sys, [X => X0, sig => sig_val, lam => lam_val, delta => delta_val],
-            (0.0, T); rng, save_positions = (false, false)
+            (0.0, T); save_positions = (false, false)
         )
 
         seed = 2222
         Xfinal_sym = zeros(Nsims)
         for i in 1:Nsims
-            sol = solve(jprob_sym, SOSRI(); save_everystep = false, seed)
+            sol = solve(jprob_sym, SOSRI(); save_everystep = false, rng = StableRNG(seed))
             Xfinal_sym[i] = sol[X, end]
             seed += 1
         end
@@ -1052,12 +1053,12 @@ end
         affect_direct!(integ) = (integ.u[1] += delta_val)
         crj_direct = ConstantRateJump(rate_direct, affect_direct!)
 
-        jprob_direct = JumpProblem(sprob, Direct(), crj_direct; rng, save_positions = (false, false))
+        jprob_direct = JumpProblem(sprob, Direct(), crj_direct; save_positions = (false, false))
 
         seed = 2222  # Use same seeds for comparison
         Xfinal_direct = zeros(Nsims)
         for i in 1:Nsims
-            sol = solve(jprob_direct, SOSRI(); save_everystep = false, seed)
+            sol = solve(jprob_direct, SOSRI(); save_everystep = false, rng = StableRNG(seed))
             Xfinal_direct[i] = sol[end][1]
             seed += 1
         end
@@ -1102,13 +1103,13 @@ end
 
         jprob = JumpProblem(
             sys, [X => 5.0, alph => alph_val, bet => bet_val, gam => gam_val, sig => sig_val],
-            (0.0, T); rng, save_positions = (false, false)
+            (0.0, T); save_positions = (false, false)
         )
 
         seed = 3333
         Xfinal = zeros(Nsims)
         for i in 1:Nsims
-            sol = solve(jprob, SOSRI(); save_everystep = false, seed)
+            sol = solve(jprob, SOSRI(); save_everystep = false, rng = StableRNG(seed))
             Xfinal[i] = sol[X, end]
             seed += 1
         end
@@ -1155,12 +1156,12 @@ end
         # couldn't be found in the affect system's symbol table
         jprob = JumpProblem(
             jsys, [:X => 50, :k => 0.1, :X0 => 100], (0.0, 10.0);
-            aggregator = Direct(), rng
+            aggregator = Direct()
         )
         @test jprob.prob isa DiscreteProblem
 
         # Solve and verify the discrete event fires correctly
-        sol = solve(jprob, SSAStepper())
+        sol = solve(jprob, SSAStepper(); rng)
         @test SciMLBase.successful_retcode(sol)
 
         # After t=5.0, X should have been reset to X0=100
@@ -1186,11 +1187,11 @@ end
         # Using Symbol keys - main test is that this doesn't error
         jprob = JumpProblem(
             jsys, [:X => 20, :k => 0.5, :reset_val => 50], (0.0, 5.0);
-            aggregator = Direct(), rng
+            aggregator = Direct()
         )
         @test jprob.prob isa DiscreteProblem
 
-        sol = solve(jprob, SSAStepper())
+        sol = solve(jprob, SSAStepper(); rng)
         @test SciMLBase.successful_retcode(sol)
 
         # Verify X was reset at t=2.0 (allow for a few jumps)
@@ -1214,11 +1215,11 @@ end
 
         # Using Symbol keys
         jprob = JumpProblem(
-            jsys, [:X => 10.0, :a => 1.0, :b => 0.01, :X0 => 50.0], (0.0, 3.0); rng
+            jsys, [:X => 10.0, :a => 1.0, :b => 0.01, :X0 => 50.0], (0.0, 3.0)
         )
         @test jprob.prob isa ODEProblem
 
-        sol = solve(jprob, Tsit5())
+        sol = solve(jprob, Tsit5(); rng)
         @test SciMLBase.successful_retcode(sol)
 
         # Verify the reset happened - X should be ~50 just after t=1.5
@@ -1241,10 +1242,10 @@ end
         # Main test: construction with Symbol keys doesn't error
         jprob = JumpProblem(
             jsys, [:X => 100, :k => 0.05, :val1 => 200, :val2 => 50], (0.0, 6.0);
-            aggregator = Direct(), rng
+            aggregator = Direct()
         )
 
-        sol = solve(jprob, SSAStepper())
+        sol = solve(jprob, SSAStepper(); rng)
         @test SciMLBase.successful_retcode(sol)
 
         # Check first reset at t=2 (allow for jumps to occur)
@@ -1273,11 +1274,11 @@ end
 
         # VRJ systems get an ODEProblem
         jprob = JumpProblem(
-            jsys, [:X => 0, :k => 1.0, :X0 => 100], (0.0, 5.0); rng
+            jsys, [:X => 0, :k => 1.0, :X0 => 100], (0.0, 5.0)
         )
         @test jprob.prob isa ODEProblem
 
-        sol = solve(jprob, Tsit5())
+        sol = solve(jprob, Tsit5(); rng)
         @test SciMLBase.successful_retcode(sol)
 
         # Verify reset at t=3
@@ -1308,7 +1309,7 @@ end
         # converted in compile_equational_affect
         jprob = JumpProblem(
             jsys, [:X => 10.0, :a => 10.0, :b => 0.001, :threshold => 15.0],
-            (0.0, 3.0); rng
+            (0.0, 3.0)
         )
         @test jprob.prob isa ODEProblem
 
@@ -1316,7 +1317,7 @@ end
         @test !haskey(jprob.prob.kwargs, :callback)
         @test haskey(jprob.kwargs, :callback)
 
-        sol = solve(jprob, Tsit5())
+        sol = solve(jprob, Tsit5(); rng)
         @test SciMLBase.successful_retcode(sol)
 
         # Correctness test matching Issue#4216 pattern:
@@ -1348,7 +1349,7 @@ end
 
         jprob = JumpProblem(
             jsys, [X => 100, k => 0.1, t1 => 3.0, t2 => 4.0],
-            (0.0, 10.0); aggregator = Direct(), rng
+            (0.0, 10.0); aggregator = Direct()
         )
 
         @test jprob.prob isa DiscreteProblem
@@ -1356,7 +1357,7 @@ end
         @test jprob.kwargs[:tstops] isa MT.SymbolicTstops
         @test Set(jprob.kwargs[:tstops](jprob.prob.p, (0.0, 10.0))) == Set([3.0, 7.0])
 
-        sol = solve(jprob, SSAStepper())
+        sol = solve(jprob, SSAStepper(); rng)
         @test SciMLBase.successful_retcode(sol)
         @test 3.0 ∈ sol.t
         @test 7.0 ∈ sol.t
@@ -1382,14 +1383,14 @@ end
 
         jprob = JumpProblem(
             jsys, [X => 100, k => 0.1, t1 => 2.0, t2 => 6.0],
-            (0.0, 10.0); aggregator = Direct(), rng
+            (0.0, 10.0); aggregator = Direct()
         )
 
         @test jprob.prob isa DiscreteProblem
         @test haskey(jprob.kwargs, :tstops)
         @test Set(jprob.kwargs[:tstops](jprob.prob.p, (0.0, 10.0))) == Set([2.0, 6.0])
 
-        sol = solve(jprob, SSAStepper())
+        sol = solve(jprob, SSAStepper(); rng)
         @test SciMLBase.successful_retcode(sol)
         @test 2.0 ∈ sol.t
         @test 6.0 ∈ sol.t
@@ -1416,7 +1417,7 @@ end
 
         jprob = JumpProblem(
             jsys, [X => 0, k => 1.0, t1 => 2.0, t2 => 3.0],
-            (0.0, 8.0); rng
+            (0.0, 8.0)
         )
 
         @test jprob.prob isa ODEProblem
@@ -1426,7 +1427,7 @@ end
         @test !haskey(jprob.prob.kwargs, :tstops)
         @test Set(jprob.kwargs[:tstops](jprob.prob.p, (0.0, 8.0))) == Set([2.0, 5.0])
 
-        sol = solve(jprob, Tsit5())
+        sol = solve(jprob, Tsit5(); rng)
         @test SciMLBase.successful_retcode(sol)
         @test 2.0 ∈ sol.t
         @test 5.0 ∈ sol.t
@@ -1453,7 +1454,7 @@ end
         jprob = JumpProblem(
             jsys,
             [X => 10.0, a => 1.0, b => 0.01, t1 => 2.0, t2 => 3.0],
-            (0.0, 10.0); rng
+            (0.0, 10.0)
         )
 
         @test jprob.prob isa ODEProblem
@@ -1463,7 +1464,7 @@ end
         @test !haskey(jprob.prob.kwargs, :tstops)
         @test Set(jprob.kwargs[:tstops](jprob.prob.p, (0.0, 10.0))) == Set([2.0, 6.0])
 
-        sol = solve(jprob, Tsit5())
+        sol = solve(jprob, Tsit5(); rng)
         @test SciMLBase.successful_retcode(sol)
 
         # Check event effects via the jump in X across each tstop
@@ -1489,7 +1490,7 @@ end
         jprob = JumpProblem(
             jsys,
             [X => 10.0, k => 0.5, σ_noise => 0.01, t1 => 1.0, t2 => 2.0],
-            (0.0, 5.0); rng
+            (0.0, 5.0)
         )
 
         @test jprob.prob isa SDEProblem
@@ -1499,7 +1500,7 @@ end
         @test !haskey(jprob.prob.kwargs, :tstops)
         @test Set(jprob.kwargs[:tstops](jprob.prob.p, (0.0, 5.0))) == Set([1.0, 3.0])
 
-        sol = solve(jprob, SOSRI())
+        sol = solve(jprob, SOSRI(); rng)
         @test SciMLBase.successful_retcode(sol)
 
         # Events at t1=1.0 and t1+t2=3.0 should fire
@@ -1524,13 +1525,13 @@ end
 
         jprob = JumpProblem(
             jsys, [X => 1000, k => 0.1, t1 => 3.0],
-            (0.0, 10.0); aggregator = Direct(), rng
+            (0.0, 10.0); aggregator = Direct()
         )
 
         tstop_vals = jprob.kwargs[:tstops](jprob.prob.p, (0.0, 10.0))
         @test Set(tstop_vals) == Set(3.0:3.0:10.0)
 
-        sol = solve(jprob, SSAStepper())
+        sol = solve(jprob, SSAStepper(); rng)
         @test SciMLBase.successful_retcode(sol)
 
         # Events should fire at t=3.0 (+100), t=6.0 (+200), t=9.0 (+300)
@@ -1556,14 +1557,14 @@ end
 
         jprob = JumpProblem(
             jsys, [X => 1000, k => 0.1, t1 => 2.0, t2 => 5.0],
-            (0.0, 10.0); aggregator = Direct(), rng
+            (0.0, 10.0); aggregator = Direct()
         )
 
         tstop_vals = jprob.kwargs[:tstops](jprob.prob.p, (0.0, 10.0))
         # t1=2.0 periodic → 2:2:10, t2=5.0 exact → [5.0]
         @test Set(tstop_vals) == Set(vcat(collect(2.0:2.0:10.0), 5.0))
 
-        sol = solve(jprob, SSAStepper())
+        sol = solve(jprob, SSAStepper(); rng)
         @test SciMLBase.successful_retcode(sol)
 
         # Event at t==t1=2.0 should fire (periodic tstop hits t=2.0)
@@ -1583,7 +1584,7 @@ end
 
         err = @test_throws ArgumentError JumpProblem(
             jsys, [X => 100, k => 1.0], (0.0, 10.0);
-            aggregator = Direct(), rng, tstops = [1.0, 2.0]
+            aggregator = Direct(), tstops = [1.0, 2.0]
         )
         @test contains(
             err.value.msg,
@@ -1600,11 +1601,11 @@ end
 
         jprob = JumpProblem(
             jsys, [X => 100, k => 1.0], (0.0, 10.0);
-            aggregator = Direct(), rng
+            aggregator = Direct()
         )
         @test !haskey(jprob.kwargs, :tstops)
 
-        sol = solve(jprob, SSAStepper())
+        sol = solve(jprob, SSAStepper(); rng)
         @test SciMLBase.successful_retcode(sol)
     end
 end
@@ -1625,18 +1626,42 @@ end
     ps = [:k => 6.0]
     tspan = (0.0, 10.0)
 
+    # working rates of the aggregator, filled from the problem's parameters at `init`
+    function working_rate(jprob)
+        init(jprob, SSAStepper())
+        return jprob.discrete_jump_aggregation.maj_rates[1]
+    end
+
     jprob = JumpProblem(js, [u0; ps], tspan)
     # Contract: rescale_rates_on_update must be false for MTK-constructed MAJ
     @test jprob.massaction_jump.rescale_rates_on_update == false
-    @test jprob.massaction_jump.scaled_rates[1] ≈ 6.0 / factorial(3)  # 1.0
+    @test working_rate(jprob) ≈ 6.0 / factorial(3)  # 1.0
 
     # remake
     jprob2 = remake(jprob; p = [:k => 12.0])
-    @test jprob2.massaction_jump.scaled_rates[1] ≈ 12.0 / factorial(3)  # 2.0, NOT 2.0/6
+    @test working_rate(jprob2) ≈ 12.0 / factorial(3)  # 2.0, NOT 2.0/6
+    # remade problems share the original's jump state, so re-initializing the original
+    # refills the shared rates from the original's own parameters
+    @test working_rate(jprob) ≈ 6.0 / factorial(3)
 
     # remake round-trip
     jprob3 = remake(jprob2; p = [:k => 6.0])
-    @test jprob3.massaction_jump.scaled_rates[1] ≈ 6.0 / factorial(3)
+    @test working_rate(jprob3) ≈ 6.0 / factorial(3)
+
+    # problems built from one system have independent rates
+    jprob4 = JumpProblem(js, [u0; :k => 12.0], tspan)
+    @test working_rate(jprob4) ≈ 12.0 / factorial(3)
+    @test working_rate(jprob) ≈ 6.0 / factorial(3)
+    @test jprob4.discrete_jump_aggregation.maj_rates[1] ≈ 12.0 / factorial(3)
+
+    # the mapper fills a destination without mutating the definition or parameters
+    maj_def = jprob.massaction_jump
+    params = copy(jprob.ps[[:k]])
+    dest = zeros(1)
+    maj_def.param_mapper(dest, maj_def, parameter_values(jprob))
+    @test dest[1] ≈ 6.0 / factorial(3)
+    @test maj_def.scaled_rates === nothing
+    @test jprob.ps[[:k]] == params
 
     # callback with reset_aggregated_jumps!
     jprob_cb = JumpProblem(
@@ -1650,14 +1675,195 @@ end
     end
     cb = DiscreteCallback(condit, affect!)
     sol = solve(jprob_cb, SSAStepper(); tstops = [100.0], callback = cb)
-    @test jprob_cb.massaction_jump.scaled_rates[1] ≈ 24.0 / factorial(3)  # 4.0
+    @test jprob_cb.discrete_jump_aggregation.maj_rates[1] ≈ 24.0 / factorial(3)  # 4.0
 
     # symbolic indexing on integrator
     jprob_integ = JumpProblem(js, [u0; ps], tspan)
     integ = init(jprob_integ, SSAStepper())
     integ.ps[:k] = 18.0
     reset_aggregated_jumps!(integ)
-    @test jprob_integ.massaction_jump.scaled_rates[1] ≈ 18.0 / factorial(3)  # 3.0
+    @test jprob_integ.discrete_jump_aggregation.maj_rates[1] ≈ 18.0 / factorial(3)  # 3.0
+end
+
+# Pre-scaled nonlinear mass-action rates must be filled from each problem's current
+# parameters in common workflows. Each MTK solve is compared, trajectory by trajectory, with
+# the same model built directly with JumpProcesses from the expected scaled rates.
+@testset "Scaled mass-action rates in sequential, remade, and ensemble solves" begin
+    @parameters k1 k2 k3 k4
+    @variables A(t) B(t) C(t)
+    jumps = [
+        SymbolicMassActionJump(k1 / 2, [A => 2], [A => -2, B => 1]),  # 2A --> B
+        SymbolicMassActionJump(k2, [A => 1, B => 1], [A => -1, B => -1, C => 1]),  # A + B --> C
+        SymbolicMassActionJump(k3 * k4 / 6, [C => 3], [C => -3, A => 1]),  # 3C --> A
+        SymbolicMassActionJump(k4, [0 => 1], [A => 1]),  # 0 --> A
+    ]
+    @named jsys = JumpSystem(jumps, t, [A, B, C], [k1, k2, k3, k4])
+    jsys = complete(jsys)
+    params(v) = [k1 => v[1], k2 => v[2], k3 => v[3], k4 => v[4]]
+    scaled_rates(v) = [v[1] / 2, v[2], v[3] * v[4] / 6, v[4]]
+    # dyadic values, so the scaled rates are exact however they are evaluated
+    v1 = [0.5, 0.03125, 0.375, 2.0]
+    v2 = [1.0, 0.0625, 0.75, 4.0]
+    tspan = (0.0, 2.0)
+    saveat = 0.25
+    jprob = JumpProblem(
+        jsys, [[A => 40, B => 10, C => 12]; params(v1)], tspan;
+        aggregator = Direct(), save_positions = (false, false)
+    )
+
+    # the reference: JumpProcesses' own problem with the expected scaled rates
+    maj = jprob.massaction_jump
+    function reference(v)
+        refmaj = MassActionJump(
+            scaled_rates(v), maj.reactant_stoch, maj.net_stoch; scale_rates = false
+        )
+        dprob = DiscreteProblem(copy(jprob.prob.u0), tspan)
+        return JumpProblem(dprob, Direct(), refmaj; save_positions = (false, false))
+    end
+    same_paths(sol1, sol2) = sol1.t == sol2.t && sol1.u == sol2.u
+    function working_rates(prob)
+        init(prob, SSAStepper())
+        return prob.discrete_jump_aggregation.maj_rates
+    end
+
+    # the usual parameter object of a JumpProblem over a DiscreteProblem
+    @test jprob.prob isa DiscreteProblem
+    @test jprob.prob.p isa MTKParameters
+    @test working_rates(jprob) == scaled_rates(v1)
+
+    # sequential solves of one problem
+    for seed in 1:3
+        sol = solve(jprob, SSAStepper(); saveat, rng = StableRNG(seed))
+        @test SciMLBase.successful_retcode(sol)
+        ref = solve(reference(v1), SSAStepper(); saveat, rng = StableRNG(seed))
+        @test same_paths(sol, ref)
+    end
+
+    # parameters set in place take effect at the next solve
+    setp(jprob, [k1, k2, k3, k4])(jprob, v2)
+    @test working_rates(jprob) == scaled_rates(v2)
+    sol = solve(jprob, SSAStepper(); saveat, rng = StableRNG(4))
+    ref = solve(reference(v2), SSAStepper(); saveat, rng = StableRNG(4))
+    @test same_paths(sol, ref)
+
+    # a remade problem is initialized from its own parameters. It shares the original's
+    # jump state, so re-initializing the original refills the shared rates from the
+    # original's parameters.
+    jprob1 = remake(jprob; p = params(v1))
+    @test working_rates(jprob1) == scaled_rates(v1)
+    sol = solve(jprob1, SSAStepper(); saveat, rng = StableRNG(5))
+    ref = solve(reference(v1), SSAStepper(); saveat, rng = StableRNG(5))
+    @test same_paths(sol, ref)
+    @test working_rates(jprob) == scaled_rates(v2)
+
+    # ensembles, serial and threaded
+    trajectories = 8
+    vs = [isodd(i) ? v1 : v2 for i in 1:trajectories]
+    ref_default = EnsembleProblem(reference(v2))
+    ref_varying = EnsembleProblem(
+        reference(v1); prob_func = (prob, ctx) -> reference(vs[ctx.sim_id])
+    )
+    # per-trajectory StableRNGs, seeded from the ensemble's master StableRNG
+    rng_func = ctx -> StableRNG(ctx.sim_seed)
+    for alg in (EnsembleSerial(), EnsembleThreads())
+        # the default `prob_func` reuses the problem, or one copy per task
+        sols = solve(
+            EnsembleProblem(jprob), SSAStepper(), alg; trajectories, saveat,
+            rng = StableRNG(6), rng_func
+        )
+        refs = solve(
+            ref_default, SSAStepper(), EnsembleSerial(); trajectories, saveat,
+            rng = StableRNG(6), rng_func
+        )
+        @test all(SciMLBase.successful_retcode, sols.u)
+        @test all(map(same_paths, sols.u, refs.u))
+
+        # per-trajectory parameters through `remake`
+        eprob = EnsembleProblem(
+            jprob; prob_func = (prob, ctx) -> remake(prob; p = params(vs[ctx.sim_id]))
+        )
+        sols = solve(
+            eprob, SSAStepper(), alg; trajectories, saveat, rng = StableRNG(7), rng_func
+        )
+        refs = solve(
+            ref_varying, SSAStepper(), EnsembleSerial(); trajectories, saveat,
+            rng = StableRNG(7), rng_func
+        )
+        @test all(SciMLBase.successful_retcode, sols.u)
+        @test all(map(same_paths, sols.u, refs.u))
+    end
+end
+
+# The compiled rate mapper receives whatever parameter object the integrator holds. Check
+# exact scaled rates, before and after a parameter update, for the despecialized parameters
+# of a hybrid ODE integrator and for the plain parameter vector of a nonsplit system.
+@testset "Scaled mass-action rates with other parameter representations" begin
+    @parameters k1 k2 d
+    @variables A(t) B(t) C(t)
+    jumps = [
+        SymbolicMassActionJump(k1 / 6, [A => 3], [A => -3, B => 1]),  # 3A --> B
+        SymbolicMassActionJump(k1 * k2 / 2, [A => 2, B => 1], [A => -2, B => -1]),  # 2A + B --> 0
+    ]
+    scaled_rates(v) = [v[1] / 6, v[1] * v[2] / 2]
+    # dyadic values, so the scaled rates are exact however they are evaluated
+    v1 = [3.0, 0.5]
+    v2 = [12.0, 0.25]
+
+    # hybrid ODE integrator without variable-rate jumps, under an explicit (deprecated)
+    # `AutoDespecialize`: `DespecializedParameters`
+    hybrid = mtkcompile(
+        System(
+            [D(A) ~ 0, D(B) ~ 0, D(C) ~ -d * C], t, [A, B, C], [k1, k2, d];
+            jumps, name = :hybrid
+        )
+    )
+    jprob = @test_deprecated JumpProblem{true, SciMLBase.AutoDespecialize}(
+        hybrid, [A => 20, B => 10, C => 1.0, k1 => v1[1], k2 => v1[2], d => 1.0],
+        (0.0, 1.0)
+    )
+    integ = init(jprob, Tsit5())
+    @test integ.p isa SciMLBase.DespecializedParameters
+    @test jprob.discrete_jump_aggregation.maj_rates == scaled_rates(v1)
+    setp(integ, [k1, k2])(integ, v2)
+    reset_aggregated_jumps!(integ)
+    @test jprob.discrete_jump_aggregation.maj_rates == scaled_rates(v2)
+
+    # nonsplit system: a plain parameter vector
+    @named jsys = JumpSystem(jumps, t, [A, B], [k1, k2])
+    jsys = complete(jsys; split = false)
+    jprob = JumpProblem(
+        jsys, [A => 20, B => 10, k1 => v1[1], k2 => v1[2]], (0.0, 1.0);
+        aggregator = Direct()
+    )
+    integ = init(jprob, SSAStepper())
+    @test integ.p isa Vector{Float64}
+    @test jprob.discrete_jump_aggregation.maj_rates == scaled_rates(v1)
+    setp(integ, [k1, k2])(integ, v2)
+    reset_aggregated_jumps!(integ)
+    @test jprob.discrete_jump_aggregation.maj_rates == scaled_rates(v2)
+end
+
+@testset "JumpProblem rejects a constructor RNG" begin
+    @parameters k
+    @variables X(t)
+    @named jsys = JumpSystem([SymbolicMassActionJump(k, [X => 1], [X => -1])], t, [X], [k])
+    jsys = complete(jsys)
+    err = @test_throws ArgumentError JumpProblem(
+        jsys, [X => 10, k => 1.0], (0.0, 1.0); rng = StableRNG(1)
+    )
+    @test occursin("Pass `rng` to `solve` or `init`", err.value.msg)
+end
+
+# The rate mapper runs at every `init`, including for systems without parameters.
+@testset "MassActionJumps without parameters" begin
+    @variables X(t)
+    maj = SymbolicMassActionJump(2.0, [0 => 1], [X => 1])
+    @named js = JumpSystem([maj], t, [X], [])
+    js = complete(js)
+    jprob = JumpProblem(js, [X => 0], (0.0, 10.0); aggregator = Direct())
+    init(jprob, SSAStepper())
+    @test jprob.discrete_jump_aggregation.maj_rates == [2.0]
+    @test SciMLBase.successful_retcode(solve(jprob, SSAStepper(); rng))
 end
 
 @testset "JumpSystem rejects rescale_rates_on_update = true" begin
@@ -1679,6 +1885,22 @@ end
     )
 end
 
+@testset "JumpProblems built from the same system have the same type" begin
+    @parameters β γ
+    @variables S(t) I(t) R(t)
+    j₁ = ConstantRateJump(β * S * I, [S ~ Pre(S) - 1, I ~ Pre(I) + 1])
+    j₂ = VariableRateJump(γ * I * (1 + t / 100), [I ~ Pre(I) - 1, R ~ Pre(R) + 1])
+    op = [S => 999, I => 1, R => 0, β => 0.1 / 1000, γ => 0.01]
+    # a new type for each build makes the solver recompile for each new problem
+    for jumps in ([j₁], [j₁, j₂])
+        @named js = JumpSystem(jumps, t, [S, I, R], [β, γ])
+        js = complete(js)
+        jprob1 = JumpProblem(js, op, (0.0, 250.0); aggregator = Direct())
+        jprob2 = JumpProblem(js, op, (0.0, 250.0); aggregator = Direct())
+        @test typeof(jprob1) == typeof(jprob2)
+    end
+end
+
 @testset "Implicit affect on an SSA integrator" begin
     @parameters d
     @variables A(t) B(t) Bobs(t)
@@ -1689,11 +1911,77 @@ end
     @named js = JumpSystem([j], t, [A, B], [d], observed = [Bobs ~ 2 * B])
     js = complete(js)
     jprob = JumpProblem(
-        js, [A => 100.0, B => 3.0, d => 1.0], (0.0, 10.0); aggregator = Direct(), rng
+        js, [A => 100.0, B => 3.0, d => 1.0], (0.0, 10.0); aggregator = Direct()
     )
 
-    sol = solve(jprob, SSAStepper())
+    sol = solve(jprob, SSAStepper(); rng)
     @test SciMLBase.successful_retcode(sol)
     @test sol[A][end] < sol[A][1]
     @test all(sol[Bobs] .≈ 2 .* sol[B])
+end
+
+@testset "vr_aggregator is not forwarded to the inner problem" begin
+    @variables A(t)
+    @parameters k
+    vrj = VariableRateJump(k * (1 + sin(t)), [A ~ Pre(A) + 1])
+    @named vrjsys = JumpSystem([vrj], t, [A], [k])
+    vrjsys = complete(vrjsys)
+    for vr_aggregator in (VR_FRM(), VR_Direct(), VR_DirectFW())
+        jprob = JumpProblem(vrjsys, [A => 0, k => 1.0], (0.0, 10.0); vr_aggregator)
+        @test jprob.prob isa ODEProblem
+        @test !haskey(jprob.prob.kwargs, :vr_aggregator)
+        sol = solve(jprob, Tsit5(); rng)
+        @test SciMLBase.successful_retcode(sol)
+        @test sol[A][end] > 0
+    end
+
+    crj = ConstantRateJump(k * A, [A ~ Pre(A) - 1])
+    @named crjsys = JumpSystem([crj], t, [A], [k])
+    crjsys = complete(crjsys)
+    jprob = JumpProblem(
+        crjsys, [A => 100, k => 0.1], (0.0, 10.0);
+        aggregator = Direct(), vr_aggregator = VR_Direct()
+    )
+    @test jprob.prob isa DiscreteProblem
+    @test !haskey(jprob.prob.kwargs, :vr_aggregator)
+    @test SciMLBase.successful_retcode(solve(jprob, SSAStepper(); rng))
+end
+
+@testset "JumpProblem defaults to FullSpecialize" begin
+    @variables X(t) = 10.0 Z(t) = 1.0
+    @parameters k = 1.0 b = 1.0
+    @brownians w
+    maj = SymbolicMassActionJump(k, [X => 1], [X => -1])
+    crj = ConstantRateJump(k * X / (1 + X), [X ~ Pre(X) + 1])
+    vrj = VariableRateJump(k * (1 + sin(t)), [Z ~ Pre(Z) + 1])
+    @mtkcompile odesys = System([D(X) ~ 0, D(Z) ~ b - k * Z], t; jumps = [maj, crj])
+    @mtkcompile sdesys = System([D(X) ~ 0, D(Z) ~ b - k * Z + w], t; jumps = [maj, crj])
+    @mtkcompile vrjsys = System([D(Z) ~ b - k * Z], t; jumps = [vrj])
+    tspan = (0.0, 5.0)
+
+    full = SciMLBase.FullSpecialize
+    @test SciMLBase.specialization(JumpProblem(odesys, [], tspan).prob.f) === full
+    @test SciMLBase.specialization(JumpProblem{true}(odesys, [], tspan).prob.f) === full
+    @test SciMLBase.specialization(JumpProblem(sdesys, [], tspan).prob.f) === full
+    # VR_FRM rebuilds the ODE function, so check the VRJ system with VR_Direct
+    jprob = JumpProblem(vrjsys, [], tspan; vr_aggregator = VR_Direct())
+    @test SciMLBase.specialization(jprob.prob.f) === full
+
+    # FunctionWrapper-based aggregators type their wrappers on `typeof(prob.p)`, so they
+    # threw a `MethodError` when solving ODE-coupled problems under `AutoDespecialize`.
+    for aggregator in (DirectFW(), SortingDirect(), NRM(), RSSA(), RSSACR(), Coevolve())
+        jprob = JumpProblem(odesys, [], tspan; aggregator)
+        @test SciMLBase.successful_retcode(solve(jprob, Tsit5(); rng))
+    end
+    for vr_aggregator in (VR_Direct(), VR_DirectFW())
+        jprob = JumpProblem(vrjsys, [], tspan; vr_aggregator)
+        @test SciMLBase.successful_retcode(solve(jprob, Tsit5(); rng))
+    end
+
+    # Other specializations are deprecated but still honored
+    jprob = @test_deprecated JumpProblem{true, SciMLBase.AutoDespecialize}(
+        odesys, [], tspan; aggregator = Direct()
+    )
+    @test SciMLBase.specialization(jprob.prob.f) === SciMLBase.AutoDespecialize
+    @test SciMLBase.successful_retcode(solve(jprob, Tsit5(); rng))
 end

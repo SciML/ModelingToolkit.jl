@@ -543,3 +543,24 @@ end
     @test err isa ArgumentError
     @test occursin("unknowns", sprint(showerror, err))
 end
+
+@testset "has_any_limited finds a node among array equations" begin
+    @variables v(t)[1:3]
+    @named plain = System([D(v[i]) ~ -v[i] for i in 1:3], t)
+    @test !has_any_limited(complete(plain))
+    @named sys = System([D(v[1]) ~ -v[1], D(v[2]) ~ -limited(v[2], 2.0), D(v[3]) ~ -v[3]], t)
+    @test has_any_limited(complete(sys))
+end
+
+@testset "has_any_limited finds a node on an equation lhs" begin
+    @variables x
+    @named sys = System([limited(x, 2.0) ~ 1])
+    @test has_any_limited(sys)
+end
+
+@testset "has_any_limited finds a node in a subsystem of an unflattened parent" begin
+    @variables x
+    @named child = System([0 ~ limited(x, 2.0) - 1])
+    @named parent = System(Equation[]; systems = [child])
+    @test has_any_limited(parent)
+end

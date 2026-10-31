@@ -5,6 +5,7 @@ using SparseArrays
 using SymbolicUtils: unwrap, iscall, operation
 using ModelingToolkitBase: t_nounits as t, D_nounits as D
 using Test
+import Symbolics
 
 @testset "`generate_custom_function`" begin
     @variables x(t) y(t)[1:3]
@@ -399,4 +400,33 @@ end
         sys, ModelingToolkitBase.SymbolicADDisallowed, "test reason"
     )
     @test_throws ArgumentError calculate_paramjac(sys)
+end
+
+@testset "public unsplit array caches" begin
+    for with_parameter in (false, true)
+        @testset "with_parameter=$with_parameter" begin
+            @variables t x(t) cache_a[1:2] cache_b[1:2]
+            @parameters rate
+            ps = with_parameter ? [rate] : empty([rate])
+            sys = complete(
+                System(Equation[], t, [x], ps; name = :sys);
+                split = false, add_initial_parameters = false
+            )
+            p = with_parameter ? [2.0] : Float64[]
+            expression = x + t + (with_parameter ? rate : 0)
+            expected_a = with_parameter ? 25.0 : 23.0
+            expected_b = with_parameter ? 49.0 : 47.0
+            f = generate_custom_function(
+                sys, expression + sum(cache_a);
+                cachesyms = (Symbolics.value.(collect(cache_a)),), expression = Val{false}
+            )
+            @test f([2.0], p, [7.0, 11.0], 3.0) == expected_a
+            g = generate_custom_function(
+                sys, expression + sum(cache_b);
+                cachesyms = (Symbolics.value.(collect(cache_b)),), expression = Val{false}
+            )
+            @test g([2.0], p, [19.0, 23.0], 3.0) == expected_b
+            @test f([2.0], p, [7.0, 11.0], 3.0) == expected_a
+        end
+    end
 end

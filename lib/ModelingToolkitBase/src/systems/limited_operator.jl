@@ -162,6 +162,13 @@ observed equations.
 """
 function has_any_limited(sys::AbstractSystem)
     ir = get_irstructure(sys)
+    # As in `has_any_homotopy`: with no `limited` node in `ir`, the per-equation queries,
+    # which each allocate a visited set the size of `ir`, cannot find one.
+    for eqs in (equations(sys), observed(sys)), eq in eqs
+        SU.populate_ir!(ir, eq.lhs)
+        SU.populate_ir!(ir, eq.rhs)
+    end
+    any(__has_limited_predicate, ir.symbols) || return false
     return has_limited_in_equations(ir, equations(sys)) ||
         has_limited_in_equations(ir, observed(sys))
 end

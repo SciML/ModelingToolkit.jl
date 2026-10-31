@@ -1,8 +1,16 @@
+const JUMPPROBLEM_SPECIALIZATION_DOCS = """
+Unlike the other problem constructors, `JumpProblem` defaults to
+`specialize = SciMLBase.FullSpecialize`. JumpProcesses' aggregators need concrete
+parameters: under `SciMLBase.AutoDespecialize`, most of them throw when the jumps are
+coupled to an ODE, and the others run much slower. Passing a specialization other than
+`SciMLBase.FullSpecialize` is deprecated.
+"""
+
 # `tspan` has no default here, unlike every other time-dependent problem constructor:
 # `JumpProcesses` already defines `JumpProblem(prob, jumps...)`, so a two-argument method
 # with an untyped `op` is ambiguous with it (Aqua reports 14 ambiguities).
-"""$(problem_docstring(JumpProcesses.JumpProblem, "inner SciMLFunction", true; init = false, tspan_default = false))"""
-@fallback_iip_specialize function JumpProcesses.JumpProblem{iip, spec}(
+"""$(problem_docstring(JumpProcesses.JumpProblem, "inner SciMLFunction", true; init = false, tspan_default = false, extra_body = JUMPPROBLEM_SPECIALIZATION_DOCS))"""
+@fallback_iip_specialize SciMLBase.FullSpecialize function JumpProcesses.JumpProblem{iip, spec}(
         sys::System, op, tspan::Union{Tuple, Nothing};
         check_compatibility = true, eval_expression = false, eval_module = @__MODULE__,
         checkbounds = false, aggregator = JumpProcesses.NullAggregator(),
@@ -10,11 +18,28 @@
     ) where {iip, spec}
     check_complete(sys, JumpProblem)
     check_compatibility && check_compatible_system(JumpProblem, sys)
+    if spec !== SciMLBase.FullSpecialize
+        Base.depwarn(
+            "`JumpProblem{iip, $spec}(sys::System, ...)` is deprecated: `JumpProblem` " *
+                "for a `System` will only support `SciMLBase.FullSpecialize`, its default. " *
+                "Use `JumpProblem(sys, op, tspan)` or `JumpProblem{iip}(sys, op, tspan)`.",
+            :JumpProblem
+        )
+    end
     if haskey(kwargs, :tstops)
         throw(
             ArgumentError(
                 "Passing `tstops` directly to `JumpProblem(::System, ...)` is not supported. " *
                     "Define tstops on the `System` via the `tstops` keyword instead."
+            )
+        )
+    end
+    # `rng` is kept as a named keyword so it never reaches the wrapped problem.
+    if rng !== nothing
+        throw(
+            ArgumentError(
+                "`rng` is no longer a keyword argument for `JumpProblem`. Pass `rng` to " *
+                    "`solve` or `init` instead, e.g. `solve(jprob, SSAStepper(); rng = my_rng)`."
             )
         )
     end
@@ -49,7 +74,9 @@
             )
             f = (du, u, p, t) -> (du .= 0; nothing)
             df = ODEFunction{true, spec}(f; sys, observed = observedfun)
-            prob = ODEProblem{true}(df, u0, tspan, p; kwargs...)
+            prob = ODEProblem{true}(
+                df, u0, tspan, p; _solver_kwargs(ODEProblem, filter_kwargs(kwargs))...
+            )
         end
     else
         _f, u0,
@@ -67,7 +94,9 @@
             f; sys = sys, observed = observedfun,
             initialization_data = get(_f.kwargs, :initialization_data, nothing)
         )
-        prob = DiscreteProblem(df, u0, tspan, p; kwargs...)
+        prob = DiscreteProblem(
+            df, u0, tspan, p; _solver_kwargs(DiscreteProblem, filter_kwargs(kwargs))...
+        )
     end
 
     # Create SymbolicTstops for all paths and forward via JumpProblem kwargs.
@@ -80,13 +109,8 @@
     dvs = flat_unknowns(sys)
     unknowntoid = Dict(value(unknown) => i for (i, unknown) in enumerate(dvs))
     js = jumps(sys)
-    invttype = prob.tspan[1] === nothing ? Float64 : typeof(1 / prob.tspan[2])
-
-    # handling parameter substitution and empty param vecs
-    p = (prob.p isa SciMLBase.NullParameters || prob.p === nothing) ? Num[] : prob.p
-
-    majpmapper = JumpSysMajParamMapper(sys, p; jseqs = js, rateconsttype = invttype)
     _majs = Vector{MassActionJump}(filter(x -> x isa MassActionJump, js))
+    majpmapper = JumpSysMajParamMapper(sys, _majs; eval_expression, eval_module)
     _crjs = Vector{ConstantRateJump}(filter(x -> x isa ConstantRateJump, js))
     vrjs = Vector{VariableRateJump}(filter(x -> x isa VariableRateJump, js))
     majs = isempty(_majs) ? nothing : assemble_maj(_majs, unknowntoid, majpmapper)
@@ -122,20 +146,16 @@
     op_processed = operating_point_preprocess(sys, op)
     cbs = process_events(
         sys; callback, eval_expression, eval_module, op = op_processed, reset_jumps = true,
-        tspan
+        tspan, mtk_verbosity = _problem_verbosity(kwargs)
     )
 
-    if rng !== nothing
-        kwargs = (; kwargs..., rng)
-    end
     if tstops !== nothing
         kwargs = (; kwargs..., tstops)
     end
-    # MTK requires pre-scaled rate expressions; never ask JumpProcesses to rescale.
     return JumpProblem(
         prob, aggregator, jset; dep_graph = jtoj, vartojumps_map = vtoj,
-        jumptovars_map = jtov, scale_rates = false, nocopy = true,
-        callback = cbs, save_positions, kwargs...
+        jumptovars_map = jtov, nocopy = true,
+        callback = cbs, save_positions, _solver_kwargs(JumpProblem, kwargs)...
     )
 end
 
@@ -150,94 +170,38 @@ function check_compatible_system(T::Union{Type{JumpProblem}}, sys::System)
 end
 
 ###################### parameter mapper ###########################
-struct JumpSysMajParamMapper{U, V, W}
-    paramexprs::U     # the parameter expressions to use for each jump rate constant
-    sympars::V        # parameters(sys) from the underlying JumpSystem
-    subdict::Any           # mapping from an element of parameters(sys) to its current numerical value
+# Fills the working rate constants of the `MassActionJump` built from a system. The rate
+# expressions are already scaled, so they are evaluated at the current parameters without
+# further scaling. They are compiled once, when the problem is built, so each fill is a
+# plain function call; the mapper holds no mutable state, so problems may share it.
+struct JumpSysMajParamMapper{F}
+    ratefun::F    # ratefun(dest, p) writes each jump's rate constant at parameters p
 end
 
-function JumpSysMajParamMapper(js::System, p; jseqs = nothing, rateconsttype = Float64)
-    eqs = (jseqs === nothing) ? jumps(js) : jseqs
-    majs = MassActionJump[x for x in eqs if x isa MassActionJump]
-    paramexprs = [maj.scaled_rates for maj in majs]
-    psyms = reduce(vcat, reorder_parameters(js); init = SymbolicT[])
-    paramdict = Dict(unwrap(k) => unwrap(v) for (k, v) in zip(psyms, reduce(vcat, p; init = rateconsttype[])))
-    return JumpSysMajParamMapper{typeof(paramexprs), typeof(psyms), rateconsttype}(
-        paramexprs,
-        psyms,
-        paramdict
+function JumpSysMajParamMapper(
+        js::System, majs; eval_expression = false, eval_module = @__MODULE__
     )
-end
-
-function updateparams!(
-        ratemap::JumpSysMajParamMapper{U, V, W},
-        params
-    ) where {U <: AbstractArray, V <: AbstractArray, W}
-    for (i, p) in enumerate(params)
-        sympar = ratemap.sympars[i]
-        ratemap.subdict[sympar] = p
-    end
-    return nothing
-end
-
-function updateparams!(
-        ratemap::JumpSysMajParamMapper{U, V, W},
-        params::MTKParameters
-    ) where {U <: AbstractArray, V <: AbstractArray, W}
-    for (i, p) in enumerate(ArrayPartition(params...))
-        sympar = ratemap.sympars[i]
-        ratemap.subdict[sympar] = p
-    end
-    return nothing
-end
-
-function updateparams!(
-        ratemap::JumpSysMajParamMapper{U, V, W},
-        params::SciMLBase.DespecializedParameters
-    ) where {U <: AbstractArray, V <: AbstractArray, W}
-    return updateparams!(ratemap, SciMLBase.unwrap_parameters(params))
-end
-
-function updateparams!(
-        ::JumpSysMajParamMapper{U, V, W},
-        params::Nothing
-    ) where {U <: AbstractArray, V <: AbstractArray, W}
-    return nothing
-end
-
-# update a maj with parameter vectors
-function (ratemap::JumpSysMajParamMapper{U, V, W})(
-        maj::MassActionJump, newparams;
-        scale_rates = false,
-        kwargs...
-    ) where {
-        U <: AbstractArray,
-        V <: AbstractArray, W,
-    }
-    updateparams!(ratemap, newparams)
-    for i in 1:get_num_majumps(maj)
-        maj.scaled_rates[i] = convert(
-            W,
-            value(
-                substitute(
-                    ratemap.paramexprs[i],
-                    ratemap.subdict; fold = Val(true)
-                )
+    rates = [unwrap(maj.scaled_rates) for maj in majs]
+    rps = reorder_parameters(js)
+    _, ratefun = build_function_wrapper(
+        js, rates, collect(Any, rps),
+        BuildFunctionWrapperOptions(;
+            p_start = 1, p_end = length(rps),
+            codegen_function_options = Symbolics.CodegenFunctionOptions(;
+                expression = Val{true}
             )
         )
-    end
-    # No scalerates! call — MTK requires pre-scaled rate expressions.
-    # The scale_rates kwarg is accepted but ignored for JumpProcesses API compatibility.
-    return nothing
+    )
+    ratefun = GeneratedFunctionWrapper{(1, 1, is_split(js))}(
+        Val{false}, nothing, ratefun; eval_expression, eval_module
+    )
+    return JumpSysMajParamMapper(ratefun)
 end
 
-# create the initial parameter vector for use in a MassActionJump
-function (ratemap::JumpSysMajParamMapper{U, V, W})(params) where {U <: AbstractArray, V <: AbstractArray, W}
-    updateparams!(ratemap, params)
-    return [
-        convert(W, value(substitute(paramexpr, ratemap.subdict; fold = Val(true))))
-            for paramexpr in ratemap.paramexprs
-    ]
+# fill `dest` with the rate constants at the parameter values `params`
+function (ratemap::JumpSysMajParamMapper)(dest, maj::MassActionJump, params)
+    ratemap.ratefun(dest, params)
+    return nothing
 end
 
 ##### MTK dispatches for Symbolic jumps #####
