@@ -1881,7 +1881,7 @@ function _static_initialization_buffer(prototype, values)
         return SVector{length(values), T}(values)
     elseif P <: StaticArray && isbitstype(T)
         return MVector{length(values), T}(values)
-    elseif P <: BitArray && T === Bool
+    elseif T === Bool && (P <: BitArray || (P <: BlockedArray && fieldtype(P, :blocks) <: BitArray))
         buffer = BitVector(undef, length(values))
         for (i, value) in enumerate(values)
             buffer[i] = value

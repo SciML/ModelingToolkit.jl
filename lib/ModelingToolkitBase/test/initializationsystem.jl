@@ -2106,6 +2106,23 @@ end
         @test sol(0.5; idxs = dbx) ≈ exp(-0.5) rtol = 1.0e-6
         @test sol[dbx][end] ≈ exp(-2.0) rtol = 1.0e-6
     end
+
+    @variables dqx(t)
+    @discretes dq(t)::Bool = true
+    dq_ev = ModelingToolkitBase.SymbolicDiscreteCallback(0.5, [dq ~ !Pre(dq)]; discrete_parameters = [dq])
+    @mtkcompile dq_sys = System(
+        [D(dqx) ~ ifelse(dq, -dqx, 0.0)], t;
+        initialization_eqs = [dqx^3 + dqx ~ 2], discrete_events = [dq_ev]
+    )
+    for spec in (SciMLBase.AutoSpecialize, SciMLBase.FullSpecialize)
+        prob = ODEProblem{true, spec}(dq_sys, [], (0.0, 0.75); guesses = [dqx => 0.5])
+        data = prob.f.initialization_data
+        @test typeof(data.initializeprobpmap(prob, data.initializeprob)) === typeof(prob.p)
+        sol = solve(prob, Tsit5(); abstol = 1.0e-10, reltol = 1.0e-10)
+        @test SciMLBase.successful_retcode(sol)
+        # x(0) = 1 decays at rate 1 until the flag flips off at t = 0.5, then stays put.
+        @test sol(0.75; idxs = dqx) ≈ exp(-0.5) rtol = 1.0e-6
+    end
 end
 
 @testset "Issue#3570, #3552: `Initial`s/guesses are copied to `u0` during `solve`/`init`" begin
