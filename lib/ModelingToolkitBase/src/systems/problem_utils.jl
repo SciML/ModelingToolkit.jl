@@ -302,9 +302,9 @@ function Base.showerror(io::IO, err::UnexpectedSymbolicValueInVarmap)
         `symbolic_u0 = true`. In case the initial conditions are not cyclic but \
         require more substitutions to resolve, increase `substitution_limit`. To report \
         cycles in initial conditions of unknowns/parameters, pass \
-        `warn_cyclic_dependency = true`. If the cycles are still not reported, you \
-        may need to pass a larger value for `circular_dependency_max_cycle_length` \
-        or `circular_dependency_max_cycles`.
+        `verbose = MTKVerbosity(cyclic_dependency = SciMLLogging.WarnLevel)`. If the \
+        cycles are still not reported, you may need to pass a larger value for \
+        `circular_dependency_max_cycle_length` or `circular_dependency_max_cycles`.
         """
     )
 end
@@ -601,30 +601,76 @@ Performs symbolic substitution on the values in `varmap` for the keys in `vars`,
 in `varmap`, it is ignored.
 """
 function evaluate_varmap!(varmap::AbstractDict{SymbolicT, SymbolicT}, vars; limit = 100, allow_symbolic = false)
+    # Array keys whose substitution changed nothing; no rule can apply to them later.
+    settled = Set{SymbolicT}()
     for k in vars
         arr, _ = split_indexed_var(unwrap(k))
+        arr in settled && continue
         v = get(varmap, arr, COMMON_NOTHING)
         v === COMMON_NOTHING && continue
         SU.isconst(v) && continue
-        varmap[arr] = fixpoint_sub(v, varmap; maxiters = limit, fold = Val(true), warn_maxiters = !allow_symbolic)
+        newv = fixpoint_sub(v, varmap; maxiters = limit, fold = Val(true), warn_maxiters = !allow_symbolic)
+        varmap[arr] = newv
+        isequal(newv, v) && push!(settled, arr)
     end
     return
+end
+
+# The buffer of `arr` if `k` is a scalar element `arr[idxs...]` with constant integer
+# indices of an array whose value is a constant array or an array literal, else `nothing`.
+function pending_element_buffer!(dd::PendingWritesWrapper, k::SymbolicT)
+    return Moshi.Match.@match k begin
+        BSImpl.Term(; f, args) && if f === getindex && has_const_int_indices(k) end => begin
+            SU.is_array_shape(SU.shape(k)) && return nothing
+            arr = args[1]
+            buffer = get(dd.buffers, arr, nothing)
+            buffer === nothing || return buffer
+            val = get(dd.base.dict, arr, COMMON_NOTHING)
+            val === COMMON_NOTHING && return nothing
+            # other array expressions keep `(expr)[i]` on first read so that rules for
+            # `expr` still apply
+            SU.isconst(val) || SU.iscall(val) && SU.operation(val) === SU.array_literal ||
+                return nothing
+            shape = SU.shape(val)
+            SU.is_array_shape(shape) && !(shape isa SU.Unknown) || return nothing
+            return dd.buffers[arr] = collect(val)
+        end
+        _ => return nothing
+    end
 end
 
 function evaluate_varmap!(
         ir::IRStructure{SymReal}, varmap::AtomicArrayDictSubstitutionWrapper, vars;
         limit = 100, allow_symbolic = false
     )
+    pending = PendingWritesWrapper(varmap)
     subber = Symbolics.FixpointSubstituter(
-        SU.IRSubstituter{true}(ir, varmap; filterer = Symbolics.FPSubFilterer{Nothing}());
+        SU.IRSubstituter{true}(ir, pending; filterer = Symbolics.FPSubFilterer{Nothing}());
         maxiters = limit, warn_maxiters = !allow_symbolic
     )
     for k in vars
+        k = unwrap(k)
+        buffer = pending_element_buffer!(pending, k)
+        if buffer !== nothing
+            idx = get_stable_index(k)
+            v = buffer[idx]::SymbolicT
+            if v !== varmap.default
+                if !SU.isconst(v)
+                    newv = subber(v)
+                    # substitution flushes the buffer if it reads this array
+                    pending_element_buffer!(pending, k)[idx] = newv
+                end
+                continue
+            end
+        end
+        # holes and every other kind of key take the ordinary path
+        flush_pending_writes!(pending)
         v = get(varmap, k, COMMON_NOTHING)
         v === COMMON_NOTHING && continue
         SU.isconst(v) && continue
         varmap[k] = subber(v)
     end
+    flush_pending_writes!(pending)
     return
 end
 
@@ -722,7 +768,7 @@ already contain that key.
 """
 function add_initials!(sys::AbstractSystem, op::SymmapT)
     for p in get_ps(sys)
-        haskey(op, p) && continue
+        get_possibly_indexed(op, p, COMMON_NOTHING) === COMMON_NOTHING || continue
         Moshi.Match.@match p begin
             BSImpl.Term(; f, args) && if f isa Initial end => begin
                 write_possibly_indexed_array!(op, p, COMMON_FALSE, COMMON_FALSE)
@@ -1317,14 +1363,12 @@ function MTKParametersReconstructor(
         Returns(())
     else
         ic = get_index_cache(dstsys)
-        buftypes = Tuple(
-            map(ic.nonnumeric_buffer_sizes) do bufsize
-                Vector{bufsize.type}
-            end
-        )
         # nonnumerics retain the assigned buffer type without narrowing
-        Base.Fix1(broadcast, _p_constructor) ∘
-            Base.Fix1(Broadcast.BroadcastFunction(call), buftypes) ∘ Tuple ∘ CopyParamsByTemplate(srcsys, syms[5]; kwargs...)
+        getters = Tuple(
+            NonnumericBufferGetter{Vector{bufsize.type}}(CopyParamsByTemplate(srcsys, buf; kwargs...))
+                for (bufsize, buf) in zip(ic.nonnumeric_buffer_sizes, syms[5])
+        )
+        NonnumericBuffersGetter(getters, _p_constructor)
     end
 
     # `DiffCache` buffers live in `caches` and are taken from the destination, not `src`.
@@ -1341,6 +1385,34 @@ end
 function call(f, args...)
     return f(args...)
 end
+
+"""
+    $(TYPEDEF)
+
+Getter for one nonnumeric buffer of an `MTKParametersReconstructor`: the values `getter` returns,
+converted to the buffer's type `T`.
+"""
+struct NonnumericBufferGetter{T, G}
+    getter::G
+end
+
+NonnumericBufferGetter{T}(getter::G) where {T, G} = NonnumericBufferGetter{T, G}(getter)
+
+(b::NonnumericBufferGetter{T})(src) where {T} = T(b.getter(src))
+
+"""
+    $(TYPEDEF)
+
+The nonnumeric portion of an `MTKParametersReconstructor`: a tuple of `NonnumericBufferGetter`s,
+one per nonnumeric buffer of the destination, each result passed to `p_constructor`. The result
+is a tuple of known length and types.
+"""
+struct NonnumericBuffersGetter{G <: Tuple, P}
+    getters::G
+    p_constructor::P
+end
+
+(nb::NonnumericBuffersGetter)(src) = map(g -> nb.p_constructor(g(src)), nb.getters)
 
 """
     $(TYPEDSIGNATURES)
@@ -2030,6 +2102,7 @@ function build_operating_point(sys::AbstractSystem, op; fast_path = false)
     map!(values(op)) do v
         v === COMMON_SENTINEL && return COMMON_NOTHING
         Symbolics.isarraysymbolic(v) || return v
+        is_numeric_const_array(v) && return v
         any(Base.Fix2(===, COMMON_SENTINEL) ∘ Base.Fix1(getindex, v), SU.stable_eachindex(v)) || return v
 
         new_v = map(SU.stable_eachindex(v)) do i
@@ -2082,6 +2155,12 @@ problem — none of which are meaningful to a `*Function` constructor on their o
 to resolve any `Symbol` keys in `guesses` to the corresponding symbolic variable of `sys`
 (via [`symbols_to_symbolics!`](@ref)) before `guesses` is converted to a `SymmapT`.
 
+The `verbosity::MTKVerbosity` field carries the diagnostic settings for problem
+construction. The keyword constructor assembles it from the `verbose` keyword (an
+`MTKVerbosity`, a `SciMLLogging` preset, or a `Bool`); the deprecated boolean keywords
+`warn_initialize_determined` and `warn_cyclic_dependency` remain accepted and, when
+explicitly passed, override the corresponding toggles.
+
 `expression` is a type parameter (matching `SciMLFunctionOptions`) so that `fn_opts` is
 concretely typed; `__process_SciMLProblem` itself never branches on it.
 
@@ -2098,7 +2177,7 @@ struct SciMLProblemOptions{expression}
     build_initializeprob::Bool
     implicit_dae::Bool
     guesses::SymmapT
-    warn_initialize_determined::Bool
+    verbosity::MTKVerbosity
     initialization_eqs::Vector{Equation}
     fully_determined::Union{Nothing, Bool}
     check_initialization_units::Bool
@@ -2107,7 +2186,6 @@ struct SciMLProblemOptions{expression}
     p_constructor::Any
     check_length::Bool
     symbolic_u0::Bool
-    warn_cyclic_dependency::Bool
     circular_dependency_max_cycle_length::Int
     circular_dependency_max_cycles::Int
     initsys_mtkcompile_kwargs::Any
@@ -2133,11 +2211,12 @@ function SciMLProblemOptions(
         # opts::SciMLProblemOptions)` always recomputes and overrides them from `op`.
         floatT = Float64, u0Type = Nothing, u0_eltype = nothing,
         build_initializeprob::Bool = false, implicit_dae::Bool = false, guesses = AnyDict(),
-        warn_initialize_determined::Bool = true, initialization_eqs = Equation[],
+        verbose = nothing, warn_initialize_determined = nothing,
+        initialization_eqs = Equation[],
         fully_determined = nothing, check_initialization_units::Bool = false,
         tofloat::Bool = true, u0_constructor = identity, p_constructor = identity,
         check_length::Bool = true, symbolic_u0::Bool = false,
-        warn_cyclic_dependency::Bool = false, circular_dependency_max_cycle_length,
+        warn_cyclic_dependency = nothing, circular_dependency_max_cycle_length,
         circular_dependency_max_cycles = 10, initsys_mtkcompile_kwargs = (;),
         substitution_limit = 100, use_scc::Bool = true, time_dependent_init::Bool,
         algebraic_only::Bool = false, missing_guess_value = default_missing_guess_value(),
@@ -2150,11 +2229,23 @@ function SciMLProblemOptions(
         symbols_to_symbolics!(sys, guesses)
         guesses = as_atomic_dict_with_defaults(Dict{SymbolicT, SymbolicT}(guesses), COMMON_NOTHING)
     end
+    verbosity = _route_problem_verbose(verbose)
+    # Deprecated boolean keywords override the corresponding toggles when explicitly
+    # passed (`nothing` = not passed).
+    verbosity = _deprecated_override_toggle(
+        verbosity, warn_initialize_determined,
+        :warn_initialize_determined, :SciMLProblemOptions,
+        _INITIALIZE_DETERMINED_TOGGLES...
+    )
+    verbosity = _deprecated_override_toggle(
+        verbosity, warn_cyclic_dependency, :warn_cyclic_dependency,
+        :SciMLProblemOptions, :cyclic_dependency => WarnLevel
+    )
     return SciMLProblemOptions{E}(
         fn_opts, floatT, u0Type, u0_eltype, build_initializeprob, implicit_dae, guesses,
-        warn_initialize_determined, initialization_eqs, fully_determined,
+        verbosity, initialization_eqs, fully_determined,
         check_initialization_units, tofloat, u0_constructor, p_constructor, check_length,
-        symbolic_u0, warn_cyclic_dependency, circular_dependency_max_cycle_length,
+        symbolic_u0, circular_dependency_max_cycle_length,
         circular_dependency_max_cycles, initsys_mtkcompile_kwargs, substitution_limit,
         use_scc, time_dependent_init, algebraic_only, missing_guess_value, allow_incomplete,
         is_initializeprob, is_steadystateprob, return_operating_point, init_compiler_options,
@@ -2199,9 +2290,9 @@ function maybe_build_initialization_problem(
         expression = Val{false}, kwargs...
     )
     (;
-        floatT, implicit_dae, warn_initialize_determined, initialization_eqs,
+        floatT, implicit_dae, initialization_eqs,
         fully_determined, check_initialization_units, u0_constructor, p_constructor,
-        warn_cyclic_dependency, circular_dependency_max_cycle_length,
+        circular_dependency_max_cycle_length,
         circular_dependency_max_cycles, initsys_mtkcompile_kwargs, use_scc,
         time_dependent_init, algebraic_only, missing_guess_value, allow_incomplete,
         is_steadystateprob,
@@ -2457,10 +2548,10 @@ Base.@nospecializeinfer function process_SciMLProblem(
         symbolic_u0 = false,
         build_initializeprob = supports_initialization(sys),
         implicit_dae = false, t = nothing, guesses = AnyDict(),
-        warn_initialize_determined = true, initialization_eqs = [],
+        verbose = nothing, warn_initialize_determined = nothing, initialization_eqs = [],
         eval_expression = false, eval_module = @__MODULE__, fully_determined = nothing,
         check_initialization_units = false, tofloat = true,
-        check_length = true, warn_cyclic_dependency = false,
+        check_length = true, warn_cyclic_dependency = nothing,
         circular_dependency_max_cycle_length = length(all_symbols(sys)),
         circular_dependency_max_cycles = 10, initsys_mtkcompile_kwargs = (;),
         substitution_limit = 100, use_scc = true, time_dependent_init = is_time_dependent(sys),
@@ -2475,7 +2566,7 @@ Base.@nospecializeinfer function process_SciMLProblem(
     opts = SciMLProblemOptions(
         sys;
         fn_opts, u0_eltype, build_initializeprob, implicit_dae, guesses,
-        warn_initialize_determined, initialization_eqs, fully_determined,
+        verbose, warn_initialize_determined, initialization_eqs, fully_determined,
         check_initialization_units, tofloat, u0_constructor, p_constructor, check_length,
         symbolic_u0, warn_cyclic_dependency, circular_dependency_max_cycle_length,
         circular_dependency_max_cycles, initsys_mtkcompile_kwargs, substitution_limit,
@@ -2522,9 +2613,9 @@ function __process_SciMLProblem(
     )
     (;
         fn_opts, floatT, u0Type, u0_eltype, build_initializeprob, implicit_dae, guesses,
-        warn_initialize_determined, initialization_eqs, fully_determined,
+        verbosity, initialization_eqs, fully_determined,
         check_initialization_units, tofloat, u0_constructor, p_constructor, check_length,
-        symbolic_u0, warn_cyclic_dependency, circular_dependency_max_cycle_length,
+        symbolic_u0, circular_dependency_max_cycle_length,
         circular_dependency_max_cycles, initsys_mtkcompile_kwargs, substitution_limit,
         use_scc, time_dependent_init, algebraic_only, missing_guess_value, allow_incomplete,
         is_initializeprob, is_steadystateprob, return_operating_point, init_compiler_options,
@@ -2593,18 +2684,19 @@ function __process_SciMLProblem(
     end
     add_observed_equations!(op, obs)
 
-    if warn_cyclic_dependency
+    if _toggle_enabled(verbosity, :cyclic_dependency)
         cycles = check_substitution_cycles(
             op, dvs; max_cycle_length = circular_dependency_max_cycle_length,
             max_cycles = circular_dependency_max_cycles
         )
         if !isempty(cycles)
-            buffer = IOBuffer()
-            for cycle in cycles
-                println(buffer, cycle)
+            @SciMLMessage(verbosity, :cyclic_dependency) do
+                buffer = IOBuffer()
+                for cycle in cycles
+                    println(buffer, cycle)
+                end
+                "Cycles in unknowns:\n$(String(take!(buffer)))"
             end
-            msg = String(take!(buffer))
-            @warn "Cycles in unknowns:\n$msg"
         end
     end
 
@@ -2627,18 +2719,19 @@ function __process_SciMLProblem(
 
     check_eqs_u0(eqs, dvs, u0; check_length, kwargs...)
 
-    if warn_cyclic_dependency
+    if _toggle_enabled(verbosity, :cyclic_dependency)
         cycles = check_substitution_cycles(
             op, ps; max_cycle_length = circular_dependency_max_cycle_length,
             max_cycles = circular_dependency_max_cycles
         )
         if !isempty(cycles)
-            buffer = IOBuffer()
-            for cycle in cycles
-                println(buffer, cycle)
+            @SciMLMessage(verbosity, :cyclic_dependency) do
+                buffer = IOBuffer()
+                for cycle in cycles
+                    println(buffer, cycle)
+                end
+                "Cycles in parameters:\n$(String(take!(buffer)))"
             end
-            msg = String(take!(buffer))
-            @warn "Cycles in parameters:\n$msg"
         end
     end
 
@@ -2744,6 +2837,8 @@ function process_kwargs(
         eval_expression = false, eval_module = @__MODULE__,
         _skip_events = false, _skip_tstops = false, tspan = nothing, kwargs...
     )
+    # Read before `filter_kwargs`, which removes an `MTKVerbosity` value.
+    mtk_verbosity = _problem_verbosity(kwargs)
     kwargs = filter_kwargs(kwargs)
     kwargs1 = (;)
 
@@ -2751,7 +2846,8 @@ function process_kwargs(
         if expression == Val{false} && !_skip_events
             cbs = if _has_symbolic_events(sys)
                 @invokelatest process_events(
-                    sys; callback, eval_expression, eval_module, tspan, kwargs...
+                    sys; callback, eval_expression, eval_module, tspan, mtk_verbosity,
+                    kwargs...
                 )
             else
                 callback
@@ -2779,6 +2875,8 @@ function filter_kwargs(kwargs)
     for key in keys(kwargs)
         key in SciMLBase.allowedkeywords || delete!(kwargs, key)
     end
+    # An `MTKVerbosity` stays: `maybe_codegen_scimlproblem` replaces it by the solver
+    # sub-specifier for the problem type (see `_solver_kwargs`).
     return pairs(NamedTuple(kwargs))
 end
 
@@ -3075,7 +3173,7 @@ Return an expression constructing SciMLProblem `T` with positional arguments `ar
 and keywords `kwargs`.
 """
 function maybe_codegen_scimlproblem(::Type{Val{true}}, T, args::NamedTuple; kwargs...)
-    return build_scimlproblem_expr(T, args; kwargs...)
+    return build_scimlproblem_expr(T, args; _solver_kwargs(T, kwargs)...)
 end
 
 """
@@ -3087,7 +3185,7 @@ function maybe_codegen_scimlproblem(::Type{Val{false}}, ::Type{T}, args::NamedTu
     @nospecialize args kwargs
     # Call `remake` so it runs initialization if it is trivial
     # Use `@invokelatest` to avoid world-age issues with `eval_expression = true`
-    return @invokelatest remake(T(args...; kwargs...))
+    return @invokelatest remake(T(args...; _solver_kwargs(T, kwargs)...))
 end
 
 """

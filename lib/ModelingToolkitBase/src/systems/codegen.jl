@@ -2509,7 +2509,7 @@ function generate_custom_function(
             sys, exprs,
             [Any[dvs]; p; collect(cachesyms); Any[get_iv(sys)]],
             BuildFunctionWrapperOptions(;
-                u_arg = 1,
+                u_arg = 1, n_param_buffers = length(p),
                 codegen_function_options = opts.codegen
             )
         )

@@ -296,6 +296,10 @@ function narrow_buffer_type(
     )
     type = Union{}
     for arr in buffer
+        if !isempty(arr) && isconcretetype(eltype(arr))
+            type = promote_type(type, eltype(arr))
+            continue
+        end
         for x in arr
             type = promote_type(type, typeof(x))
         end
@@ -733,7 +737,8 @@ function __remake_buffer(indp, oldbuf::MTKParameters, idxs, vals; validate = tru
     # If the parameter buffer is an `MTKParameters` object, `indp` must eventually drill
     # down to an `AbstractSystem` using `symbolic_container`. We leverage this to get
     # the index cache.
-    ic = get_index_cache(indp_to_system(indp))
+    sys = indp_to_system(indp)
+    ic = get_index_cache(sys)
     for (idx, val) in zip(idxs, vals)
         sym = nothing
         if val === missing
@@ -743,7 +748,10 @@ function __remake_buffer(indp, oldbuf::MTKParameters, idxs, vals; validate = tru
             sym = idx
             idx = parameter_index(ic, sym)
             if idx === nothing
-                @warn "Symbolic variable $sym is not a (non-dependent) parameter in the system"
+                @SciMLMessage(
+                    "Symbolic variable $sym is not a (non-dependent) parameter in the system",
+                    _system_verbosity(sys), :parameter_not_in_system
+                )
                 continue
             end
             idx in handled_idxs && continue
@@ -760,7 +768,10 @@ function __remake_buffer(indp, oldbuf::MTKParameters, idxs, vals; validate = tru
                 for (i, vali) in zip(eachindex(sym), eachindex(val))
                     idx = parameter_index(ic, sym[i])
                     if idx === nothing
-                        @warn "Symbolic variable $sym is not a (non-dependent) parameter in the system"
+                        @SciMLMessage(
+                            "Symbolic variable $sym is not a (non-dependent) parameter in the system",
+                            _system_verbosity(sys), :parameter_not_in_system
+                        )
                         continue
                     end
                     # Intentionally don't check handled_idxs here because array variables always take priority

@@ -68,6 +68,9 @@ import Symbolics: rename, islinear,
     tosymbol, build_function
 const derivative = Symbolics.derivative
 import ModelingToolkitBase as MTKBase
+using ModelingToolkitBase: MTKVerbosity, MTKVerbosityCtx
+using SciMLLogging: SciMLLogging, @SciMLMessage, AbstractVerbosityPreset
+export SciMLLogging
 import SimpleNonlinearSolve
 
 using UnPack: @unpack
