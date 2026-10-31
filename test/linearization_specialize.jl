@@ -1,4 +1,4 @@
-using ModelingToolkit, SciMLBase, SymbolicIndexingInterface, Test
+using ModelingToolkit, SciMLBase, SymbolicIndexingInterface, LinearAlgebra, Test
 using ModelingToolkit: t_nounits as t, D_nounits as D
 
 const FWW = SciMLBase.FunctionWrappersWrappers.FunctionWrappersWrapper
@@ -88,6 +88,18 @@ end
     @test !reaches(RGF, lfe.prob.f)
     @test !any(f -> reaches(RGF, f), prepared(lfe))
     @test jacobians(lfe(lfe.prob.u0, lfe.prob.p, 0.0)) == jacobians(lf(lf.prob.u0, lf.prob.p, 0.0))
+    # Without `FullSpecialize`, `eval_expression` applies to the observed function only, so the
+    # system function the problem wraps is still built from `RuntimeGeneratedFunction`s.
+    unwrapped(f) = f isa FWW ? unwrapped(first(f.fw).obj[]) : f isa SciMLBase.Void ? unwrapped(f.f) : f
+    has_rgf_type(f) = occursin("RuntimeGeneratedFunction", string(typeof(unwrapped(f))))
+    @test !has_rgf_type(lfe.prob.f.f)
+    for option in ((;), (; specialize = nothing))
+        lfd, _ = linearization_function(
+            scalar_plant, [u], [x]; eval_expression = true, eval_module = @__MODULE__,
+            kwargs..., option...
+        )
+        @test has_rgf_type(lfd.prob.f.f)
+    end
 end
 
 @testset "get_sensitivity_function with specialize = FullSpecialize" begin
@@ -107,22 +119,59 @@ end
         setp(sys, sys.C.ki)(lf.prob.p, ki)
         setp(syss, syss.C.kp)(lfs.prob.p, kp)
         setp(syss, syss.C.ki)(lfs.prob.p, ki)
-        @test jacobians(lfs(lfs.prob.u0, lfs.prob.p, 0.0)) == jacobians(lf(lf.prob.u0, lf.prob.p, 0.0))
+        js = lfs(lfs.prob.u0, lfs.prob.p, 0.0)
+        @test jacobians(js) == jacobians(lf(lf.prob.u0, lf.prob.p, 0.0))
+        # Closed loop `ẋ = -x + u`, `İ = -x`, `u = -kp * x + ki * I`: `A` has trace `-(1 + kp)` and
+        # determinant `ki` in any state order, and the sensitivity's feedthrough is 1.
+        @test isempty(js.g_z)
+        @test tr(js.f_x) ≈ -(1 + kp)
+        @test det(js.f_x) ≈ ki
+        @test js.h_u == ones(1, 1)
     end
 end
 
-# With `NoInit`, a call whose `u` and `p` have the problem's types does not remake the problem; with
-# `OverrideInit` (`initialize = true`) the same call still does. Both give the same Jacobians.
+# With `FullSpecialize` and `NoInit`, a call whose `u` and `p` have the problem's types does not
+# remake the problem. With `OverrideInit` (`initialize = true`), or without `FullSpecialize`, the
+# same call still does. All give the same Jacobians.
 @testset "NoInit call without remake" begin
     kwargs = (; op = Dict(x => 0.5, u => 0.0), warn_empty_op = false)
-    lf, _ = linearization_function(scalar_plant, [u], [x]; initialize = false, kwargs...)
-    lfi, _ = linearization_function(scalar_plant, [u], [x]; initialize = true, kwargs...)
+    full = (; specialize = SciMLBase.FullSpecialize)
+    lf, _ = linearization_function(scalar_plant, [u], [x]; initialize = false, kwargs..., full...)
+    lfi, _ = linearization_function(scalar_plant, [u], [x]; initialize = true, kwargs..., full...)
+    lfd, _ = linearization_function(scalar_plant, [u], [x]; initialize = false, kwargs...)
     sig(l) = Tuple{typeof(l.prob.u0), typeof(l.prob.p), Float64}
     names = ("remake", "get_initial_values")
     @test !refers_to(lf, sig(lf), names)
     @test refers_to(lfi, sig(lfi), names)
+    @test refers_to(lfd, sig(lfd), names)
     j = lf(lf.prob.u0, lf.prob.p, 0.0)
     ji = lfi(lfi.prob.u0, lfi.prob.p, 0.0)
+    jd = lfd(lfd.prob.u0, lfd.prob.p, 0.0)
     @test jacobians(j) == jacobians(ji)
-    @test j.x == ji.x
+    @test jacobians(j) == jacobians(jd)
+    @test j.x == ji.x == jd.x
+end
+
+# The Jacobians of `D(x) ~ -k * x + u` with output `x` are `f_x = -k`, `f_u = 1`, `h_x = 1`, `h_u = 0`.
+@testset "Analytic Jacobians for each specialization, initialization and evaluation setting" begin
+    @variables x(t) = 0.0 u(t) = 0.0
+    @parameters k = 1.0
+    @named reference_plant = System([D(x) ~ -k * x + u], t)
+    for initialize in (false, true), eval_expression in (false, true)
+        eval_kwargs = eval_expression ? (; eval_expression, eval_module = @__MODULE__) : (;)
+        common = (; op = Dict(x => 0.0, u => 0.0), initialize, warn_empty_op = false, eval_kwargs...)
+        for option in ((;), (; specialize = nothing), (; specialize = SciMLBase.FullSpecialize))
+            lf, sys = linearization_function(reference_plant, [u], [x]; common..., option...)
+            setter = setp(sys, k)
+            for kv in (0.5, 1.2, 0.2)
+                setter(lf.prob.p, kv)
+                # functions evaluated with `eval_expression` exist only in later worlds
+                j = Base.invokelatest(lf, lf.prob.u0, lf.prob.p, 0.0)
+                @test j.f_x == fill(-kv, 1, 1)
+                @test j.f_u == ones(1, 1)
+                @test j.h_x == ones(1, 1)
+                @test j.h_u == zeros(1, 1)
+            end
+        end
+    end
 end
