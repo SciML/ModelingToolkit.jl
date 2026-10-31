@@ -181,7 +181,9 @@ The `simplified_sys` has undergone [`ModelingToolkitBase.mtkcompile`](@ref) and 
     remain accepted and override the corresponding toggles when explicitly passed.
   - `specialize`: The `SciMLBase.AbstractSpecialization` of the `ODEProblem` built for the system, or `nothing` for
     `ODEProblem`'s default. With `SciMLBase.FullSpecialize`, the system and observed functions are called directly
-    instead of through function wrappers, so the evaluation is fully specialized.
+    instead of through function wrappers, so the evaluation is fully specialized; `eval_expression` and
+    `eval_module` also apply to the system function; and with `initialize = false`, a call whose `u` and `p` have
+    the types of the problem's uses them as given, without remaking the problem.
   - `kwargs`: Are passed on to `find_solvables!`
 
 See also [`linearize`](@ref) which provides a higher-level interface.
@@ -329,13 +331,15 @@ function _linearization_function_compiled(
         initializealg = initialize ? OverrideInit() : NoInit()
     end
 
+    full_specialize = specialize === SciMLBase.FullSpecialize
     prob_type = specialize === nothing ? ODEProblem{true} : ODEProblem{true, specialize}
+    codegen_kwargs = full_specialize ? (; eval_expression, eval_module) : (;)
     prob = prob_type(
         sys, merge(op, anydict(p)), (t, t); allow_incomplete = true,
         algebraic_only, guesses, missing_guess_value, verbose = verbosity,
         initialization_eqs = [initialization_eqs; held_eqs],
         # the problem constructor applies and deprecates this keyword
-        warn_initialize_determined, eval_expression, eval_module
+        warn_initialize_determined, codegen_kwargs...
     )
     initial_idxs_for_unknowns = ParameterIndex{SciMLStructures.Initials, Int}[]
     for v in unknowns(sys)
@@ -348,7 +352,7 @@ function _linearization_function_compiled(
         sys, outputs,
         GeneratedFunctionOptions(; expression = Val{false}, eval_expression, eval_module)
     )
-    wrap = specialize !== SciMLBase.FullSpecialize
+    wrap = !full_specialize
     h = wrap ? SciMLBase.Void{Any}(h) : SciMLBase.Void(h)
 
     initialization_kwargs = (;
@@ -698,8 +702,9 @@ function (linfun::LinearizationFunction)(u, p, t)
         T = promote_type(T, typeof(t))
         u = promote_with_nothing(T, u)
         p = promote_with_nothing(T, p)
-        if linfun.initializealg isa NoInit && typeof(u) === typeof(linfun.prob.u0) &&
-                typeof(p) === typeof(linfun.prob.p)
+        if SciMLBase.specialization(fun) === SciMLBase.FullSpecialize &&
+                linfun.initializealg isa NoInit &&
+                typeof(u) === typeof(linfun.prob.u0) && typeof(p) === typeof(linfun.prob.p)
             # `get_initial_values` with `NoInit` returns the integrator's `u` and `p`
             success = true
         else
