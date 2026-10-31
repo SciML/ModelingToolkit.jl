@@ -24,6 +24,4 @@ jobs:
     uses: "SciML/.github/.github/workflows/sublibrary-project-tests.yml@v1"
     with:
       check-bounds: auto
-    env:
-      JULIA_PKG_PRECOMPILE_AUTO: "0"
     secrets: "inherit"
