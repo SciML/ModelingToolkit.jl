@@ -415,6 +415,7 @@ function calculate_jacobian(
 
     if sparse
         jac = sparsejacobian(rhs, dvs; simplify)
+        check_jacobian_differentiable(sys, jac, rhs, dvs)
         if get_iv(sys) !== nothing
             # Add nonzeros of W as non-structural zeros of the Jacobian
             # (to ensure equal results for oop and iip Jacobian)
@@ -431,9 +432,43 @@ function calculate_jacobian(
         end
     else
         jac = jacobian(rhs, dvs; simplify)
+        check_jacobian_differentiable(sys, jac, rhs, dvs)
     end
 
     return jac
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Throw an `ArgumentError` if an entry of `jac` still contains an unexpanded `Differential`
+with respect to one of `dvs`. Symbolics leaves such a term when a registered function has no
+derivative rule for the argument that depends on `dvs` (an opaque operator), and the entry
+would otherwise be a silently wrong Jacobian.
+"""
+function check_jacobian_differentiable(sys::System, jac, rhs, dvs)
+    iv = get_iv(sys)
+    is_opaque_derivative(x) = isdifferential(x) && !isequal(operation(x).x, iv)
+    entries = if jac isa SparseArrays.AbstractSparseMatrix
+        zip(findnz(jac)...)
+    else
+        ((idx[1], idx[2], v) for (idx, v) in pairs(IndexCartesian(), jac))
+    end
+    for (i, j, v) in entries
+        SU.query(is_opaque_derivative, unwrap(v)) || continue
+        throw(
+            ArgumentError(
+                """
+                Cannot symbolically differentiate equation `$(rhs[i])` with respect to `$(dvs[j])`: \
+                it contains a call to a function with no derivative rule for the argument that \
+                depends on the unknowns, so the Jacobian entry would be wrong. Register a derivative \
+                with `Symbolics.@register_derivative`, or supply your own Jacobian by passing \
+                `jac = false` and `remake`-ing the problem with a hand-built `jac` function.
+                """
+            )
+        )
+    end
+    return nothing
 end
 
 """
