@@ -175,3 +175,57 @@ end
         end
     end
 end
+
+# `D(x) ~ -k * x^2 + u^3 + t * x` with output `y ~ x^2 + sin(u)`: `f_x = -2k * x + t`, `f_u = 3u^2`,
+# `h_x = 2x`, `h_u = cos(u)`. A state of another element type and parameters given as pairs are
+# converted to the problem's types; with `OverrideInit`, the call remakes the problem.
+@testset "Analytic Jacobians of a nonlinear system for converted arguments" begin
+    @variables x(t) = 0.5 u(t) = 2.0 y(t)
+    @parameters k = 1.0
+    @named nonlinear_plant = System([D(x) ~ -k * x^2 + u^3 + t * x, y ~ x^2 + sin(u)], t)
+    tv = 0.3
+    function check(j, xv, uv, kv)
+        @test j.f_x ≈ fill(-2kv * xv + tv, 1, 1)
+        @test j.f_u ≈ fill(3uv^2, 1, 1)
+        @test j.h_x ≈ fill(2xv, 1, 1)
+        @test j.h_u ≈ fill(cos(uv), 1, 1)
+        @test j.x ≈ [xv]
+    end
+    for initialize in (false, true), eval_expression in (false, true)
+        eval_kwargs = eval_expression ? (; eval_expression, eval_module = @__MODULE__) : (;)
+        for option in ((;), (; specialize = SciMLBase.FullSpecialize))
+            lf, sys = linearization_function(
+                nonlinear_plant, [u], [y]; op = Dict(x => 0.7, u => 1.5), initialize, t = tv,
+                warn_empty_op = false, eval_kwargs..., option...
+            )
+            setp(sys, k)(lf.prob.p, 3.0)
+            check(Base.invokelatest(lf, lf.prob.u0, lf.prob.p, tv), 0.7, 1.5, 3.0)
+            initialize && continue
+            check(Base.invokelatest(lf, [0.2], lf.prob.p, tv), 0.2, 1.5, 3.0)
+            check(Base.invokelatest(lf, Float32[0.5], lf.prob.p, tv), 0.5, 1.5, 3.0)
+            check(Base.invokelatest(lf, [2], lf.prob.p, tv), 2.0, 1.5, 3.0)
+            check(Base.invokelatest(lf, [0.5], [k => 2.0, u => 3.0], tv), 0.5, 3.0, 2.0)
+        end
+    end
+end
+
+# `z ~ w^2 + sin(t)` has no unknowns, and `h_u = 2w`.
+@testset "Analytic output Jacobian of a system without unknowns" begin
+    @variables w(t) = 3.0 z(t)
+    @named static_model = System([z ~ w^2 + sin(t)], t)
+    for eval_expression in (false, true)
+        eval_kwargs = eval_expression ? (; eval_expression, eval_module = @__MODULE__) : (;)
+        for option in ((;), (; specialize = nothing), (; specialize = SciMLBase.FullSpecialize))
+            lf, sys = linearization_function(
+                static_model, [w], [z]; op = Dict(w => 3.0), initialize = false,
+                warn_empty_op = false, eval_kwargs..., option...
+            )
+            j = Base.invokelatest(lf, nothing, [w => 5.0], 0.2)
+            @test size(j.f_x) == (0, 0)
+            @test j.h_u ≈ fill(10.0, 1, 1)
+            @test Base.invokelatest(lf, nothing, lf.prob.p, 0.2).h_u ≈ fill(6.0, 1, 1)
+            setp(sys, w)(lf.prob.p, 1.5)
+            @test Base.invokelatest(lf, nothing, lf.prob.p, 0.2).h_u ≈ fill(3.0, 1, 1)
+        end
+    end
+end
