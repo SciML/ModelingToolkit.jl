@@ -2542,14 +2542,13 @@ end
     $(TYPEDSIGNATURES)
 
 The initialization problem and metadata without the references an ahead-of-time compiler
-cannot serialize: a nonlinear (sub)problem's `NonlinearFunction` loses its `sys` and its
-`ObservedFunctionCache` (only used for symbolic indexing of the initialization solution), a
-linear subproblem's `SymbolicLinearInterface` has its `sys` replaced by a
-[`StrippedLinearSystem`](@ref) (which still updates `A` and `b`) and loses its `observed`,
-and the metadata keeps
-its functional fields (`oop_reconstruct_u0_p`, `get_updated_u0`, `set_initial_unknowns!`)
-with empty symbolic ones. Everything `get_initial_values` and `update_initializeprob!` use
-is kept.
+cannot serialize: a nonlinear, least-squares or homotopy (sub)problem's `NonlinearFunction`
+loses its `sys` and its `ObservedFunctionCache` (only used for symbolic indexing of the
+initialization solution), a linear subproblem's `SymbolicLinearInterface` has its `sys`
+replaced by a [`StrippedLinearSystem`](@ref) (which still updates `A` and `b`) and loses its
+`observed`, and the metadata keeps its functional fields (`oop_reconstruct_u0_p`,
+`get_updated_u0`, `set_initial_unknowns!`) with empty symbolic ones. Everything
+`get_initial_values` and `update_initializeprob!` use is kept.
 """
 function strip_initialization_symbolics(initializeprob, meta::InitializationMetadata)
     initializeprob = strip_problem_symbolics(initializeprob)
@@ -2577,6 +2576,12 @@ function strip_problem_symbolics(prob::NonlinearLeastSquaresProblem)
     return NonlinearLeastSquaresProblem{SciMLBase.isinplace(prob)}(
         strip_function_symbolics(prob.f), prob.u0, prob.p;
         lb = prob.lb, ub = prob.ub, prob.kwargs...
+    )
+end
+function strip_problem_symbolics(prob::SciMLBase.HomotopyProblem)
+    return SciMLBase.HomotopyProblem{SciMLBase.isinplace(prob)}(
+        strip_function_symbolics(prob.f), prob.u0, prob.p;
+        λspan = prob.λspan, prob.kwargs...
     )
 end
 function strip_problem_symbolics(prob::SciMLBase.LinearProblem)
