@@ -48,6 +48,9 @@ struct IndexCache
     initials_idx::TunableIndexMap
     constant_idx::ParamIndexMap
     nonnumeric_idx::NonnumericMap
+    # `DiffCache` scratch buffers added via `add_diffcache`. They live in the `caches`
+    # portion of `MTKParameters`, ahead of any SCC cache buffers appended later.
+    caches_idx::ParamIndexMap
     observed_syms_to_timeseries::Dict{SymbolicT, TimeseriesSetType}
     dependent_pars_to_timeseries::Dict{SymbolicT, TimeseriesSetType}
     discrete_buffer_sizes::Vector{Vector{BufferTemplate}}
@@ -55,6 +58,7 @@ struct IndexCache
     initials_buffer_size::BufferTemplate
     constant_buffer_sizes::Vector{BufferTemplate}
     nonnumeric_buffer_sizes::Vector{BufferTemplate}
+    caches_buffer_sizes::Vector{BufferTemplate}
     symbol_to_variable::Dict{Symbol, SymbolicParam}
 end
 
@@ -62,11 +66,11 @@ function Base.copy(ic::IndexCache)
     return IndexCache(
         copy(ic.unknown_idx), copy(ic.discrete_idx), copy(ic.callback_to_clocks),
         copy(ic.tunable_idx), copy(ic.initials_idx), copy(ic.constant_idx),
-        copy(ic.nonnumeric_idx), copy(ic.observed_syms_to_timeseries),
+        copy(ic.nonnumeric_idx), copy(ic.caches_idx), copy(ic.observed_syms_to_timeseries),
         copy(ic.dependent_pars_to_timeseries), copy(ic.discrete_buffer_sizes),
         ic.tunable_buffer_size, ic.initials_buffer_size,
         copy(ic.constant_buffer_sizes), copy(ic.nonnumeric_buffer_sizes),
-        copy(ic.symbol_to_variable)
+        copy(ic.caches_buffer_sizes), copy(ic.symbol_to_variable)
     )
 end
 
@@ -179,9 +183,12 @@ function IndexCache(sys::AbstractSystem)
     end
 
     diffcache_params = SU.getmetadata(sys, DiffCacheParams, Dict{SymbolicT, Int}())::Dict{SymbolicT, Int}
-    # Diffcache params added via `add_diffcache` are special.
+    # Diffcache params added via `add_diffcache` are special: they are scratch space the
+    # generated code writes active intermediates into, so they go in the `caches` portion
+    # (which AD shadows) rather than `nonnumeric` (which is declared inactive).
+    caches_buffers = Dict{TypeT, Set{SymbolicT}}()
     for p in keys(diffcache_params)
-        buffer = get!(Set{SymbolicT}, nonnumeric_buffers, DiffCacheAllocatorAPIWrapper{Number})
+        buffer = get!(Set{SymbolicT}, caches_buffers, DiffCacheAllocatorAPIWrapper{Number})
         push!(buffer, p)
     end
 
@@ -225,6 +232,8 @@ function IndexCache(sys::AbstractSystem)
         const_buffer_sizes = get_buffer_sizes_and_idxs(ParamIndexMap, sys, constant_buffers)
     nonnumeric_idxs,
         nonnumeric_buffer_sizes = get_buffer_sizes_and_idxs(NonnumericMap, sys, nonnumeric_buffers)
+    caches_idxs,
+        caches_buffer_sizes = get_buffer_sizes_and_idxs(ParamIndexMap, sys, caches_buffers)
 
     tunable_idxs = TunableIndexMap()
     tunable_buffer_size = 0
@@ -339,6 +348,7 @@ function IndexCache(sys::AbstractSystem)
         initials_idxs,
         const_idxs,
         nonnumeric_idxs,
+        caches_idxs,
         observed_syms_to_timeseries,
         dependent_pars_to_timeseries,
         disc_buffer_templates,
@@ -346,6 +356,7 @@ function IndexCache(sys::AbstractSystem)
         BufferTemplate(Number, initials_buffer_size),
         const_buffer_sizes,
         nonnumeric_buffer_sizes,
+        caches_buffer_sizes,
         symbol_to_variable
     )
 end
@@ -582,6 +593,8 @@ function SymbolicIndexingInterface.parameter_index(ic::IndexCache, sym::Symbolic
         ParameterIndex(SciMLStructures.Constants(), idx, validate_size)
     elseif (idx = check_index_map(ic.nonnumeric_idx, sym)) !== nothing
         ParameterIndex(NONNUMERIC_PORTION, idx, validate_size)
+    elseif (idx = check_index_map(ic.caches_idx, sym)) !== nothing
+        ParameterIndex(SciMLStructures.Caches(), idx, validate_size)
     elseif iscall(sym) && operation(sym) == getindex
         args = arguments(sym)
         pidx = parameter_index(ic, args[1])
@@ -702,14 +715,20 @@ function reorder_parameters(ic::IndexCache, ps::Vector{SymbolicT}; drop_missing 
     for bufsz in ic.nonnumeric_buffer_sizes
         push!(nonnumeric_buf, fill(COMMON_DEFAULT_VAR, bufsz.length))
     end
+    caches_buf = Vector{SymbolicT}[]
+    for bufsz in ic.caches_buffer_sizes
+        push!(caches_buf, fill(COMMON_DEFAULT_VAR, bufsz.length))
+    end
     if flatten
         append!(result, disc_buf)
         append!(result, const_buf)
         append!(result, nonnumeric_buf)
+        append!(result, caches_buf)
     else
         push!(result, disc_buf)
         push!(result, const_buf)
         push!(result, nonnumeric_buf)
+        push!(result, caches_buf)
     end
     for p in ps
         if (idx = get(ic.discrete_idx, p, nothing)) !== nothing
@@ -738,6 +757,9 @@ function reorder_parameters(ic::IndexCache, ps::Vector{SymbolicT}; drop_missing 
         elseif (ij = get(ic.nonnumeric_idx, p, nothing)) !== nothing
             i, j = ij
             nonnumeric_buf[i][j] = p
+        elseif (ij = get(ic.caches_idx, p, nothing)) !== nothing
+            i, j = ij
+            caches_buf[i][j] = p
         else
             error("Invalid parameter $p")
         end
@@ -785,6 +807,11 @@ function iterated_buffer_index(ic::IndexCache, ind::ParameterIndex)
     end
     if ind.portion == NONNUMERIC_PORTION
         return idx + ind.idx[1]
+    elseif !isempty(ic.nonnumeric_buffer_sizes)
+        idx += length(ic.nonnumeric_buffer_sizes)
+    end
+    if ind.portion isa SciMLStructures.Caches
+        return idx + ind.idx[1]
     end
     error("Unhandled portion $(ind.portion)")
 end
@@ -802,6 +829,8 @@ function get_buffer_template(ic::IndexCache, pidx::ParameterIndex)
         return ic.constant_buffer_sizes[idx[1]]
     elseif portion isa Nonnumeric
         return ic.nonnumeric_buffer_sizes[idx[1]]
+    elseif portion isa SciMLStructures.Caches
+        return ic.caches_buffer_sizes[idx[1]]
     else
         error("Unhandled portion $portion")
     end
