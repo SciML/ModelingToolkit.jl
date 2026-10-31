@@ -53,6 +53,7 @@ to maintain consistency. To make this clear, MTK uses the following rules:
 
  1. All unknowns are treated as modifiable by the callback. In order to enforce that an unknown `x` remains the same, one can add `x ~ Pre(x)` to the affect equations.
  2. All parameters are treated as un-modifiable, *unless* they are declared as `discrete_parameters` to the callback. In order to be a discrete parameter, the parameter must be time-dependent (the terminology *discretes* here means [discrete variables](@ref save_discretes)).
+ 3. A differential variable that the affect equations do not reference outside of `Pre` is kept at its pre-callback value whenever the algebraic equations can instead be satisfied by changing algebraic unknowns or discrete parameters. Differential variables change only where no other unknown can absorb an equation, and this is decided separately for each independent part of the system. Differential variables that are part of an index-reduced constraint are always treated as modifiable.
 
 For example, consider the following system.
 
@@ -74,6 +75,18 @@ event = SymbolicDiscreteCallback(
 ```
 
 This way, we enforce that `y` will remain the same, and `p` will change.
+
+Rule 3 matters when an event only changes a discrete parameter of a DAE:
+
+```julia
+@variables x(t) v(t) λ(t) [guess = 0.0]
+@discretes on(t) = 1.0
+eqs = [D(x) ~ v, D(v) ~ -λ, 0 ~ 2λ + v - 2on]
+event = SymbolicDiscreteCallback([0.5] => [on ~ 0], discrete_parameters = [on])
+```
+
+Here `v` keeps its value and `λ` is recomputed from `0 ~ 2λ + v - 2on`. To instead
+keep `λ` and let `v` change, add `λ ~ Pre(λ)` to the affect equations.
 
 !!! warning
 
