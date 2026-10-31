@@ -2232,7 +2232,9 @@ struct SciMLProblemOptions{expression}
     cache, and the `InitializationMetadata` without its symbolic fields (operating point,
     guesses, additional equations). The data still initializes the problem and follows
     parameter changes (`update_initializeprob!`); `remake` with new symbolic values is not
-    supported for such a problem.
+    supported for such a problem: it rebuilds the initialization without the original
+    operating point, guesses and initialization equations, so it can initialize to different
+    values or fail.
     """
     strip_initialization_symbolics::Bool
 end
@@ -2540,8 +2542,11 @@ end
     $(TYPEDSIGNATURES)
 
 The initialization problem and metadata without the references an ahead-of-time compiler
-cannot serialize: the `NonlinearFunction` loses its `sys` and its `ObservedFunctionCache`
-(only used for symbolic indexing of the initialization solution), and the metadata keeps
+cannot serialize: a nonlinear (sub)problem's `NonlinearFunction` loses its `sys` and its
+`ObservedFunctionCache` (only used for symbolic indexing of the initialization solution), a
+linear subproblem's `SymbolicLinearInterface` has its `sys` replaced by a
+[`StrippedLinearSystem`](@ref) (which still updates `A` and `b`) and loses its `observed`,
+and the metadata keeps
 its functional fields (`oop_reconstruct_u0_p`, `get_updated_u0`, `set_initial_unknowns!`)
 with empty symbolic ones. Everything `get_initial_values` and `update_initializeprob!` use
 is kept.
@@ -2572,6 +2577,16 @@ function strip_problem_symbolics(prob::NonlinearLeastSquaresProblem)
     return NonlinearLeastSquaresProblem{SciMLBase.isinplace(prob)}(
         strip_function_symbolics(prob.f), prob.u0, prob.p;
         lb = prob.lb, ub = prob.ub, prob.kwargs...
+    )
+end
+function strip_problem_symbolics(prob::SciMLBase.LinearProblem)
+    f = prob.f
+    f isa SciMLBase.SymbolicLinearInterface || return prob
+    f = SciMLBase.SymbolicLinearInterface(
+        f.update_Ab, StrippedLinearSystem(), nothing, f.metadata
+    )
+    return SciMLBase.LinearProblem{SciMLBase.isinplace(prob)}(
+        prob.A, prob.b, prob.p; u0 = prob.u0, f, prob.kwargs...
     )
 end
 strip_problem_symbolics(prob) = prob

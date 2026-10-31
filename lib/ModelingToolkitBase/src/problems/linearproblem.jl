@@ -285,9 +285,19 @@ function get_A_b_from_LinearFunction(
     return A, b
 end
 
+"""
+    $(TYPEDEF)
+
+Stands in for the `System` of a `LinearProblem` whose symbolic references were stripped
+(see [`strip_problem_symbolics`](@ref)), so that `remake` still updates `A` and `b` through
+the generated update functions.
+"""
+struct StrippedLinearSystem end
+
 # For remake
 function SciMLBase.get_new_A_b(
-        sys::AbstractSystem, f::SciMLBase.SymbolicLinearInterface, p, A, b; kw...
+        sys::Union{AbstractSystem, StrippedLinearSystem},
+        f::SciMLBase.SymbolicLinearInterface, p, A, b; kw...
     )
     if ArrayInterface.ismutable(A)
         T = eltype(SciMLStructures.canonicalize(SciMLStructures.Tunable(), p)[1])
