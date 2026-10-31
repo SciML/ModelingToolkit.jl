@@ -848,8 +848,9 @@ Invokes `u_up!` to update state variables and `p_up!` to update discrete paramet
 optionally resets aggregated jumps. Created by [`compile_explicit_affect`](@ref).
 
 # Fields
-- `dvs_to_update`: symbolic unknowns modified by this affect (emptiness is checked at call time)
-- `ps_to_update`: symbolic discrete parameters modified by this affect
+- `dvs_to_update`: indices (in `unknowns(sys)`) of the unknowns modified by this affect
+  (emptiness is checked at call time)
+- `ps_to_update`: `ParameterIndex`es of the discrete parameters modified by this affect
 - `reset_jumps`: if `true`, call `reset_aggregated_jumps!` after the update
 - `u_up!`: compiled in-place function that writes updated state into the integrator
 - `p_up!`: compiled in-place function that writes updated parameters into the integrator
@@ -1029,15 +1030,9 @@ else
         applied = false
         for (i, evt) in enumerate(evts)
             if evt == 1
-                f = va.affects[va.eq2affect[i]]
-                (f === nothing || f === EMPTY_AFFECT) && continue
-                f(integ)
-                applied = true
+                applied |= apply_nth_affect(va.affects, va.eq2affect[i], integ)
             elseif evt == -1
-                f = va.affect_negs[va.eq2affect[i]]
-                (f === nothing || f === EMPTY_AFFECT) && continue
-                f(integ)
-                applied = true
+                applied |= apply_nth_affect(va.affect_negs, va.eq2affect[i], integ)
             end
         end
         # DiffEqBase assumes a non-`nothing` VectorContinuousCallback affect modifies
@@ -1046,6 +1041,38 @@ else
         applied || SciMLBase.derivative_discontinuity!(integ, false)
         return
     end
+end
+
+"""
+    apply_nth_affect(affects, k, integ) -> Bool
+
+Call `affects[k](integ)` unless it is `nothing` or [`EMPTY_AFFECT`](@ref), and return whether
+an affect ran. For a tuple of affects the index is dispatched to a call of the concrete
+element, so each affect's call is static.
+"""
+function apply_nth_affect(affects, k, integ)
+    return apply_affect_if_real(affects[k], integ)
+end
+
+@generated function apply_nth_affect(affects::Tuple, k, integ)
+    ex = :(throw(BoundsError(affects, k)))
+    for i in fieldcount(affects):-1:1
+        ex = :(k == $i ? apply_affect_if_real(affects[$i], integ) : $ex)
+    end
+    return ex
+end
+
+apply_affect_if_real(::Nothing, integ) = false
+function apply_affect_if_real(f, integ)
+    f === EMPTY_AFFECT && return false
+    f(integ)
+    return true
+end
+
+call_each_affect(integ) = nothing
+function call_each_affect(integ, f, fs...)
+    f === nothing || f(integ)
+    return call_each_affect(integ, fs...)
 end
 
 """
@@ -1067,6 +1094,11 @@ function (voa::VectorOptionalAffect)(cb, u, t, integ)
     for func in voa.funs
         func === nothing || func(integ)
     end
+    return
+end
+
+function (voa::VectorOptionalAffect{<:Tuple})(cb, u, t, integ)
+    call_each_affect(integ, voa.funs...)
     return
 end
 
@@ -1256,10 +1288,10 @@ Compile the affect, affect_neg, initialize, and finalize callables for each call
 homogeneous group of `SymbolicContinuousCallback`s, and collect clock-partition save indices.
 
 Returns a `NamedTuple` with fields:
-- `affects`: compiled positive-edge affect callables
-- `affect_negs`: compiled negative-edge affect callables (may contain `nothing`)
-- `inits`: compiled initialize callables (may contain `nothing`)
-- `finals`: compiled finalize callables (may contain `nothing`)
+- `affects`: tuple of compiled positive-edge affect callables
+- `affect_negs`: tuple of compiled negative-edge affect callables (may contain `nothing`)
+- `inits`: tuple of compiled initialize callables (may contain `nothing`)
+- `finals`: tuple of compiled finalize callables (may contain `nothing`)
 - `saved_clock_partitions`: `Vector{Vector{Int}}` of clock partition indices (empty for non-split systems)
 
 # Arguments
@@ -1288,7 +1320,12 @@ function compile_vector_callback_affects(cbs, sys, ic; kwargs...)
             end
         end
     end
-    return (; affects, affect_negs, inits, finals, saved_clock_partitions)
+    # Tuples: each compiled affect has its own type, so a vector of them is untyped and
+    # every call through it would be dynamic.
+    return (;
+        affects = Tuple(affects), affect_negs = Tuple(affect_negs), inits = Tuple(inits),
+        finals = Tuple(finals), saved_clock_partitions,
+    )
 end
 
 """
@@ -1592,7 +1629,12 @@ Base.@nospecializeinfer function compile_explicit_affect(
     u_up! = eval_or_rgf(u_up!; eval_expression, eval_module)
     p_up! = eval_or_rgf(p_up!; eval_expression, eval_module)
 
-    return ExplicitAffect(dvs_to_update, ps_to_update, reset_jumps, u_up!, p_up!)
+    # The affect is what the integrator carries at run time; it needs to know whether unknowns
+    # or parameters are written, not which symbolic variables they are, so the two sets are kept
+    # as the indices they resolve to and the callback holds no symbolic terms.
+    u_to_update = [variable_index(sys, v) for v in dvs_to_update]
+    p_to_update = [parameter_index(sys, p) for p in ps_to_update]
+    return ExplicitAffect(u_to_update, p_to_update, reset_jumps, u_up!, p_up!)
 end
 
 """
