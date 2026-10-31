@@ -1,3 +1,4 @@
+"""$(function_docstring(ImplicitDiscreteFunction, true, Symbol[]))"""
 @fallback_iip_specialize function SciMLBase.ImplicitDiscreteFunction{iip, spec}(
         sys::System; u0 = nothing, p = nothing, t = nothing, eval_expression = false,
         eval_module = @__MODULE__, expression = Val{false},
@@ -19,7 +20,7 @@ end
     SciMLBase.ImplicitDiscreteFunction{iip, spec}(sys::System, opts::SciMLFunctionOptions)
 
 Public entry point that builds an `ImplicitDiscreteFunction` directly from a pre-assembled
-[`SciMLFunctionOptions`](@ref), bypassing the `kwargs...` wrapper above.
+`SciMLFunctionOptions`, bypassing the `kwargs...` wrapper above.
 """
 function SciMLBase.ImplicitDiscreteFunction{iip, spec}(
         sys::System, opts::SciMLFunctionOptions{E}
@@ -28,7 +29,7 @@ function SciMLBase.ImplicitDiscreteFunction{iip, spec}(
     opts.check_compatibility && check_compatible_system(ImplicitDiscreteFunction, sys)
 
     iv = get_iv(sys)
-    dvs = unknowns(sys)
+    dvs = flat_unknowns(sys)
     (; u0, p, t, analytic, initialization_data) = opts
     codegen_opts = opts.codegen
 
@@ -63,15 +64,16 @@ function SciMLBase.ImplicitDiscreteFunction{iip, spec}(
     )
 end
 
+"""$(problem_docstring(SciMLBase.ImplicitDiscreteProblem, ImplicitDiscreteFunction, true))"""
 @fallback_iip_specialize function SciMLBase.ImplicitDiscreteProblem{iip, spec}(
-        sys::System, op, tspan;
+        sys::System, op, tspan = default_tspan(sys);
         check_compatibility = true, expression = Val{false}, kwargs...
     ) where {iip, spec}
     check_complete(sys, ImplicitDiscreteProblem)
     check_compatibility && check_compatible_system(ImplicitDiscreteProblem, sys)
 
     _iip = resolve_iip(iip, op)
-    dvs = unknowns(sys)
+    dvs = flat_unknowns(sys)
     op = to_varmap(op, dvs)
     add_toterms!(op; replace = true)
     f, u0,

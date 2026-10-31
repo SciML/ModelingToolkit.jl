@@ -4,6 +4,7 @@ using ModelingToolkitStandardLibrary.Electrical
 using ModelingToolkitStandardLibrary.Mechanical.Rotational
 using ModelingToolkitStandardLibrary.Blocks
 using OrdinaryDiffEqDefault
+using CommonSolve: init
 using ModelingToolkit: t_nounits as t, D_nounits as D
 
 const SUITE = BenchmarkGroup()

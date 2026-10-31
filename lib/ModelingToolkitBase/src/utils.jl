@@ -151,15 +151,19 @@ Value that can be provided to the `check` keyword of `System` to enable checking
 """
 const CheckUnits = 1 << 2
 
-function check_independent_variables(ivs)
+function check_independent_variables(ivs, verbosity = DEFAULT_MTK_VERBOSE)
     for iv in ivs
-        isparameter(iv) || @invokelatest warn_indepvar(iv)
+        isparameter(iv) || @invokelatest warn_indepvar(iv, verbosity)
     end
     return
 end
 
-@noinline function warn_indepvar(iv::SymbolicT)
-    return @warn "Independent variable $iv should be defined with @independent_variables $iv."
+@noinline function warn_indepvar(iv::SymbolicT, verbosity)
+    @SciMLMessage(
+        "Independent variable $iv should be defined with @independent_variables $iv.",
+        verbosity, :independent_variable_not_parameter
+    )
+    return nothing
 end
 
 function check_parameters(ps, iv)
@@ -192,11 +196,50 @@ function check_variables(dvs, iv)
     return
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Whether `eq` is an array equation: its left-hand side is array-valued, so it stands for
+one scalar equation per element.
+"""
+is_array_equation(eq::Equation) = SU.is_array_shape(SU.shape(eq.lhs))
+
+"""
+    $(TYPEDSIGNATURES)
+
+Expand the array equations in `eqs` into one scalar equation per element, so that the
+result has one equation per row of the generated code and of the mass matrix. Returns
+`eqs` itself when it has no array equations.
+"""
+function scalarize_array_equations(eqs::Vector{Equation})
+    any(is_array_equation, eqs) || return eqs
+    new_eqs = Equation[]
+    sizehint!(new_eqs, count_equation_rows(eqs))
+    for eq in eqs
+        if is_array_equation(eq)
+            append!(new_eqs, vec(Symbolics.scalarize(eq)))
+        else
+            push!(new_eqs, eq)
+        end
+    end
+    return new_eqs
+end
+
 function check_lhs(eq::Equation, ::Type{Differential}, dvs::Set)
     v = unwrap(eq.lhs)
     _iszero(v) && return
-    op = operation(v)
-    op isa Differential && isone(op.order) && only(arguments(v)) in dvs && return
+    if iscall(v)
+        op = operation(v)
+        if op isa Differential && isone(op.order)
+            x = only(arguments(v))
+            if SU.is_array_shape(SU.shape(x))
+                # `D(u[2:4])` names the slice; each of its elements must be an unknown.
+                all(idx -> x[idx] in dvs, SU.stable_eachindex(x)) && return
+            elseif x in dvs
+                return
+            end
+        end
+    end
     error(lazy"$v is not a valid LHS. Please run mtkcompile before simulation.")
 end
 function check_lhs(eqs::Vector{Equation}, ::Type{Differential}, dvs::Set)
@@ -392,7 +435,7 @@ function find_all_parameter_equations(sys::AbstractSystem)
     rest_eqs = Equation[]
     for eq in equations(sys)
         empty!(varsbuf)
-        Symbolics.search_variables!(
+        SU.search_variables!(
             varsbuf, eq; is_atomic = check_bindings_is_atomic,
             recurse = check_no_parameter_equations_recurse
         )
@@ -580,9 +623,18 @@ function collect_guesses!(guesses::SymmapT, vars::Vector{SymbolicT})
 end
 
 """
-    $TYPEDSIGNATURES
+    collect_var_to_name!(vars::Dict{Symbol, SymbolicT}, xs::Vector{SymbolicT})
 
-Populate `vars` with a mapping from the name of each symbolic variable in `xs` to that variable.
+Populate `vars` with mappings from symbolic variable names to variables.
+
+# Arguments
+
+- `vars`: dictionary updated in place.
+- `xs`: symbolic variables to inspect.
+
+# Returns
+
+`nothing`. Throws `ArgumentError` if two distinct variables have the same name.
 """
 function collect_var_to_name!(vars::Dict{Symbol, SymbolicT}, xs::Vector{SymbolicT})
     for x in xs
@@ -609,9 +661,7 @@ end
 Throw error when difference/derivative operation occurs in the R.H.S.
 """
 @noinline function throw_invalid_operator(opvar, eq, op::Type)
-    if op === Differential
-        optext = "derivative"
-    end
+    optext = op === Differential ? "derivative" : "difference"
     msg = "The $optext variable must be isolated to the left-hand " *
         "side of the equation like `$opvar ~ ...`. You may want to use `mtkcompile` or the DAE form.\nGot $eq."
     throw(InvalidSystemException(msg))
@@ -656,9 +706,22 @@ function check_operator_variables(eqs, ::Type{op}) where {op}
         is_tmp_fine ||
             error(lazy"The LHS cannot contain nondifferentiated variables. Please run `mtkcompile` or use the DAE form.\nGot $eq")
         for v in tmp
-            v in ops &&
-                error(lazy"The LHS operator must be unique. Please run `mtkcompile` or use the DAE form. $v appears in LHS more than once.")
-            push!(ops, v)
+            # `D(u[2:4])` stands for the derivatives of its elements, which must not be
+            # differentiated again by another equation, as a slice or as a scalar.
+            if isdifferential(v) && SU.is_array_shape(SU.shape(only(arguments(v))))
+                dop = operation(v)::Differential
+                x = only(arguments(v))
+                for idx in SU.stable_eachindex(x)
+                    el = dop(x[idx])
+                    el in ops &&
+                        error(lazy"The LHS operator must be unique. Please run `mtkcompile` or use the DAE form. $el appears in LHS more than once.")
+                    push!(ops, el)
+                end
+            else
+                v in ops &&
+                    error(lazy"The LHS operator must be unique. Please run `mtkcompile` or use the DAE form. $v appears in LHS more than once.")
+                push!(ops, v)
+            end
         end
         empty!(tmp)
         empty!(visited)
@@ -678,6 +741,34 @@ isoperator(::Type{op}) where {op <: SU.Operator} = Base.Fix2(isoperator, op)
 
 isdifferential(expr) = isoperator(expr, Differential)
 isdiffeq(eq) = isdifferential(eq.lhs) || isoperator(eq.lhs, Shift)
+
+function array_derivative_is_atomic(ex::SymbolicT)
+    return isdifferential(ex) && SU.is_array_shape(SU.shape(ex))
+end
+
+function array_derivative_expansion(term::SymbolicT)
+    op = operation(term)
+    arg = only(arguments(term))
+    sh = SU.shape(arg)::SU.ShapeVecT
+    # Preserve rank for broadcasts against surrounding slices.
+    arrargs = Symbolics.SArgsT()
+    sizehint!(arrargs, prod(length, sh; init = 1) + 1)
+    push!(arrargs, SU.Const{VartypeT}(size(arg)))
+    for idx in SU.stable_eachindex(arg)
+        push!(arrargs, op(arg[idx]))
+    end
+    return Symbolics.STerm(
+        SU.array_literal, arrargs; type = symtype(arg), shape = sh
+    )
+end
+
+function array_derivative_expansion_map(terms)
+    subs = Dict{SymbolicT, SymbolicT}()
+    for term in terms
+        subs[term] = array_derivative_expansion(term)
+    end
+    return subs
+end
 
 isvariable(x::Num)::Bool = isvariable(value(x))
 function isvariable(x)
@@ -705,7 +796,17 @@ function collect_operator_variables(eqs::Vector{Equation}, ::Type{op}) where {op
         SU.search_variables!(vars, eq; is_atomic = OperatorIsAtomic{op}())
         for v in vars
             isoperator(v, op) || continue
-            push!(diffvars, arguments(v)[1])
+            arg = arguments(v)[1]
+            # An operator applied to an array variable or slice, such as `D(u[2:4])`,
+            # names the array rather than its elements. Callers test membership of the
+            # scalar unknowns, so record the elements.
+            if SU.is_array_shape(SU.shape(arg))
+                for idx in SU.stable_eachindex(arg)
+                    push!(diffvars, arg[idx])
+                end
+            else
+                push!(diffvars, arg)
+            end
         end
         empty!(vars)
     end
@@ -860,7 +961,7 @@ can be checked using `check_scope_depth`.
 
 This function should return `nothing`.
 """
-function collect_vars!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, expr::SymbolicT, iv::Union{SymbolicT, Nothing}, ::Type{op} = Symbolics.Operator; depth = 0) where {op}
+function collect_vars!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, expr::SymbolicT, iv::Union{SymbolicT, Nothing}, ::Type{op} = SU.Operator; depth = 0) where {op}
     Moshi.Match.@match expr begin
         BSImpl.Const() => return
         BSImpl.Sym() => return collect_var!(unknowns, parameters, expr, iv; depth)
@@ -869,9 +970,9 @@ function collect_vars!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{S
             # This must be done here since search_variables! returns leaf variables, not the Integral term
             domain = f.domain.domain
             if domain isa AnyInterval{Num}
-                lo, hi = unwrap.(DomainSets.endpoints(domain))
+                lo, hi = unwrap.(IntervalSets.endpoints(domain))
             elseif domain isa AnyInterval{SymbolicT}
-                lo, hi = DomainSets.endpoints(domain)
+                lo, hi = IntervalSets.endpoints(domain)
             elseif domain isa AnyInterval
                 lo = hi = COMMON_NOTHING
             else
@@ -898,7 +999,7 @@ function collect_vars!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{S
             BSImpl.Term(; f, args) && if f isa op end => begin
                 validate_operator(f, args, iv; context = expr)
                 isempty(args) && continue
-                push!(vars, args[1])
+                union!(vars, args)
             end
             BSImpl.Term(; f, args) && if iv isa SymbolicT && f isa SymbolicT && !isequal(args[1], iv) end => begin
                 # We know this isn't a called function symbolic, since our `is_atomic` filter
@@ -932,7 +1033,7 @@ function collect_vars!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{S
     return nothing
 end
 
-function collect_vars!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, expr::AbstractArray, iv::Union{SymbolicT, Nothing}, ::Type{op} = Symbolics.Operator; depth = 0) where {op}
+function collect_vars!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, expr::AbstractArray, iv::Union{SymbolicT, Nothing}, ::Type{op} = SU.Operator; depth = 0) where {op}
     for var in expr
         collect_vars!(unknowns, parameters, var, iv, op; depth)
     end
@@ -951,7 +1052,7 @@ eqtype_supports_collect_vars(eq::Inequality) = true
 eqtype_supports_collect_vars(eq::Pair) = true
 
 function collect_vars!(
-        unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, eq::Union{Equation, Inequality}, iv::Union{SymbolicT, Nothing}, ::Type{op} = Symbolics.Operator;
+        unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, eq::Union{Equation, Inequality}, iv::Union{SymbolicT, Nothing}, ::Type{op} = SU.Operator;
         depth = 0
     ) where {op}
     collect_vars!(unknowns, parameters, eq.lhs, iv, op; depth)
@@ -960,13 +1061,13 @@ function collect_vars!(
 end
 
 function collect_vars!(
-        unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, ex::Union{Num, Arr, CallAndWrap}, iv::Union{SymbolicT, Nothing}, ::Type{op} = Symbolics.Operator; depth = 0
+        unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, ex::Union{Num, Arr, CallAndWrap}, iv::Union{SymbolicT, Nothing}, ::Type{op} = SU.Operator; depth = 0
     ) where {op}
     return collect_vars!(unknowns, parameters, unwrap(ex), iv, op; depth)
 end
 
 function collect_vars!(
-        unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, p::Pair, iv::Union{SymbolicT, Nothing}, ::Type{op} = Symbolics.Operator; depth = 0
+        unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, p::Pair, iv::Union{SymbolicT, Nothing}, ::Type{op} = SU.Operator; depth = 0
     ) where {op}
     collect_vars!(unknowns, parameters, p[1], iv, op; depth)
     collect_vars!(unknowns, parameters, p[2], iv, op; depth)
@@ -974,7 +1075,7 @@ function collect_vars!(
 end
 
 function collect_vars!(
-        unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, expr, iv::Union{SymbolicT, Nothing}, ::Type{op} = Symbolics.Operator; depth = 0
+        unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, expr, iv::Union{SymbolicT, Nothing}, ::Type{op} = SU.Operator; depth = 0
     ) where {op}
     return nothing
 end
@@ -1220,6 +1321,7 @@ point number or array of such numbers.
 """
 function is_floatingpoint_symtype(T)
     return T === Real || T === Number || T === Complex || T <: AbstractFloat ||
+        T isa DataType && T <: Complex && is_floatingpoint_symtype(T.parameters[1]) ||
         T <: AbstractArray && is_floatingpoint_symtype(eltype(T))
 end
 
@@ -1661,6 +1763,29 @@ function _get_stable_index(x::SymbolicT)
         BSImpl.Term(; f, args) && if f === getindex end => return SU.StableIndex{Int}(x)
         BSImpl.Term(; f, args) && if f isa Operator end => return get_stable_index(args[1])
         _ => throw(ArgumentError(lazy"Invalid variable $x for `get_stable_index`."))
+    end
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Return `true` if `x` is an indexed array symbolic whose indices are all constant
+integers (suitable for [`get_stable_index`](@ref)). Symbolic or non-integer
+indices return `false`.
+"""
+function has_const_int_indices(x::SymbolicT)
+    return Moshi.Match.@match x begin
+        BSImpl.Term(; f, args) && if f === getindex end => begin
+            for i in 2:length(args)
+                idx = unwrap_const(args[i])
+                idx isa Integer || return false
+            end
+            return true
+        end
+        BSImpl.Term(; f, args) && if f isa Operator && length(args) == 1 end => begin
+            return has_const_int_indices(args[1]::SymbolicT)
+        end
+        _ => return false
     end
 end
 

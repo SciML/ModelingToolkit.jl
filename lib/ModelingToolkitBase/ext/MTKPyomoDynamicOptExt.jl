@@ -6,9 +6,11 @@ using UnPack
 using NaNMath
 using Setfield
 using OrderedCollections: OrderedSet
-using Symbolics: SymbolicT, unwrap
+using PythonCall: pyconvert, pyfunc
+using Symbolics: Num, SymbolicT, unwrap, ≲, ≳
 import SymbolicUtils as SU
 const MTK = ModelingToolkitBase
+const GEQ_RELATIONAL_OP = (0 ≳ 0).relational_op
 
 function __init__()
     # Workaround for Julia 1.10 compiler bug (Issue #4211)
@@ -97,16 +99,17 @@ end
 function MTK.PyomoDynamicOptProblem(
         sys::System, op, tspan;
         dt = nothing, steps = nothing, tune_parameters = false,
-        guesses = Dict(),
+        guesses = Dict(), initial_trajectory = Dict(),
+        nominal_values = Dict(),
         bounds = Dict(), kwargs...
     )
     prob,
-        pmap = MTK.process_DynamicOptProblem(
+        pmap, nominal_values = MTK.process_DynamicOptProblem(
         PyomoDynamicOptProblem, PyomoDynamicOptModel,
-        sys, op, tspan; dt, steps, tune_parameters, guesses, bounds, kwargs...
+        sys, op, tspan; dt, steps, tune_parameters, guesses, initial_trajectory, nominal_values, bounds, kwargs...
     )
     conc_model = prob.wrapped_model.model
-    MTK.add_equational_constraints!(prob.wrapped_model, sys, pmap, tspan)
+    MTK.add_equational_constraints!(prob.wrapped_model, sys, pmap, tspan, nominal_values)
     return prob
 end
 
@@ -122,21 +125,21 @@ end
 
 function MTK.generate_state_variable!(m::ConcreteModel, u0, ns, ts)
     m.u_idxs = pyomo.RangeSet(1, ns)
-    init_f = Pyomo.pyfunc((m, i, t) -> (u0[Pyomo.pyconvert(Int, i)]))
+    init_f = pyfunc((m, i, t) -> u0[pyconvert(Int, i)])
     m.U = pyomo.Var(m.u_idxs, m.t, initialize = init_f)
     return PyomoVar(m.U)
 end
 
 function MTK.generate_input_variable!(m::ConcreteModel, c0, nc, ts)
     m.v_idxs = pyomo.RangeSet(1, nc)
-    init_f = Pyomo.pyfunc((m, i, t) -> (c0[Pyomo.pyconvert(Int, i)]))
+    init_f = pyfunc((m, i, t) -> c0[pyconvert(Int, i)])
     m.V = pyomo.Var(m.v_idxs, m.t, initialize = init_f)
     return PyomoVar(m.V)
 end
 
 function MTK.generate_tunable_params!(m::ConcreteModel, p0, np)
     m.p_idxs = pyomo.RangeSet(1, np)
-    init_f = Pyomo.pyfunc((m, i) -> (p0[Pyomo.pyconvert(Int, i)]))
+    init_f = pyfunc((m, i) -> p0[pyconvert(Int, i)])
     m.P = pyomo.Var(m.p_idxs, initialize = init_f)
     return PyomoVar(m.P)
 end
@@ -150,10 +153,9 @@ function MTK.add_constraint!(pmodel::PyomoDynamicOptModel, cons; n_idxs = 1)
     @unpack model, model_sym, t_sym, dummy_sym = pmodel
     expr = if cons isa Equation
         cons.lhs - cons.rhs == 0
-    elseif cons.relational_op === Symbolics.geq
-        cons.lhs - cons.rhs ≥ 0
     else
-        cons.lhs - cons.rhs ≤ 0
+        op = cons.relational_op === GEQ_RELATIONAL_OP ? (>=) : (<=)
+        SU.term(op, cons.lhs - cons.rhs, 0; type = Bool)
     end
     expr = Symbolics.substitute(
         Symbolics.unwrap(expr), SPECIAL_FUNCTIONS_DICT, fold = Val(false)
@@ -162,15 +164,15 @@ function MTK.add_constraint!(pmodel::PyomoDynamicOptModel, cons; n_idxs = 1)
     cons_sym = Symbol("cons", hash(cons))
     return if SU.query(isequal(Symbolics.unwrap(t_sym)), expr)
         f = eval(Symbolics.build_function(expr, model_sym, t_sym))
-        setproperty!(model, cons_sym, pyomo.Constraint(model.t, rule = Pyomo.pyfunc(f)))
+        setproperty!(model, cons_sym, pyomo.Constraint(model.t, rule = pyfunc(f)))
     else
         f = eval(Symbolics.build_function(expr, model_sym, dummy_sym))
-        setproperty!(model, cons_sym, pyomo.Constraint(rule = Pyomo.pyfunc(f)))
+        setproperty!(model, cons_sym, pyomo.Constraint(rule = pyfunc(f)))
     end
 end
 
-function MTK.set_variable_bounds!(m::PyomoDynamicOptModel, sys, pmap, tf, tunable_params, user_bounds = Dict())
-    (; state_bounds, input_bounds, param_bounds, tf_bounds) = MTK.extract_variable_bounds(sys, pmap, tf, tunable_params, user_bounds)
+function MTK.set_variable_bounds!(m::PyomoDynamicOptModel, sys, pmap, tspan, tunable_params, user_bounds = Dict())
+    (; state_bounds, input_bounds, param_bounds, tf_bounds) = MTK.extract_variable_bounds(sys, pmap, tspan, tunable_params, user_bounds)
     t = MTK.get_iv(sys)
     for (i, (lo, hi)) in state_bounds
         var = MTK.lowered_var(m, :U, i, t)
@@ -200,10 +202,10 @@ function MTK.set_objective!(pmodel::PyomoDynamicOptModel, expr)
     expr = Symbolics.substitute(expr, SPECIAL_FUNCTIONS_DICT, fold = Val(false))
     return if SU.query(isequal(Symbolics.unwrap(t_sym)), expr)
         f = eval(Symbolics.build_function(expr, model_sym, t_sym))
-        model.obj = pyomo.Objective(model.t, rule = Pyomo.pyfunc(f))
+        model.obj = pyomo.Objective(model.t, rule = pyfunc(f))
     else
         f = eval(Symbolics.build_function(expr, model_sym, dummy_sym))
-        model.obj = pyomo.Objective(rule = Pyomo.pyfunc(f))
+        model.obj = pyomo.Objective(rule = pyfunc(f))
     end
 end
 
@@ -217,7 +219,7 @@ end
 function MTK.lowered_integral(m::PyomoDynamicOptModel, arg, lo, hi)
     @unpack model, model_sym, t_sym, dummy_sym = m
     total = 0
-    dt = Pyomo.pyconvert(Float64, (model.t.at(-1) - model.t.at(1)) / (model.steps - 1))
+    dt = pyconvert(Float64, (model.t.at(-1) - model.t.at(1)) / (model.steps - 1))
     f = Symbolics.build_function(arg, model_sym, t_sym, expression = false)
     for (i, t) in enumerate(model.t)
         if Bool(lo < t) && Bool(t < hi)
@@ -292,23 +294,23 @@ end
 
 function MTK.get_U_values(output::PyomoOutput)
     m = output.model
-    return [[Pyomo.pyconvert(Float64, pyomo.value(m.U[i, t])) for i in m.u_idxs] for t in m.t]
+    return [[pyconvert(Float64, pyomo.value(m.U[i, t])) for i in m.u_idxs] for t in m.t]
 end
 function MTK.get_V_values(output::PyomoOutput)
     m = output.model
-    return [[Pyomo.pyconvert(Float64, pyomo.value(m.V[i, t])) for i in m.v_idxs] for t in m.t]
+    return [[pyconvert(Float64, pyomo.value(m.V[i, t])) for i in m.v_idxs] for t in m.t]
 end
 function MTK.get_P_values(output::PyomoOutput)
     m = output.model
-    return [Pyomo.pyconvert(Float64, pyomo.value(m.P[i])) for i in m.p_idxs]
+    return [pyconvert(Float64, pyomo.value(m.P[i])) for i in m.p_idxs]
 end
 function MTK.get_t_values(output::PyomoOutput)
     m = output.model
-    return Pyomo.pyconvert(Float64, pyomo.value(m.tₛ)) * [Pyomo.pyconvert(Float64, t) for t in m.t]
+    return pyconvert(Float64, pyomo.value(m.tₛ)) * [pyconvert(Float64, t) for t in m.t]
 end
 
 function MTK.objective_value(output::PyomoOutput)
-    return Pyomo.pyconvert(Float64, pyomo.value(output.model.obj))
+    return pyconvert(Float64, pyomo.value(output.model.obj))
 end
 
 function MTK.successful_solve(output::PyomoOutput)

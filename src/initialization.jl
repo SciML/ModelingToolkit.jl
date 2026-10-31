@@ -1,9 +1,7 @@
 MTKBase.singular_check(ts::TearingState) = StateSelection.singular_check(ts)
 
 function MTKBase.get_initialization_problem_type(
-        sys::System, isys::System;
-        warn_initialize_determined = true,
-        use_scc = true, kwargs...
+        sys::System, isys::System, verbosity::MTKVerbosity; use_scc = true, kwargs...
     )
     neqs = length(equations(isys))
     nunknown = length(unknowns(isys))
@@ -18,11 +16,15 @@ function MTKBase.get_initialization_problem_type(
         scc_message = ""
     end
 
-    if warn_initialize_determined && neqs > nunknown
-        @warn overdetermined_initialization_message(neqs, nunknown, scc_message)
+    if neqs > nunknown
+        @SciMLMessage(verbosity, :overdetermined_initialization) do
+            overdetermined_initialization_message(neqs, nunknown, scc_message)
+        end
     end
-    if warn_initialize_determined && neqs < nunknown
-        @warn underdetermined_initialization_message(neqs, nunknown, scc_message)
+    if neqs < nunknown
+        @SciMLMessage(verbosity, :underdetermined_initialization) do
+            underdetermined_initialization_message(neqs, nunknown, scc_message)
+        end
     end
 
     unassigned_vars = MTKBase.singular_check(ts)
@@ -37,11 +39,13 @@ function MTKBase.get_initialization_problem_type(
                 # remaining blocks keep their plain Newton solves.
                 SCCNonlinearProblem
             else
-                @warn """
-                `SCCNonlinearProblem` can only be used with `split = true` systems. \
-                Simplify your `System` with `split = true` or pass `use_scc = false` to \
-                disable this warning
-                """
+                @SciMLMessage(verbosity, :scc_initialization_unavailable) do
+                    """
+                    `SCCNonlinearProblem` can only be used with `split = true` systems. \
+                    Simplify your `System` with `split = true` or pass `use_scc = false` to \
+                    disable this warning
+                    """
+                end
                 MTKBase.get_nonlinear_problem_type(isys)
             end
         else
@@ -84,14 +88,22 @@ at the cost of compiling the residual for the backend's number types. `prob` may
 data (e.g. an `ODEProblem`/`DAEProblem` built from a `System`), or an initialization
 `NonlinearProblem`/`NonlinearLeastSquaresProblem` directly.
 
-# Keyword arguments
+# Arguments
+
+- `prob`: A problem with initialization data, or an initialization
+  `NonlinearProblem`/`NonlinearLeastSquaresProblem`.
+
+# Keywords
+
   - `rtol`: a singular value `σ` is treated as zero when `σ ≤ max(atol, rtol * σmax)`,
     where `σmax` is the largest singular value. Increase it to also surface near-singular
     directions.
   - `atol`: absolute singular-value threshold (see `rtol`).
   - `threshold`: only unknowns/equations whose participation exceeds this value are
     reported.
-  - `verbose`: print a human-readable report.
+  - `verbose`: print a human-readable report. Accepts a `Bool`, a `SciMLLogging` preset,
+    or an [`MTKVerbosity`](@ref); the report is controlled by its
+    `initialization_analysis` toggle.
   - `autodiff`: `nothing` (default) computes the Jacobian by central finite differences
     with step `cbrt(eps)`, whose truncation error is far below the default rank tolerance
     and whose first call avoids recompiling the generated residual (the dominant cost of
@@ -114,6 +126,13 @@ A `NamedTuple` `(; jacobian, singular_values, rank, nullity, redundancy, underde
 A `nullity` of `0` means the Jacobian has full column rank at `u0` (no underdetermined
 unknowns); a `redundancy` of `0` means full row rank (no redundant equations).
 
+# Examples
+
+```julia
+analysis = analyze_initialization_jacobian(prob)
+analysis.nullity, analysis.redundancy
+```
+
 !!! note
     The Jacobian is evaluated at a single point (`u0`), so this reports the *local* rank
     structure there. A structurally well-posed initialization can still be numerically
@@ -122,6 +141,7 @@ unknowns); a `redundancy` of `0` means full row rank (no redundant equations).
 function analyze_initialization_jacobian(
         prob; rtol = 1.0e-8, atol = 0.0, threshold = 1.0e-3, verbose = true, autodiff = nothing
     )
+    verbose = MTKVerbosity(verbose)
     empty_result = (;
         jacobian = nothing, singular_values = Float64[], rank = 0,
         nullity = 0, redundancy = 0, underdetermined_unknowns = Pair[],
@@ -129,13 +149,18 @@ function analyze_initialization_jacobian(
     )
     iprob = _initialization_problem(prob)
     if iprob === nothing
-        verbose &&
-            @info "No initialization problem to analyze: the system is fully determined by its initial conditions."
+        @SciMLMessage(
+            "No initialization problem to analyze: the system is fully determined by its initial conditions.",
+            verbose, :initialization_analysis
+        )
         return empty_result
     end
     u0 = state_values(iprob)
     if u0 === nothing || isempty(u0)
-        verbose && @info "The initialization problem has no unknowns to solve for."
+        @SciMLMessage(
+            "The initialization problem has no unknowns to solve for.",
+            verbose, :initialization_analysis
+        )
         return empty_result
     end
     u0 = collect(float.(u0))
@@ -179,37 +204,50 @@ function analyze_initialization_jacobian(
         [(eqs === nothing ? i : eqs[i]) => row_w[i] for i in 1:nrows if row_w[i] > threshold];
         by = last, rev = true
     )
-    if verbose
-        println("Initialization Jacobian rank analysis")
-        println("  residual Jacobian: $(nrows)×$(ncols), rank ≈ $rank, nullity ≈ $nullity, redundancy ≈ $redundancy")
-        if !isempty(S)
-            k = min(5, length(S))
-            println(
-                "  smallest $k singular value(s): ",
-                round.(S[(end - k + 1):end], sigdigits = 3)
-            )
-        end
-        if nullity == 0
-            println("  Full column rank at u0 — no underdetermined unknowns.")
-        else
-            println("  Underdetermined unknowns (participation ∈ [0, 1]):")
-            for (s, w) in underdetermined_unknowns
-                println("    ", lpad(string(round(w, digits = 4)), 8), "  ", s)
-            end
-        end
-        if redundancy == 0
-            println("  Full row rank at u0 — no redundant equations.")
-        else
-            println("  Redundant equations (participation ∈ [0, 1]):")
-            for (e, w) in redundant_equations
-                println("    ", lpad(string(round(w, digits = 4)), 8), "  ", e)
-            end
-        end
+    @SciMLMessage(verbose, :initialization_analysis) do
+        _initialization_analysis_report(
+            nrows, ncols, rank, nullity, redundancy, S,
+            underdetermined_unknowns, redundant_equations
+        )
     end
     return (;
         jacobian = J, singular_values = S, rank, nullity, redundancy,
         underdetermined_unknowns, redundant_equations,
     )
+end
+
+# The human-readable report of `analyze_initialization_jacobian`.
+function _initialization_analysis_report(
+        nrows, ncols, rank, nullity, redundancy, S,
+        underdetermined_unknowns, redundant_equations
+    )
+    io = IOBuffer()
+    println(io, "Initialization Jacobian rank analysis")
+    println(io, "  residual Jacobian: $(nrows)×$(ncols), rank ≈ $rank, nullity ≈ $nullity, redundancy ≈ $redundancy")
+    if !isempty(S)
+        k = min(5, length(S))
+        println(
+            io, "  smallest $k singular value(s): ",
+            round.(S[(end - k + 1):end], sigdigits = 3)
+        )
+    end
+    if nullity == 0
+        println(io, "  Full column rank at u0 — no underdetermined unknowns.")
+    else
+        println(io, "  Underdetermined unknowns (participation ∈ [0, 1]):")
+        for (s, w) in underdetermined_unknowns
+            println(io, "    ", lpad(string(round(w, digits = 4)), 8), "  ", s)
+        end
+    end
+    if redundancy == 0
+        print(io, "  Full row rank at u0 — no redundant equations.")
+    else
+        print(io, "  Redundant equations (participation ∈ [0, 1]):")
+        for (e, w) in redundant_equations
+            print(io, "\n    ", lpad(string(round(w, digits = 4)), 8), "  ", e)
+        end
+    end
+    return String(take!(io))
 end
 
 # Symbolic equations of an initialization problem, in residual order, or `nothing` if not

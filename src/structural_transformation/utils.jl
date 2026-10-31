@@ -18,8 +18,16 @@ function sorted_incidence_matrix(sys::AbstractSystem)
 
     ts = get_tearing_state(sys)
     imat = Graphs.incidence_matrix(ts.structure.graph)
+    # `var_sccs` only lists matched variables; append unmatched columns so `q`
+    # is a full column permutation. Row permutation length must match `size(imat, 1)`.
+    q = Int[]
+    sizehint!(q, size(imat, 2))
+    for scc in var_sccs
+        append!(q, scc)
+    end
+    append!(q, setdiff(axes(imat, 2), q))
     buffer = similar(imat)
-    permute!(buffer, imat, 1:size(imat, 2), reduce(vcat, var_sccs))
+    permute!(buffer, imat, axes(imat, 1), q)
     return buffer
 end
 
@@ -27,9 +35,17 @@ end
 ### Structural and symbolic utilities
 ###
 """
-    $TYPEDSIGNATURES
+    highest_order_variable_mask(ts)
 
-Return a predicate selecting variables with no differentiated successor in the tearing state.
+Return a predicate selecting highest-order variables in a tearing state.
+
+# Arguments
+
+- `ts`: tearing state whose derivative graph should be inspected.
+
+# Returns
+
+A predicate `f(v)::Bool` over variable indices.
 """
 function highest_order_variable_mask(ts)
     return let v2d = ts.structure.var_to_diff
@@ -38,9 +54,17 @@ function highest_order_variable_mask(ts)
 end
 
 """
-    $TYPEDSIGNATURES
+    lowest_order_variable_mask(ts)
 
-Return a predicate selecting variables with no lower-order predecessor in the tearing state.
+Return a predicate selecting lowest-order variables in a tearing state.
+
+# Arguments
+
+- `ts`: tearing state whose derivative graph should be inspected.
+
+# Returns
+
+A predicate `f(v)::Bool` over variable indices.
 """
 function lowest_order_variable_mask(ts)
     return let v2d = ts.structure.var_to_diff
@@ -49,9 +73,19 @@ function lowest_order_variable_mask(ts)
 end
 
 """
-    $TYPEDSIGNATURES
+    but_ordered_incidence(ts::TearingState, varmask = highest_order_variable_mask(ts))
 
-Return a block upper triangular incidence matrix and block boundaries for `ts`.
+Construct the block upper triangular ordered incidence matrix for `ts`.
+
+# Arguments
+
+- `ts`: tearing state to analyze.
+- `varmask`: predicate selecting which variable indices participate in the ordering.
+
+# Returns
+
+A pair `(matrix, block_boundaries)` containing the ordered incidence matrix and the
+starting row/column boundaries for each block.
 """
 function but_ordered_incidence(ts::TearingState, varmask = highest_order_variable_mask(ts))
     graph = complete(ts.structure.graph)

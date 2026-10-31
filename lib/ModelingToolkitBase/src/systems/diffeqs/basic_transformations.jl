@@ -218,7 +218,9 @@ function fractional_to_ordinary(
 
     function fto_helper(sub_eq, sub_var, α; initial = 0)
         alpha_0 = α
+        α == 1 && throw(ArgumentError("`fractional_to_ordinary` requires non-integer orders, got α = 1"))
 
+        coeff = 1.0
         if (α > 1)
             coeff = 1 / (α - 1)
             m = 2
@@ -950,7 +952,7 @@ function convert_system_indepvar(sys::System, t; name = nameof(sys))
             end
             ns = maketerm(
                 typeof(s), operation(s), Any[t],
-                SymbolicUtils.metadata(s)
+                TermInterface.metadata(s)
             )
             newsts[i] = ns
             varmap[s] = ns
@@ -996,6 +998,8 @@ Shorthand for `respecialize(sys, []; all = true)`
 """
 respecialize(sys::AbstractSystem) = respecialize(sys, []; all = true)
 
+_with_callable_type(::Type{<:FnType{X, Y}}, ::Type{T}) where {X, Y, T} = FnType{X, Y, T}
+
 """
     $(TYPEDSIGNATURES)
 
@@ -1004,14 +1008,17 @@ Specialize nonnumeric parameters in `sys` by changing their symtype to a concret
 to a value. If the element is a parameter, it must have a default. Each specified parameter
 is updated to have the symtype of the value associated with it (either in `mapping` or in
 the defaults). This operation can only be performed on nonnumeric, non-array parameters. The
-defaults of respecialized parameters are set to the associated values.
+defaults of respecialized parameters are set to the associated values. A callable parameter,
+such as `(f::AbstractFoo)(..)` or `f(::Real)::Real`, keeps its call signature and takes the
+type of the value as its callable type.
 
 This operation can only be performed on `complete`d systems.
 
 # Keyword arguments
 
 - `all`: Specialize all nonnumeric parameters in the system. This will error if any such
-  parameter does not have a default.
+  parameter does not have a default. Buffers added by `add_diffcache` are left as they are,
+  since `MTKParameters` creates their values.
 """
 function respecialize(sys::AbstractSystem, mapping; all = false)
     if !iscomplete(sys)
@@ -1036,10 +1043,12 @@ function respecialize(sys::AbstractSystem, mapping; all = false)
 
     extras = Union{SymbolicT, Pair}[]
     if all
+        diffcaches = SU.getmetadata(sys, DiffCacheParams, Dict{SymbolicT, Int}())::Dict{SymbolicT, Int}
         for x in filter(!is_variable_numeric, get_ps(sys))
             if any(y -> isequal(x, y) || y isa Pair && isequal(x, y[1]), mapping) ||
                     symbolic_type(x) === ArraySymbolic() ||
-                    iscall(x) && operation(x) === getindex
+                    iscall(x) && operation(x) === getindex ||
+                    haskey(diffcaches, x)
                 continue
             end
             push!(extras, x)
@@ -1092,6 +1101,8 @@ function respecialize(sys::AbstractSystem, mapping; all = false)
             op = SU.Sym{VartypeT}(nameof(op); type = SU.FnType{Tuple, T, Nothing}, shape = SU.shape(k))
             args = arguments(k)
             new_p = op(args...)
+        elseif SU.is_function_symbolic(k)
+            new_p = SSym(getname(k); type = _with_callable_type(symtype(k), T), shape = SU.shape(k))
         else
             new_p = SSym(getname(k); type = T, shape = SU.shape(v))
         end
@@ -1192,6 +1203,13 @@ end
 Add a symbolic `DiffCache` containing a buffer of length `len` to `sys`. Return the new system
 and the symbolic parameter in it representing the added `DiffCache` wrapped in a
 [`DiffCacheAllocatorAPIWrapper`](@ref).
+
+The buffer is stored in the `caches` portion of `MTKParameters` (see [`MTKParameters`](@ref)),
+ahead of any cache buffers appended by `SCCNonlinearProblem`. It is scratch space that
+generated code writes into, so it is deliberately kept out of the `nonnumeric` portion,
+which is declared inactive for Enzyme and non-differentiable for ChainRules. `copy` and
+`remake_buffer` shallow-copy the buffer vector, so copies of an `MTKParameters` share the
+underlying `DiffCache`; problems built from such copies must not be solved concurrently.
 
 Only intended for internal use by ModelingToolkitBase, ModelingToolkitTearing and ModelingToolkit.
 """

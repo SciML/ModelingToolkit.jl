@@ -1,3 +1,4 @@
+"""$(function_docstring(NonlinearFunction, false, [:resid_prototype, :jac]))"""
 @fallback_iip_specialize function SciMLBase.NonlinearFunction{iip, spec}(
         sys::System; u0 = nothing, p = nothing, t = nothing, jac = false,
         eval_expression = false, eval_module = @__MODULE__, sparse = false,
@@ -19,7 +20,7 @@ end
     SciMLBase.NonlinearFunction{iip, spec}(sys::System, opts::SciMLFunctionOptions; kwargs...)
 
 Public entry point that builds a `NonlinearFunction` directly from a pre-assembled
-[`SciMLFunctionOptions`](@ref), bypassing the `kwargs...` wrapper above.
+`SciMLFunctionOptions`, bypassing the `kwargs...` wrapper above.
 """
 function SciMLBase.NonlinearFunction{iip, spec}(
         sys::System, opts::SciMLFunctionOptions{E};
@@ -27,6 +28,14 @@ function SciMLBase.NonlinearFunction{iip, spec}(
     ) where {iip, spec, E}
     check_complete(sys, NonlinearFunction)
     opts.check_compatibility && check_compatible_system(NonlinearFunction, sys)
+    if has_any_limited(sys)
+        throw(
+            ArgumentError(
+                "the system contains `limited(...)` nodes that were not lowered; " *
+                    "`limited` requires the system to be compiled with `mtkcompile`."
+            )
+        )
+    end
 
     (; u0, p, jac, sparse, analytic, simplify, initialization_data) = opts
     codegen_opts = opts.codegen
@@ -37,10 +46,11 @@ function SciMLBase.NonlinearFunction{iip, spec}(
         if u0 === nothing || p === nothing
             error("u0, and p must be specified for FunctionWrapperSpecialize on NonlinearFunction.")
         end
+        resid = resid_prototype === nothing ? u0 : resid_prototype
         if E
-            f = :($(SciMLBase.wrapfun_iip)($f, ($u0, $u0, $p)))
+            f = :($(SciMLBase.wrapfun_iip)($f, ($resid, $u0, $p)))
         else
-            f = SciMLBase.wrapfun_iip(f, (u0, u0, p))
+            f = SciMLBase.wrapfun_iip(f, (resid, u0, p))
         end
     end
 
@@ -76,13 +86,13 @@ end
     $(TYPEDSIGNATURES)
 
 Construct the `lb` and `ub` vectors of bounds for the unknowns of `sys` from their `bounds`
-metadata, aligned with the order of `unknowns(sys)`. `op` is the operating point used to
+metadata, aligned with the order of `flat_unknowns(sys)`. `op` is the operating point used to
 resolve any symbolic bounds. Returns `(nothing, nothing)` if no unknown has a finite bound,
 so problems without bounds are left untouched (and don't trigger the bounds-handling path in
 the solver). See also [`getbounds`](@ref).
 """
 function generate_nonlinear_bounds(sys::AbstractSystem, op)
-    dvs = unknowns(sys)
+    dvs = flat_unknowns(sys)
     isempty(dvs) && return nothing, nothing
     lb = first.(getbounds.(dvs))
     ub = last.(getbounds.(dvs))
@@ -113,8 +123,35 @@ function generate_nonlinear_bounds(sys::AbstractSystem, op)
     return lb, ub
 end
 
+"""
+    $(TYPEDEF)
+
+Sentinel default for the `lb`/`ub` keywords of the nonlinear problem constructors,
+distinguishing "not supplied, so derive the box from the unknowns' `bounds` metadata" from
+an explicit `lb = nothing, ub = nothing`, which asserts that the problem has no box.
+
+The distinction matters wherever a system's unknowns are not the quantities their metadata
+describes. The implicit stage system of an `nlstep` `ODEProblem` is the case in point: it
+reuses the ODE unknowns as the symbols for the Newton *increments* `z`, for which
+`lb ≤ u ≤ ub` is not `lb ≤ z ≤ ub`.
+"""
+struct DeriveBounds end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Resolve the `lb`/`ub` keywords of a nonlinear problem constructor: derive both from the
+unknowns' `bounds` metadata only when neither was supplied, and turn the
+[`DeriveBounds`](@ref) sentinel into `nothing` otherwise.
+"""
+function resolve_nonlinear_bounds(sys::AbstractSystem, op, lb, ub)
+    lb isa DeriveBounds && ub isa DeriveBounds && return generate_nonlinear_bounds(sys, op)
+    return (lb isa DeriveBounds ? nothing : lb), (ub isa DeriveBounds ? nothing : ub)
+end
+
+"""$(problem_docstring(SciMLBase.NonlinearProblem, NonlinearFunction, false))"""
 @fallback_iip_specialize function SciMLBase.NonlinearProblem{iip, spec}(
-        sys::System, op; expression = Val{false}, lb = nothing, ub = nothing,
+        sys::System, op; expression = Val{false}, lb = DeriveBounds(), ub = DeriveBounds(),
         check_length = true, check_compatibility = true, kwargs...
     ) where {iip, spec}
     check_complete(sys, NonlinearProblem)
@@ -130,11 +167,16 @@ end
         check_length, check_compatibility, expression, kwargs...
     )
 
-    if lb === nothing && ub === nothing
-        lb, ub = generate_nonlinear_bounds(sys, op)
-    end
+    lb, ub = resolve_nonlinear_bounds(sys, op, lb, ub)
 
     kwargs = process_kwargs(sys; kwargs...)
+    # `limited` quantities lower to a `postcondition` corrector, which is a solver option
+    # rather than a property of the function: attach it to the problem's keywords so it
+    # is forwarded to `solve`/`init` like any other option (and can be overridden there).
+    kwargs = merge_limited_postcondition(
+        sys, _iip, kwargs; expression, eval_expression = get(kwargs, :eval_expression, false),
+        eval_module = get(kwargs, :eval_module, @__MODULE__)
+    )
     ptype = getmetadata(sys, ProblemTypeCtx, StandardNonlinearProblem())
     args = (; f, u0, p, ptype)
 
@@ -168,8 +210,9 @@ function SciMLBase.AbstractNonlinearProblem(sys::System, op; kwargs...)
     return get_nonlinear_problem_type(sys)(sys, op; kwargs...)
 end
 
+"""$(problem_docstring(SciMLBase.NonlinearLeastSquaresProblem, NonlinearFunction, false))"""
 @fallback_iip_specialize function SciMLBase.NonlinearLeastSquaresProblem{iip, spec}(
-        sys::System, op; check_length = false, lb = nothing, ub = nothing,
+        sys::System, op; check_length = false, lb = DeriveBounds(), ub = DeriveBounds(),
         check_compatibility = true, expression = Val{false}, kwargs...
     ) where {iip, spec}
     check_complete(sys, NonlinearLeastSquaresProblem)
@@ -178,13 +221,11 @@ end
     _iip = resolve_iip(iip, op)
     f, u0,
         p = process_SciMLProblem(
-        NonlinearFunction{_iip}, sys, op;
-        check_length, expression, kwargs...
+        NonlinearFunction{_iip, spec}, sys, op;
+        check_length, check_compatibility, expression, kwargs...
     )
 
-    if lb === nothing && ub === nothing
-        lb, ub = generate_nonlinear_bounds(sys, op)
-    end
+    lb, ub = resolve_nonlinear_bounds(sys, op, lb, ub)
 
     kwargs = process_kwargs(sys; kwargs...)
     args = (; f, u0, p)

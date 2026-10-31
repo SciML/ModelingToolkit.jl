@@ -1,3 +1,4 @@
+"""$(function_docstring(IntervalNonlinearFunction, false, Symbol[]))"""
 function SciMLBase.IntervalNonlinearFunction(
         sys::System; u0 = nothing, p = nothing, t = nothing, eval_expression = false,
         eval_module = @__MODULE__, expression = Val{false}, checkbounds = false,
@@ -17,7 +18,7 @@ end
     SciMLBase.IntervalNonlinearFunction(sys::System, opts::SciMLFunctionOptions)
 
 Public entry point that builds an `IntervalNonlinearFunction` directly from a pre-assembled
-[`SciMLFunctionOptions`](@ref), bypassing the `kwargs...` wrapper above.
+`SciMLFunctionOptions`, bypassing the `kwargs...` wrapper above.
 """
 function SciMLBase.IntervalNonlinearFunction(sys::System, opts::SciMLFunctionOptions{E}) where {E}
     check_complete(sys, IntervalNonlinearFunction)
@@ -43,6 +44,7 @@ function SciMLBase.IntervalNonlinearFunction(sys::System, opts::SciMLFunctionOpt
     )
 end
 
+"""$(problem_docstring(SciMLBase.IntervalNonlinearProblem, IntervalNonlinearFunction, false))"""
 function SciMLBase.IntervalNonlinearProblem(
         sys::System, uspan::NTuple{2}, parammap = SciMLBase.NullParameters();
         check_compatibility = true, expression = Val{false}, kwargs...

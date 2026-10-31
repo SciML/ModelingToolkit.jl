@@ -124,7 +124,8 @@ struct PDESystem <: AbstractSystem
             if isnothing(analytic_func)
                 analytic_func = map(analytic) do eq
                     args = arguments(eq.lhs)
-                    p = ps isa SciMLBase.NullParameters ? [] : ps
+                    p = ps isa SciMLBase.NullParameters ? [] :
+                        map(p -> p isa Pair ? first(p) : p, ps)
                     args = vcat(DestructuredArgs(p), args)
                     ex = Func(args, [], eq.rhs) |> toexpr
                     eq.lhs => drop_expr(
@@ -187,6 +188,19 @@ end
 # variables as `ivs` (plural), whereas the AbstractSystem API expects `unknowns` and `iv`.
 get_unknowns(sys::PDESystem) = getfield(sys, :dvs)
 has_unknowns(::PDESystem) = true
+
+# PDESystem stores field roles as variable metadata instead of dedicated fields.
+# Return unwrapped variables to match the AbstractSystem input/output interface.
+function get_inputs(sys::PDESystem)
+    return filter(isinput, unwrap.(get_dvs(sys)))
+end
+
+function get_outputs(sys::PDESystem)
+    return filter(x -> !isinput(x) && isoutput(x), unwrap.(get_dvs(sys)))
+end
+
+has_inputs(::PDESystem) = true
+has_outputs(::PDESystem) = true
 
 function Base.propertynames(sys::PDESystem; private = false)
     if private

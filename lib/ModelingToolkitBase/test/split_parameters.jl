@@ -13,18 +13,18 @@ using Symbolics
 x = [1, 2.0, false, [1, 2, 3], Parameter(1.0)]
 
 y = ModelingToolkitBase.promote_to_concrete(x)
-@test eltype(y) == Union{Float64, Parameter{Float64}, Vector{Int64}}
+@test eltype(y) == Union{Float64, Parameter{Float64}, Vector{Int}}
 
 y = ModelingToolkitBase.promote_to_concrete(x; tofloat = false)
-@test eltype(y) == Union{Bool, Float64, Int64, Parameter{Float64}, Vector{Int64}}
+@test eltype(y) == Union{Bool, Float64, Int, Parameter{Float64}, Vector{Int}}
 
 x = [1, 2.0, false, [1, 2, 3]]
 y = ModelingToolkitBase.promote_to_concrete(x)
-@test eltype(y) == Union{Float64, Vector{Int64}}
+@test eltype(y) == Union{Float64, Vector{Int}}
 
 x = Any[1, 2.0, false]
 y = ModelingToolkitBase.promote_to_concrete(x; tofloat = false)
-@test eltype(y) == Union{Bool, Float64, Int64}
+@test eltype(y) == Union{Bool, Float64, Int}
 
 y = ModelingToolkitBase.promote_to_concrete(x; use_union = false)
 @test eltype(y) == Float64

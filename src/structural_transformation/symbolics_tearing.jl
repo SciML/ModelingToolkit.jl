@@ -12,13 +12,16 @@ end
     tearing(sys)
 
 Tear the nonlinear equations in system. When `simplify=true`, we simplify the
-new residual equations after tearing. End users are encouraged to call [`mtkcompile`](@ref)
+new residual equations after tearing. End users are encouraged to call [`ModelingToolkitBase.mtkcompile`](@ref)
 instead, which calls this function internally.
 """
 function tearing(
         sys::AbstractSystem, state = TearingState(sys);
         reassemble_alg::ReassembleAlgorithm = DefaultReassembleAlgorithm(),
-        fully_determined = true, kwargs...
+        fully_determined = true,
+        # Not forwarded: StateSelection and MTKTearing do not accept `verbose`.
+        verbose::MTKVerbosity = MTKVerbosity(),
+        kwargs...
     )
     tearing_result, extras = tearing(state; kwargs...)
     return invalidate_cache!(reassemble_alg(state, tearing_result, state.mm; fully_determined, kwargs...))
@@ -26,7 +29,7 @@ end
 
 function safe_isinteger(@nospecialize(x::Number))
     if x isa Int64
-        return true
+        return typemin(Int) <= x <= typemax(Int)
     elseif x isa Int32
         return true
     elseif x isa BigInt
@@ -57,7 +60,10 @@ the system is balanced.
 function dummy_derivative(
         sys, state = TearingState(sys);
         reassemble_alg::ReassembleAlgorithm = DefaultReassembleAlgorithm(),
-        fully_determined = true, kwargs...
+        fully_determined = true,
+        # Not forwarded: StateSelection and MTKTearing do not accept `verbose`.
+        verbose::MTKVerbosity = MTKVerbosity(),
+        kwargs...
     )
     jac = let state = state
         (eqs, vars) -> begin

@@ -6,6 +6,10 @@ using LinearAlgebra
 using Test
 using ModelingToolkit: t_nounits as t, D_nounits as D
 
+@test SciMLBase.specialization(
+    SemilinearODEFunction{true, SciMLBase.AutoDespecialize}
+) === SciMLBase.AutoDespecialize
+
 # from https://docs.sciml.ai/SciMLBenchmarksOutput/dev/AstroChem/nelson/
 @testset "Astrochem model" begin
     function Nelson!(du, u, p, t)

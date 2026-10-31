@@ -1,19 +1,33 @@
-@deprecate structural_simplify(sys; kwargs...) mtkcompile(sys; kwargs...)
-@deprecate structural_simplify(sys, io; kwargs...) mtkcompile(
-    sys; inputs = io[1], outputs = io[2], kwargs...
-)
-
-@doc """
+"""
     structural_simplify(sys; kwargs...)
+    structural_simplify(sys, io; kwargs...)
 
 Deprecated alias for [`mtkcompile`](@ref).
+
+Use `mtkcompile(sys; kwargs...)` in new code.
 """
-structural_simplify
+function structural_simplify(sys; kwargs...)
+    Base.depwarn(
+        "`structural_simplify(sys; kwargs...)` is deprecated, use `mtkcompile(sys; kwargs...)` instead.",
+        :structural_simplify,
+    )
+    return mtkcompile(sys; kwargs...)
+end
+
+function structural_simplify(sys, io; kwargs...)
+    Base.depwarn(
+        "`structural_simplify(sys, io; kwargs...)` is deprecated, use `mtkcompile(sys; kwargs...)` instead.",
+        :structural_simplify,
+    )
+    return mtkcompile(sys; inputs = io[1], outputs = io[2], kwargs...)
+end
 
 """
-    @mtkbuild sys = Constructor(args...; kwargs...)
+    @mtkbuild expr
 
 Deprecated alias for [`@mtkcompile`](@ref).
+
+Use `@mtkcompile` in new code.
 """
 macro mtkbuild(exprs...)
     return quote
@@ -27,14 +41,14 @@ macro mtkbuild(exprs...)
     end |> esc
 end
 
-const ODESystem = IntermediateDeprecationSystem
-
-@doc """
+"""
     ODESystem(args...; kwargs...)
 
-Deprecated alias constructor for [`System`](@ref).
+Deprecated alias for [`System`](@ref).
+
+Use `System(args...; kwargs...)` in new code.
 """
-ODESystem
+const ODESystem = IntermediateDeprecationSystem
 
 function IntermediateDeprecationSystem(args...; kwargs...)
     Base.depwarn(
@@ -45,23 +59,47 @@ function IntermediateDeprecationSystem(args...; kwargs...)
     return System(args...; kwargs...)
 end
 
-for T in [:NonlinearSystem, :DiscreteSystem, :ImplicitDiscreteSystem]
-    @eval @deprecate $T(args...; kwargs...) System(args...; kwargs...)
+"""
+    NonlinearSystem(args...; kwargs...)
+
+Deprecated alias constructor for [`System`](@ref). Use `System(args...; kwargs...)` in
+new code.
+"""
+function NonlinearSystem(args...; kwargs...)
+    Base.depwarn(
+        "`NonlinearSystem(args...; kwargs...)` is deprecated, use `System(args...; kwargs...)` instead.",
+        :NonlinearSystem,
+    )
+    return System(args...; kwargs...)
 end
 
-@doc """
+"""
     DiscreteSystem(args...; kwargs...)
 
-Deprecated alias constructor for [`System`](@ref).
+Deprecated alias constructor for [`System`](@ref). Use `System(args...; kwargs...)` in
+new code.
 """
-DiscreteSystem
+function DiscreteSystem(args...; kwargs...)
+    Base.depwarn(
+        "`DiscreteSystem(args...; kwargs...)` is deprecated, use `System(args...; kwargs...)` instead.",
+        :DiscreteSystem,
+    )
+    return System(args...; kwargs...)
+end
 
-@doc """
+"""
     ImplicitDiscreteSystem(args...; kwargs...)
 
-Deprecated alias constructor for [`System`](@ref).
+Deprecated alias constructor for [`System`](@ref). Use `System(args...; kwargs...)` in
+new code.
 """
-ImplicitDiscreteSystem
+function ImplicitDiscreteSystem(args...; kwargs...)
+    Base.depwarn(
+        "`ImplicitDiscreteSystem(args...; kwargs...)` is deprecated, use `System(args...; kwargs...)` instead.",
+        :ImplicitDiscreteSystem,
+    )
+    return System(args...; kwargs...)
+end
 
 for T in [
         :ODEProblem, :DDEProblem, :SDEProblem, :SDDEProblem, :DAEProblem,
@@ -274,6 +312,8 @@ end
     @brownian xs...
 
 Deprecated alias for [`@brownians`](@ref).
+
+Use `@brownians` in new code.
 """
 macro brownian(xs...)
     return quote

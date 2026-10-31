@@ -113,7 +113,8 @@ end
 
 Modify an atomic array mapping `dd` to map `k` to `v`. If `k` is an indexed array symbolic,
 update the array to have value `v` at the corresponding index. If the array is not a key,
-create the key and set all other entries to `default`.
+create the key and set all other entries to `default`. If `k` is an array symbolic and `v`
+is scalar-shaped, `v` is broadcast to `size(k)`.
 """
 function write_possibly_indexed_array!(dd::AtomicArrayDict{SymbolicT}, k::SymbolicT, v::SymbolicT, default::SymbolicT)
     arr, isarr = split_indexed_var(k)
@@ -123,15 +124,30 @@ function write_possibly_indexed_array!(dd::AtomicArrayDict{SymbolicT}, k::Symbol
         else
             fill(default, size(arr))
         end
-        idx = get_stable_index(k)
-        buffer[idx] = v
+        isempty(buffer) && return dd
+        if ndims(k) == 0
+            buffer[get_stable_index(k)] = v
+        else
+            indices = unwrap_const.(arguments(k)[2:end])
+            buffer[indices...] = collect(v)
+        end
         if all(SU.isconst, buffer)
             dd[arr] = BSImpl.Const{VartypeT}(unwrap_const.(buffer))
         else
             dd[arr] = BSImpl.Const{VartypeT}(buffer)
         end
     else
-        dd[k] = v
+        shk = SU.shape(k)
+        dd[k] = if SU.is_array_shape(shk) && !(shk isa SU.Unknown) &&
+                !SU.is_array_shape(SU.shape(v))
+            if SU.isconst(v)
+                BSImpl.Const{VartypeT}(fill(unwrap_const(v), size(k)))
+            else
+                BSImpl.Const{VartypeT}(fill(v, size(k)))
+            end
+        else
+            v
+        end
     end
     return dd
 end
@@ -152,14 +168,66 @@ end
 Equivalent to `get(dd, k, default)`. If `k` is an indexed array, then return
 `dd[arr][idxs...]` for the corresponding array `arr` and indices, or `default`
 if `arr` does not exist.
+
+When `k` is a scalar `getindex` term (possibly under unary [`Operator`](@ref)s)
+with non-constant indices and `arr` is present:
+- if `allow_symbolic_indices` is `false` (default), return `default` so
+  membership-style callers treat the entry as missing until indices are concrete;
+- if `allow_symbolic_indices` is `true`, return the symbolic `getindex` of the
+  substituted array value so a fixpoint substituter can resolve the indices next.
+
+Slice / `ArrayOp` and other non-`getindex` forms always go through
+[`get_stable_index`](@ref), which throws.
 """
-function get_possibly_indexed(dd::AtomicArrayDict, k::SymbolicT, default)
+function get_possibly_indexed(
+        dd::AtomicArrayDict, k::SymbolicT, default; allow_symbolic_indices::Bool = false
+    )
     arr, isarr = split_indexed_var(k)
     res = get(dd, arr, default)
     isarr || return res
     res === default && return default
+    if !has_const_int_indices(k) && is_getindex_indexed(k)
+        allow_symbolic_indices || return default
+        return index_substituted_array(res, k)
+    end
     idx = get_stable_index(k)
     return res[idx]
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Return `true` if `k` is a scalar `getindex` term, possibly under unary
+[`Operator`](@ref) wrappers. Slice / [`ArrayOp`](@ref) forms return `false`.
+"""
+function is_getindex_indexed(k::SymbolicT)
+    return Moshi.Match.@match k begin
+        BSImpl.Term(; f, args) && if f === getindex end => true
+        BSImpl.Term(; f, args) && if f isa Operator && length(args) == 1 end => begin
+            return is_getindex_indexed(args[1]::SymbolicT)
+        end
+        _ => return false
+    end
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Build `getindex(res, idxs...)` using the (possibly symbolic) indices of the
+indexed term `k`. Recurses through wrapping [`Operator`](@ref)s.
+"""
+function index_substituted_array(res::SymbolicT, k::SymbolicT)
+    return Moshi.Match.@match k begin
+        BSImpl.Term(; f, args) && if f === getindex end => begin
+            return res[args[2:end]...]::SymbolicT
+        end
+        BSImpl.Term(; f, args) && if f isa Operator && length(args) == 1 end => begin
+            # `res` is already the value of `f(arr)`; do not re-apply `f`
+            # (mirrors `_get_stable_index`, which discards the operator).
+            return index_substituted_array(res, args[1]::SymbolicT)::SymbolicT
+        end
+        _ => throw(ArgumentError(lazy"Invalid variable $k for `index_substituted_array`."))
+    end
 end
 
 struct AtomicArraySet{D <: AbstractDict{SymbolicT, Nothing}} <: AbstractSet{SymbolicT}
@@ -235,6 +303,13 @@ it will return the indexed array. For example, if the wrapped `dict` has
 `k[1]`, it will return `k[1]` instead of `default`. This is useful since `default`
 is used to represent missing values. Substituting something like `sin(k[1])` will
 then not attempt to perform `sin(default)` but instead return `sin(k[1])`.
+
+Limitation: when the stored array value uses `COMMON_NOTHING` holes (e.g.
+`Union{Nothing,Float64}[1.0, nothing, 3.0]`), looking up a *symbolic* index such
+as `a[i]` is not supported — constructing the intermediate symbolic `getindex`
+of that heterogeneous array currently errors. Concrete integer indices still
+honour the hole contract above. Prefer leaving those slots unset in the map
+until indices are concrete, or fill holes before substitution.
 """
 struct AtomicArrayDictSubstitutionWrapper{D} <: AbstractDict{SymbolicT, SymbolicT}
     dict::AtomicArrayDict{SymbolicT, D}
@@ -247,15 +322,20 @@ end
 
 const AADSubWrapper{D} = AtomicArrayDictSubstitutionWrapper{D}
 
+# A constant array of plain numbers cannot contain `COMMON_SENTINEL` or `COMMON_NOTHING`.
+# Scanning it through symbolic `getindex` is O(length) with a large constant, so callers
+# use this to skip the scan.
+is_numeric_const_array(v::SymbolicT) = SU.isconst(v) && eltype(unwrap_const(v)) <: Number
+
 Base.get(def::Base.Callable, dd::AADSubWrapper, k) = def()
 function Base.get(def::Base.Callable, dd::AADSubWrapper, k::SymbolicT)
-    res = get_possibly_indexed(dd.dict, k, dd.default)
+    res = get_possibly_indexed(dd.dict, k, dd.default; allow_symbolic_indices = true)
     if res === dd.default
         arr, isarr = split_indexed_var(k)
         isarr && haskey(dd.dict, arr) && return k
         return def()
     end
-    if SU.is_array_shape(SU.shape(k)) && any(
+    if SU.is_array_shape(SU.shape(k)) && !is_numeric_const_array(res) && any(
             Base.Fix2(===, dd.default) ∘ Base.Fix1(getindex, res),
             SU.stable_eachindex(res)
         )
@@ -290,3 +370,47 @@ Base.length(dd::AADSubWrapper) = length(dd.dict)
 Base.iterate(dd::AADSubWrapper, args...) = Base.iterate(dd.dict, args...)
 Base.sizehint!(dd::AADSubWrapper, n; kw...) = sizehint!(dd.dict, n; kw...)
 Base.empty!(dd::AADSubWrapper) = empty!(dd.dict)
+
+"""
+    $(TYPEDEF)
+
+Wrapper over an `AtomicArrayDictSubstitutionWrapper` that holds element writes to array
+values in per-array buffers and stores each buffer back as a whole array only when that
+array is next read through the wrapper, or on `flush_pending_writes!`. Writing `n`
+elements of one array through the wrapped dictionary copies and rehashes the array each
+time, which is quadratic in its length.
+"""
+struct PendingWritesWrapper{D} <: AbstractDict{SymbolicT, SymbolicT}
+    base::AtomicArrayDictSubstitutionWrapper{D}
+    buffers::Dict{SymbolicT, Array{SymbolicT}}
+end
+
+PendingWritesWrapper(base::AtomicArrayDictSubstitutionWrapper) = PendingWritesWrapper(base, Dict{SymbolicT, Array{SymbolicT}}())
+
+function flush_pending_writes!(dd::PendingWritesWrapper, arr::SymbolicT)
+    buffer = pop!(dd.buffers, arr, nothing)
+    buffer === nothing && return dd
+    dd.base.dict[arr] = if all(SU.isconst, buffer)
+        BSImpl.Const{VartypeT}(unwrap_const.(buffer))
+    else
+        BSImpl.Const{VartypeT}(buffer)
+    end
+    return dd
+end
+
+function flush_pending_writes!(dd::PendingWritesWrapper)
+    for arr in collect(keys(dd.buffers))
+        flush_pending_writes!(dd, arr)
+    end
+    return dd
+end
+
+Base.get(def::Base.Callable, dd::PendingWritesWrapper, k) = get(def, dd.base, k)
+function Base.get(def::Base.Callable, dd::PendingWritesWrapper, k::SymbolicT)
+    isempty(dd.buffers) || flush_pending_writes!(dd, split_indexed_var(k)[1])
+    return get(def, dd.base, k)
+end
+Base.get(dd::PendingWritesWrapper, k, default) = get(Returns(default), dd, k)
+Base.haskey(dd::PendingWritesWrapper, k) = haskey(dd.base, k)
+Base.length(dd::PendingWritesWrapper) = length(dd.base)
+Base.iterate(dd::PendingWritesWrapper, args...) = iterate(dd.base, args...)

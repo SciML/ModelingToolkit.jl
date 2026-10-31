@@ -36,6 +36,18 @@ The directionality of an analysis point can be thought of as an arrow in a block
 
 This is signified by the name being the middle argument to `connect`.
 
+An analysis point of a built model is referred to by property access on the system in
+which it was created, `sys.analysis_point_name`, and the functions above accept the
+[`AnalysisPoint`](@ref) this returns. A point belonging to a subsystem is reached through
+the hierarchy, `sys.inner.analysis_point_name`. The system must be the unsimplified and
+uncompleted model, since both `mtkcompile` and `complete` remove the analysis points.
+
+!!! warning "Old style"
+
+    Referring to an analysis point by its `Symbol` name, as in
+    `get_sensitivity(sys, :plant_input)`, is the old style and is retained only for
+    backwards compatibility. It will be deprecated.
+
 Of the above mentioned functions, all except for [`open_loop`](@ref) return the output of [`ModelingToolkit.linearize`](@ref), which is
 
 ```julia
@@ -67,8 +79,8 @@ eqs = [connect(P.output, :plant_output, C.input)  # Connect with an automaticall
        connect(C.output, :plant_input, P.input)]
 sys = System(eqs, t, systems = [P, C], name = :feedback_system)
 
-matrices_S = get_sensitivity(sys, :plant_input)[1] # Compute the matrices of a state-space representation of the (input)sensitivity function.
-matrices_T = get_comp_sensitivity(sys, :plant_input)[1]
+matrices_S = get_sensitivity(sys, sys.plant_input)[1] # Compute the matrices of a state-space representation of the (input)sensitivity function.
+matrices_T = get_comp_sensitivity(sys, sys.plant_input)[1]
 ```
 
 Continued linear analysis and design can be performed using ControlSystemsBase.jl.
@@ -95,7 +107,7 @@ T = comp_sensitivity(P, C) # or feedback(P*C)
 We may also derive the loop-transfer function $L(s) = P(s)C(s)$ using
 
 ```@example LINEAR_ANALYSIS
-matrices_L = get_looptransfer(sys, :plant_output)[1]
+matrices_L = get_looptransfer(sys, sys.plant_output)[1]
 L = ss(matrices_L...)
 ```
 
@@ -109,7 +121,7 @@ To obtain the transfer function between two analysis points, we call `linearize`
 
 ```@example LINEAR_ANALYSIS
 using ModelingToolkit # hide
-matrices_PS = linearize(sys, :plant_input, :plant_output)[1]
+matrices_PS = linearize(sys, sys.plant_input, sys.plant_output)[1]
 ```
 
 this particular transfer function should be equivalent to the linear system `P(s)S(s)`, i.e., equivalent to
@@ -140,16 +152,22 @@ margin(P)
 nyquistplot(P)
 ```
 
-## Operating Point of Unconnected Inputs After Loop Openings
-When a connection is broken via `loop_openings`, the downstream input variable(s) that were previously driven by the connection become free. The value assigned to these inputs determines the operating point at which the linearization is computed, which is significant for nonlinear systems where the Jacobian depends on the operating point.
-Semantics: The variable introduced by a loop opening is treated as a parameter of the system, not as an additional input to the linearization. It does not appear as an extra column in the $B$ or $D$ matrices of the linearized state-space model. No default value is automatically propagated from the output side of the broken connection — the user is expected to provide the value explicitly via the operating point (e.g., `op = [u => value`]).
-For initialization, variables that become free due to loop openings are treated as solvable parameters: the initialization system always considers them as unknowns. If the user provides a value in the operating point, that value is used. If no value is provided, the initialization system will attempt to determine a consistent value, but the system may be underdetermined and a warning will be issued.
-Motivation: This design reflects a series of tradeoffs discovered through iteration:
+## Operating Point of Signals Disconnected by Loop Openings
+When a connection is broken via `loop_openings`, the input variables that were driven by the connection are disconnected. Their values are part of the operating point at which the linearization is computed, which is significant for systems that are nonlinear in these variables.
 
-- Defaulting free inputs to zero (the original behavior) is incorrect for nonlinear systems because it changes the linearization point relative to the equilibrium, potentially yielding meaningless results.
-- Automatically propagating the output value of the broken connection preserves the correct operating point in some cases, makes it impossible to disconnect input sources (e.g., a Step signal). It also silently determines the operating point in a way that is difficult for the user to inspect or override.
-- Making the variable a parameter (rather than a linearization input) prevents it from appearing as an extra input dimension in the linearized system. The user requested a linearization from specific inputs to specific outputs; the broken connection's input is not one of them.
-- Requiring the user to explicitly provide the operating point for broken connections makes the linearization well-defined and inspectable. If the user wants the value that would have been present with the loop closed, they can determine this from a simulation or an initialization solution and pass it explicitly.
+Semantics: A loop opening changes the input-output structure of the linearization, not the operating point. A disconnected variable becomes a parameter of the system, not an additional input of the linearization, so it does not appear as an extra column of the $B$ or $D$ matrices. Its value is determined by, in order of precedence,
+
+ 1. its entry in the operating point: a value, e.g., `op = Dict(u => value)`; the value `missing`, which makes the initialization solve for the variable from additional conditions in the operating point, for example a steady-state condition `D(x) => 0` for a differential state variable `x`; or an expression,
+ 2. its initial condition in the system, e.g., `@variables u(t) = value`, unless the linearization is performed around a solution with [`LinearizationOpPoint`](@ref), which ignores the initial conditions of the system,
+ 3. otherwise, the value of the signal that drove it before the connection was broken, at the operating point of the loop-closed system. The initialization includes the equation `u ~ driver` in place of the broken connection, so it solves the same problem as the initialization of the loop-closed system. With a [`LinearizationOpPoint`](@ref), this is the value the signal has in the solution at each time point.
+
+A guess value of the variable does not determine its value. The same rules apply to the input that replaces the broken connection in [`get_looptransfer`](@ref), and to an input analysis point that is also listed in `loop_openings`. The value of a disconnected signal is fixed when the linearization function is built, so it must be given in the operating point passed to [`linearization_function`](@ref) or to the analysis function that builds it; `linearize(sys, lin_fun; op)` rejects values for signals that the linearization function holds at the value of their driver.
+
+Motivation:
+
+  - Loop openings are mostly used to extract a part of a feedback system at the operating point of the closed loop, e.g., the plant, the controller, or a loop-transfer function for the computation of stability margins. The linearizations of the parts combine into the linearization of the closed loop only if all parts are linearized at the same operating point. Holding the disconnected signals at their loop-closed values ensures this without any entries in the operating point, both at a single operating point and along a solution.
+  - Setting disconnected signals to zero changes the operating point of the components that are nonlinear in them, and can yield linearizations at points the system never attains.
+  - A loop opening can also be used to disconnect a signal in order to linearize at a different operating point, for example to remove a reference step that saturates a controller at the initial time. The new value of the signal is then a choice of the user, and it is given in the operating point or as an initial condition of the disconnected variable.
 
 ## Index
 

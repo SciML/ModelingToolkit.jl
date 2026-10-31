@@ -6,6 +6,7 @@ using Aqua
 using JET
 using SciMLTesting
 using Test
+import ModelingToolkit: t_nounits as t, D_nounits as D
 
 # ExplicitImports only sees an extension module once its trigger package is loaded, so
 # every weakdep is loaded here to bring the extensions into the checked module set.
@@ -29,6 +30,34 @@ const MTK_EXTENSIONS = (
     end
 end
 
+@testset "Documented input-output API" begin
+    for (mod, name) in (
+            (ModelingToolkitBase, :generate_control_function),
+            (ModelingToolkitBase, :build_explicit_observed_function),
+            (ModelingToolkit, :generate_control_function),
+            (ModelingToolkit, :build_explicit_observed_function),
+        )
+        @test Base.isexported(mod, name)
+        @static if VERSION >= v"1.11"
+            @test Base.ispublic(mod, name)
+        end
+        @test Base.Docs.doc(getfield(mod, name)) !== nothing
+    end
+
+    @variables x(t) u(t)
+    @parameters k
+    @named sys = System([D(x) ~ -k * (x + u)], t)
+
+    (; f, dvs, ps, io_sys) = generate_control_function(sys, [u]; simplify = true)
+    p = [2.0]
+    @test isequal(dvs[], x)
+    @test isequal(ps, [k])
+    @test f[1]([1.0], [3.0], p, 0.0) ≈ [-8.0]
+
+    g = build_explicit_observed_function(io_sys, [x + u * t]; inputs = [u])
+    @test g([1.0], [2.0], p, 3.0) ≈ [7.0]
+end
+
 # The exact set of externally-owned bindings ModelingToolkit deliberately exposes as part
 # of its own public API. ModelingToolkit is a facade: `@reexport using ModelingToolkitBase`
 # pulls up the modelling layer, which in turn `@reexport`s Symbolics (and, through it,
@@ -49,27 +78,38 @@ const REEXPORTED_API = (
     Symbol("@mtkbuild"), Symbol("@mtkcompile"), Symbol("@mtkcomplete"), Symbol("@named"),
     Symbol("@namespace"), Symbol("@nonamespace"), Symbol("@parameters"),
     Symbol("@poissonians"), :AbstractCollocation, :AbstractSystem, :add_accumulations,
-    :alg_equations, :AnalysisPoint, :analytically_integrated, :apply_to_variables, :asdigraph,
+    :alg_equations, :AnalysisPoint, :analytically_integrated, :ap_var, :apply_to_variables,
+    :asdigraph,
     :asgraph, :assertions, :AssignmentAffect, :bindings, :Both, :bound_inputs, :bound_outputs,
-    :bound_parameters, :brownians, :calculate_control_jacobian, :calculate_cost_gradient,
+    :bound_parameters, :brownians, :build_explicit_observed_function,
+    :calculate_control_jacobian, :calculate_cost_gradient,
     :calculate_cost_hessian, :calculate_hessian, :calculate_jacobian, :calculate_massmatrix,
-    :calculate_tgrad, :CasADiCollocation, :CasADiDynamicOptProblem,
+    :calculate_multiobjective_hessian, :calculate_multiobjective_jacobian,
+    :calculate_paramjac, :calculate_tgrad, :canonical_constraints, :CasADiCollocation,
+    :CasADiDynamicOptProblem,
     :change_independent_variable, :change_of_variables, :check_mutable_cache,
     :check_symbolic_ad_allowed, :CheckAll, :CheckComponents, :CheckNone, :CheckUnits,
     :collect_scoped_vars!, :collect_var_to_name!, :collect_vars!, :CompilerOptions, :complete,
-    :compose, :connect, :Connection, :constraints, :continuous_events,
+    :compose, :connect, :Connection, :constraint_residual, :constraints,
+    :constraints_to_penalties,
+    :continuous_events,
     :continuous_events_toplevel, :convert_bindings_for_time_independent_system,
-    :convert_system_indepvar, :cost, :D, :D_nounits, :debug_system, :diff_equations,
+    :convert_system_indepvar, :cost, :costs, :D, :D_nounits, :debug_system, :diff_equations,
     :discrete_events, :discrete_events_toplevel, :DiscreteSystem, :domain_connect,
     :DynamicOptSolution, :eqeq_dependencies, :eqtype_supports_collect_vars, :Equality,
     :equation_dependencies, :equations, :equations_toplevel, :EvalAt, :expand_connections,
     :extend, :flatten, :Flow, :fractional_to_ordinary, :full_equations,
-    :generate_control_jacobian, :generate_cost, :generate_cost_gradient,
+    :generate_control_function, :generate_control_jacobian, :generate_cost,
+    :generate_cost_gradient,
     :generate_cost_hessian, :generate_custom_function, :generate_diffusion_function,
-    :generate_initializesystem, :generate_jacobian, :generate_rhs, :generate_tgrad,
-    :generate_W, :get_alg_eqs, :get_analytically_integrated, :get_assertions, :get_bcs,
-    :get_bindings, :get_brownians, :get_connector_type, :get_consolidate, :get_constraints,
-    :get_continuous_events, :get_costs, :get_description, :get_diff_eqs, :get_discrete_events,
+    :generate_initializesystem, :generate_jacobian, :generate_multiobjective_cost,
+    :generate_multiobjective_hessian, :generate_multiobjective_jacobian,
+    :generate_paramjac, :generate_rhs,
+    :generate_tgrad,
+    :generate_trajectory, :generate_W, :get_alg_eqs, :get_analytically_integrated,
+    :get_assertions, :get_bcs, :get_bindings, :get_brownians, :get_connector_type,
+    :get_consolidate, :get_constraints, :get_continuous_events, :get_costs,
+    :get_description, :get_diff_eqs, :get_discrete_events,
     :get_domain, :get_dvs, :get_eqs, :get_guesses, :get_gui_metadata,
     :get_ignored_connections, :get_index_cache, :get_initial_conditions,
     :get_initialization_eqs, :get_initializesystem, :get_inputs, :get_irreducibles,
@@ -94,26 +134,31 @@ const REEXPORTED_API = (
     :has_state_priorities, :has_systems, :has_tag, :has_tearing_state, :has_tspan,
     :has_tstops, :has_unknowns, :has_var_to_name, :hasbounds, :hasconnect, :hasdefault,
     :hasdescription, :hasdist, :hasguess, :hasmisc, :hasnominal, :hasunit, :hierarchy, :Hold,
-    :homotopy, :HomotopyContinuationProblem, :ImperativeAffect, :ImplicitDiscreteSystem,
+    :homotopy, :homotopy_enabled, :HomotopyContinuationProblem, :HomotopyCtx,
+    :ImperativeAffect, :ImplicitDiscreteSystem,
     :independent_variable, :independent_variables, :InfiniteOptCollocation,
     :InfiniteOptDynamicOptProblem, :Initial, :initial_conditions, :initialization_equations,
     :InitializationProblem, :inputs, :instream, :irreducibles, :is_alg_equation, :is_bound,
     :is_diff_equation, :iscomplete, :isdisturbance, :isinitial, :isinput, :isirreducible,
     :isoutput, :isparameter, :istunable, :JuMPCollocation, :JuMPDynamicOptProblem, :jumps,
-    :JumpSystem, :linear_fractional_to_ordinary, :liouville_transform, :LocalScope,
+    :JumpSystem, :limited, :limitnew, :limitold, :linear_fractional_to_ordinary,
+    :liouville_transform, :LocalScope,
     :maybe_zeros, :MiscSystemData, :MissingGuessValue, :ModelingToolkitBase,
     :modelingtoolkitize, :modified_unknowns!, :mtkcompile, :MTKParameters,
-    :MTKVariableTypeCtx, :namespace_equations, :noise_to_brownians, :NonlinearSystem,
+    :MTKVariableTypeCtx, :MTKVerbosity, :MTKVerbosityCtx, :namespace_equations,
+    :noise_to_brownians, :NonlinearSystem,
     :observables, :observed, :ODESystem, :open_loop, :OptimizationSystem, :outputs,
     :parameters, :parameters_toplevel, :ParentScope, :PDESystem, :Pre, :ProblemTypeCtx,
     :PyomoCollocation, :PyomoDynamicOptProblem, :renamespace, :reorder_dimension_by_tunables,
     :reorder_dimension_by_tunables!, :respecialize, :Sample, :SampleTime, :SDESystem,
     :set_defaults, :setdefault, :setguess, :setnominal, :Shift, :ShiftIndex,
     :should_invalidate_mutable_cache_entry, :state_priorities, :state_priority,
-    :stochastic_integral_transform, :store_to_mutable_cache!, :Stream, :structural_simplify,
+    :stochastic_integral_transform, :store_to_mutable_cache!, :Stream, :strip_homotopy,
+    :structural_simplify,
     :subset_tunables, :SymbolicADDisallowed, :SymbolicContinuousCallback,
     :SymbolicDiscreteCallback, :SymbolicMassActionJump, :SymScope, :System, :t, :t_nounits,
-    :tobrownian, :toggle_namespacing, :toparam, :tunable_parameters, :unbound_inputs,
+    :tobrownian, :toggle_namespacing, :toparam, :tovar, :tunable_parameters,
+    :unbound_inputs,
     :unbound_outputs, :unknowns, :unknowns_toplevel, :variable_dependencies, :VariableBounds,
     :VariableConnectType, :VariableDescription, :VariableInput, :VariableIrreducible,
     :VariableMisc, :VariableOutput, :VariableStatePriority, :VariableType, :VariableUnit,
@@ -146,9 +191,9 @@ const REEXPORTED_API = (
     Symbol("@acrule"), Symbol("@arrayop"), Symbol("@makearray"), Symbol("@rule"),
     Symbol("@syms"), :BS, :expand, :flatten_fractions, :get_canonical_expr, :get_reachability,
     :getmetadata, :hasmetadata, :ifelse_branching, :ifelse_eager, :IRStructure, :istree,
-    :populate_ir!, :print_ir, :quick_cancel, :Rewriters, :RuleSet, :SafeReal, :setmetadata,
-    :simplify, :simplify_fractions, :substitute, :SymbolicUtils, :SymReal, :Term, :term,
-    :toexpr, :TreeReal, :unwrap_const, :vartype,
+    :populate_ir!, :print_ir, :quick_cancel, :Rewriters, :RuleSet, :SafeReal, :scalarize,
+    :setmetadata, :shape, :simplify, :simplify_fractions, :substitute, :SymbolicUtils,
+    :SymReal, :Term, :term, :toexpr, :TreeReal, :Unknown, :unwrap, :unwrap_const, :vartype,
     # TermInterface: the term-manipulation interface, re-exported transitively by
     # SymbolicUtils.
     :arguments, :iscall, :operation, :sorted_arguments,
@@ -161,6 +206,8 @@ const REEXPORTED_API = (
     :SDEProblem, :SolverStepClock, :SteadyStateProblem, :TimeDomain,
     # CommonSolve: `solve` is the entry point of every documented workflow.
     :solve,
+    # SciMLLogging: the module, so that `SciMLLogging.Silent` etc. work for `MTKVerbosity`.
+    :SciMLLogging,
     # JumpProcesses: `JumpProblem` is constructed from a `System` with jumps.
     :JumpProblem,
     # BipartiteGraphs: `BipartiteGraph` is re-exported by ModelingToolkitBase for the
@@ -177,21 +224,6 @@ const REEXPORTED_API = (
     :find_solvables!,
     # UnPack: `@unpack`/`@pack!`, re-exported by ModelingToolkitBase.
     Symbol("@pack!"), Symbol("@unpack"), :UnPack,
-)
-
-# Public names that reach ModelingToolkit's API surface only through
-# `@reexport using Symbolics` in ModelingToolkitBase. They are owned (and undocumented) by
-# Symbolics/SymbolicUtils, so ModelingToolkit is not the right place to document them.
-const SYMBOLICS_OWNED_REEXPORTS = (
-    Symbol("@symbolic_wrap"),
-    Symbol("@wrapped"),
-    :RuleSet,
-    :get_canonical_expr,
-    :infimum,
-    :is_derivative,
-    :istree,
-    :solve_for,
-    :supremum,
 )
 
 # `ModelingToolkit` reaches for names that are not `public` at the module that defines
@@ -276,14 +308,18 @@ const NONPUBLIC_QUALIFIED_ACCESSES = (
     :map, :RefValue,
     # ModelingToolkitBase. `Type` here is the Moshi ADT constructor of
     # `ModelingToolkitBase.StructuralHint`; `Base.Type` is public and is not affected.
-    :AnalysisVariable, :check_compatible_system, :compute_array_variable_buffer_idxs,
+    :AnalysisVariable, :apply_limited_lowering, :attach_stage_limiters,
+    :check_compatible_system, :compute_array_variable_buffer_idxs,
     :default_missing_guess_value, :discover_maybe_zeros, :EXPERIMENTAL_WARNING,
-    :function_docstring, :generate_homotopy_residual, :generate_ODENLStepData,
+    :function_docstring, :generate_DAENLStepData, :generate_homotopy_residual,
+    :generate_ODENLStepData,
     :GENERATE_X_KWARGS, :get_initialization_problem_type, :get_nonlinear_problem_type,
-    :has_any_homotopy, :indp_to_system, :invalidate_cache!, :lower_homotopy, :__mtkcompile,
+    :has_any_homotopy, :indp_to_system, :invalidate_cache!, :LimitedCtx, :lower_homotopy,
+    :__mtkcompile,
     :ParameterArrayAssignments, :problem_docstring, :ReorderedDefaultParameters,
     :reverse_all_default_reversible_transformations, :simplify_sde_system, :simplify_shifts,
-    :singular_check, :topsort_equations, :torn_system_jacobian_sparsity, :Type,
+    :singular_check, :steady_state_sccprob, :topsort_equations,
+    :torn_system_jacobian_sparsity, :Type, :UNBALANCED_SYSTEM_EXCEPTIONS,
     :wrap_symbolic_linear_interface,
     # ModelingToolkitTearing
     :backshift_expr, :ClockInference, :DefaultReassembleAlgorithm, :get_time_domain,
@@ -331,9 +367,14 @@ const STRUCTURAL_TYPES = (
 run_qa(
     ModelingToolkit;
     Aqua = Aqua,
+    # JET currently exhausts tens of GB of memory on MTK and reports false
+    # positives from generated short-circuit guards. Track the fix in MTK and
+    # upstream before re-enabling this lane:
+    # https://github.com/SciML/ModelingToolkit.jl/issues/4958
+    # https://github.com/JuliaLang/julia/issues/62745
+    # https://github.com/aviatesk/JET.jl/issues/858
     JET = JET,
-    jet = true,
-    jet_kwargs = (; target_defined_modules = true),
+    jet = false,
     aqua_kwargs = (;
         piracies = (; treat_as_own = (MTKBASE_OWNED_TYPES..., STRUCTURAL_TYPES...)),
     ),
@@ -341,6 +382,5 @@ run_qa(
         all_explicit_imports_are_public = (; ignore = NONPUBLIC_EXPLICIT_IMPORTS),
         all_qualified_accesses_are_public = (; ignore = NONPUBLIC_QUALIFIED_ACCESSES),
     ),
-    api_docs_kwargs = (; ignore = SYMBOLICS_OWNED_REEXPORTS),
     reexports_allow = REEXPORTED_API,
 )
