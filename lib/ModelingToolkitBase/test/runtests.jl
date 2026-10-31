@@ -64,6 +64,7 @@ end
             @safetestset "Change of variables" include("changeofvariables.jl")
             @safetestset "Symbolic Event Test" include("symbolic_events.jl")
             @safetestset "Compiled callbacks hold indices" include("explicit_affect_indices.jl")
+            @safetestset "Vector callback dispatch protocol" include("callback_dispatch_protocol.jl")
             @safetestset "Stream Connect Test" include("stream_connectors.jl")
             @safetestset "Domain Connect Test" include("domain_connectors.jl")
             @safetestset "Dependency Graph Test" include("dep_graphs.jl")
