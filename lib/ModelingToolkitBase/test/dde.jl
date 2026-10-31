@@ -242,3 +242,13 @@ end
     # FIXME: SDDEs don't work
     # @test_nowarn solve(prob, RKMil())
 end
+
+@testset "Delay indexed by a parameter" begin
+    @variables y(..)
+    @parameters τ[1:2] = [0.5, 0.25] k::Int = 1
+    @named sys = System([D(y(t)) ~ -y(t - τ[k])], t, [y(t)], [τ, k])
+    sys = mtkcompile(sys)
+    prob = DDEProblem(sys, [y(t) => 1.0], (0.0, 1.0); h = (p, t) -> 1.0)
+    sol = solve(prob, MethodOfSteps(Tsit5()); reltol = 1.0e-10, abstol = 1.0e-10)
+    @test sol[y(t)][end] ≈ 0.125 rtol = 1.0e-6
+end
