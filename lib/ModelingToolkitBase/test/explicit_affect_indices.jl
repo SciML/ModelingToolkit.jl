@@ -1,7 +1,7 @@
 using ModelingToolkitBase, SciMLBase, OrdinaryDiffEqDefault, Test
 using ModelingToolkitBase: t_nounits as t, D_nounits as D
 using SymbolicUtils: BasicSymbolic
-using SymbolicIndexingInterface: variable_index
+using SymbolicIndexingInterface: variable_index, parameter_index
 
 # Whether `f`'s optimized code for `sig` makes a call that isn't resolved statically.
 function has_dynamic_call(f, sig)
@@ -115,4 +115,63 @@ end
     @test sol.retcode == ReturnCode.Success
     @test sol.ps[c1][end] == 1.0 && sol.ps[c2][end] == 1.0
     @test sol(0.25)[1] ≈ 0.25 atol = 1.0e-8
+end
+
+# An affect that writes only a discrete parameter records its `ParameterIndex` and no unknowns;
+# the parameter is updated when the event fires at x = t = 0.5.
+@testset "ExplicitAffect writing a discrete parameter (split = $split)" for split in (true, false)
+    @variables x(t) = 0.0
+    @discretes c(t) = 0.0
+    @named s = System(
+        [D(x) ~ 1], t, [x], [c];
+        continuous_events = [
+            ModelingToolkitBase.SymbolicContinuousCallback([x ~ 0.5], [c ~ 2.0]; discrete_parameters = [c]),
+        ]
+    )
+    sys = mtkcompile(s; split)
+    prob = ODEProblem(sys, [], (0.0, 1.0))
+    cb = continuous_callback(prob)
+    aff = cb.affect!
+    @test aff isa ModelingToolkitBase.ExplicitAffect
+    @test aff.ps_to_update == [parameter_index(sys, c)]
+    @test isempty(aff.dvs_to_update)
+    @test isempty(symbolic_objects(cb))
+    sol = solve(prob, DefaultODEAlgorithm(); abstol = 1.0e-8, reltol = 1.0e-8)
+    @test SciMLBase.successful_retcode(sol)
+    @test last(sol.ps[c]) == 2.0
+    # only split systems save discrete parameters as a time series
+    if split
+        @test sol(0.25; idxs = c) == 0.0
+        @test sol(0.75; idxs = c) == 2.0
+    end
+    @test sol(0.75)[1] ≈ 0.75 atol = 1.0e-8
+end
+
+# Affects that write an array unknown and an array discrete parameter: the indices are those
+# `variable_index` and `parameter_index` resolve, and the event's writes land as before.
+@testset "ExplicitAffect writing arrays" begin
+    @variables xs(t)[1:2] = [0.0, 1.0]
+    @discretes cs(t)[1:2] = [0.0, 0.0]
+    @named s = System(
+        [D(xs[1]) ~ 1, D(xs[2]) ~ 0], t, [xs], [cs];
+        continuous_events = [
+            ModelingToolkitBase.SymbolicContinuousCallback(
+                [xs[1] ~ 0.5], [xs ~ [Pre(xs[1]), 3.0], cs ~ [1.0, 2.0]]; discrete_parameters = [cs]
+            ),
+        ]
+    )
+    sys = mtkcompile(s)
+    prob = ODEProblem(sys, [], (0.0, 1.0))
+    aff = continuous_callback(prob).affect!
+    @test aff isa ModelingToolkitBase.ExplicitAffect
+    @test aff.ps_to_update == [parameter_index(sys, cs)]
+    @test !isempty(aff.dvs_to_update)
+    @test all(i -> i isa Integer, aff.dvs_to_update)
+    @test sort(aff.dvs_to_update) == sort([variable_index(sys, xs[i]) for i in 1:2])
+    @test isempty(symbolic_objects(continuous_callback(prob)))
+    sol = solve(prob, DefaultODEAlgorithm(); abstol = 1.0e-8, reltol = 1.0e-8)
+    @test SciMLBase.successful_retcode(sol)
+    @test sol.ps[cs][end] == [1.0, 2.0]
+    @test sol(0.25; idxs = xs) ≈ [0.25, 1.0] atol = 1.0e-8
+    @test sol(0.75; idxs = xs) ≈ [0.75, 3.0] atol = 1.0e-8
 end
