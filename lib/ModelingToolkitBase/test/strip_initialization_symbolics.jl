@@ -35,6 +35,7 @@ function test_stripped_metadata(idata)
     @test isempty(idata.metadata.op)
     @test isempty(idata.metadata.guesses)
     @test isempty(idata.metadata.additional_initialization_eqs)
+    return nothing
 end
 
 # With x = 1 the initialization is the linear y = k x.
@@ -114,13 +115,42 @@ end
     @test integ[y] ≈ 2.0
 end
 
+# With x = 1 the initialization is atan(y - 3) = 0, reached from the out-of-basin guess
+# y = 12 by continuation from the simplified equation y = 0; its root is y = 3.
+@testset "strip_initialization_symbolics, homotopy initialization" begin
+    @variables x(t) y(t)
+    @mtkcompile sys = System(
+        [D(x) ~ -x, 0 ~ ModelingToolkitBase.homotopy(atan(y - 3), y)], t;
+        guesses = [y => 12.0]
+    )
+    prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0))
+    lean = ODEProblem(sys, [x => 1.0], (0.0, 1.0); strip_initialization_symbolics = true)
+    full_init = prob.f.initialization_data.initializeprob
+    idata = lean.f.initialization_data
+    initprob = idata.initializeprob
+    @test initprob isa SciMLBase.HomotopyProblem
+    @test initprob.λspan == full_init.λspan
+    @test initprob.u0 == full_init.u0
+    @test initprob.f.sys === nothing
+    @test initprob.f.observed === SciMLBase.DEFAULT_OBSERVED_NO_TIME
+    @test !isempty(symbolic_objects(full_init))
+    @test isempty(symbolic_objects(initprob))
+    test_stripped_metadata(idata)
+
+    integ = init(lean, DefaultODEAlgorithm(); tols...)
+    @test integ[x] == 1.0
+    @test integ[y] ≈ 3.0
+end
+
 # The helper keeps the problem's numerical data and keywords; the residual u - p, 2(u - p) has
 # its least-squares solution at u = p.
 @testset "strip_problem_symbolics(::NonlinearLeastSquaresProblem)" begin
     @variables u
     @named nsys = System([0 ~ u - 1], [u], [])
-    f = NonlinearFunction((r, u, p) -> (r[1] = u[1] - p; r[2] = 2 * (u[1] - p); nothing);
-        sys = nsys, resid_prototype = zeros(2))
+    f = NonlinearFunction(
+        (r, u, p) -> (r[1] = u[1] - p; r[2] = 2 * (u[1] - p); nothing);
+        sys = nsys, resid_prototype = zeros(2)
+    )
     q = NonlinearLeastSquaresProblem(f, [0.0], 2.0; abstol = 1.0e-12)
     r = ModelingToolkitBase.strip_problem_symbolics(q)
     @test r isa NonlinearLeastSquaresProblem
