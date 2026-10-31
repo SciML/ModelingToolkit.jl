@@ -1881,6 +1881,12 @@ function _static_initialization_buffer(prototype, values)
         return SVector{length(values), T}(values)
     elseif P <: StaticArray && isbitstype(T)
         return MVector{length(values), T}(values)
+    elseif T === Bool && (P <: BitArray || (P <: BlockedArray && fieldtype(P, :blocks) <: BitArray))
+        buffer = BitVector(undef, length(values))
+        for (i, value) in enumerate(values)
+            buffer[i] = value
+        end
+        return buffer
     else
         # A plain mutable buffer stays plain. The map rebuilds `p`, and solve-time
         # initialization assigns the result straight back (`integrator.p = pmap(...)`),
@@ -1964,7 +1970,13 @@ function _construct_fullspecialize_initializeprobpmap(
                 buffer = _parameter_buffer_expr(prototype, raw, idxs, p_constructor)
                 if field === :discrete
                     sizes = get_index_cache(sys).discrete_buffer_sizes[buffer_idx]
-                    block_sizes = Expr(:call, Expr(:curly, SVector, length(sizes), Int))
+                    # Block sizes match the container `MTKParameters` builds: a `Vector{Int}`,
+                    # passed through `p_constructor` when one is given.
+                    block_sizes = if p_constructor === identity
+                        Expr(:vect)
+                    else
+                        Expr(:call, Expr(:curly, SVector, length(sizes), Int))
+                    end
                     for sz in sizes
                         push!(block_sizes.args, sz.length)
                     end
