@@ -1,7 +1,44 @@
-using ModelingToolkitBase, SciMLBase, OrdinaryDiffEqDefault, Test
+using ModelingToolkitBase, SciMLBase, OrdinaryDiffEqDefault, NonlinearSolve, Test
 using ModelingToolkitBase: t_nounits as t, D_nounits as D
+using SymbolicUtils: BasicSymbolic
 
-@testset "strip_initialization_symbolics" begin
+# The initialization solve follows the integrator's tolerances.
+const tols = (; abstol = 1.0e-12, reltol = 1.0e-12)
+
+# Every symbolic term or system reachable from `x`. Modules and types are not entered.
+function symbolic_objects(x, seen = IdDict{Any, Nothing}(), found = Any[])
+    (x isa Module || x isa Type || x isa Symbol || x isa String || isbits(x)) && return found
+    haskey(seen, x) && return found
+    seen[x] = nothing
+    if x isa BasicSymbolic || x isa ModelingToolkitBase.AbstractSystem
+        push!(found, x)
+        return found
+    end
+    if x isa AbstractArray
+        for i in eachindex(x)
+            isassigned(x, i) && symbolic_objects(x[i], seen, found)
+        end
+    elseif x isa AbstractDict
+        for (k, v) in x
+            symbolic_objects(k, seen, found)
+            symbolic_objects(v, seen, found)
+        end
+    else
+        for i in 1:fieldcount(typeof(x))
+            isdefined(x, i) && symbolic_objects(getfield(x, i), seen, found)
+        end
+    end
+    return found
+end
+
+function test_stripped_metadata(idata)
+    @test isempty(idata.metadata.op)
+    @test isempty(idata.metadata.guesses)
+    @test isempty(idata.metadata.additional_initialization_eqs)
+end
+
+# With x = 1 the initialization is the linear y = k x.
+@testset "strip_initialization_symbolics, linear initialization" begin
     @parameters k = 2.0
     @variables x(t) y(t)
     eqs = [D(x) ~ -k * x, 0 ~ y - k * x]
@@ -10,18 +47,27 @@ using ModelingToolkitBase: t_nounits as t, D_nounits as D
     prob = ODEProblem(sys, op, (0.0, 1.0))
     lean = ODEProblem(sys, op, (0.0, 1.0); strip_initialization_symbolics = true)
     idata = lean.f.initialization_data
-    @test idata.initializeprob.f.sys === nothing
-    @test idata.initializeprob.f.observed === SciMLBase.DEFAULT_OBSERVED_NO_TIME
-    @test isempty(idata.metadata.op) && isempty(idata.metadata.guesses)
-    @test isempty(idata.metadata.additional_initialization_eqs)
-    i1 = init(prob, DefaultODEAlgorithm())
-    i2 = init(lean, DefaultODEAlgorithm())
-    @test i1.u == i2.u
-    prob.ps[k] = 3.0
+    initprob = idata.initializeprob
+    @test initprob isa SCCNonlinearProblem
+    @test only(initprob.probs) isa LinearProblem
+    @test initprob.f.sys === nothing
+    @test initprob.f.observed === SciMLBase.DEFAULT_OBSERVED_NO_TIME
+    @test only(initprob.probs).f.sys isa ModelingToolkitBase.StrippedLinearSystem
+    @test !isempty(symbolic_objects(prob.f.initialization_data.initializeprob))
+    @test isempty(symbolic_objects(initprob))
+    test_stripped_metadata(idata)
+
+    integ = init(lean, DefaultODEAlgorithm(); tols...)
+    @test integ[x] == 1.0
+    @test integ[y] ≈ 2.0
+    @test integ.u == init(prob, DefaultODEAlgorithm()).u
     lean.ps[k] = 3.0
-    @test init(prob, DefaultODEAlgorithm()).u == init(lean, DefaultODEAlgorithm()).u == [1.0, 3.0]
+    integ = init(lean, DefaultODEAlgorithm(); tols...)
+    @test integ[x] == 1.0
+    @test integ[y] ≈ 3.0
 end
 
+# With x = 1 the initialization is y^2 = k x, whose positive root from the guess y = 1 is √k.
 @testset "strip_initialization_symbolics, nonlinear initialization" begin
     @parameters k = 2.0
     @variables x(t) y(t)
@@ -29,8 +75,60 @@ end
     kws = (; guesses = [y => 1.0], use_scc = false)
     prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0); kws...)
     lean = ODEProblem(sys, [x => 1.0], (0.0, 1.0); kws..., strip_initialization_symbolics = true)
-    initprob = lean.f.initialization_data.initializeprob
+    idata = lean.f.initialization_data
+    initprob = idata.initializeprob
     @test initprob isa NonlinearProblem
     @test initprob.f.sys === nothing
-    @test init(prob, DefaultODEAlgorithm()).u ≈ init(lean, DefaultODEAlgorithm()).u
+    @test initprob.f.observed === SciMLBase.DEFAULT_OBSERVED_NO_TIME
+    @test !isempty(symbolic_objects(prob.f.initialization_data.initializeprob))
+    @test isempty(symbolic_objects(initprob))
+    test_stripped_metadata(idata)
+
+    integ = init(lean, DefaultODEAlgorithm(); tols...)
+    @test integ[x] == 1.0
+    @test integ[y] ≈ sqrt(2.0)
+    lean.ps[k] = 3.0
+    integ = init(lean, DefaultODEAlgorithm(); tols...)
+    @test integ[y] ≈ sqrt(3.0)
+end
+
+# Three initialization equations in two unknowns, consistent at x = y = 2 (y^2 = k x with
+# k = 2), make an overdetermined `NonlinearLeastSquaresProblem`.
+@testset "strip_initialization_symbolics, least-squares initialization" begin
+    @parameters k = 2.0
+    @variables x(t) y(t)
+    @mtkcompile sys = System([D(x) ~ -x, 0 ~ y^2 - k * x], t)
+    kws = (; initialization_eqs = [x ~ 2.0, y ~ 2.0], guesses = [x => 1.0, y => 1.0])
+    prob = ODEProblem(sys, [], (0.0, 1.0); kws...)
+    lean = ODEProblem(sys, [], (0.0, 1.0); kws..., strip_initialization_symbolics = true)
+    idata = lean.f.initialization_data
+    initprob = idata.initializeprob
+    @test initprob isa NonlinearLeastSquaresProblem
+    @test initprob.f.sys === nothing
+    @test !isempty(symbolic_objects(prob.f.initialization_data.initializeprob))
+    @test isempty(symbolic_objects(initprob))
+    test_stripped_metadata(idata)
+
+    integ = init(lean, DefaultODEAlgorithm(); tols...)
+    @test integ[x] ≈ 2.0
+    @test integ[y] ≈ 2.0
+end
+
+# The helper keeps the problem's numerical data and keywords; the residual u - p, 2(u - p) has
+# its least-squares solution at u = p.
+@testset "strip_problem_symbolics(::NonlinearLeastSquaresProblem)" begin
+    @variables u
+    @named nsys = System([0 ~ u - 1], [u], [])
+    f = NonlinearFunction((r, u, p) -> (r[1] = u[1] - p; r[2] = 2 * (u[1] - p); nothing);
+        sys = nsys, resid_prototype = zeros(2))
+    q = NonlinearLeastSquaresProblem(f, [0.0], 2.0; abstol = 1.0e-12)
+    r = ModelingToolkitBase.strip_problem_symbolics(q)
+    @test r isa NonlinearLeastSquaresProblem
+    @test SciMLBase.isinplace(r)
+    @test r.f.sys === nothing
+    @test r.f.resid_prototype == zeros(2)
+    @test r.u0 == [0.0]
+    @test r.p == 2.0
+    @test r.kwargs[:abstol] == 1.0e-12
+    @test solve(r).u ≈ [2.0]
 end
