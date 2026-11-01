@@ -2547,20 +2547,56 @@ loses its `sys` and its `ObservedFunctionCache` (only used for symbolic indexing
 initialization solution), a linear subproblem's `SymbolicLinearInterface` has its `sys`
 replaced by a [`StrippedLinearSystem`](@ref) (which still updates `A` and `b`) and loses its
 `observed`, and the metadata keeps its functional fields (`oop_reconstruct_u0_p`,
-`get_updated_u0`, `set_initial_unknowns!`) with empty symbolic ones. Everything
-`get_initial_values` and `update_initializeprob!` use is kept.
+`get_updated_u0`, and `set_initial_unknowns!` writing by numeric index) with empty symbolic
+ones. Everything `get_initial_values` and `update_initializeprob!` use is kept.
 """
 function strip_initialization_symbolics(initializeprob, meta::InitializationMetadata)
     initializeprob = strip_problem_symbolics(initializeprob)
     meta = InitializationMetadata(
         empty(meta.op), empty(meta.guesses), Equation[], meta.use_scc,
         meta.time_dependent_init, meta.oop_reconstruct_u0_p, meta.get_updated_u0,
-        meta.set_initial_unknowns!, meta.missing_guess_value
+        strip_setter_symbolics(meta.set_initial_unknowns!), meta.missing_guess_value
     )
     return initializeprob, meta
 end
 
-strip_function_symbolics(f) = SciMLBase.remake(f; sys = nothing, observed = SciMLBase.DEFAULT_OBSERVED_NO_TIME)
+"""
+    $(TYPEDEF)
+
+Writes `u0` into the `Initial` parameters at `idxs` (positions in `p.initials`, or in `p`
+for an unsplit parameter vector), in order.
+"""
+struct SetInitialsByIndex
+    idxs::Vector{Int}
+end
+
+function (s::SetInitialsByIndex)(p::MTKParameters, u0)
+    s(p.initials, u0)
+    return nothing
+end
+
+function (s::SetInitialsByIndex)(p::AbstractVector, u0)
+    for (i, v) in zip(s.idxs, u0)
+        p[i] = v
+    end
+    return nothing
+end
+
+strip_setter_symbolics(siu::SetInitialUnknowns) =
+    SetInitialUnknowns(SetInitialsByIndex(siu.idxs_in_initials), siu.idxs_in_initials)
+strip_setter_symbolics(f) = f
+
+"""
+    $(TYPEDEF)
+
+The `observed` function of a stripped initialization function, which has no symbols to
+index.
+"""
+struct StrippedObserved end
+
+(::StrippedObserved)(sym, u, p) = error("Indexing symbol $sym is unknown.")
+
+strip_function_symbolics(f) = SciMLBase.remake(f; sys = nothing, observed = StrippedObserved())
 
 function strip_problem_symbolics(prob::SCCNonlinearProblem)
     probs = map(strip_problem_symbolics, prob.probs)

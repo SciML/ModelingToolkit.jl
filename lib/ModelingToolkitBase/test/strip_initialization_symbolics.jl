@@ -52,10 +52,11 @@ end
     @test initprob isa SCCNonlinearProblem
     @test only(initprob.probs) isa LinearProblem
     @test initprob.f.sys === nothing
-    @test initprob.f.observed === SciMLBase.DEFAULT_OBSERVED_NO_TIME
+    @test_throws ErrorException initprob.f.observed(y, initprob.u0, initprob.p)
     @test only(initprob.probs).f.sys isa ModelingToolkitBase.StrippedLinearSystem
     @test !isempty(symbolic_objects(prob.f.initialization_data.initializeprob))
     @test isempty(symbolic_objects(initprob))
+    @test isempty(symbolic_objects(lean.f.initialization_data))
     test_stripped_metadata(idata)
 
     integ = init(lean, DefaultODEAlgorithm(); tols...)
@@ -80,9 +81,10 @@ end
     initprob = idata.initializeprob
     @test initprob isa NonlinearProblem
     @test initprob.f.sys === nothing
-    @test initprob.f.observed === SciMLBase.DEFAULT_OBSERVED_NO_TIME
+    @test_throws ErrorException initprob.f.observed(y, initprob.u0, initprob.p)
     @test !isempty(symbolic_objects(prob.f.initialization_data.initializeprob))
     @test isempty(symbolic_objects(initprob))
+    @test isempty(symbolic_objects(lean.f.initialization_data))
     test_stripped_metadata(idata)
 
     integ = init(lean, DefaultODEAlgorithm(); tols...)
@@ -108,6 +110,7 @@ end
     @test initprob.f.sys === nothing
     @test !isempty(symbolic_objects(prob.f.initialization_data.initializeprob))
     @test isempty(symbolic_objects(initprob))
+    @test isempty(symbolic_objects(lean.f.initialization_data))
     test_stripped_metadata(idata)
 
     integ = init(lean, DefaultODEAlgorithm(); tols...)
@@ -132,9 +135,10 @@ end
     @test initprob.λspan == full_init.λspan
     @test initprob.u0 == full_init.u0
     @test initprob.f.sys === nothing
-    @test initprob.f.observed === SciMLBase.DEFAULT_OBSERVED_NO_TIME
+    @test_throws ErrorException initprob.f.observed(y, initprob.u0, initprob.p)
     @test !isempty(symbolic_objects(full_init))
     @test isempty(symbolic_objects(initprob))
+    @test isempty(symbolic_objects(lean.f.initialization_data))
     test_stripped_metadata(idata)
 
     integ = init(lean, DefaultODEAlgorithm(); tols...)
@@ -161,4 +165,27 @@ end
     @test r.p == 2.0
     @test r.kwargs[:abstol] == 1.0e-12
     @test solve(r).u ≈ [2.0]
+end
+
+# A numeric `u0` passed to `remake` is written into the `Initial` parameters. With
+# x = 4 the initialization is y^2 = k x with k = 2, whose positive root from y = 1 is √8.
+@testset "strip_initialization_symbolics, numeric remake, $S, split = $split" for S in (SciMLBase.FullSpecialize, SciMLBase.AutoSpecialize),
+        split in (true, false)
+
+    @parameters k = 2.0
+    @variables x(t) y(t)
+    @mtkcompile sys = System([D(x) ~ -x, 0 ~ y^2 - k * x], t) split = split
+    kws = (; guesses = [y => 1.0], use_scc = false)
+    prob = ODEProblem{true, S}(sys, [x => 1.0], (0.0, 1.0); kws...)
+    lean = ODEProblem{true, S}(
+        sys, [x => 1.0], (0.0, 1.0); kws..., strip_initialization_symbolics = true
+    )
+    @test !isempty(symbolic_objects(prob.f.initialization_data))
+    @test isempty(symbolic_objects(lean.f.initialization_data))
+
+    u0 = map(v -> isequal(v, x) ? 4.0 : 1.0, unknowns(sys))
+    lean2 = remake(lean; u0)
+    integ = init(lean2, DefaultODEAlgorithm(); tols...)
+    @test integ[x] == 4.0
+    @test integ[y] ≈ sqrt(8.0)
 end

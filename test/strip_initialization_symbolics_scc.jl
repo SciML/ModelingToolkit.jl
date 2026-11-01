@@ -49,9 +49,10 @@ end
     @test all(p -> p isa NonlinearProblem, initprob.probs)
     @test !isempty(symbolic_objects(full_init))
     @test isempty(symbolic_objects(initprob))
+    @test isempty(symbolic_objects(lean.f.initialization_data))
     for p in initprob.probs
         @test p.f.sys === nothing
-        @test p.f.observed === SciMLBase.DEFAULT_OBSERVED_NO_TIME
+        @test_throws ErrorException p.f.observed(y, p.u0, p.p)
     end
 
     integ = init(lean, DefaultODEAlgorithm(); tols...)
