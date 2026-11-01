@@ -174,6 +174,11 @@ The `simplified_sys` has undergone [`ModelingToolkitBase.mtkcompile`](@ref) and 
     diagnostic output (the `empty_operating_point` toggle and the initialization toggles).
     The deprecated boolean keywords `warn_empty_op` and `warn_initialize_determined`
     remain accepted and override the corresponding toggles when explicitly passed.
+  - `specialize`: The `SciMLBase.AbstractSpecialization` of the `ODEProblem` built for the system, or `nothing` for
+    `ODEProblem`'s default. With `SciMLBase.FullSpecialize`, the system and observed functions are called directly
+    instead of through function wrappers, so the evaluation is fully specialized; `eval_expression` and
+    `eval_module` also apply to the system function; and with `initialize = false`, a call whose `u` and `p` have
+    the types of the problem's uses them as given, without remaking the problem.
   - `kwargs`: Are passed on to `find_solvables!`
 
 See also [`linearize`](@ref) which provides a higher-level interface.
@@ -200,6 +205,7 @@ function linearization_function(
         ignore_system_initial_conditions = false,
         loop_opening_params = SymbolicT[],
         loop_opening_drivers = SymbolicT[],
+        specialize = nothing,
         kwargs...
     )
     verbosity = verbose === nothing ? MTKVerbosity() : MTKVerbosity(verbose)
@@ -268,12 +274,15 @@ function linearization_function(
         initializealg = initialize ? OverrideInit() : NoInit()
     end
 
-    prob = ODEProblem{true}(
+    full_specialize = specialize === SciMLBase.FullSpecialize
+    prob_type = specialize === nothing ? ODEProblem{true} : ODEProblem{true, specialize}
+    codegen_kwargs = full_specialize ? (; eval_expression, eval_module) : (;)
+    prob = prob_type(
         sys, merge(op, anydict(p)), (t, t); allow_incomplete = true,
         algebraic_only = true, guesses, missing_guess_value, verbose = verbosity,
         initialization_eqs = held_eqs,
         # the problem constructor applies and deprecates this keyword
-        warn_initialize_determined
+        warn_initialize_determined, codegen_kwargs...
     )
     initial_idxs_for_unknowns = ParameterIndex{SciMLStructures.Initials, Int}[]
     for v in unknowns(sys)
@@ -286,7 +295,8 @@ function linearization_function(
         sys, outputs,
         GeneratedFunctionOptions(; expression = Val{false}, eval_expression, eval_module)
     )
-    h = SciMLBase.Void{Any}(h)
+    wrap = !full_specialize
+    h = wrap ? SciMLBase.Void{Any}(h) : SciMLBase.Void(h)
 
     initialization_kwargs = (;
         abstol = initialization_abstol, reltol = initialization_reltol,
@@ -304,14 +314,14 @@ function linearization_function(
     # Preparing the jacobians with respect to the inputs requires a vector of a concrete
     # element type, also when there are no inputs.
     inputvals = isempty(inputs) ? T[] : [prob.ps[i] for i in inputs]
-    prob = _linearization_wrap_odeproblem_f(prob, T)
+    wrap && (prob = _linearization_wrap_odeproblem_f(prob, T))
     ct0 = DI.Constant(T(t0))
     u0T = if u0 === nothing
         T[]
     else
         T.(u0)
     end
-    h = SciMLBase.wrapfun_iip(h, (u0T, u0T, p, T(t0)))
+    wrap && (h = SciMLBase.wrapfun_iip(h, (u0T, u0T, p, T(t0))))
     hp_fun = HPFun(h, setp_oop(sys, inputs))
 
     cu0T = DI.Constant(u0T)
@@ -635,16 +645,23 @@ function (linfun::LinearizationFunction)(u, p, t)
         T = promote_type(T, typeof(t))
         u = promote_with_nothing(T, u)
         p = promote_with_nothing(T, p)
-        integ = MockIntegrator{true}(u, p, t, fun, integ_cache, nothing)
-        prob = remake(linfun.prob; u0 = u, p = p)
-        u, p,
-            success = SciMLBase.get_initial_values(
-            prob, integ, fun, linfun.initializealg, Val(true);
-            linfun.initialize_kwargs...
-        )
-        u = u::typeof(prob.u0)
-        p = p::typeof(prob.p)
-        success = success::Bool
+        if SciMLBase.specialization(fun) === SciMLBase.FullSpecialize &&
+                linfun.initializealg isa NoInit &&
+                typeof(u) === typeof(linfun.prob.u0) && typeof(p) === typeof(linfun.prob.p)
+            # `get_initial_values` with `NoInit` returns the integrator's `u` and `p`
+            success = true
+        else
+            integ = MockIntegrator{true}(u, p, t, fun, integ_cache, nothing)
+            prob = remake(linfun.prob; u0 = u, p = p)
+            u, p,
+                success = SciMLBase.get_initial_values(
+                prob, integ, fun, linfun.initializealg, Val(true);
+                linfun.initialize_kwargs...
+            )
+            u = u::typeof(prob.u0)
+            p = p::typeof(prob.p)
+            success = success::Bool
+        end
         if !success
             error("Initialization algorithm $(linfun.initializealg) failed with `unknowns = $u` and `p = $p`.")
         end
