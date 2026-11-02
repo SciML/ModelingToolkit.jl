@@ -322,6 +322,11 @@ end
 
 const AADSubWrapper{D} = AtomicArrayDictSubstitutionWrapper{D}
 
+# A constant array of plain numbers cannot contain `COMMON_SENTINEL` or `COMMON_NOTHING`.
+# Scanning it through symbolic `getindex` is O(length) with a large constant, so callers
+# use this to skip the scan.
+is_numeric_const_array(v::SymbolicT) = SU.isconst(v) && eltype(unwrap_const(v)) <: Number
+
 Base.get(def::Base.Callable, dd::AADSubWrapper, k) = def()
 function Base.get(def::Base.Callable, dd::AADSubWrapper, k::SymbolicT)
     res = get_possibly_indexed(dd.dict, k, dd.default; allow_symbolic_indices = true)
@@ -330,7 +335,7 @@ function Base.get(def::Base.Callable, dd::AADSubWrapper, k::SymbolicT)
         isarr && haskey(dd.dict, arr) && return k
         return def()
     end
-    if SU.is_array_shape(SU.shape(k)) && any(
+    if SU.is_array_shape(SU.shape(k)) && !is_numeric_const_array(res) && any(
             Base.Fix2(===, dd.default) ∘ Base.Fix1(getindex, res),
             SU.stable_eachindex(res)
         )
@@ -365,3 +370,47 @@ Base.length(dd::AADSubWrapper) = length(dd.dict)
 Base.iterate(dd::AADSubWrapper, args...) = Base.iterate(dd.dict, args...)
 Base.sizehint!(dd::AADSubWrapper, n; kw...) = sizehint!(dd.dict, n; kw...)
 Base.empty!(dd::AADSubWrapper) = empty!(dd.dict)
+
+"""
+    $(TYPEDEF)
+
+Wrapper over an `AtomicArrayDictSubstitutionWrapper` that holds element writes to array
+values in per-array buffers and stores each buffer back as a whole array only when that
+array is next read through the wrapper, or on `flush_pending_writes!`. Writing `n`
+elements of one array through the wrapped dictionary copies and rehashes the array each
+time, which is quadratic in its length.
+"""
+struct PendingWritesWrapper{D} <: AbstractDict{SymbolicT, SymbolicT}
+    base::AtomicArrayDictSubstitutionWrapper{D}
+    buffers::Dict{SymbolicT, Array{SymbolicT}}
+end
+
+PendingWritesWrapper(base::AtomicArrayDictSubstitutionWrapper) = PendingWritesWrapper(base, Dict{SymbolicT, Array{SymbolicT}}())
+
+function flush_pending_writes!(dd::PendingWritesWrapper, arr::SymbolicT)
+    buffer = pop!(dd.buffers, arr, nothing)
+    buffer === nothing && return dd
+    dd.base.dict[arr] = if all(SU.isconst, buffer)
+        BSImpl.Const{VartypeT}(unwrap_const.(buffer))
+    else
+        BSImpl.Const{VartypeT}(buffer)
+    end
+    return dd
+end
+
+function flush_pending_writes!(dd::PendingWritesWrapper)
+    for arr in collect(keys(dd.buffers))
+        flush_pending_writes!(dd, arr)
+    end
+    return dd
+end
+
+Base.get(def::Base.Callable, dd::PendingWritesWrapper, k) = get(def, dd.base, k)
+function Base.get(def::Base.Callable, dd::PendingWritesWrapper, k::SymbolicT)
+    isempty(dd.buffers) || flush_pending_writes!(dd, split_indexed_var(k)[1])
+    return get(def, dd.base, k)
+end
+Base.get(dd::PendingWritesWrapper, k, default) = get(Returns(default), dd, k)
+Base.haskey(dd::PendingWritesWrapper, k) = haskey(dd.base, k)
+Base.length(dd::PendingWritesWrapper) = length(dd.base)
+Base.iterate(dd::PendingWritesWrapper, args...) = iterate(dd.base, args...)

@@ -298,6 +298,10 @@ function narrow_buffer_type(
     )
     type = Union{}
     for arr in buffer
+        if !isempty(arr) && isconcretetype(eltype(arr))
+            type = promote_type(type, eltype(arr))
+            continue
+        end
         for x in arr
             type = promote_type(type, typeof(x))
         end
@@ -503,6 +507,46 @@ end
 function SymbolicIndexingInterface.parameter_values(p::MTKParameters, pind::ParameterIndex)
     return _ducktyped_parameter_values(p, pind)
 end
+
+# `bufs[i][j]`, or `bufs[i][j][k...]`, in the buffer tuple of the `discrete`, `constant`,
+# `nonnumeric` or `caches` portion. Those portions hold one buffer per element type. Indexing the
+# tuple with a runtime `i` gives a buffer of a type inference cannot narrow once the tuple holds
+# four or more types, so the access on it is a dynamic dispatch, which is slow and which
+# `juliac --trim` rejects. Walking the tuple narrows it to one concrete buffer before the access.
+@inline function _buffer_getindex(bufs::Tuple{}, i::Int, j, k)
+    throw(BoundsError(bufs, i))
+end
+@inline function _buffer_getindex(bufs::Tuple, i::Int, j, k)
+    if i === 1
+        buf = first(bufs)
+        return isempty(k) ? buf[j] : buf[j][k...]
+    end
+    return _buffer_getindex(Base.tail(bufs), i - 1, j, k)
+end
+# Any other collection of buffers, such as the AD tangent of a buffer tuple.
+@inline _buffer_getindex(bufs, i::Int, j, k) = isempty(k) ? bufs[i][j] : bufs[i][j][k...]
+
+# The assignment counterpart of `_buffer_getindex`. `validate_size` compares the size of `val`
+# with that of the element it replaces.
+@inline function _buffer_setindex!(bufs::Tuple{}, val, i::Int, j, k, validate_size::Bool)
+    throw(BoundsError(bufs, i))
+end
+@inline function _buffer_setindex!(bufs::Tuple, val, i::Int, j, k, validate_size::Bool)
+    if i === 1
+        buf = first(bufs)
+        if isempty(k)
+            if validate_size && size(val) !== size(buf[j])
+                throw(InvalidParameterSizeException(size(buf[j]), size(val)))
+            end
+            buf[j] = val
+        else
+            buf[j][k...] = val
+        end
+        return nothing
+    end
+    return _buffer_setindex!(Base.tail(bufs), val, i - 1, j, k, validate_size)
+end
+
 function _ducktyped_parameter_values(p, pind::ParameterIndex)
     @unpack portion, idx = pind
     if portion isa SciMLStructures.Tunable
@@ -513,13 +557,13 @@ function _ducktyped_parameter_values(p, pind::ParameterIndex)
     end
     i, j, k... = idx
     if portion isa SciMLStructures.Discrete
-        return isempty(k) ? p.discrete[i][j] : p.discrete[i][j][k...]
+        return _buffer_getindex(p.discrete, i, j, k)
     elseif portion isa SciMLStructures.Constants
-        return isempty(k) ? p.constant[i][j] : p.constant[i][j][k...]
+        return _buffer_getindex(p.constant, i, j, k)
     elseif portion === NONNUMERIC_PORTION
-        return isempty(k) ? p.nonnumeric[i][j] : p.nonnumeric[i][j][k...]
+        return _buffer_getindex(p.nonnumeric, i, j, k)
     elseif portion isa SciMLStructures.Caches
-        return isempty(k) ? p.caches[i][j] : p.caches[i][j][k...]
+        return _buffer_getindex(p.caches, i, j, k)
     else
         error("Unhandled portion $portion")
     end
@@ -542,39 +586,15 @@ function SymbolicIndexingInterface.set_parameter!(
     else
         i, j, k... = idx
         if portion isa SciMLStructures.Discrete
-            if isempty(k)
-                if validate_size && size(val) !== size(p.discrete[i][j])
-                    throw(
-                        InvalidParameterSizeException(
-                            size(p.discrete[i][j]), size(val)
-                        )
-                    )
-                end
-                p.discrete[i][j] = val
-            else
-                p.discrete[i][j][k...] = val
-            end
+            _buffer_setindex!(p.discrete, val, i, j, k, validate_size)
         elseif portion isa SciMLStructures.Constants
-            if isempty(k)
-                if validate_size && size(val) !== size(p.constant[i][j])
-                    throw(InvalidParameterSizeException(size(p.constant[i][j]), size(val)))
-                end
-                p.constant[i][j] = val
-            else
-                p.constant[i][j][k...] = val
-            end
+            _buffer_setindex!(p.constant, val, i, j, k, validate_size)
         elseif portion === NONNUMERIC_PORTION
-            if isempty(k)
-                p.nonnumeric[i][j] = val
-            else
-                p.nonnumeric[i][j][k...] = val
-            end
+            # Neither a nonnumeric element (a string, a function, a struct) nor a cache need
+            # have a `size`.
+            _buffer_setindex!(p.nonnumeric, val, i, j, k, false)
         elseif portion isa SciMLStructures.Caches
-            if isempty(k)
-                p.caches[i][j] = val
-            else
-                p.caches[i][j][k...] = val
-            end
+            _buffer_setindex!(p.caches, val, i, j, k, false)
         else
             error("Unhandled portion $portion")
         end
@@ -748,7 +768,8 @@ function __remake_buffer(indp, oldbuf::MTKParameters, idxs, vals; validate = tru
     # If the parameter buffer is an `MTKParameters` object, `indp` must eventually drill
     # down to an `AbstractSystem` using `symbolic_container`. We leverage this to get
     # the index cache.
-    ic = get_index_cache(indp_to_system(indp))
+    sys = indp_to_system(indp)
+    ic = get_index_cache(sys)
     for (idx, val) in zip(idxs, vals)
         sym = nothing
         if val === missing
@@ -758,7 +779,10 @@ function __remake_buffer(indp, oldbuf::MTKParameters, idxs, vals; validate = tru
             sym = idx
             idx = parameter_index(ic, sym)
             if idx === nothing
-                @warn "Symbolic variable $sym is not a (non-dependent) parameter in the system"
+                @SciMLMessage(
+                    "Symbolic variable $sym is not a (non-dependent) parameter in the system",
+                    _system_verbosity(sys), :parameter_not_in_system
+                )
                 continue
             end
             idx in handled_idxs && continue
@@ -775,7 +799,10 @@ function __remake_buffer(indp, oldbuf::MTKParameters, idxs, vals; validate = tru
                 for (i, vali) in zip(eachindex(sym), eachindex(val))
                     idx = parameter_index(ic, sym[i])
                     if idx === nothing
-                        @warn "Symbolic variable $sym is not a (non-dependent) parameter in the system"
+                        @SciMLMessage(
+                            "Symbolic variable $sym is not a (non-dependent) parameter in the system",
+                            _system_verbosity(sys), :parameter_not_in_system
+                        )
                         continue
                     end
                     # Intentionally don't check handled_idxs here because array variables always take priority
