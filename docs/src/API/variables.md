@@ -347,6 +347,7 @@ variables programmatically.
 ModelingToolkitBase.toparam
 ModelingToolkitBase.tovar
 ModelingToolkitBase.tobrownian
+ModelingToolkitBase.shaped_parameter
 ```
 
 ## Miscellaneous metadata
