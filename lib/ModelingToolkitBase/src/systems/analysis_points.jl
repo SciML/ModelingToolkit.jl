@@ -557,14 +557,13 @@ function unknown_to_parameter!(dvs::Vector{SymbolicT}, ps::Vector{SymbolicT}, va
     idx = findfirst(isequal(var), dvs)
     if idx !== nothing
         deleteat!(dvs, idx)
-    elseif symbolic_type(var) == ArraySymbolic()
-        elems = Set{SymbolicT}(vec(collect(var)))
+    elseif SU.is_array_shape(SU.shape(var))
         n = length(dvs)
-        filter!(!in(elems), dvs)
+        filter!(!isequal(var) ∘ first ∘ split_indexed_var, dvs)
         length(dvs) == n - length(elems) ||
-            error("Not all elements of the array variable $var are unknowns of the system.")
+            error(lazy"Not all elements of the array variable $var are unknowns of the system.")
     else
-        error("Variable $var is not an unknown of the system.")
+        error(lazy"Variable $var is not an unknown of the system.")
     end
     push!(ps, var)
     return nothing
@@ -610,7 +609,7 @@ function apply_transformation(tf::Break, sys::AbstractSystem)
                 out_var = ap_var(out)
                 if tf.outputs_to_params
                     split_indexed_var(out_var)[2] && error(
-                        "Analysis point $(nameof(ap)) connects to the element $out_var of an array variable. Opening the loop at this analysis point requires turning a single element of the array into a parameter, which is not supported. Connect the analysis point to the entire array variable instead."
+                        lazy"Analysis point $(nameof(ap)) connects to the element $out_var of an array variable. Opening the loop at this analysis point requires turning a single element of the array into a parameter, which is not supported. Connect the analysis point to the entire array variable instead."
                     )
                     namespace = namespace_hierarchy(getname(out_var))
                     insert!(namespace, 1, nameof(breaksys))
