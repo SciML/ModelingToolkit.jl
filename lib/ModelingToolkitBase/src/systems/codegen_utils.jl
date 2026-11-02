@@ -647,6 +647,12 @@ const DEFAULT_CHUNK_SIZE = 500
 # of the whole function's IR, i.e. if they would recompute too many shared subexpressions.
 const DEFAULT_MAX_CHUNK_DUPLICATION = 1.25
 
+# An atomic term can hold a non-constant index (`x[k]`, `Pre(x[k])`, `y(t - τ[k])`),
+# and codegen needs the indexed array, so only elements with constant indices stop the search
+function find_arrvars_recurse(ex::SymbolicT)
+    return !SU.default_is_atomic(ex) || !has_const_int_indices(ex)
+end
+
 """
     BuildFunctionWrapperOptions(; kwargs...)
 
@@ -984,7 +990,7 @@ Base.@nospecializeinfer function build_function_wrapper(
 
     required_arrvars = Set{SymbolicT}()
     search_buffer = SU.IRStructureSearchBuffer(ir, required_arrvars)
-    SU.search_variables!(search_buffer, expr; is_atomic = find_arrvars_is_atomic, recurse = !SU.default_is_atomic)
+    SU.search_variables!(search_buffer, expr; is_atomic = find_arrvars_is_atomic, recurse = find_arrvars_recurse)
 
     # assignments for reconstructing scalarized array symbolics
     if non_standard_param_layout
