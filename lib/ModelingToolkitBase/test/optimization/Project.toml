@@ -36,6 +36,7 @@ ModelingToolkitBase = {path = "../.."}
 [compat]
 CasADi = "1.3.1"
 DataInterpolations = "8.8, 9"
+OptimizationBase = "5.9"
 OrdinaryDiffEqExplicitTableaus = "2"
 OrdinaryDiffEqImplicitTableaus = "2"
 Pyomo = "2.0.2"
