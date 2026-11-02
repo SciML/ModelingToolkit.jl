@@ -24,11 +24,15 @@ end
 
 run_expr(ex, args...) = Base.invokelatest(eval(ex), args...)
 
-# Chunking is intentionally disabled when the loaded RuntimeGeneratedFunctions cannot compile helpers.
-const CHUNKING_AVAILABLE = MTKB._rgf_supports_local_functions()
-expect_chunked(ex) = CHUNKING_AVAILABLE ? count_helpers(ex) > 1 : count_helpers(ex) == 0
-
-count_helpers(ex) = count(a -> Meta.isexpr(a, :call) && Meta.isexpr(a.args[1], :function), ex.args[2].args)
+# The helper calls of a combined function: the statements of an in-place one, the arguments of
+# the `vcat` of an out-of-place one.
+is_helper_call(a) = Meta.isexpr(a, :call) && Meta.isexpr(a.args[1], :function)
+function count_helpers(ex)
+    calls = filter(a -> a isa Expr, ex.args[2].args)
+    vcats = filter(a -> Meta.isexpr(a, :call) && a.args[1] === :vcat, calls)
+    return count(is_helper_call, calls) + sum(c -> count(is_helper_call, c.args), vcats; init = 0)
+end
+expect_chunked(ex) = count_helpers(ex) > 1
 
 n = 200
 sys = ring_system(n)
@@ -41,6 +45,7 @@ run_expr(build_rhs(sys, rhss; chunk_size = 0)[2], reference, u, p, 0.0)
 @testset "explicit chunk_size splits the in-place function and matches" begin
     oop, iip = build_rhs(sys, rhss; chunk_size = 300)
     @test expect_chunked(iip)
+    @test expect_chunked(oop)
     du = zeros(n)
     run_expr(iip, du, u, p, 0.0)
     @test du == reference
@@ -51,13 +56,14 @@ end
     oop, iip = build_rhs(sys, rhss; chunk_size = -1)
     @test count_helpers(iip) == 0
     @test oop == build_rhs(sys, rhss; chunk_size = 0)[1]
+    @test count_helpers(oop) == 0
 end
 
 @testset "chunking is off by default and with chunk_size = 0" begin
     @test MTKB.BuildFunctionWrapperOptions().chunk_size == 0
     @test count_helpers(build_rhs(sys, rhss)[2]) == 0
     @test count_helpers(build_rhs(sys, rhss; chunk_size = 0)[2]) == 0
-    @test (count_helpers(build_rhs(sys, rhss; chunk_size = 1)[2]) > 0) == CHUNKING_AVAILABLE
+    @test count_helpers(build_rhs(sys, rhss; chunk_size = 1)[2]) > 0
 end
 
 @testset "functions that cannot be split independently are left whole" begin
@@ -120,4 +126,23 @@ end
     out = zeros(4)
     @test run_expr(chunked, out, [1.0, 2.0, 3.0, 4.0], ring_p, 0.0) === out
     @test out == [4.0, 9.0, 16.0, 1.0]
+end
+
+@testset "chunk sizes are the statements reachable from each slice" begin
+    full_ir = MTKB.get_irstructure(sys)
+    reachable(r) = length(MTKB.SU.subset_ir(full_ir, rhss[r]))
+    total = reachable(1:n)
+    for target in (150, 300, 1000)
+        ranges = MTKB._chunk_ranges(full_ir, rhss, target)
+        @test ranges !== nothing
+        @test reduce(vcat, collect.(ranges)) == 1:n
+        # a slice is closed as soon as it reaches the target, and not before
+        @test all(r -> reachable(r) >= target, ranges[1:(end - 1)])
+        @test all(r -> reachable(first(r):(last(r) - 1)) < target, ranges[1:(end - 1)])
+    end
+    # the unrelated statements of a shared IR do not affect the sizes
+    subset_ir = MTKB.SU.subset_ir(full_ir, rhss)
+    @test MTKB._chunk_ranges(subset_ir, rhss, 300) == MTKB._chunk_ranges(full_ir, rhss, 300)
+    @test MTKB._chunk_ranges(full_ir, rhss, total) === nothing
+    @test MTKB._chunk_ranges(full_ir, rhss, 0) === nothing
 end

@@ -715,12 +715,14 @@ composed `wrap_code`, the resolved `optimize`, and the `output_type`-derived
 - `extra_assignments`: Extra `Assignment` statements to prefix to `expr`, after all other
   assignments.
 - `chunk_size`: Off (`0`) by default. Very large generated functions take superlinear time to
-  compile, so when the right-hand side is a vector whose reachable `IRStructure` has more than
-  $DEFAULT_CHUNK_THRESHOLD statements, the in-place function is split into helper functions that
-  each fill a slice of the output (the out-of-place function is left whole). `-1` does this
-  automatically, into helpers of about $DEFAULT_CHUNK_SIZE statements, unless the helpers would
-  recompute too many shared subexpressions; `0` (the default) never splits; a positive value splits any function
-  with more statements than `chunk_size` into helpers of about `chunk_size` statements.
+  compile, so when the right-hand side is a vector whose reachable `IRStructure` statements
+  number more than $DEFAULT_CHUNK_THRESHOLD, it is split into helper functions that each build a slice
+  of the output, and the generated in-place function calls them in turn while the out-of-place
+  function `vcat`s their results. `-1` does this automatically, into helpers reaching about
+  $DEFAULT_CHUNK_SIZE statements each, unless the helpers would recompute too many shared
+  subexpressions; `0` (the default) never splits; a positive value splits any function with more
+  reachable statements than `chunk_size` into helpers of about `chunk_size` statements. The
+  statements of each slice are counted by a traversal of the IR from its elements.
   A chunked in-place function writes each helper's slice directly into `out`, so enabling this
   requires that `out` does not alias any input (an unchunked function happens to tolerate this
   only incidentally).
@@ -813,62 +815,93 @@ Base.@nospecializeinfer function build_function_wrapper(
     return build_function_wrapper(sys, expr, collect(Any, args), opts)
 end
 
-# Whether the loaded RuntimeGeneratedFunctions can compile a function containing a local
-# function definition, as chunked helpers are. Versions 0.5.12 and 0.5.13 fail on Julia 1.12
-# with "syntax: malformed expression". Cached after the first probe.
-const _RGF_LOCAL_FUNCTIONS = Ref{Union{Nothing, Bool}}(nothing)
-
-function _rgf_supports_local_functions()
-    supported = _RGF_LOCAL_FUNCTIONS[]
-    supported === nothing || return supported
-    probe = :(
-        function (x)
-            return (
-                function (a)
-                    b = a + 1
-                    return b
-                end
-            )(x)
-        end
-    )
-    supported = try
-        drop_expr(RuntimeGeneratedFunction(@__MODULE__, @__MODULE__, probe))(1) == 2
-    catch
-        false
-    end
-    _RGF_LOCAL_FUNCTIONS[] = supported
-    return supported
-end
-
 # Contiguous slices of the output vector `expr`, each reaching about `target` statements of
-# `ir` (the reachable IR of `expr`), or `nothing` if the function should not be chunked.
+# `ir`, or `nothing` if the function should not be chunked. Only the statements reachable from
+# the elements of `expr` are counted (a graph traversal, `ir` is typically shared with much
+# unrelated work), and each slice is grown element by element until its own reachable
+# statements, which are exactly what its helper has to compile, reach `target`.
 function _chunk_ranges(ir::IRStructure{VartypeT}, expr, chunk_size::Int)
     chunk_size == 0 && return nothing
     expr isa AbstractVector{SymbolicT} || return nothing
-    nstmts = length(ir)
-    target = chunk_size < 0 ? DEFAULT_CHUNK_SIZE : chunk_size
-    nstmts > (chunk_size < 0 ? DEFAULT_CHUNK_THRESHOLD : target) || return nothing
-    per_chunk = max(1, fld(target * length(expr), nstmts))
-    ranges = [i:min(i + per_chunk - 1, length(expr)) for i in 1:per_chunk:length(expr)]
-    length(ranges) > 1 || return nothing
-    if chunk_size < 0
-        chunked = sum(r -> length(SU.subset_ir(ir, view(expr, r))), ranges)
-        chunked <= DEFAULT_MAX_CHUNK_DUPLICATION * nstmts || return nothing
+    auto = chunk_size < 0
+    target = auto ? DEFAULT_CHUNK_SIZE : chunk_size
+    idxs = Int32[get(ir.definition, e, Int32(0)) for e in expr]
+    any(iszero, idxs) && return nothing
+    nverts = Graphs.nv(ir.dependency_graph)
+    visited = falses(nverts)
+    reachable = Int32[]
+    for idx in idxs
+        visited[idx] && continue
+        SU.get_reachability!(reachable, ir, idx; visited)
+        visited[idx] = true
+        push!(reachable, idx)
     end
+    total = length(reachable)
+    total > (auto ? DEFAULT_CHUNK_THRESHOLD : target) || return nothing
+
+    ranges = UnitRange{Int}[]
+    chunked = 0
+    start = 1
+    empty!(reachable)
+    fill!(visited, false)
+    for (i, idx) in enumerate(idxs)
+        if !visited[idx]
+            SU.get_reachability!(reachable, ir, idx; visited)
+            visited[idx] = true
+            push!(reachable, idx)
+        end
+        if length(reachable) >= target || i == length(idxs)
+            push!(ranges, start:i)
+            chunked += length(reachable)
+            start = i + 1
+            empty!(reachable)
+            fill!(visited, false)
+        end
+    end
+    length(ranges) > 1 || return nothing
+    # Helpers recompute the statements shared between slices.
+    auto && chunked > DEFAULT_MAX_CHUNK_DUPLICATION * total && return nothing
     return ranges
 end
 
-# Combine the in-place helper functions `helpers` (generated `:function` expressions with the
-# same signature) into one function with that signature which calls each of them in turn.
-function _call_chunks(helpers::Vector{Any})
+# Combine the helper functions `helpers` (generated anonymous `:function` expressions with the
+# same signature) into one function with that signature. The in-place version calls each
+# helper in turn and returns `out`, the out-of-place version `vcat`s the results of the helpers.
+function _call_chunks(helpers::Vector{Expr}, iip::Bool)
     signature = helpers[1].args[1]
     all(arg -> arg isa Symbol, signature.args) || return nothing
     body = Expr(:block)
+    results = Expr(:call, :vcat)
     for helper in helpers
-        push!(body.args, Expr(:call, helper, signature.args...))
+        call = Expr(:call, helper)
+        append!(call.args, signature.args)
+        push!(iip ? body.args : results.args, call)
     end
-    push!(body.args, signature.args[1])
+    push!(body.args, iip ? signature.args[1] : results)
     return Expr(:function, signature, body)
+end
+
+# Build `expr` as the `chunk_ranges` slices, each by a recursive call of
+# `build_function_wrapper` that makes its own minimal IR, and combine the helpers. Returns
+# `nothing` if the helpers cannot be combined.
+function _build_chunked(sys, expr, args, opts::BuildFunctionWrapperOptions, chunk_ranges)
+    oop_helpers = Expr[]
+    iip_helpers = Expr[]
+    for range in chunk_ranges
+        helper_opts = setproperties(
+            opts, (;
+                chunk_size = 0,
+                codegen = setproperties(opts.codegen, (; outputidxs = collect(range))),
+            )
+        )
+        oop, iip = build_function_wrapper(sys, expr[range], args, helper_opts)
+        push!(oop_helpers, oop)
+        push!(iip_helpers, iip)
+    end
+    oop = _call_chunks(oop_helpers, false)
+    iip = _call_chunks(iip_helpers, true)
+    (oop === nothing || iip === nothing) && return nothing
+    return oop, iip
 end
 
 """
@@ -953,25 +986,25 @@ Base.@nospecializeinfer function build_function_wrapper(
         SU.populate_ir!(ir, subexpr)
     end
 
-    # Subset the `IRStructure` so that optimization passes run on the minimal set of
-    # expressions
-    ir = SU.subset_ir(ir, stmts)
-
-    # A very large in-place function is split into helpers that each fill a slice of the output.
-    # Opt-in (`chunk_size`): the chunked function requires that `out` does not alias any input.
-    # Each helper is generated by this same function from its slice of `expr`, so it only reads
-    # its arguments and has its own minimal IR.
-    chunk_ranges = nothing
-    if opts.codegen.iip_config == (true, true) && !wrap_delays && !create_bindings &&
-            isempty(compress_args) && isempty(extra_assignments) &&
+    # A very large function is split into helpers that each fill a slice of the output, decided
+    # here from the reachable statements, before any of the work below is done on the whole
+    # function. The chunked in-place function requires that `out` does not alias any input.
+    if chunk_size != 0 && opts.codegen.iip_config == (true, true) && !wrap_delays &&
+            !create_bindings && isempty(compress_args) && isempty(extra_assignments) &&
             !(has_preface(sys) && preface(sys) !== nothing) &&
             all(==(identity), opts.codegen.wrap_code) && opts.codegen.outputidxs === nothing &&
             mkarray === nothing && output_type !== Tuple
         chunk_ranges = _chunk_ranges(ir, expr, chunk_size)
-        if chunk_ranges !== nothing && !_rgf_supports_local_functions()
-            chunk_ranges = nothing
+        if chunk_ranges !== nothing
+            chunked = _build_chunked(sys, expr, orig_args, opts, chunk_ranges)
+            chunked === nothing || return chunked
         end
     end
+
+    # Subset the `IRStructure` so that optimization passes run on the minimal set of
+    # expressions
+    ir = SU.subset_ir(ir, stmts)
+
     # We don't use `replace_node!` here to insert the observed, and instead prefer to
     # substitute as done above. The issue arises due to array variables passed scalarized
     # to the function. Consider a case where `p1` and `p2` are array parameters, `p1 => p2`
@@ -1092,25 +1125,6 @@ Base.@nospecializeinfer function build_function_wrapper(
     # rest (`nanmath`, `checkbounds`, `iip_config`, ...), so `codegen_function` still sees a
     # single concrete `CodegenFunctionOptions` type and is compiled once.
     codegen_options = setproperties(opts.codegen, (; wrap_code, similarto, optimize))
-    if chunk_ranges !== nothing
-        helpers = Any[]
-        for range in chunk_ranges
-            helper_opts = setproperties(
-                opts, (;
-                    chunk_size = 0,
-                    codegen = setproperties(
-                        opts.codegen, (; iip_config = (false, true), outputidxs = collect(range))
-                    ),
-                )
-            )
-            push!(helpers, build_function_wrapper(sys, expr[range], orig_args, helper_opts)[2])
-        end
-        iip = _call_chunks(helpers)
-        if iip !== nothing
-            codegen_options = setproperties(codegen_options, (; iip_config = (true, false)))
-            return first(Symbolics.codegen_function(ir, expr, args, codegen_options)), iip
-        end
-    end
     return Symbolics.codegen_function(ir, expr, args, codegen_options)
 end
 
