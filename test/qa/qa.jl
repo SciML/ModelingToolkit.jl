@@ -341,6 +341,10 @@ const NONPUBLIC_QUALIFIED_ACCESSES = (
     :ShapeVecT, :stable_eachindex, :Unknown, :with_allocator,
     # SciMLBase, Moshi
     :Match, :ODENLStepData, :ParamJacobianWrapper, :Void,
+    # SCCNonlinearSolve: `iteratively_build_sols` is the solve-time seam where
+    # vector-stored SCC problems dispatch to the Enzyme-safe tuple specialization
+    # (see `SCCExplicitFuns`). It has no public spelling.
+    :iteratively_build_sols,
 )
 
 # ModelingToolkit is the upper half of ModelingToolkitBase: the two are one library split
