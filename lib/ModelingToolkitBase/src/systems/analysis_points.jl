@@ -550,6 +550,26 @@ end
 
 Break(ap::AnalysisPoint) = Break(ap, false)
 
+# Remove the unknown `var` from `dvs` and add it to `ps`. The unknowns of a system store an
+# array variable either as the array itself or as its individual elements; in the latter
+# case all elements are removed and the array is added to `ps` as a whole.
+function unknown_to_parameter!(dvs::Vector{SymbolicT}, ps::Vector{SymbolicT}, var::SymbolicT)
+    idx = findfirst(isequal(var), dvs)
+    if idx !== nothing
+        deleteat!(dvs, idx)
+    elseif symbolic_type(var) == ArraySymbolic()
+        elems = Set{SymbolicT}(vec(collect(var)))
+        n = length(dvs)
+        filter!(!in(elems), dvs)
+        length(dvs) == n - length(elems) ||
+            error("Not all elements of the array variable $var are unknowns of the system.")
+    else
+        error("Variable $var is not an unknown of the system.")
+    end
+    push!(ps, var)
+    return nothing
+end
+
 function apply_transformation(tf::Break, sys::AbstractSystem)
     return modify_nested_subsystem(sys, tf.ap) do breaksys
         # get analysis point
@@ -576,8 +596,7 @@ function apply_transformation(tf::Break, sys::AbstractSystem)
                         @set! outsys.ps = new_ps
 
                         out_var = ap_var(toggle_namespacing(outsys, false))
-                        deleteat!(new_dvs, findfirst(isequal(out_var), new_dvs)::Int)
-                        push!(new_ps, out_var)
+                        unknown_to_parameter!(new_dvs, new_ps, out_var)
 
                         return outsys, (out_var,)
                     end
@@ -590,16 +609,18 @@ function apply_transformation(tf::Break, sys::AbstractSystem)
             for out in outs
                 out_var = ap_var(out)
                 if tf.outputs_to_params
+                    split_indexed_var(out_var)[2] && error(
+                        "Analysis point $(nameof(ap)) connects to the element $out_var of an array variable. Opening the loop at this analysis point requires turning a single element of the array into a parameter, which is not supported. Connect the analysis point to the entire array variable instead."
+                    )
                     namespace = namespace_hierarchy(getname(out_var))
                     insert!(namespace, 1, nameof(breaksys))
                     breaksys, _ = modify_nested_subsystem(breaksys, @view(namespace[1:(end - 1)])) do apsys
                         new_dvs = copy(get_unknowns(apsys))
-                        var_in_apsys = getvar(apsys, namespace[end]; namespace = false)
-                        deleteat!(new_dvs, findfirst(isequal(var_in_apsys), new_dvs)::Int)
                         @set! apsys.unknowns = new_dvs
                         new_ps = copy(get_ps(apsys))
-                        push!(new_ps, var_in_apsys)
                         @set! apsys.ps = new_ps
+                        var_in_apsys = getvar(apsys, namespace[end]; namespace = false)
+                        unknown_to_parameter!(new_dvs, new_ps, unwrap(var_in_apsys))
                         return apsys, ()
                     end
                 end
