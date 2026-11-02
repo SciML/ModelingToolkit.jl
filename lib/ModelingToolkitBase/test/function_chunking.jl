@@ -146,3 +146,23 @@ end
     @test MTKB._chunk_ranges(full_ir, rhss, total) === nothing
     @test MTKB._chunk_ranges(full_ir, rhss, 0) === nothing
 end
+
+@testset "non-Array output types are not chunked" begin
+    # a minimal labelled-vector type whose `vcat` would not reproduce the requested output
+    struct LabelledVec <: AbstractVector{Float64}
+        data::Vector{Float64}
+        labels::Vector{Symbol}
+    end
+    Base.size(v::LabelledVec) = size(v.data)
+    Base.getindex(v::LabelledVec, i::Int) = v.data[i]
+    Base.setindex!(v::LabelledVec, x, i::Int) = (v.data[i] = x)
+    Base.similar(v::LabelledVec, ::Type{Float64}, dims::Dims{1}) =
+        LabelledVec(zeros(dims), v.labels[1:min(end, dims[1])])
+    for output_type in (LabelledVec, Vector{Float64}, Array)
+        kwargs = (; chunk_size = 1, output_type)
+        expected = output_type === LabelledVec ? 0 : 1
+        @test (count_helpers(build_rhs(sys, rhss; kwargs...)[2]) > 0) == (expected > 0)
+    end
+    @test build_rhs(sys, rhss; chunk_size = 1, output_type = LabelledVec) ==
+        build_rhs(sys, rhss; chunk_size = 0, output_type = LabelledVec)
+end

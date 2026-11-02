@@ -815,6 +815,12 @@ Base.@nospecializeinfer function build_function_wrapper(
     return build_function_wrapper(sys, expr, collect(Any, args), opts)
 end
 
+# Chunked results are `vcat`s of the slices' results, which only reproduce the requested output
+# for plain `Array`s (`nothing` is the default `Array`): labelled and static containers would
+# lose or duplicate their metadata.
+_is_plain_array_type(::Nothing) = true
+_is_plain_array_type(T) = T isa Type && T <: Array
+
 # Contiguous slices of the output vector `expr`, each reaching about `target` statements of
 # `ir`, or `nothing` if the function should not be chunked. Only the statements reachable from
 # the elements of `expr` are counted (a graph traversal, `ir` is typically shared with much
@@ -993,7 +999,8 @@ Base.@nospecializeinfer function build_function_wrapper(
             !create_bindings && isempty(compress_args) && isempty(extra_assignments) &&
             !(has_preface(sys) && preface(sys) !== nothing) &&
             all(==(identity), opts.codegen.wrap_code) && opts.codegen.outputidxs === nothing &&
-            mkarray === nothing && output_type !== Tuple
+            mkarray === nothing && _is_plain_array_type(output_type) &&
+            _is_plain_array_type(opts.codegen.similarto)
         chunk_ranges = _chunk_ranges(ir, expr, chunk_size)
         if chunk_ranges !== nothing
             chunked = _build_chunked(sys, expr, orig_args, opts, chunk_ranges)
