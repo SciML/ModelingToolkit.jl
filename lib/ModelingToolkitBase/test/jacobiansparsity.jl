@@ -1,6 +1,8 @@
 using ModelingToolkitBase, SparseArrays, OrdinaryDiffEq, DiffEqBase, BenchmarkTools
 import SymbolicUtils as SU
 using Test
+using LinearAlgebra: I
+import Symbolics
 
 N = 3
 xyd_brusselator = range(0, stop = 1, length = N)
@@ -210,5 +212,91 @@ if @isdefined(ModelingToolkit)
             vars2 = SU.search_variables(equations(sys)[ieq])
             @test issetequal(vars1, vars2)
         end
+    end
+end
+
+# Needs the opaque array operator handling of Symbolics.jl PR #2118; without it Symbolics
+# returns zeros for these Jacobian entries, which is detected by the probe below.
+@testset "Opaque array operators without derivative rules are an error" begin
+    t = ModelingToolkitBase.t_nounits
+    D = ModelingToolkitBase.D_nounits
+    n = 4
+    K = spdiagm(-1 => -ones(n - 1), 0 => 2ones(n), 1 => -ones(n - 1))
+    @variables u(t)[1:n] x(t) y(t)
+    @parameters A[1:n, 1:n] b[1:n]
+
+    opaque_apply(A, x) = A * x
+    Symbolics.@register_array_symbolic opaque_apply(A::AbstractMatrix, x::AbstractVector) begin
+        size = (length(x),)
+        eltype = promote_type(Float64, eltype(x))
+        ndims = 1
+    end
+
+    symbolics_handles_opaque = !all(
+        e -> isequal(e, 0),
+        Symbolics.jacobian(Symbolics.scalarize(opaque_apply(A, u)), Symbolics.scalarize(u))
+    )
+    if symbolics_handles_opaque
+
+        @named opsys = System([D(u) ~ opaque_apply(A, u)], t, [u], [A])
+        opsys = complete(opsys)
+        opop = Dict{Any, Any}(A => K, u => ones(n))
+        @test_throws ArgumentError calculate_jacobian(opsys)
+        @test_throws ArgumentError calculate_jacobian(opsys; sparse = true)
+        err = try
+            calculate_jacobian(opsys)
+        catch err
+            err
+        end
+        @test occursin("opaque_apply", err.msg) && occursin("jac", err.msg)
+        @test_throws ArgumentError ODEProblem(
+            opsys, opop, (0.0, 1.0); jac = true, build_initializeprob = false
+        )
+        # without a symbolic Jacobian the conservative dense pattern is still available
+        @test all(ModelingToolkitBase.jacobian_sparsity(opsys) .== true)
+        @test_nowarn ODEProblem(opsys, opop, (0.0, 1.0); sparse = true)
+
+        # a registered call with a derivative rule is differentiated
+        ruled(x) = [x, 2x]
+        Symbolics.@register_array_symbolic ruled(x::Real) begin
+            size = (2,)
+            eltype = Float64
+            ndims = 1
+        end
+        Symbolics.@register_derivative ruled(x) 1 Symbolics.SConst([1.0, 2.0])
+        @named rulesys = System([D(y) ~ ruled(y)[2]], t, [y], [])
+        rulesys = complete(rulesys)
+        @test_nowarn calculate_jacobian(rulesys)
+
+        # a call that does not depend on the unknowns is a constant of the Jacobian
+        @named constsys = System([D(u) ~ -u + opaque_apply(A, b)], t, [u], [A, b])
+        constsys = complete(constsys)
+        @test SU.unwrap_const.(calculate_jacobian(constsys)) == -Matrix(I, n, n)
+        @test_nowarn ODEProblem(
+            constsys, Dict{Any, Any}(A => K, b => ones(n), u => ones(n)), (0.0, 1.0);
+            jac = true, sparse = true
+        )
+
+        # an element of an array parameter is an ordinary scalar coefficient
+        @parameters Q[1:2, 1:2]
+        @named elsys = System([D(x) ~ Q[1, 1] * x], t, [x], [Q])
+        elsys = complete(elsys)
+        @test isequal(only(calculate_jacobian(elsys)), Q[1, 1])
+
+        # a registered function with a derivative rule for the unknown, and a
+        # sparse matrix parameter as a non-differentiated argument
+        @parameters Ap::SparseMatrixCSC{Float64, Int} [tunable = false]
+        offset(A, x) = x + sum(A)
+        Symbolics.@register_symbolic offset(A::SparseMatrixCSC, x::Real)
+        Symbolics.@register_derivative offset(A, x) 2 Symbolics.SConst(1.0)
+        @named offsys = System([D(x) ~ offset(Ap, x)], t, [x], [Ap])
+        offsys = complete(offsys)
+        @test SU.unwrap_const(only(calculate_jacobian(offsys))) == 1
+        @test_nowarn ODEProblem(
+            offsys, Dict{Any, Any}(Ap => K, x => 1.0), (0.0, 1.0);
+            jac = true, build_initializeprob = false
+        )
+    else
+        @test_skip symbolics_handles_opaque
     end
 end
