@@ -151,7 +151,7 @@ import PreallocationTools: DiffCache, get_tmp
 import FillArrays
 import BipartiteGraphs
 using BipartiteGraphs: BipartiteGraph, DiCMOBiGraph, HyperGraph, Matching, Unassigned,
-    𝑑neighbors, 𝑠neighbors, 𝑠vertices
+    construct_augmenting_path!, maximal_matching, 𝑑neighbors, 𝑠neighbors, 𝑠vertices
 import Random: AbstractRNG
 # To handle `Integral` in a type-stable manner
 import DomainSets
