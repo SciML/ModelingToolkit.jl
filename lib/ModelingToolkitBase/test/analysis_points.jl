@@ -266,10 +266,10 @@ if @isdefined(ModelingToolkit)
         end
     end
 
-    @testset "loop_openings require an operating point" begin
-        # Opening a loop turns the opened signal into a parameter whose operating-point
-        # value is not implied by the solution. It must be provided explicitly, otherwise
-        # `linearize` errors instead of silently using a stale/default value.
+    @testset "Signals disconnected by loop openings keep their values along a solution" begin
+        # Opening a loop turns the opened signal into a parameter. Without an entry in the
+        # operating point, it is held at the value of the signal that drove it, which along
+        # a solution is the value the signal has in the loop-closed solution.
         # Linearize plant_input -> P.output.u while opening the `plant_output` analysis
         # point (so the opened AP is neither the input nor the output).
 
@@ -279,25 +279,37 @@ if @isdefined(ModelingToolkit)
         sol = solve(prob, Rodas5())
         ts = [0.0, 0.5, 1.0]
 
-        lf_lo, _ = linearization_function(
+        lf_lo, ssys_lo = linearization_function(
             sys, sys.plant_input, P.output.u; loop_openings = [sys.plant_output]
         )
         lops = lf_lo.loop_opening_params
         @test !isempty(lops)
 
-        # Not providing the loop-opening parameter errors (both vector and scalar paths).
-        @test_throws Exception linearize(
+        # Both the vector and the scalar path hold the opened signal at its value in the
+        # solution, which equals the explicit symbolic mapping to the driving signal.
+        mats_vec, _, _ = linearize(
             sys, sys.plant_input, P.output.u;
             op = ModelingToolkit.LinearizationOpPoint(sol, ts),
             loop_openings = [sys.plant_output]
         )
-        @test_throws Exception linearize(
+        mats_sym, _, _ = linearize(
             sys, sys.plant_input, P.output.u;
-            op = ModelingToolkit.LinearizationOpPoint(sol, 0.0),
+            op = ModelingToolkit.LinearizationOpPoint(sol, ts; op = Dict(p => P.output.u for p in lops)),
             loop_openings = [sys.plant_output]
         )
+        @test length(mats_vec) == length(ts)
+        for (m, msym) in zip(mats_vec, mats_sym)
+            @test m.A ≈ msym.A
+            @test m.B ≈ msym.B
+        end
+        mats_scalar, _, _ = linearize(
+            sys, sys.plant_input, P.output.u;
+            op = ModelingToolkit.LinearizationOpPoint(sol, 0.5),
+            loop_openings = [sys.plant_output]
+        )
+        @test mats_scalar.A ≈ mats_vec[2].A
 
-        # Providing it via the `op` keyword of `LinearizationOpPoint` works.
+        # An entry in the `op` of the `LinearizationOpPoint` takes precedence.
         op_lo = Dict(p => 0.0 for p in lops)
         mats_lo, _, _ = linearize(
             sys, sys.plant_input, P.output.u;
@@ -305,6 +317,254 @@ if @isdefined(ModelingToolkit)
             loop_openings = [sys.plant_output]
         )
         @test length(mats_lo) == length(ts)
+
+        # The initialization equation of a held signal is fixed when the linearization
+        # function is built, so a value for it at `linearize` time is rejected.
+        @test_throws ErrorException linearize(ssys_lo, lf_lo; op = op_lo)
+    end
+
+    @testset "Operating point of signals disconnected by loop openings" begin
+        # The controller state equation is nonlinear in the controller input, so the
+        # entry A = -(1 + u^2) of the controller state reveals the value of the opened input.
+        @component function ICPlant(; name)
+            @variables begin
+                u(t), [input = true]
+                x(t) = 1.0
+                y(t), [output = true]
+            end
+            System([D(x) ~ -x^3 + u, y ~ x], t; name)
+        end
+        @component function ICCtrl(; name, k = -2.0, with_ic = true)
+            u = with_ic ? only(@variables u(t) = 0.5 [input = true]) :
+                only(@variables u(t) [input = true])
+            @variables begin
+                x(t) = 0.0
+                y(t), [output = true]
+            end
+            @parameters k = k
+            System([D(x) ~ -(1 + u^2) * x + k * u, y ~ x], t; name)
+        end
+        function ic_loop(; with_ic)
+            @named icP = ICPlant()
+            @named icC = ICCtrl(; with_ic)
+            eqs = [connect(icP.y, :plant_output, icC.u), connect(icC.y, :ctrl_output, icP.u)]
+            return System(eqs, t; systems = [icP, icC], name = :icsys)
+        end
+        icx(ssys) = findfirst(v -> occursin("icC₊x", string(v)), unknowns(ssys))
+
+        # The initial condition of the opened variable provides its operating-point value
+        icsys = ic_loop(; with_ic = true)
+        mats, ssys, _ = linearize(
+            icsys, :ctrl_output, :plant_output; loop_openings = [:plant_output]
+        )
+        @test mats.A[icx(ssys), icx(ssys)] ≈ -(1 + 0.5^2)
+
+        # An entry in the operating point takes precedence over the initial condition
+        csys = complete(icsys)
+        mats, ssys, _ = linearize(
+            icsys, :ctrl_output, :plant_output; loop_openings = [:plant_output],
+            op = Dict(csys.icC.u => 1.0)
+        )
+        @test mats.A[icx(ssys), icx(ssys)] ≈ -2.0
+
+        # `missing` makes the initialization solve for the opened variable, here from the
+        # steady-state condition of the controller state, k * u = 0 at x = 0
+        mats, ssys, _ = linearize(
+            icsys, :ctrl_output, :plant_output; loop_openings = [:plant_output],
+            op = Dict(csys.icC.u => missing, D(csys.icC.x) => 0.0)
+        )
+        @test mats.A[icx(ssys), icx(ssys)] ≈ -1.0 atol = 1.0e-8
+
+        # Without an entry in the operating point or an initial condition, the opened
+        # variable is held at the value of the plant output at the operating point of the
+        # loop-closed system, x = 1 from the initial condition of the plant state
+        nosys = ic_loop(; with_ic = false)
+        mats, ssys, _ = linearize(
+            nosys, :ctrl_output, :plant_output; loop_openings = [:plant_output]
+        )
+        @test mats.A[icx(ssys), icx(ssys)] ≈ -(1 + 1.0^2)
+        ncsys = complete(nosys)
+        mats, ssys, _ = linearize(
+            nosys, :ctrl_output, :plant_output; loop_openings = [:plant_output],
+            op = Dict(ncsys.icP.x => 0.3)
+        )
+        @test mats.A[icx(ssys), icx(ssys)] ≈ -(1 + 0.3^2)
+
+        # The same holds for the input that replaces the broken connection in
+        # `get_looptransfer`, and for an input analysis point that is also a loop opening
+        mats, ssys = get_looptransfer(
+            nosys, :plant_output; op = Dict(ncsys.icP.x => 0.3)
+        )
+        @test mats.A[icx(ssys), icx(ssys)] ≈ -(1 + 0.3^2)
+        mats, ssys, _ = linearize(
+            nosys, :plant_output, :ctrl_output; loop_openings = [:plant_output],
+            op = Dict(ncsys.icP.x => 0.3)
+        )
+        @test mats.A[icx(ssys), icx(ssys)] ≈ -(1 + 0.3^2)
+
+        @testset "Input Jacobian of an input analysis point that is also a loop opening" begin
+            op1 = Dict(ncsys.icP.x => 0.3, ncsys.icC.x => 0.2)
+            mats, ssys, _ = linearize(
+                nosys, :plant_output, :ctrl_output;
+                loop_openings = [:plant_output], op = op1
+            )
+            @test mats.A[icx(ssys), icx(ssys)] ≈ -(1 + 0.3^2)
+            @test mats.B[icx(ssys), 1] ≈ -2 * 0.3 * 0.2 - 2
+
+            lin_fun, ssys = linearization_function(
+                nosys, :plant_output, :ctrl_output;
+                loop_openings = [:plant_output], op = op1
+            )
+            for plant_x in (0.6, 0.3)
+                mats, _ = linearize(
+                    ssys, lin_fun;
+                    op = Dict(ncsys.icP.x => plant_x, ncsys.icC.x => 0.2)
+                )
+                @test mats.A[icx(ssys), icx(ssys)] ≈ -(1 + plant_x^2)
+                @test mats.B[icx(ssys), 1] ≈ -2 * plant_x * 0.2 - 2
+            end
+        end
+
+        # The driver may depend on a state variable without a value, which the
+        # initialization determines together with the opened variable
+        @component function ICIntegratingPlant(; name)
+            @variables begin
+                u(t), [input = true]
+                phi(t)
+                w(t) = 0.0
+                y(t), [output = true]
+            end
+            System([D(phi) ~ w, D(w) ~ -w + u, y ~ phi], t; name)
+        end
+        @named icP = ICIntegratingPlant()
+        @named icC = ICCtrl(; with_ic = false)
+        intsys = System(
+            [connect(icP.y, :plant_output, icC.u), connect(icC.y, :ctrl_output, icP.u)], t;
+            systems = [icP, icC], name = :icsys
+        )
+        mats, ssys, extras = linearize(
+            intsys, :ctrl_output, :plant_output; loop_openings = [:plant_output]
+        )
+        iphi = findfirst(v -> occursin("icP₊phi", string(v)), unknowns(ssys))
+        @test mats.A[icx(ssys), icx(ssys)] ≈ -(1 + extras.x[iphi]^2)
+        mats, ssys, _ = linearize(
+            intsys, :ctrl_output, :plant_output; loop_openings = [:plant_output],
+            op = Dict(complete(intsys).icP.phi => 0.5)
+        )
+        @test mats.A[icx(ssys), icx(ssys)] ≈ -(1 + 0.5^2)
+
+        @testset "Inputs of get_looptransfer that are elements of an array variable" begin
+            # The plant is nonlinear in its input, so the entries of `B` reveal the
+            # values of the inputs that replace the broken connections
+            @component function ArrayInputPlant(; name)
+                @variables begin
+                    x(t)[1:2] = [1.0, 2.0]
+                    u(t)[1:2], [input = true]
+                    y(t)[1:2], [output = true]
+                end
+                System([[D(x[i]) ~ -x[i] + u[i]^2 for i in 1:2]; [y[i] ~ x[i] for i in 1:2]], t; name)
+            end
+            @component function ScalarGain(; name)
+                @parameters k = 2.0
+                @variables e(t) [input = true] u(t) [output = true]
+                System([u ~ -k * e], t; name)
+            end
+            @named plant = ArrayInputPlant()
+            @named c1 = ScalarGain()
+            @named c2 = ScalarGain()
+            arrsys = System(
+                [
+                    connect(c1.u, :u1, plant.u[1]), connect(c2.u, :u2, plant.u[2]),
+                    connect(plant.y[1], c1.e), connect(plant.y[2], c2.e),
+                ], t; systems = [plant, c1, c2], name = :arrsys
+            )
+            mats, ssys = get_looptransfer(arrsys, [:u1, :u2])
+            # `C * B` does not depend on the choice of state variables. With u = -k * x,
+            # the plant contributes 2u and the gains -k.
+            k = 2.0
+            x0 = [1.0, 2.0]
+            @test mats.C * mats.B ≈ diagm(-k .* 2 .* (-k .* x0))
+        end
+    end
+
+    @testset "Symbolic loop-opening op values resolve from the solution" begin
+        # A symbolic operating-point value (`opened_signal => driving_signal`) is
+        # evaluated from the solution at each time point, so the opened signal is
+        # linearized around the value it has in the loop-closed solution. The controller
+        # state equation is nonlinear in its input, so the linearization genuinely
+        # depends on the value used for the opened signal.
+        @component function NonlinPlant(; name)
+            @variables begin
+                u(t), [input = true]
+                x(t) = 1.0
+                y(t), [output = true]
+            end
+            System([D(x) ~ -x^3 + u, y ~ x], t; name)
+        end
+        @component function NonlinCtrl(; name, k = -2.0)
+            @variables begin
+                u(t), [input = true]
+                x(t) = 0.0
+                y(t), [output = true]
+            end
+            @parameters k = k
+            System([D(x) ~ -(1 + u^2) * x + k * u, y ~ x], t; name)
+        end
+        @named nlP = NonlinPlant()
+        @named nlC = NonlinCtrl()
+        nleqs = [connect(nlP.y, :plant_output, nlC.u), connect(nlC.y, :ctrl_output, nlP.u)]
+        @named nlsys = System(nleqs, t; systems = [nlP, nlC])
+        ncsys = complete(nlsys)
+        nlprob = ODEProblem(mtkcompile(nlsys), [], (0.0, 5.0))
+        nlsol = solve(nlprob, Rodas5())
+        nlts = collect(0.0:0.5:5.0)
+        sym_op = Dict(ncsys.nlC.u => ncsys.nlP.y)
+
+        # Trajectory path: per-point values match the loop-closed solution.
+        mats_sym, lsys_sym, _ = linearize(
+            nlsys, :ctrl_output, :plant_output; loop_openings = [:plant_output],
+            op = ModelingToolkit.LinearizationOpPoint(nlsol, nlts; op = sym_op)
+        )
+        iC = findfirst(v -> occursin("nlC₊x", string(v)), unknowns(lsys_sym))
+        got = [m.A[iC, iC] for m in mats_sym]
+        truth = [-(1 + nlsol(ti, idxs = ncsys.nlP.y)^2) for ti in nlts]
+        @test got ≈ truth rtol = 1.0e-6
+        @test !allequal(round.(got; digits = 6))
+
+        # Scalar path agrees.
+        mats_1, _, _ = linearize(
+            nlsys, :ctrl_output, :plant_output; loop_openings = [:plant_output],
+            op = ModelingToolkit.LinearizationOpPoint(nlsol, 2.5; op = sym_op)
+        )
+        @test mats_1.A[iC, iC] ≈ -(1 + nlsol(2.5, idxs = ncsys.nlP.y)^2) rtol = 1.0e-6
+
+        # Without an entry in the operating point, the opened signal is held at the value
+        # it has in the solution, the same as with the explicit symbolic mapping.
+        mats_def, _, _ = linearize(
+            nlsys, :ctrl_output, :plant_output; loop_openings = [:plant_output],
+            op = ModelingToolkit.LinearizationOpPoint(nlsol, nlts)
+        )
+        @test [m.A[iC, iC] for m in mats_def] ≈ truth rtol = 1.0e-6
+
+        # `missing` passes through the trajectory path without error.
+        mats_miss, _, _ = linearize(
+            nlsys, :ctrl_output, :plant_output; loop_openings = [:plant_output],
+            op = ModelingToolkit.LinearizationOpPoint(nlsol, nlts; op = Dict(ncsys.nlC.u => missing))
+        )
+        @test length(mats_miss) == length(nlts)
+
+        # A `LinearizationOpPoint` may also be passed to the functions that build on
+        # `linearization_function`. The sensitivity function at the plant output has the
+        # dynamics of the loop-closed system, linearized at the state of the solution.
+        sens, _ = get_sensitivity(
+            nlsys, :plant_output; op = ModelingToolkit.LinearizationOpPoint(nlsol, 2.5)
+        )
+        xP, xC = nlsol(2.5, idxs = [ncsys.nlP.x, ncsys.nlC.x])
+        k = -2.0
+        A_closed = [-3xP^2 1; (-2xP * xC + k) -(1 + xP^2)]
+        by_reim = z -> (real(z), imag(z))
+        @test sort(eigvals(sens.A); by = by_reim) ≈ sort(eigvals(A_closed); by = by_reim) rtol = 1.0e-6
+        @test sens.D ≈ [1.0;;]
     end
 
     @testset "Complicated model" begin
