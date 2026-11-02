@@ -430,3 +430,30 @@ end
         end
     end
 end
+
+@testset "Array variables indexed by a parameter" begin
+    @variables x(t)[1:3] y(t)
+    @parameters k::Int = 2 p[1:3] = [1.0, 2.0, 3.0]
+    @mtkcompile sys = System(
+        [D(x[1]) ~ -x[k], D(x[2]) ~ -p[k] * x[2], D(x[3]) ~ -x[3], y ~ x[k]], t
+    )
+    prob = ODEProblem(sys, [x => ones(3)], (0.0, 1.0))
+    sol = solve(prob, Tsit5(); reltol = 1.0e-10, abstol = 1.0e-10)
+    @test SciMLBase.successful_retcode(sol)
+    @test sol[x[1]][end] ≈ (1 + exp(-2)) / 2
+    @test sol[y][end] ≈ exp(-2)
+
+    sol = solve(remake(prob; p = [k => 3]), Tsit5(); reltol = 1.0e-10, abstol = 1.0e-10)
+    @test SciMLBase.successful_retcode(sol)
+    @test sol[x[1]][end] ≈ exp(-1)
+    @test sol[y][end] ≈ exp(-1)
+
+    @mtkcompile sys = System(
+        [D(x[1]) ~ -x[1], D(x[2]) ~ -x[2], D(x[3]) ~ -x[3]], t, [x], [k];
+        discrete_events = [[0.5] => [x[1] ~ Pre(x[k])]]
+    )
+    prob = ODEProblem(sys, [x => [1.0, 0.5, 0.25]], (0.0, 1.0))
+    sol = solve(prob, Tsit5(); reltol = 1.0e-10, abstol = 1.0e-10)
+    @test SciMLBase.successful_retcode(sol)
+    @test sol[x[1]][end] ≈ exp(-1) / 2
+end
