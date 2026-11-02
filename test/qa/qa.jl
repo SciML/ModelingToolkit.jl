@@ -329,7 +329,7 @@ const NONPUBLIC_QUALIFIED_ACCESSES = (
     :StateMachineOperator,
     # StateSelection
     :check_consistency, :complete!, :dummy_derivative_graph!, :find_solvables!,
-    :find_var_sccs, :get_new_mm, :is_only_discrete, :is_present, :isalgvar, :isdervar,
+    :find_var_sccs, :get_mm, :get_new_mm, :is_only_discrete, :is_present, :isalgvar, :isdervar,
     :pantelides!, :rm_eqs_vars!, :structural_singularity_removal!, :trivial_tearing!,
     :var_derivative!,
     # Symbolics
