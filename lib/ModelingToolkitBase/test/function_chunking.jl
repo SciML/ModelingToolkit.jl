@@ -45,7 +45,7 @@ run_expr(build_rhs(sys, rhss; chunk_size = 0)[2], reference, u, p, 0.0)
 @testset "explicit chunk_size splits the in-place function and matches" begin
     oop, iip = build_rhs(sys, rhss; chunk_size = 300)
     @test expect_chunked(iip)
-    @test expect_chunked(oop)
+    @test count_helpers(oop) == 0
     du = zeros(n)
     run_expr(iip, du, u, p, 0.0)
     @test du == reference
@@ -165,4 +165,34 @@ end
     end
     @test build_rhs(sys, rhss; chunk_size = 1, output_type = LabelledVec) ==
         build_rhs(sys, rhss; chunk_size = 0, output_type = LabelledVec)
+end
+
+@testset "unspecified output type keeps the runtime container of the out-of-place function" begin
+    # `similar` keeps the wrapper, `vcat` of wrappers does not
+    struct LabelledU <: AbstractVector{Float64}
+        data::Vector{Float64}
+    end
+    Base.size(v::LabelledU) = size(v.data)
+    Base.getindex(v::LabelledU, i::Int) = v.data[i]
+    Base.setindex!(v::LabelledU, x, i::Int) = (v.data[i] = x)
+    Base.similar(::LabelledU, ::Type{Float64}, dims::Dims{1}) = LabelledU(zeros(dims))
+    MTKB.SU.Code.create_array(::Type{LabelledU}, ::Nothing, ::Val{1}, ::Val, vals...) =
+        LabelledU(collect(Float64, vals))
+    Base.vcat(a::LabelledU, rest::LabelledU...) = vcat(a.data, (r.data for r in rest)...)
+
+    oop, iip = build_rhs(sys, rhss; chunk_size = 1)
+    oop0, iip0 = build_rhs(sys, rhss; chunk_size = 0)
+    @test count_helpers(iip) > 1
+    @test count_helpers(oop) == 0
+    @test oop == oop0
+    lu = LabelledU(u)
+    result = run_expr(oop, lu, p, 0.0)
+    @test result isa LabelledU
+    @test typeof(result) === typeof(run_expr(oop0, lu, p, 0.0))
+    @test result == reference
+    du = zeros(n)
+    run_expr(iip, du, lu, p, 0.0)
+    @test du == reference
+    # an explicit plain Array type is still `vcat`ed
+    @test count_helpers(build_rhs(sys, rhss; chunk_size = 1, output_type = Array)[1]) > 1
 end

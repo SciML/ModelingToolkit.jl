@@ -815,9 +815,9 @@ Base.@nospecializeinfer function build_function_wrapper(
     return build_function_wrapper(sys, expr, collect(Any, args), opts)
 end
 
-# Chunked results are `vcat`s of the slices' results, which only reproduce the requested output
-# for plain `Array`s (`nothing` is the default `Array`): labelled and static containers would
-# lose or duplicate their metadata.
+# An explicitly requested container is chunked only if it is a plain `Array` (`nothing`, the
+# container of the runtime arguments, is handled in `_build_chunked`): the `vcat` of the slices
+# would lose or duplicate the metadata of labelled and static containers.
 _is_plain_array_type(::Nothing) = true
 _is_plain_array_type(T) = T isa Type && T <: Array
 
@@ -889,24 +889,42 @@ end
 
 # Build `expr` as the `chunk_ranges` slices, each by a recursive call of
 # `build_function_wrapper` that makes its own minimal IR, and combine the helpers. Returns
-# `nothing` if the helpers cannot be combined.
+# `nothing` if the helpers cannot be combined. The out-of-place function is the `vcat` of the
+# slices only if the container type is given explicitly as a plain `Array`; otherwise it is the
+# ordinary whole-function one, since its container is decided by the runtime arguments and
+# `vcat` of the slices would not preserve it (it is only compiled if called).
 function _build_chunked(sys, expr, args, opts::BuildFunctionWrapperOptions, chunk_ranges)
+    vcat_oop = opts.output_type !== nothing || opts.codegen.similarto !== nothing
+    helper_iip_config = (vcat_oop, true)
     oop_helpers = Expr[]
     iip_helpers = Expr[]
     for range in chunk_ranges
         helper_opts = setproperties(
             opts, (;
                 chunk_size = 0,
-                codegen = setproperties(opts.codegen, (; outputidxs = collect(range))),
+                codegen = setproperties(
+                    opts.codegen, (; outputidxs = collect(range), iip_config = helper_iip_config)
+                ),
             )
         )
         oop, iip = build_function_wrapper(sys, expr[range], args, helper_opts)
-        push!(oop_helpers, oop)
+        vcat_oop && push!(oop_helpers, oop)
         push!(iip_helpers, iip)
     end
-    oop = _call_chunks(oop_helpers, false)
     iip = _call_chunks(iip_helpers, true)
-    (oop === nothing || iip === nothing) && return nothing
+    iip === nothing && return nothing
+    if vcat_oop
+        oop = _call_chunks(oop_helpers, false)
+    else
+        whole_opts = setproperties(
+            opts, (;
+                chunk_size = 0,
+                codegen = setproperties(opts.codegen, (; iip_config = (true, false))),
+            )
+        )
+        oop = build_function_wrapper(sys, expr, args, whole_opts)[1]
+    end
+    oop === nothing && return nothing
     return oop, iip
 end
 
