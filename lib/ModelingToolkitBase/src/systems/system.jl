@@ -2097,3 +2097,28 @@ function set_necessary_initial_conditions(sys::System, ics)
     get_necessary_initial_conditions(sys) === ics && return sys
     return setmetadata(sys, NecessaryInitialConditions, ics)::System
 end
+
+# The per-task caches of a `System` (`irstructure_tlv` and the `MutableCacheKey`
+# metadata) hold values specific to whichever `Task` accessed them. A copied or
+# deserialized `System` gets fresh `PerTaskValue`s rather than transferring task-local
+# state, so those values never reach `deepcopy` or `Serialization`.
+function _fresh_per_task_caches(sys::System)
+    return setproperties(
+        sys; metadata = refreshed_metadata(get_metadata(sys); preserve_cache = false),
+        irstructure_tlv = __new_irstructure_tlv()
+    )
+end
+
+function Base.deepcopy_internal(sys::System, iddict::IdDict)
+    haskey(iddict, sys) && return iddict[sys]::System
+    return iddict[sys] = invoke(
+        Base.deepcopy_internal, Tuple{Any, IdDict}, _fresh_per_task_caches(sys), iddict
+    )::System
+end
+
+function Serialization.serialize(s::Serialization.AbstractSerializer, sys::System)
+    return invoke(
+        Serialization.serialize, Tuple{Serialization.AbstractSerializer, Any},
+        s, _fresh_per_task_caches(sys)
+    )
+end

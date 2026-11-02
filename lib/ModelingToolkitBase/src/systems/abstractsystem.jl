@@ -995,7 +995,7 @@ function maybe_invalidate_cache(cache::Dict{DataType, Any}, patch::Nothing)
 end
 
 # `::MetadataT` but that is defined later
-function refreshed_metadata(meta::Base.ImmutableDict, patch = nothing)
+function refreshed_metadata(meta::Base.ImmutableDict, patch = nothing; preserve_cache::Bool = true)
     newmeta = MetadataT()
     hascache = false
     for (k, v) in meta
@@ -1006,9 +1006,9 @@ function refreshed_metadata(meta::Base.ImmutableDict, patch = nothing)
         haskey(newmeta, k) && continue
         if k === MutableCacheKey
             hascache = true
-            new_cache = maybe_invalidate_cache((v::MutableCacheTLVT)[]::MutableCacheT, patch)::MutableCacheT
+            old_tlv = v::MutableCacheTLVT
             v = __new_mutable_cache_tlv()
-            v[] = new_cache
+            preserve_cache && (v[] = maybe_invalidate_cache(old_tlv[]::MutableCacheT, patch)::MutableCacheT)
         end
         newmeta = Base.ImmutableDict(newmeta, k => v)
     end
