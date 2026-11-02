@@ -1,4 +1,5 @@
 using ModelingToolkitBase
+import SciMLLogging
 using ModelingToolkitBase: t_nounits as t, D_nounits as D, get_u0
 using SciMLBase
 using OrdinaryDiffEq
@@ -146,7 +147,8 @@ end
         # `2^100` evaluates to `0`, though the warning still prints.
         ODEProblem(
             sys, [x => 2y, y => 2x], (0.0, 1.0);
-            warn_cyclic_dependency = true, build_initializeprob = false, substitution_limit = 4
+            verbose = MTKVerbosity(cyclic_dependency = SciMLLogging.WarnLevel),
+            build_initializeprob = false, substitution_limit = 4
         )
     catch e
     end
@@ -162,7 +164,7 @@ end
     # "unknowns" because they are initialization unknowns
     @test_warn ["Cycle", "parameters", "p", "q"] ODEProblem(
         sys, [x => 1, y => 2, p => 2q, q => 3p],
-        (0.0, 1.0); warn_cyclic_dependency = true
+        (0.0, 1.0); verbose = MTKVerbosity(cyclic_dependency = SciMLLogging.WarnLevel)
     )
 end
 
@@ -324,7 +326,7 @@ end
     tspan = (0.0, 100.0)
     prob = ODEProblem(
         sys, [u0; p], tspan, jac = true, guesses = [w2 => -1.0],
-        warn_initialize_determined = false
+        verbose = MTKVerbosity(initialization = SciMLLogging.Silent)
     )
     @test prob[w2] ≈ -1.0
     @test prob.ps[β] ≈ 8 / 3

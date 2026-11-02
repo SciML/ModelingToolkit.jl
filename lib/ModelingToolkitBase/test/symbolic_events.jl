@@ -1,4 +1,5 @@
 using ModelingToolkitBase, OrdinaryDiffEq, StochasticDiffEq, JumpProcesses, Test
+import SciMLLogging
 using OrdinaryDiffEqRosenbrock
 using SciMLStructures: canonicalize, Discrete
 using ModelingToolkitBase: SymbolicContinuousCallback,
@@ -1096,7 +1097,7 @@ end
     ss = mtkcompile(sys)
     @test_logs (
         :warn,
-        "The symbols Any[:furnace_on] are declared as both observed and modified; this is a code smell because it becomes easy to confuse them and assign/not assign a value.",
+        r"The symbols Any\[:furnace_on\] are declared as both observed and modified; this is a code smell because it becomes easy to confuse them and assign/not assign a value.",
     ) prob = ODEProblem(
         ss, [temp => 0.0, furnace_on => true], (0.0, 100.0)
     )
@@ -1545,7 +1546,10 @@ if @isdefined(ModelingToolkit)
             discrete_parameters = [g], iv = t
         )
         @mtkcompile sys = System(eqs, t, [x, y, w], [g]; continuous_events = c_evt)
-        prob = ODEProblem(sys, [], (0.0, 1.0); warn_initialize_determined = false)
+        prob = ODEProblem(
+            sys, [], (0.0, 1.0);
+            verbose = MTKVerbosity(initialization = SciMLLogging.Silent)
+        )
 
         sol = solve(prob, FBDF())
         @test SciMLBase.successful_retcode(sol)
