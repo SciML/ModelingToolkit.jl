@@ -2085,6 +2085,46 @@ end
     @test def_sol.u[1] == auto_sol.u[1]
 end
 
+@testset "FullSpecialize initialization keeps discrete and Bool buffer types" begin
+    @variables dbx(t)
+    @parameters db_rate = 1.0 db_flag::Bool = true [tunable = false]
+    @discretes db_d(t) = 1.0
+    db_ev = ModelingToolkitBase.SymbolicDiscreteCallback(1.0, [db_d ~ Pre(db_d) + 1]; discrete_parameters = [db_d])
+    @mtkcompile db_sys = System(
+        [D(dbx) ~ ifelse(db_flag, -db_rate * db_d * dbx, 0.0)], t;
+        initialization_eqs = [dbx^3 + dbx ~ 2], discrete_events = [db_ev]
+    )
+    for spec in (SciMLBase.AutoSpecialize, SciMLBase.FullSpecialize)
+        prob = ODEProblem{true, spec}(db_sys, [], (0.0, 1.5); guesses = [dbx => 0.5])
+        @test prob.p.constant isa Tuple{BitVector}
+        data = prob.f.initialization_data
+        @test typeof(data.initializeprobpmap(prob, data.initializeprob)) === typeof(prob.p)
+        sol = solve(prob, Tsit5(); abstol = 1.0e-10, reltol = 1.0e-10)
+        @test SciMLBase.successful_retcode(sol)
+        # x^3 + x = 2 has the single real root x = 1; the rate is 1 until t = 1, then 2.
+        @test sol[dbx][1] ≈ 1.0 atol = 1.0e-8
+        @test sol(0.5; idxs = dbx) ≈ exp(-0.5) rtol = 1.0e-6
+        @test sol[dbx][end] ≈ exp(-2.0) rtol = 1.0e-6
+    end
+
+    @variables dqx(t)
+    @discretes dq(t)::Bool = true
+    dq_ev = ModelingToolkitBase.SymbolicDiscreteCallback(0.5, [dq ~ !Pre(dq)]; discrete_parameters = [dq])
+    @mtkcompile dq_sys = System(
+        [D(dqx) ~ ifelse(dq, -dqx, 0.0)], t;
+        initialization_eqs = [dqx^3 + dqx ~ 2], discrete_events = [dq_ev]
+    )
+    for spec in (SciMLBase.AutoSpecialize, SciMLBase.FullSpecialize)
+        prob = ODEProblem{true, spec}(dq_sys, [], (0.0, 0.75); guesses = [dqx => 0.5])
+        data = prob.f.initialization_data
+        @test typeof(data.initializeprobpmap(prob, data.initializeprob)) === typeof(prob.p)
+        sol = solve(prob, Tsit5(); abstol = 1.0e-10, reltol = 1.0e-10)
+        @test SciMLBase.successful_retcode(sol)
+        # x(0) = 1 decays at rate 1 until the flag flips off at t = 0.5, then stays put.
+        @test sol(0.75; idxs = dqx) ≈ exp(-0.5) rtol = 1.0e-6
+    end
+end
+
 @testset "Issue#3570, #3552: `Initial`s/guesses are copied to `u0` during `solve`/`init`" begin
     @parameters g
     @variables x(t) [state_priority = 10] y(t) λ(t)
