@@ -132,6 +132,7 @@ end
         println("C compilation test requires gcc available in the path!")
         @safetestset "C Compilation Test" include("ccompile.jl")
         @safetestset "Multithreading test" include("multithreading.jl")
+        @safetestset "PerTaskValue test" include("per_task_value.jl")
         @testset "Distributed Test" include("distributed.jl")
         @testset "Serialization" include("serialization.jl")
     end

@@ -1,35 +1,21 @@
-# `PerTaskValue` exists to fix https://github.com/SciML/ModelingToolkit.jl/issues/5336
-#
-# The per-task mutable state attached to a `System` (the `IRStructure` field and the
-# `MutableCacheKey` metadata) used to be stored in `TaskLocalValue`s. A
-# `TaskLocalValue` keeps its value in `task_local_storage()` keyed by itself, with a
-# strong reference on both the key and the value. Entries are only removed by an
-# explicit `empty!` or when the task exits, so every `TaskLocalValue` created — one
-# per `System` construction and one per `setproperties` — permanently inserted an
-# entry into the current task's storage. Compiling systems in a loop therefore leaked
-# ~62 task-local entries per `mtkcompile`, retaining all of their reachable symbols.
-#
-# `PerTaskValue` inverts the ownership: the per-task values live in a dictionary
-# owned by the `System` (or its metadata), keyed weakly on the `Task`. Dropping the
-# `System` frees every per-task value, and a dead task's key cannot keep its value
-# alive either. `Base.WeakKeyDict` cannot be used for this: its `setindex!` registers
-# a finalizer on every key, and the finalizer closure holds the dictionary — i.e.
-# the `Task` key would keep the dictionary (and all per-task values) alive for the
-# task's lifetime, reproducing the same leak. Hence a plain `Dict{WeakRef, T}` with a
-# lock, where entries whose tasks have finished are dropped lazily on write.
+# `PerTaskValue` keeps per-task values in a `Dict{WeakRef, T}` owned by this object
+# instead of `task_local_storage()`, so they are released when the owner is collected.
+# `Base.WeakKeyDict` is unsuitable for this: its `setindex!` registers a finalizer on
+# each key that holds the dictionary, retaining the owner for the task's lifetime.
+# Instead, each inserted task gets a `finalizer` holding only a `WeakRef` to this
+# object, which sweeps dead entries once the task is collected — so collected tasks
+# release their values even while the owner and other tasks keep using it.
 
 """
     $(TYPEDEF)
 
-A value that is stored once per task which accesses it, initialized lazily by calling
+A value stored once per `Task` that accesses it, initialized lazily by calling
 `initializer`. Equivalent to `TaskLocalValue` from TaskLocalValues.jl, except the
-per-task values are stored in a `Dict{WeakRef, T}` keyed on the `Task` and owned by
-this object rather than in `task_local_storage()`. This means the values are
-garbage-collected together with this object (typically a field of `System` or an
-entry in its metadata), instead of being retained in the task's local storage until
-the task exits.
+per-task values are stored in a `Dict{WeakRef, T}` owned by this object (typically a
+field of `System` or an entry in its metadata) instead of `task_local_storage()`, so
+they are released together with this object or once the owning task is collected.
 """
-struct PerTaskValue{T, F}
+mutable struct PerTaskValue{T, F}
     initializer::F
     dict::Dict{WeakRef, T}
     lock::Base.Threads.SpinLock
@@ -39,17 +25,32 @@ function PerTaskValue{T}(initializer::F) where {T, F}
     return PerTaskValue{T, F}(initializer, Dict{WeakRef, T}(), Threads.SpinLock())
 end
 
+Base.eltype(::PerTaskValue{T}) where {T} = T
+
 function _cleanup_dead_tasks!(dict::Dict{WeakRef})
     return filter!(p -> p.first.value !== nothing, dict)
 end
 
-Base.eltype(::PerTaskValue{T}) where {T} = T
+function _sweep_dead_tasks(ref::WeakRef, ::Task)
+    val = ref.value
+    val === nothing && return nothing
+    return lock(val.lock) do
+        _cleanup_dead_tasks!(val.dict)
+    end
+end
+
+# `ref` is the only reference the `finalizer` holds to `val`, so registering it on the
+# task cannot keep `val` alive.
+function _register_task_cleanup(val::PerTaskValue, task::Task)
+    return finalizer(Base.Fix1(_sweep_dead_tasks, WeakRef(val)), task)
+end
 
 function Base.getindex(val::PerTaskValue{T}) where {T}
     task = current_task()
     return lock(val.lock) do
         haskey(val.dict, task) && return val.dict[task]
         _cleanup_dead_tasks!(val.dict)
+        _register_task_cleanup(val, task)
         return val.dict[WeakRef(task)] = val.initializer()::T
     end
 end
@@ -58,6 +59,7 @@ function Base.setindex!(val::PerTaskValue{T}, value) where {T}
     task = current_task()
     lock(val.lock) do
         _cleanup_dead_tasks!(val.dict)
+        haskey(val.dict, task) || _register_task_cleanup(val, task)
         val.dict[WeakRef(task)] = convert(T, value)
     end
     return value
@@ -73,20 +75,24 @@ end
 # The per-task values are lazily created and specific to each `Task` (which cannot be
 # serialized or deepcopied). A (de)serialized or deepcopied `PerTaskValue` only retains
 # its `initializer` and recreates the per-task values on demand, matching the semantics
-# `TaskLocalValue` had.
+# `TaskLocalValue` had. The cycle bookkeeping keeps repeated references to the same
+# `PerTaskValue` aliased in the result.
 function Serialization.serialize(s::Serialization.AbstractSerializer, val::PerTaskValue)
-    Serialization.writetag(s.io, Serialization.OBJECT_TAG)
-    Serialization.serialize(s, typeof(val))
-    return Serialization.serialize(s, val.initializer)
+    Serialization.serialize_cycle_header(s, val) && return nothing
+    Serialization.serialize(s, val.initializer)
+    return nothing
 end
 
 function Serialization.deserialize(
         s::Serialization.AbstractSerializer, ::Type{PerTaskValue{T, F}}
     ) where {T, F}
     initializer = Serialization.deserialize(s)::F
-    return PerTaskValue{T}(initializer)
+    val = PerTaskValue{T}(initializer)
+    Serialization.deserialize_cycle(s, val)
+    return val
 end
 
-function Base.deepcopy_internal(val::PerTaskValue{T, F}, ::IdDict) where {T, F}
-    return PerTaskValue{T}(val.initializer)
+function Base.deepcopy_internal(val::PerTaskValue{T, F}, iddict::IdDict) where {T, F}
+    haskey(iddict, val) && return iddict[val]::PerTaskValue{T, F}
+    return iddict[val] = PerTaskValue{T}(val.initializer)
 end
