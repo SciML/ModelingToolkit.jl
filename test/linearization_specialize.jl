@@ -229,3 +229,83 @@ end
         end
     end
 end
+
+# `q` is bound to `Initial(x)`, so the Jacobians read the fixed initial value in `p`:
+# `D(x) ~ -q * x^2 + u` with output `y ~ q * x + 2q * u` has `f_x = -2q * x`, `f_u = 1`, `h_x = q`,
+# `h_u = 2q`. `NoInit` evaluates at the given `u` and `p`, with or without `remake`, and neither
+# writes `u` into `Initial(x)`. `OverrideInit` moves the fixed `x` to the `Initial(x)` in `p`.
+@testset "Fixed initial values in `p`" begin
+    @variables x(t) = 0.5 u(t) = 0.0 y(t)
+    @parameters q = Initial(x)
+    @named fixed_plant = System([D(x) ~ -q * x^2 + u, y ~ q * x + 2q * u], t)
+    function check(j, sys, xv, qv)
+        @test j.x ≈ [xv]
+        @test getp(sys, Initial(sys.x))(j.p) == qv
+        @test j.f_x ≈ fill(-2qv * xv, 1, 1)
+        @test j.f_u ≈ ones(1, 1)
+        @test j.h_x ≈ fill(qv, 1, 1)
+        return @test j.h_u ≈ fill(2qv, 1, 1)
+    end
+    function calls(initialize, option)
+        build() = linearization_function(
+            fixed_plant, [u], [y]; op = Dict(x => 0.5, u => 0.0), initialize,
+            warn_empty_op = false, option...
+        )
+        settled(xv, qv) = initialize ? qv : xv
+        results = []
+        lf, sys = build()
+        j = lf([0.2], lf.prob.p, 0.0)
+        check(j, sys, settled(0.2, 0.5), 0.5)
+        @test lf.prob.u0 == [0.5]
+        @test getp(sys, Initial(sys.x))(lf.prob.p) == 0.5
+        push!(results, j)
+        j = lf([0.2], [Initial(sys.x) => 0.3], 0.0)
+        check(j, sys, settled(0.2, 0.3), 0.3)
+        push!(results, j)
+        setp(lf, Initial(sys.x))(lf, 0.2)
+        j = lf(lf.prob.u0, lf.prob.p, 0.0)
+        check(j, sys, settled(0.5, 0.2), 0.2)
+        push!(results, j)
+        lf, sys = build()
+        setu(lf, sys.x)(lf, 0.2)
+        j = lf(lf.prob.u0, lf.prob.p, 0.0)
+        check(j, sys, 0.2, 0.2)
+        push!(results, j)
+        return results
+    end
+    full = (; specialize = SciMLBase.FullSpecialize)
+    for initialize in (false, true)
+        @test map(jacobians, calls(initialize, full)) == map(jacobians, calls(initialize, (;)))
+    end
+    lf, _ = linearization_function(
+        fixed_plant, [u], [y]; op = Dict(x => 0.5, u => 0.0), initialize = false,
+        warn_empty_op = false, full...
+    )
+    sig = Tuple{typeof(lf.prob.u0), typeof(lf.prob.p), Float64}
+    @test !refers_to(lf, sig, ("remake", "get_initial_values"))
+
+    # `r` is bound to `Initial(a)` in `D(a) ~ -r * a^2 + b + v`, `0 ~ b^3 + b - r * a`, `w ~ b + r * a`:
+    # `f_x = -2r * a`, `f_z = 1`, `g_x = -r`, `g_z = 3b^2 + 1`, `f_u = 1`, `g_u = 0`, `h_x = r`,
+    # `h_z = 1`, `h_u = 0`. The root of `b^3 + b = 1` is the operating point.
+    @variables a(t) = 1.0 b(t) [guess = 0.5] v(t) = 0.0 w(t)
+    @parameters r = Initial(a)
+    @named fixed_dae = System([D(a) ~ -r * a^2 + b + v, 0 ~ b^3 + b - r * a, w ~ b + r * a], t)
+    bv = 0.6823278038280193
+    for option in ((;), full), initialize in (false, true)
+        lf, sys = linearization_function(
+            fixed_dae, [v], [w]; op = Dict(a => 1.0, v => 0.0, b => bv), initialize,
+            warn_empty_op = false, option...
+        )
+        j = lf(lf.prob.u0 .* 1.5, lf.prob.p, 0.0)
+        av, zv = initialize ? (1.0, bv) : (1.5, 1.5bv)
+        @test j.f_x ≈ fill(-2av, 1, 1)
+        @test j.f_z ≈ ones(1, 1)
+        @test j.g_x ≈ fill(-1.0, 1, 1)
+        @test j.g_z ≈ fill(3zv^2 + 1, 1, 1)
+        @test j.f_u ≈ ones(1, 1)
+        @test j.g_u ≈ zeros(1, 1)
+        @test j.h_x ≈ ones(1, 1)
+        @test j.h_z ≈ ones(1, 1)
+        @test j.h_u ≈ zeros(1, 1)
+    end
+end
