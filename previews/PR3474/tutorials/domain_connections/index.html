@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Domains · ModelingToolkit.jl</title><meta name="title" content="Domains · ModelingToolkit.jl"/><meta property="og:title" content="Domains · ModelingToolkit.jl"/><meta property="twitter:title" content="Domains · ModelingToolkit.jl"/><meta name="description" content="Documentation for ModelingToolkit.jl."/><meta property="og:description" content="Documentation for ModelingToolkit.jl."/><meta property="twitter:description" content="Documentation for ModelingToolkit.jl."/><meta property="og:url" content="https://docs.sciml.ai/ModelingToolkit/stable/tutorials/domain_connections/"/><meta property="twitter:url" content="https://docs.sciml.ai/ModelingToolkit/stable/tutorials/domain_connections/"/><link rel="canonical" href="https://docs.sciml.ai/ModelingToolkit/stable/tutorials/domain_connections/"/><script data-outdated-warner src="../../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../search_index.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script><link href="../../assets/favicon.ico" rel="icon" type="image/x-icon"/></head><body><div id="documenter"><nav class="docs-sidebar"><a class="docs-logo" href="../../"><img src="../../assets/logo.png" alt="ModelingToolkit.jl logo"/></a><div class="docs-package-name"><span class="docs-autofit"><a href="../../">ModelingToolkit.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../../">Home</a></li><li><a class="tocitem" href="../ode_modeling/">Getting Started with ModelingToolkit.jl</a></li><li><span class="tocitem">Tutorials</span><ul><li><a class="tocitem" href="../acausal_components/">Acausal Component-Based Modeling</a></li><li><a class="tocitem" href="../nonlinear/">Modeling Nonlinear Systems</a></li><li><a class="tocitem" href="../initialization/">Initialization of ODESystems</a></li><li><a class="tocitem" href="../optimization/">Modeling Optimization Problems</a></li><li><a class="tocitem" href="../modelingtoolkitize/">Modelingtoolkitize: Automatically Translating Numerical to Symbolic Code</a></li><li><a class="tocitem" href="../programmatically_generating/">Programmatically Generating and Scripting ODESystems</a></li><li><a class="tocitem" href="../stochastic_diffeq/">Modeling with Stochasticity</a></li><li><a class="tocitem" href="../discrete_system/">(Experimental) Modeling Discrete Systems</a></li><li><a class="tocitem" href="../parameter_identifiability/">Parameter Identifiability in ODE Models</a></li><li><a class="tocitem" href="../change_independent_variable/">Changing the independent variable of ODEs</a></li><li><a class="tocitem" href="../bifurcation_diagram_computation/">Bifurcation Diagrams</a></li><li><a class="tocitem" href="../SampledData/">Clocks and Sampled-Data Systems</a></li><li class="is-active"><a class="tocitem" href>Domains</a><ul class="internal"><li><a class="tocitem" href="#Basics"><span>Basics</span></a></li><li><a class="tocitem" href="#Multiple-Domain-Networks"><span>Multiple Domain Networks</span></a></li><li><a class="tocitem" href="#Special-Connection-Cases-(domain_connect())"><span>Special Connection Cases (<code>domain_connect()</code>)</span></a></li></ul></li><li><a class="tocitem" href="../callable_params/">Callable parameters and interpolating data</a></li><li><a class="tocitem" href="../linear_analysis/">Linear Analysis</a></li><li><a class="tocitem" href="../fmi/">Importing FMUs</a></li></ul></li><li><span class="tocitem">Examples</span><ul><li><input class="collapse-toggle" id="menuitem-4-1" type="checkbox"/><label class="tocitem" for="menuitem-4-1"><span class="docs-label">Basic Examples</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="../../examples/higher_order/">Automatic Transformation of Nth Order ODEs to 1st Order ODEs</a></li><li><a class="tocitem" href="../../examples/spring_mass/">Component-Based Modeling of a Spring-Mass System</a></li><li><a class="tocitem" href="../../examples/modelingtoolkitize_index_reduction/">Automated Index Reduction of DAEs</a></li><li><a class="tocitem" href="../../examples/remake/">Optimizing through an ODE solve and re-creating MTK Problems</a></li></ul></li><li><input class="collapse-toggle" id="menuitem-4-2" type="checkbox"/><label class="tocitem" for="menuitem-4-2"><span class="docs-label">Advanced Examples</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="../../examples/tearing_parallelism/">Exposing More Parallelism By Tearing Algebraic Equations in ODESystems</a></li><li><a class="tocitem" href="../../examples/sparse_jacobians/">Automated Sparse Analytical Jacobians</a></li><li><a class="tocitem" href="../../examples/perturbation/">Symbolic-Numeric Perturbation Theory for ODEs</a></li></ul></li></ul></li><li><span class="tocitem">Basics</span><ul><li><a class="tocitem" href="../../basics/AbstractSystem/">The AbstractSystem Interface</a></li><li><a class="tocitem" href="../../basics/ContextualVariables/">Contextual Variable Types</a></li><li><a class="tocitem" href="../../basics/Variable_metadata/">Symbolic Metadata</a></li><li><a class="tocitem" href="../../basics/Composition/">Composing Models and Building Reusable Components</a></li><li><a class="tocitem" href="../../basics/Events/">Event Handling and Callback Functions</a></li><li><a class="tocitem" href="../../basics/Linearization/">Linearization</a></li><li><a class="tocitem" href="../../basics/InputOutput/">Input output</a></li><li><a class="tocitem" href="../../basics/MTKLanguage/">ModelingToolkit Language: Modeling with <code>@mtkmodel</code>, <code>@connectors</code> and <code>@mtkbuild</code></a></li><li><a class="tocitem" href="../../basics/Validation/">Model Validation and Units</a></li><li><a class="tocitem" href="../../basics/Debugging/">Debugging</a></li><li><a class="tocitem" href="../../basics/DependencyGraphs/">Dependency Graphs</a></li><li><a class="tocitem" href="../../basics/Precompilation/">Working with Precompilation and Binary Building</a></li><li><a class="tocitem" href="../../basics/FAQ/">Frequently Asked Questions</a></li></ul></li><li><span class="tocitem">System Types</span><ul><li><a class="tocitem" href="../../systems/ODESystem/">ODESystem</a></li><li><a class="tocitem" href="../../systems/SDESystem/">SDESystem</a></li><li><a class="tocitem" href="../../systems/JumpSystem/">JumpSystem</a></li><li><a class="tocitem" href="../../systems/NonlinearSystem/">NonlinearSystem</a></li><li><a class="tocitem" href="../../systems/OptimizationSystem/">OptimizationSystem</a></li><li><a class="tocitem" href="../../systems/PDESystem/">PDESystem</a></li><li><a class="tocitem" href="../../systems/DiscreteSystem/">DiscreteSystem</a></li><li><a class="tocitem" href="../../systems/ImplicitDiscreteSystem/">ImplicitDiscreteSystem</a></li></ul></li><li><a class="tocitem" href="../../comparison/">Comparison of ModelingToolkit vs Equation-Based and Block Modeling Languages</a></li><li><a class="tocitem" href="../../internals/">Internal Details</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Tutorials</a></li><li class="is-active"><a href>Domains</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Domains</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/SciML/ModelingToolkit.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/SciML/ModelingToolkit.jl/blob/master/docs/src/tutorials/domain_connections.md" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="domains"><a class="docs-heading-anchor" href="#domains">Domains</a><a id="domains-1"></a><a class="docs-heading-anchor-permalink" href="#domains" title="Permalink"></a></h1><h2 id="Basics"><a class="docs-heading-anchor" href="#Basics">Basics</a><a id="Basics-1"></a><a class="docs-heading-anchor-permalink" href="#Basics" title="Permalink"></a></h2><p>A domain in ModelingToolkit.jl is a network of connected components that share properties of the medium in the network.  For example, a collection of hydraulic components connected together will have a fluid medium.  Using the domain feature, one only needs to define and set the fluid medium properties once, in one component, rather than at each component.  The way this works in ModelingToolkit.jl is by defining a connector (with Through/Flow and Across variables) with parameters defining the medium of the domain.  Then a second connector is defined, with the same parameters, and the same Through/Flow variable, which acts as the setter.  For example, a hydraulic domain may have a hydraulic connector, <code>HydraulicPort</code>, that defines a fluid medium with density (<code>ρ</code>), viscosity (<code>μ</code>), and a bulk modulus (<code>β</code>), a through/flow variable mass flow (<code>dm</code>) and an across variable pressure (<code>p</code>).</p><pre><code class="language-julia hljs">using ModelingToolkit
+using ModelingToolkit: t_nounits as t, D_nounits as D
+
+@connector function HydraulicPort(; p_int, name)
+    pars = @parameters begin
+        ρ
+        β
+        μ
+    end
+
+    vars = @variables begin
+        p(t) = p_int
+        dm(t), [connect = Flow]
+    end
+
+    ODESystem(Equation[], t, vars, pars; name, defaults = [dm =&gt; 0])
+end</code></pre><p>The fluid medium setter for <code>HydralicPort</code> may be defined as <code>HydraulicFluid</code> with the same parameters and through/flow variable.  But now, the parameters can be set through the function keywords.</p><pre><code class="language-julia hljs">@connector function HydraulicFluid(;
+        density = 997,
+        bulk_modulus = 2.09e9,
+        viscosity = 0.0010016,
+        name)
+    pars = @parameters begin
+        ρ = density
+        β = bulk_modulus
+        μ = viscosity
+    end
+
+    vars = @variables begin
+        dm(t), [connect = Flow]
+    end
+
+    eqs = [
+        dm ~ 0
+    ]
+
+    ODESystem(eqs, t, vars, pars; name, defaults = [dm =&gt; 0])
+end</code></pre><p>Now, we can connect a <code>HydraulicFluid</code> component to any <code>HydraulicPort</code> connector, and the parameters of all <code>HydraulicPort</code>&#39;s in the network will be automatically set.  Let&#39;s consider a simple example, connecting a pressure source component to a volume component.  Note that we don&#39;t need to define density for the volume component, it&#39;s supplied by the <code>HydraulicPort</code> (<code>port.ρ</code>).</p><pre><code class="language-julia hljs">@component function FixedPressure(; p, name)
+    pars = @parameters p = p
+    systems = @named begin
+        port = HydraulicPort(; p_int = p)
+    end
+
+    eqs = [port.p ~ p]
+
+    ODESystem(eqs, t, [], pars; name, systems)
+end
+
+@component function FixedVolume(; vol, p_int, name)
+    pars = @parameters begin
+        p_int = p_int
+        vol = vol
+    end
+
+    systems = @named begin
+        port = HydraulicPort(; p_int)
+    end
+
+    vars = @variables begin
+        rho(t) = port.ρ
+        drho(t) = 0
+    end
+
+    # let
+    dm = port.dm
+    p = port.p
+
+    eqs = [D(rho) ~ drho
+           rho ~ port.ρ * (1 + p / port.β)
+           dm ~ drho * vol]
+
+    ODESystem(eqs, t, vars, pars; name, systems)
+end</code></pre><p>When the system is defined we can generate a fluid component and connect it to the system.  Here <code>fluid</code> is connected to the <code>src.port</code>, but it could also be connected to <code>vol.port</code>, any connection in the network is fine.</p><pre><code class="language-julia hljs">@component function System(; name)
+    systems = @named begin
+        src = FixedPressure(; p = 200e5)
+        vol = FixedVolume(; vol = 0.1, p_int = 200e5)
+
+        fluid = HydraulicFluid(; density = 876)
+    end
+
+    eqs = [connect(fluid, src.port)
+           connect(src.port, vol.port)]
+
+    ODESystem(eqs, t, [], []; systems, name)
+end
+
+@named odesys = System()</code></pre><p>To see how the domain works, we can examine the set parameter values for each of the ports <code>src.port</code> and <code>vol.port</code>.  First we assemble the system using <code>structural_simplify()</code> and then check the default value of <code>vol.port.ρ</code>, whichs points to the setter value <code>fluid₊ρ</code>.  Likewise, <code>src.port.ρ</code>, will also point to the setter value <code>fluid₊ρ</code>.  Therefore, there is now only 1 defined density value <code>fluid₊ρ</code> which sets the density for the connected network.</p><pre><code class="language-julia-repl hljs" style="display:block;">julia&gt; sys = structural_simplify(odesys)</code><code class="nohighlight hljs ansi" style="display:block;"><span class="sgr1">Model odesys:</span>
+<span class="sgr1">Parameters (12):</span> see parameters(odesys)
+  fluid₊β [defaults to 2.09e9]
+  src₊p [defaults to 2.0e7]
+  vol₊p_int [defaults to 2.0e7]
+  vol₊vol [defaults to 0.1]
+  ⋮
+<span class="sgr1">Observed (10):</span> see observed(odesys)</code><br/><code class="language-julia-repl hljs" style="display:block;">julia&gt; ModelingToolkit.defaults(sys)[odesys.vol.port.ρ]</code><code class="nohighlight hljs ansi" style="display:block;">ERROR: KeyError: key odesys₊vol₊port₊ρ not found</code></pre><h2 id="Multiple-Domain-Networks"><a class="docs-heading-anchor" href="#Multiple-Domain-Networks">Multiple Domain Networks</a><a id="Multiple-Domain-Networks-1"></a><a class="docs-heading-anchor-permalink" href="#Multiple-Domain-Networks" title="Permalink"></a></h2><p>If we have a more complicated system, for example a hydraulic actuator, with a separated fluid on both sides of the piston, it&#39;s possible we might have 2 separate domain networks.  In this case we can connect 2 separate fluids, or the same fluid, to both networks.  First a simple actuator is defined with 2 ports.</p><pre><code class="language-julia hljs">@component function Actuator(; p_int, mass, area, name)
+    pars = @parameters begin
+        p_int = p_int
+        mass = mass
+        area = area
+    end
+
+    systems = @named begin
+        port_a = HydraulicPort(; p_int)
+        port_b = HydraulicPort(; p_int)
+    end
+
+    vars = @variables begin
+        x(t) = 0
+        dx(t) = 0
+        ddx(t) = 0
+    end
+
+    eqs = [D(x) ~ dx
+           D(dx) ~ ddx
+           mass * ddx ~ (port_a.p - port_b.p) * area
+           port_a.dm ~ +(port_a.ρ) * dx * area
+           port_b.dm ~ -(port_b.ρ) * dx * area]
+
+    ODESystem(eqs, t, vars, pars; name, systems)
+end</code></pre><p>A system with 2 different fluids is defined and connected to each separate domain network.</p><pre><code class="language-julia hljs">@component function ActuatorSystem2(; name)
+    systems = @named begin
+        src_a = FixedPressure(; p = 200e5)
+        src_b = FixedPressure(; p = 200e5)
+        act = Actuator(; p_int = 200e5, mass = 1000, area = 0.1)
+
+        fluid_a = HydraulicFluid(; density = 876)
+        fluid_b = HydraulicFluid(; density = 999)
+    end
+
+    eqs = [connect(fluid_a, src_a.port)
+           connect(fluid_b, src_b.port)
+           connect(src_a.port, act.port_a)
+           connect(src_b.port, act.port_b)]
+
+    ODESystem(eqs, t, [], []; systems, name)
+end
+
+@named actsys2 = ActuatorSystem2()</code></pre><p>After running <code>structural_simplify()</code> on <code>actsys2</code>, the defaults will show that <code>act.port_a.ρ</code> points to <code>fluid_a₊ρ</code> and <code>act.port_b.ρ</code> points to <code>fluid_b₊ρ</code>.  This is a special case, in most cases a hydraulic system will have only 1 fluid, however this simple system has 2 separate domain networks.  Therefore, we can connect a single fluid to both networks.  This does not interfere with the mathematical equations of the system, since no unknown variables are connected.</p><pre><code class="language-julia hljs">@component function ActuatorSystem1(; name)
+    systems = @named begin
+        src_a = FixedPressure(; p = 200e5)
+        src_b = FixedPressure(; p = 200e5)
+        act = Actuator(; p_int = 200e5, mass = 1000, area = 0.1)
+
+        fluid = HydraulicFluid(; density = 876)
+    end
+
+    eqs = [connect(fluid, src_a.port)
+           connect(fluid, src_b.port)
+           connect(src_a.port, act.port_a)
+           connect(src_b.port, act.port_b)]
+
+    ODESystem(eqs, t, [], []; systems, name)
+end
+
+@named actsys1 = ActuatorSystem1()</code></pre><h2 id="Special-Connection-Cases-(domain_connect())"><a class="docs-heading-anchor" href="#Special-Connection-Cases-(domain_connect())">Special Connection Cases (<code>domain_connect()</code>)</a><a id="Special-Connection-Cases-(domain_connect())-1"></a><a class="docs-heading-anchor-permalink" href="#Special-Connection-Cases-(domain_connect())" title="Permalink"></a></h2><p>In some cases a component will be defined with 2 connectors of the same domain, but they are not connected.  For example the <code>Restrictor</code> defined here gives equations to define the behavior of how the 2 connectors <code>port_a</code> and <code>port_b</code> are physically connected.</p><pre><code class="language-julia hljs">@component function Restrictor(; name, p_int)
+    pars = @parameters begin
+        K = 0.1
+        p_int = p_int
+    end
+
+    systems = @named begin
+        port_a = HydraulicPort(; p_int)
+        port_b = HydraulicPort(; p_int)
+    end
+
+    eqs = [port_a.dm ~ (port_a.p - port_b.p) * K
+           0 ~ port_a.dm + port_b.dm]
+
+    ODESystem(eqs, t, [], pars; systems, name)
+end</code></pre><p>Adding the <code>Restrictor</code> to the original system example will cause a break in the domain network, since a <code>connect(port_a, port_b)</code> is not defined.</p><pre><code class="language-julia hljs">@component function RestrictorSystem(; name)
+    systems = @named begin
+        src = FixedPressure(; p = 200e5)
+        res = Restrictor(; p_int = 200e5)
+        vol = FixedVolume(; vol = 0.1, p_int = 200e5)
+
+        fluid = HydraulicFluid(; density = 876)
+    end
+
+    eqs = [connect(fluid, src.port)
+           connect(src.port, res.port_a)
+           connect(res.port_b, vol.port)]
+
+    ODESystem(eqs, t, [], []; systems, name)
+end
+
+@mtkbuild ressys = RestrictorSystem()</code></pre><p>When <code>structural_simplify()</code> is applied to this system it can be seen that the defaults are missing for <code>res.port_b</code> and <code>vol.port</code>.</p><pre><code class="language-julia-repl hljs" style="display:block;">julia&gt; ModelingToolkit.defaults(ressys)[ressys.res.port_a.ρ]</code><code class="nohighlight hljs ansi" style="display:block;">fluid₊ρ</code><br/><code class="language-julia-repl hljs" style="display:block;">julia&gt; ModelingToolkit.defaults(ressys)[ressys.res.port_b.ρ]</code><code class="nohighlight hljs ansi" style="display:block;">ERROR: KeyError: key res₊port_b₊ρ not found</code><br/><code class="language-julia-repl hljs" style="display:block;">julia&gt; ModelingToolkit.defaults(ressys)[ressys.vol.port.ρ]</code><code class="nohighlight hljs ansi" style="display:block;">ERROR: KeyError: key vol₊port₊ρ not found</code></pre><p>To ensure that the <code>Restrictor</code> component does not disrupt the domain network, the <a href="@ref"><code>domain_connect()</code></a> function can be used, which explicitly only connects the domain network and not the unknown variables.</p><pre><code class="language-julia hljs">@component function Restrictor(; name, p_int)
+    pars = @parameters begin
+        K = 0.1
+        p_int = p_int
+    end
+
+    systems = @named begin
+        port_a = HydraulicPort(; p_int)
+        port_b = HydraulicPort(; p_int)
+    end
+
+    eqs = [domain_connect(port_a, port_b) # &lt;-- connect the domain network
+           port_a.dm ~ (port_a.p - port_b.p) * K
+           0 ~ port_a.dm + port_b.dm]
+
+    ODESystem(eqs, t, [], pars; systems, name)
+end
+
+@mtkbuild ressys = RestrictorSystem()</code></pre><p>Now that the <code>Restrictor</code> component is properly defined using <code>domain_connect()</code>, the defaults for <code>res.port_b</code> and <code>vol.port</code> are properly defined.</p><pre><code class="language-julia-repl hljs" style="display:block;">julia&gt; ModelingToolkit.defaults(ressys)[ressys.res.port_a.ρ]</code><code class="nohighlight hljs ansi" style="display:block;">fluid₊ρ</code><br/><code class="language-julia-repl hljs" style="display:block;">julia&gt; ModelingToolkit.defaults(ressys)[ressys.res.port_b.ρ]</code><code class="nohighlight hljs ansi" style="display:block;">fluid₊ρ</code><br/><code class="language-julia-repl hljs" style="display:block;">julia&gt; ModelingToolkit.defaults(ressys)[ressys.vol.port.ρ]</code><code class="nohighlight hljs ansi" style="display:block;">fluid₊ρ</code></pre></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../SampledData/">« Clocks and Sampled-Data Systems</a><a class="docs-footer-nextpage" href="../callable_params/">Callable parameters and interpolating data »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.9.0 on <span class="colophon-date" title="Thursday 20 March 2025 03:22">Thursday 20 March 2025</span>. Using Julia version 1.10.9.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>

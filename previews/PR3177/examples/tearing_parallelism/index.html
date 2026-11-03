@@ -1,0 +1,1230 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Exposing More Parallelism By Tearing Algebraic Equations in ODESystems · ModelingToolkit.jl</title><meta name="title" content="Exposing More Parallelism By Tearing Algebraic Equations in ODESystems · ModelingToolkit.jl"/><meta property="og:title" content="Exposing More Parallelism By Tearing Algebraic Equations in ODESystems · ModelingToolkit.jl"/><meta property="twitter:title" content="Exposing More Parallelism By Tearing Algebraic Equations in ODESystems · ModelingToolkit.jl"/><meta name="description" content="Documentation for ModelingToolkit.jl."/><meta property="og:description" content="Documentation for ModelingToolkit.jl."/><meta property="twitter:description" content="Documentation for ModelingToolkit.jl."/><meta property="og:url" content="https://docs.sciml.ai/ModelingToolkit/stable/examples/tearing_parallelism/"/><meta property="twitter:url" content="https://docs.sciml.ai/ModelingToolkit/stable/examples/tearing_parallelism/"/><link rel="canonical" href="https://docs.sciml.ai/ModelingToolkit/stable/examples/tearing_parallelism/"/><script data-outdated-warner src="../../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../search_index.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script><link href="../../assets/favicon.ico" rel="icon" type="image/x-icon"/></head><body><div id="documenter"><nav class="docs-sidebar"><a class="docs-logo" href="../../"><img src="../../assets/logo.png" alt="ModelingToolkit.jl logo"/></a><div class="docs-package-name"><span class="docs-autofit"><a href="../../">ModelingToolkit.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../../">Home</a></li><li><a class="tocitem" href="../../tutorials/ode_modeling/">Getting Started with ModelingToolkit.jl</a></li><li><span class="tocitem">Tutorials</span><ul><li><a class="tocitem" href="../../tutorials/acausal_components/">Acausal Component-Based Modeling</a></li><li><a class="tocitem" href="../../tutorials/nonlinear/">Modeling Nonlinear Systems</a></li><li><a class="tocitem" href="../../tutorials/initialization/">Initialization of ODESystems</a></li><li><a class="tocitem" href="../../tutorials/optimization/">Modeling Optimization Problems</a></li><li><a class="tocitem" href="../../tutorials/modelingtoolkitize/">Modelingtoolkitize: Automatically Translating Numerical to Symbolic Code</a></li><li><a class="tocitem" href="../../tutorials/programmatically_generating/">Programmatically Generating and Scripting ODESystems</a></li><li><a class="tocitem" href="../../tutorials/stochastic_diffeq/">Modeling with Stochasticity</a></li><li><a class="tocitem" href="../../tutorials/discrete_system/">(Experimental) Modeling Discrete Systems</a></li><li><a class="tocitem" href="../../tutorials/parameter_identifiability/">Parameter Identifiability in ODE Models</a></li><li><a class="tocitem" href="../../tutorials/bifurcation_diagram_computation/">Bifurcation Diagrams</a></li><li><a class="tocitem" href="../../tutorials/SampledData/">Clocks and Sampled-Data Systems</a></li><li><a class="tocitem" href="../../tutorials/domain_connections/">Domains</a></li><li><a class="tocitem" href="../../tutorials/callable_params/">Callable parameters and interpolating data</a></li></ul></li><li><span class="tocitem">Examples</span><ul><li><input class="collapse-toggle" id="menuitem-4-1" type="checkbox"/><label class="tocitem" for="menuitem-4-1"><span class="docs-label">Basic Examples</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="../higher_order/">Automatic Transformation of Nth Order ODEs to 1st Order ODEs</a></li><li><a class="tocitem" href="../spring_mass/">Component-Based Modeling of a Spring-Mass System</a></li><li><a class="tocitem" href="../modelingtoolkitize_index_reduction/">Automated Index Reduction of DAEs</a></li><li><a class="tocitem" href="../remake/">Optimizing through an ODE solve and re-creating MTK Problems</a></li></ul></li><li><input class="collapse-toggle" id="menuitem-4-2" type="checkbox" checked/><label class="tocitem" for="menuitem-4-2"><span class="docs-label">Advanced Examples</span><i class="docs-chevron"></i></label><ul class="collapsed"><li class="is-active"><a class="tocitem" href>Exposing More Parallelism By Tearing Algebraic Equations in ODESystems</a><ul class="internal"><li><a class="tocitem" href="#The-Component-Library"><span>The Component Library</span></a></li><li><a class="tocitem" href="#The-Model"><span>The Model</span></a></li><li><a class="tocitem" href="#What-Happened?"><span>What Happened?</span></a></li></ul></li><li><a class="tocitem" href="../sparse_jacobians/">Automated Sparse Analytical Jacobians</a></li><li><a class="tocitem" href="../perturbation/">Symbolic-Numeric Perturbation Theory for ODEs</a></li></ul></li></ul></li><li><span class="tocitem">Basics</span><ul><li><a class="tocitem" href="../../basics/AbstractSystem/">The AbstractSystem Interface</a></li><li><a class="tocitem" href="../../basics/ContextualVariables/">Contextual Variable Types</a></li><li><a class="tocitem" href="../../basics/Variable_metadata/">Symbolic Metadata</a></li><li><a class="tocitem" href="../../basics/Composition/">Composing Models and Building Reusable Components</a></li><li><a class="tocitem" href="../../basics/Events/">Event Handling and Callback Functions</a></li><li><a class="tocitem" href="../../basics/Linearization/">Linearization</a></li><li><a class="tocitem" href="../../basics/InputOutput/">Input output</a></li><li><a class="tocitem" href="../../basics/MTKLanguage/">ModelingToolkit Language: Modeling with <code>@mtkmodel</code>, <code>@connectors</code> and <code>@mtkbuild</code></a></li><li><a class="tocitem" href="../../basics/Validation/">Model Validation and Units</a></li><li><a class="tocitem" href="../../basics/DependencyGraphs/">Dependency Graphs</a></li><li><a class="tocitem" href="../../basics/Precompilation/">Working with Precompilation and Binary Building</a></li><li><a class="tocitem" href="../../basics/FAQ/">Frequently Asked Questions</a></li></ul></li><li><span class="tocitem">System Types</span><ul><li><a class="tocitem" href="../../systems/ODESystem/">ODESystem</a></li><li><a class="tocitem" href="../../systems/SDESystem/">SDESystem</a></li><li><a class="tocitem" href="../../systems/JumpSystem/">JumpSystem</a></li><li><a class="tocitem" href="../../systems/NonlinearSystem/">NonlinearSystem</a></li><li><a class="tocitem" href="../../systems/OptimizationSystem/">OptimizationSystem</a></li><li><a class="tocitem" href="../../systems/PDESystem/">PDESystem</a></li></ul></li><li><a class="tocitem" href="../../comparison/">Comparison of ModelingToolkit vs Equation-Based and Block Modeling Languages</a></li><li><a class="tocitem" href="../../internals/">Internal Details</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Examples</a></li><li><a class="is-disabled">Advanced Examples</a></li><li class="is-active"><a href>Exposing More Parallelism By Tearing Algebraic Equations in ODESystems</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Exposing More Parallelism By Tearing Algebraic Equations in ODESystems</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/SciML/ModelingToolkit.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/SciML/ModelingToolkit.jl/blob/master/docs/src/examples/tearing_parallelism.md" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Exposing-More-Parallelism-By-Tearing-Algebraic-Equations-in-ODESystems"><a class="docs-heading-anchor" href="#Exposing-More-Parallelism-By-Tearing-Algebraic-Equations-in-ODESystems">Exposing More Parallelism By Tearing Algebraic Equations in ODESystems</a><a id="Exposing-More-Parallelism-By-Tearing-Algebraic-Equations-in-ODESystems-1"></a><a class="docs-heading-anchor-permalink" href="#Exposing-More-Parallelism-By-Tearing-Algebraic-Equations-in-ODESystems" title="Permalink"></a></h1><p>Sometimes it can be very non-trivial to parallelize a system. In this tutorial, we will demonstrate how to make use of <code>structural_simplify</code> to expose more parallelism in the solution process and parallelize the resulting simulation.</p><h2 id="The-Component-Library"><a class="docs-heading-anchor" href="#The-Component-Library">The Component Library</a><a id="The-Component-Library-1"></a><a class="docs-heading-anchor-permalink" href="#The-Component-Library" title="Permalink"></a></h2><p>The following tutorial will use the following set of components describing electrical circuits:</p><pre><code class="language-julia hljs">using ModelingToolkit, OrdinaryDiffEq
+using ModelingToolkit: t_nounits as t, D_nounits as D
+
+# Basic electric components
+@connector function Pin(; name)
+    @variables v(t)=1.0 i(t)=1.0 [connect = Flow]
+    ODESystem(Equation[], t, [v, i], [], name = name)
+end
+
+function Ground(; name)
+    @named g = Pin()
+    eqs = [g.v ~ 0]
+    compose(ODESystem(eqs, t, [], [], name = name), g)
+end
+
+function ConstantVoltage(; name, V = 1.0)
+    val = V
+    @named p = Pin()
+    @named n = Pin()
+    @parameters V = V
+    eqs = [V ~ p.v - n.v
+           0 ~ p.i + n.i]
+    compose(ODESystem(eqs, t, [], [V], name = name), p, n)
+end
+
+@connector function HeatPort(; name)
+    @variables T(t)=293.15 Q_flow(t)=0.0 [connect = Flow]
+    ODESystem(Equation[], t, [T, Q_flow], [], name = name)
+end
+
+function HeatingResistor(; name, R = 1.0, TAmbient = 293.15, alpha = 1.0)
+    @named p = Pin()
+    @named n = Pin()
+    @named h = HeatPort()
+    @variables v(t) RTherm(t)
+    @parameters R=R TAmbient=TAmbient alpha=alpha
+    eqs = [RTherm ~ R * (1 + alpha * (h.T - TAmbient))
+           v ~ p.i * RTherm
+           h.Q_flow ~ -v * p.i # -LossPower
+           v ~ p.v - n.v
+           0 ~ p.i + n.i]
+    compose(ODESystem(eqs, t, [v, RTherm], [R, TAmbient, alpha],
+            name = name), p, n, h)
+end
+
+function HeatCapacitor(; name, rho = 8050, V = 1, cp = 460, TAmbient = 293.15)
+    @parameters rho=rho V=V cp=cp
+    C = rho * V * cp
+    @named h = HeatPort()
+    eqs = [
+        D(h.T) ~ h.Q_flow / C
+    ]
+    compose(ODESystem(eqs, t, [], [rho, V, cp],
+            name = name), h)
+end
+
+function Capacitor(; name, C = 1.0)
+    @named p = Pin()
+    @named n = Pin()
+    @variables v(t) = 0.0
+    @parameters C = C
+    eqs = [v ~ p.v - n.v
+           0 ~ p.i + n.i
+           D(v) ~ p.i / C]
+    compose(ODESystem(eqs, t, [v], [C],
+            name = name), p, n)
+end
+
+function parallel_rc_model(i; name, source, ground, R, C)
+    resistor = HeatingResistor(name = Symbol(:resistor, i), R = R)
+    capacitor = Capacitor(name = Symbol(:capacitor, i), C = C)
+    heat_capacitor = HeatCapacitor(name = Symbol(:heat_capacitor, i))
+
+    rc_eqs = [connect(source.p, resistor.p)
+              connect(resistor.n, capacitor.p)
+              connect(capacitor.n, source.n, ground.g)
+              connect(resistor.h, heat_capacitor.h)]
+
+    compose(ODESystem(rc_eqs, t, name = Symbol(name, i)),
+        [resistor, capacitor, source, ground, heat_capacitor])
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">parallel_rc_model (generic function with 1 method)</code></pre><h2 id="The-Model"><a class="docs-heading-anchor" href="#The-Model">The Model</a><a id="The-Model-1"></a><a class="docs-heading-anchor-permalink" href="#The-Model" title="Permalink"></a></h2><p>Assuming that the components are defined, our model is 50 resistors and capacitors connected in parallel. Thus following the <a href="../../tutorials/acausal_components/#acausal">acausal components tutorial</a>, we can connect a bunch of RC components as follows:</p><pre><code class="language-julia hljs">V = 2.0
+@named source = ConstantVoltage(V = V)
+@named ground = Ground()
+N = 50
+Rs = 10 .^ range(0, stop = -4, length = N)
+Cs = 10 .^ range(-3, stop = 0, length = N)
+rc_systems = map(1:N) do i
+    parallel_rc_model(i; name = :rc, source = source, ground = ground, R = Rs[i], C = Cs[i])
+end;
+@variables E(t) = 0.0
+eqs = [
+    D(E) ~ sum(((i, sys),) -&gt; getproperty(sys, Symbol(:resistor, i)).h.Q_flow,
+    enumerate(rc_systems))
+]
+@named _big_rc = ODESystem(eqs, t, [E], [])
+@named big_rc = compose(_big_rc, rc_systems)</code></pre><p class="math-container">\[ \begin{equation}
+\left[
+\begin{array}{c}
+\frac{\mathrm{d} E\left( t \right)}{\mathrm{d}t} = \mathtt{rc25.resistor25.h.Q\_flow}\left( t \right) + \mathtt{rc20.resistor20.h.Q\_flow}\left( t \right) + \mathtt{rc36.resistor36.h.Q\_flow}\left( t \right) + \mathtt{rc32.resistor32.h.Q\_flow}\left( t \right) + \mathtt{rc31.resistor31.h.Q\_flow}\left( t \right) + \mathtt{rc43.resistor43.h.Q\_flow}\left( t \right) + \mathtt{rc6.resistor6.h.Q\_flow}\left( t \right) + \mathtt{rc4.resistor4.h.Q\_flow}\left( t \right) + \mathtt{rc40.resistor40.h.Q\_flow}\left( t \right) + \mathtt{rc34.resistor34.h.Q\_flow}\left( t \right) + \mathtt{rc18.resistor18.h.Q\_flow}\left( t \right) + \mathtt{rc46.resistor46.h.Q\_flow}\left( t \right) + \mathtt{rc21.resistor21.h.Q\_flow}\left( t \right) + \mathtt{rc30.resistor30.h.Q\_flow}\left( t \right) + \mathtt{rc38.resistor38.h.Q\_flow}\left( t \right) + \mathtt{rc8.resistor8.h.Q\_flow}\left( t \right) + \mathtt{rc11.resistor11.h.Q\_flow}\left( t \right) + \mathtt{rc29.resistor29.h.Q\_flow}\left( t \right) + \mathtt{rc23.resistor23.h.Q\_flow}\left( t \right) + \mathtt{rc50.resistor50.h.Q\_flow}\left( t \right) + \mathtt{rc9.resistor9.h.Q\_flow}\left( t \right) + \mathtt{rc22.resistor22.h.Q\_flow}\left( t \right) + \mathtt{rc27.resistor27.h.Q\_flow}\left( t \right) + \mathtt{rc28.resistor28.h.Q\_flow}\left( t \right) + \mathtt{rc2.resistor2.h.Q\_flow}\left( t \right) + \mathtt{rc35.resistor35.h.Q\_flow}\left( t \right) + \mathtt{rc49.resistor49.h.Q\_flow}\left( t \right) + \mathtt{rc41.resistor41.h.Q\_flow}\left( t \right) + \mathtt{rc39.resistor39.h.Q\_flow}\left( t \right) + \mathtt{rc48.resistor48.h.Q\_flow}\left( t \right) + \mathtt{rc19.resistor19.h.Q\_flow}\left( t \right) + \mathtt{rc16.resistor16.h.Q\_flow}\left( t \right) + \mathtt{rc47.resistor47.h.Q\_flow}\left( t \right) + \mathtt{rc3.resistor3.h.Q\_flow}\left( t \right) + \mathtt{rc5.resistor5.h.Q\_flow}\left( t \right) + \mathtt{rc1.resistor1.h.Q\_flow}\left( t \right) + \mathtt{rc10.resistor10.h.Q\_flow}\left( t \right) + \mathtt{rc44.resistor44.h.Q\_flow}\left( t \right) + \mathtt{rc24.resistor24.h.Q\_flow}\left( t \right) + \mathtt{rc7.resistor7.h.Q\_flow}\left( t \right) + \mathtt{rc15.resistor15.h.Q\_flow}\left( t \right) + \mathtt{rc37.resistor37.h.Q\_flow}\left( t \right) + \mathtt{rc13.resistor13.h.Q\_flow}\left( t \right) + \mathtt{rc17.resistor17.h.Q\_flow}\left( t \right) + \mathtt{rc45.resistor45.h.Q\_flow}\left( t \right) + \mathtt{rc26.resistor26.h.Q\_flow}\left( t \right) + \mathtt{rc12.resistor12.h.Q\_flow}\left( t \right) + \mathtt{rc42.resistor42.h.Q\_flow}\left( t \right) + \mathtt{rc33.resistor33.h.Q\_flow}\left( t \right) + \mathtt{rc14.resistor14.h.Q\_flow}\left( t \right) \\
+\mathrm{connect}\left( source_{+}p, resistor1_{+}p \right) \\
+\mathrm{connect}\left( resistor1_{+}n, capacitor1_{+}p \right) \\
+\mathrm{connect}\left( capacitor1_{+}n, source_{+}n, ground_{+}g \right) \\
+\mathrm{connect}\left( resistor1_{+}h, heat_{capacitor1_{+}h} \right) \\
+\mathtt{rc1.resistor1.RTherm}\left( t \right) = \mathtt{rc1.resistor1.R} \left( 1 + \left(  - \mathtt{rc1.resistor1.TAmbient} + \mathtt{rc1.resistor1.h.T}\left( t \right) \right) \mathtt{rc1.resistor1.alpha} \right) \\
+\mathtt{rc1.resistor1.v}\left( t \right) = \mathtt{rc1.resistor1.RTherm}\left( t \right) \mathtt{rc1.resistor1.p.i}\left( t \right) \\
+\mathtt{rc1.resistor1.h.Q\_flow}\left( t \right) =  - \mathtt{rc1.resistor1.v}\left( t \right) \mathtt{rc1.resistor1.p.i}\left( t \right) \\
+\mathtt{rc1.resistor1.v}\left( t \right) =  - \mathtt{rc1.resistor1.n.v}\left( t \right) + \mathtt{rc1.resistor1.p.v}\left( t \right) \\
+0 = \mathtt{rc1.resistor1.n.i}\left( t \right) + \mathtt{rc1.resistor1.p.i}\left( t \right) \\
+\mathtt{rc1.capacitor1.v}\left( t \right) = \mathtt{rc1.capacitor1.p.v}\left( t \right) - \mathtt{rc1.capacitor1.n.v}\left( t \right) \\
+0 = \mathtt{rc1.capacitor1.p.i}\left( t \right) + \mathtt{rc1.capacitor1.n.i}\left( t \right) \\
+\frac{\mathrm{d} \mathtt{rc1.capacitor1.v}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc1.capacitor1.p.i}\left( t \right)}{\mathtt{rc1.capacitor1.C}} \\
+\mathtt{rc1.source.V} =  - \mathtt{rc1.source.n.v}\left( t \right) + \mathtt{rc1.source.p.v}\left( t \right) \\
+0 = \mathtt{rc1.source.p.i}\left( t \right) + \mathtt{rc1.source.n.i}\left( t \right) \\
+\mathtt{rc1.ground.g.v}\left( t \right) = 0 \\
+\frac{\mathrm{d} \mathtt{rc1.heat\_capacitor1.h.T}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc1.heat\_capacitor1.h.Q\_flow}\left( t \right)}{\mathtt{rc1.heat\_capacitor1.V} \mathtt{rc1.heat\_capacitor1.cp} \mathtt{rc1.heat\_capacitor1.rho}} \\
+\mathrm{connect}\left( source_{+}p, resistor2_{+}p \right) \\
+\mathrm{connect}\left( resistor2_{+}n, capacitor2_{+}p \right) \\
+\mathrm{connect}\left( capacitor2_{+}n, source_{+}n, ground_{+}g \right) \\
+\mathrm{connect}\left( resistor2_{+}h, heat_{capacitor2_{+}h} \right) \\
+\mathtt{rc2.resistor2.RTherm}\left( t \right) = \mathtt{rc2.resistor2.R} \left( 1 + \left(  - \mathtt{rc2.resistor2.TAmbient} + \mathtt{rc2.resistor2.h.T}\left( t \right) \right) \mathtt{rc2.resistor2.alpha} \right) \\
+\mathtt{rc2.resistor2.v}\left( t \right) = \mathtt{rc2.resistor2.p.i}\left( t \right) \mathtt{rc2.resistor2.RTherm}\left( t \right) \\
+\mathtt{rc2.resistor2.h.Q\_flow}\left( t \right) =  - \mathtt{rc2.resistor2.p.i}\left( t \right) \mathtt{rc2.resistor2.v}\left( t \right) \\
+\mathtt{rc2.resistor2.v}\left( t \right) = \mathtt{rc2.resistor2.p.v}\left( t \right) - \mathtt{rc2.resistor2.n.v}\left( t \right) \\
+0 = \mathtt{rc2.resistor2.p.i}\left( t \right) + \mathtt{rc2.resistor2.n.i}\left( t \right) \\
+\mathtt{rc2.capacitor2.v}\left( t \right) = \mathtt{rc2.capacitor2.p.v}\left( t \right) - \mathtt{rc2.capacitor2.n.v}\left( t \right) \\
+0 = \mathtt{rc2.capacitor2.p.i}\left( t \right) + \mathtt{rc2.capacitor2.n.i}\left( t \right) \\
+\frac{\mathrm{d} \mathtt{rc2.capacitor2.v}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc2.capacitor2.p.i}\left( t \right)}{\mathtt{rc2.capacitor2.C}} \\
+\mathtt{rc2.source.V} = \mathtt{rc2.source.p.v}\left( t \right) - \mathtt{rc2.source.n.v}\left( t \right) \\
+0 = \mathtt{rc2.source.n.i}\left( t \right) + \mathtt{rc2.source.p.i}\left( t \right) \\
+\mathtt{rc2.ground.g.v}\left( t \right) = 0 \\
+\frac{\mathrm{d} \mathtt{rc2.heat\_capacitor2.h.T}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc2.heat\_capacitor2.h.Q\_flow}\left( t \right)}{\mathtt{rc2.heat\_capacitor2.V} \mathtt{rc2.heat\_capacitor2.cp} \mathtt{rc2.heat\_capacitor2.rho}} \\
+\mathrm{connect}\left( source_{+}p, resistor3_{+}p \right) \\
+\mathrm{connect}\left( resistor3_{+}n, capacitor3_{+}p \right) \\
+\mathrm{connect}\left( capacitor3_{+}n, source_{+}n, ground_{+}g \right) \\
+\mathrm{connect}\left( resistor3_{+}h, heat_{capacitor3_{+}h} \right) \\
+\mathtt{rc3.resistor3.RTherm}\left( t \right) = \mathtt{rc3.resistor3.R} \left( 1 + \left(  - \mathtt{rc3.resistor3.TAmbient} + \mathtt{rc3.resistor3.h.T}\left( t \right) \right) \mathtt{rc3.resistor3.alpha} \right) \\
+\mathtt{rc3.resistor3.v}\left( t \right) = \mathtt{rc3.resistor3.p.i}\left( t \right) \mathtt{rc3.resistor3.RTherm}\left( t \right) \\
+\mathtt{rc3.resistor3.h.Q\_flow}\left( t \right) =  - \mathtt{rc3.resistor3.v}\left( t \right) \mathtt{rc3.resistor3.p.i}\left( t \right) \\
+\mathtt{rc3.resistor3.v}\left( t \right) = \mathtt{rc3.resistor3.p.v}\left( t \right) - \mathtt{rc3.resistor3.n.v}\left( t \right) \\
+0 = \mathtt{rc3.resistor3.p.i}\left( t \right) + \mathtt{rc3.resistor3.n.i}\left( t \right) \\
+\mathtt{rc3.capacitor3.v}\left( t \right) = \mathtt{rc3.capacitor3.p.v}\left( t \right) - \mathtt{rc3.capacitor3.n.v}\left( t \right) \\
+0 = \mathtt{rc3.capacitor3.p.i}\left( t \right) + \mathtt{rc3.capacitor3.n.i}\left( t \right) \\
+\frac{\mathrm{d} \mathtt{rc3.capacitor3.v}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc3.capacitor3.p.i}\left( t \right)}{\mathtt{rc3.capacitor3.C}} \\
+\mathtt{rc3.source.V} = \mathtt{rc3.source.p.v}\left( t \right) - \mathtt{rc3.source.n.v}\left( t \right) \\
+0 = \mathtt{rc3.source.n.i}\left( t \right) + \mathtt{rc3.source.p.i}\left( t \right) \\
+\mathtt{rc3.ground.g.v}\left( t \right) = 0 \\
+\frac{\mathrm{d} \mathtt{rc3.heat\_capacitor3.h.T}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc3.heat\_capacitor3.h.Q\_flow}\left( t \right)}{\mathtt{rc3.heat\_capacitor3.V} \mathtt{rc3.heat\_capacitor3.cp} \mathtt{rc3.heat\_capacitor3.rho}} \\
+\mathrm{connect}\left( source_{+}p, resistor4_{+}p \right) \\
+\mathrm{connect}\left( resistor4_{+}n, capacitor4_{+}p \right) \\
+\mathrm{connect}\left( capacitor4_{+}n, source_{+}n, ground_{+}g \right) \\
+\mathrm{connect}\left( resistor4_{+}h, heat_{capacitor4_{+}h} \right) \\
+\mathtt{rc4.resistor4.RTherm}\left( t \right) = \mathtt{rc4.resistor4.R} \left( 1 + \left(  - \mathtt{rc4.resistor4.TAmbient} + \mathtt{rc4.resistor4.h.T}\left( t \right) \right) \mathtt{rc4.resistor4.alpha} \right) \\
+\mathtt{rc4.resistor4.v}\left( t \right) = \mathtt{rc4.resistor4.RTherm}\left( t \right) \mathtt{rc4.resistor4.p.i}\left( t \right) \\
+\mathtt{rc4.resistor4.h.Q\_flow}\left( t \right) =  - \mathtt{rc4.resistor4.v}\left( t \right) \mathtt{rc4.resistor4.p.i}\left( t \right) \\
+\mathtt{rc4.resistor4.v}\left( t \right) = \mathtt{rc4.resistor4.p.v}\left( t \right) - \mathtt{rc4.resistor4.n.v}\left( t \right) \\
+0 = \mathtt{rc4.resistor4.n.i}\left( t \right) + \mathtt{rc4.resistor4.p.i}\left( t \right) \\
+\mathtt{rc4.capacitor4.v}\left( t \right) = \mathtt{rc4.capacitor4.p.v}\left( t \right) - \mathtt{rc4.capacitor4.n.v}\left( t \right) \\
+0 = \mathtt{rc4.capacitor4.p.i}\left( t \right) + \mathtt{rc4.capacitor4.n.i}\left( t \right) \\
+\frac{\mathrm{d} \mathtt{rc4.capacitor4.v}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc4.capacitor4.p.i}\left( t \right)}{\mathtt{rc4.capacitor4.C}} \\
+\mathtt{rc4.source.V} = \mathtt{rc4.source.p.v}\left( t \right) - \mathtt{rc4.source.n.v}\left( t \right) \\
+0 = \mathtt{rc4.source.p.i}\left( t \right) + \mathtt{rc4.source.n.i}\left( t \right) \\
+\mathtt{rc4.ground.g.v}\left( t \right) = 0 \\
+\frac{\mathrm{d} \mathtt{rc4.heat\_capacitor4.h.T}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc4.heat\_capacitor4.h.Q\_flow}\left( t \right)}{\mathtt{rc4.heat\_capacitor4.V} \mathtt{rc4.heat\_capacitor4.cp} \mathtt{rc4.heat\_capacitor4.rho}} \\
+\mathrm{connect}\left( source_{+}p, resistor5_{+}p \right) \\
+\mathrm{connect}\left( resistor5_{+}n, capacitor5_{+}p \right) \\
+\mathrm{connect}\left( capacitor5_{+}n, source_{+}n, ground_{+}g \right) \\
+\mathrm{connect}\left( resistor5_{+}h, heat_{capacitor5_{+}h} \right) \\
+\mathtt{rc5.resistor5.RTherm}\left( t \right) = \mathtt{rc5.resistor5.R} \left( 1 + \left(  - \mathtt{rc5.resistor5.TAmbient} + \mathtt{rc5.resistor5.h.T}\left( t \right) \right) \mathtt{rc5.resistor5.alpha} \right) \\
+\mathtt{rc5.resistor5.v}\left( t \right) = \mathtt{rc5.resistor5.p.i}\left( t \right) \mathtt{rc5.resistor5.RTherm}\left( t \right) \\
+\mathtt{rc5.resistor5.h.Q\_flow}\left( t \right) =  - \mathtt{rc5.resistor5.p.i}\left( t \right) \mathtt{rc5.resistor5.v}\left( t \right) \\
+\mathtt{rc5.resistor5.v}\left( t \right) =  - \mathtt{rc5.resistor5.n.v}\left( t \right) + \mathtt{rc5.resistor5.p.v}\left( t \right) \\
+0 = \mathtt{rc5.resistor5.p.i}\left( t \right) + \mathtt{rc5.resistor5.n.i}\left( t \right) \\
+\mathtt{rc5.capacitor5.v}\left( t \right) = \mathtt{rc5.capacitor5.p.v}\left( t \right) - \mathtt{rc5.capacitor5.n.v}\left( t \right) \\
+0 = \mathtt{rc5.capacitor5.n.i}\left( t \right) + \mathtt{rc5.capacitor5.p.i}\left( t \right) \\
+\frac{\mathrm{d} \mathtt{rc5.capacitor5.v}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc5.capacitor5.p.i}\left( t \right)}{\mathtt{rc5.capacitor5.C}} \\
+\mathtt{rc5.source.V} =  - \mathtt{rc5.source.n.v}\left( t \right) + \mathtt{rc5.source.p.v}\left( t \right) \\
+0 = \mathtt{rc5.source.p.i}\left( t \right) + \mathtt{rc5.source.n.i}\left( t \right) \\
+\mathtt{rc5.ground.g.v}\left( t \right) = 0 \\
+\frac{\mathrm{d} \mathtt{rc5.heat\_capacitor5.h.T}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc5.heat\_capacitor5.h.Q\_flow}\left( t \right)}{\mathtt{rc5.heat\_capacitor5.V} \mathtt{rc5.heat\_capacitor5.cp} \mathtt{rc5.heat\_capacitor5.rho}} \\
+\mathrm{connect}\left( source_{+}p, resistor6_{+}p \right) \\
+\mathrm{connect}\left( resistor6_{+}n, capacitor6_{+}p \right) \\
+\mathrm{connect}\left( capacitor6_{+}n, source_{+}n, ground_{+}g \right) \\
+\mathrm{connect}\left( resistor6_{+}h, heat_{capacitor6_{+}h} \right) \\
+\mathtt{rc6.resistor6.RTherm}\left( t \right) = \mathtt{rc6.resistor6.R} \left( 1 + \left(  - \mathtt{rc6.resistor6.TAmbient} + \mathtt{rc6.resistor6.h.T}\left( t \right) \right) \mathtt{rc6.resistor6.alpha} \right) \\
+\mathtt{rc6.resistor6.v}\left( t \right) = \mathtt{rc6.resistor6.p.i}\left( t \right) \mathtt{rc6.resistor6.RTherm}\left( t \right) \\
+\mathtt{rc6.resistor6.h.Q\_flow}\left( t \right) =  - \mathtt{rc6.resistor6.p.i}\left( t \right) \mathtt{rc6.resistor6.v}\left( t \right) \\
+\mathtt{rc6.resistor6.v}\left( t \right) =  - \mathtt{rc6.resistor6.n.v}\left( t \right) + \mathtt{rc6.resistor6.p.v}\left( t \right) \\
+0 = \mathtt{rc6.resistor6.p.i}\left( t \right) + \mathtt{rc6.resistor6.n.i}\left( t \right) \\
+\mathtt{rc6.capacitor6.v}\left( t \right) = \mathtt{rc6.capacitor6.p.v}\left( t \right) - \mathtt{rc6.capacitor6.n.v}\left( t \right) \\
+0 = \mathtt{rc6.capacitor6.n.i}\left( t \right) + \mathtt{rc6.capacitor6.p.i}\left( t \right) \\
+\frac{\mathrm{d} \mathtt{rc6.capacitor6.v}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc6.capacitor6.p.i}\left( t \right)}{\mathtt{rc6.capacitor6.C}} \\
+\mathtt{rc6.source.V} = \mathtt{rc6.source.p.v}\left( t \right) - \mathtt{rc6.source.n.v}\left( t \right) \\
+0 = \mathtt{rc6.source.n.i}\left( t \right) + \mathtt{rc6.source.p.i}\left( t \right) \\
+\mathtt{rc6.ground.g.v}\left( t \right) = 0 \\
+\frac{\mathrm{d} \mathtt{rc6.heat\_capacitor6.h.T}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc6.heat\_capacitor6.h.Q\_flow}\left( t \right)}{\mathtt{rc6.heat\_capacitor6.V} \mathtt{rc6.heat\_capacitor6.cp} \mathtt{rc6.heat\_capacitor6.rho}} \\
+\mathrm{connect}\left( source_{+}p, resistor7_{+}p \right) \\
+\mathrm{connect}\left( resistor7_{+}n, capacitor7_{+}p \right) \\
+\mathrm{connect}\left( capacitor7_{+}n, source_{+}n, ground_{+}g \right) \\
+\mathrm{connect}\left( resistor7_{+}h, heat_{capacitor7_{+}h} \right) \\
+\mathtt{rc7.resistor7.RTherm}\left( t \right) = \mathtt{rc7.resistor7.R} \left( 1 + \left(  - \mathtt{rc7.resistor7.TAmbient} + \mathtt{rc7.resistor7.h.T}\left( t \right) \right) \mathtt{rc7.resistor7.alpha} \right) \\
+\mathtt{rc7.resistor7.v}\left( t \right) = \mathtt{rc7.resistor7.RTherm}\left( t \right) \mathtt{rc7.resistor7.p.i}\left( t \right) \\
+\mathtt{rc7.resistor7.h.Q\_flow}\left( t \right) =  - \mathtt{rc7.resistor7.p.i}\left( t \right) \mathtt{rc7.resistor7.v}\left( t \right) \\
+\mathtt{rc7.resistor7.v}\left( t \right) =  - \mathtt{rc7.resistor7.n.v}\left( t \right) + \mathtt{rc7.resistor7.p.v}\left( t \right) \\
+0 = \mathtt{rc7.resistor7.p.i}\left( t \right) + \mathtt{rc7.resistor7.n.i}\left( t \right) \\
+\mathtt{rc7.capacitor7.v}\left( t \right) =  - \mathtt{rc7.capacitor7.n.v}\left( t \right) + \mathtt{rc7.capacitor7.p.v}\left( t \right) \\
+0 = \mathtt{rc7.capacitor7.p.i}\left( t \right) + \mathtt{rc7.capacitor7.n.i}\left( t \right) \\
+\frac{\mathrm{d} \mathtt{rc7.capacitor7.v}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc7.capacitor7.p.i}\left( t \right)}{\mathtt{rc7.capacitor7.C}} \\
+\mathtt{rc7.source.V} =  - \mathtt{rc7.source.n.v}\left( t \right) + \mathtt{rc7.source.p.v}\left( t \right) \\
+0 = \mathtt{rc7.source.p.i}\left( t \right) + \mathtt{rc7.source.n.i}\left( t \right) \\
+\mathtt{rc7.ground.g.v}\left( t \right) = 0 \\
+\frac{\mathrm{d} \mathtt{rc7.heat\_capacitor7.h.T}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc7.heat\_capacitor7.h.Q\_flow}\left( t \right)}{\mathtt{rc7.heat\_capacitor7.V} \mathtt{rc7.heat\_capacitor7.cp} \mathtt{rc7.heat\_capacitor7.rho}} \\
+\mathrm{connect}\left( source_{+}p, resistor8_{+}p \right) \\
+\mathrm{connect}\left( resistor8_{+}n, capacitor8_{+}p \right) \\
+\mathrm{connect}\left( capacitor8_{+}n, source_{+}n, ground_{+}g \right) \\
+\mathrm{connect}\left( resistor8_{+}h, heat_{capacitor8_{+}h} \right) \\
+\mathtt{rc8.resistor8.RTherm}\left( t \right) = \mathtt{rc8.resistor8.R} \left( 1 + \left(  - \mathtt{rc8.resistor8.TAmbient} + \mathtt{rc8.resistor8.h.T}\left( t \right) \right) \mathtt{rc8.resistor8.alpha} \right) \\
+\mathtt{rc8.resistor8.v}\left( t \right) = \mathtt{rc8.resistor8.RTherm}\left( t \right) \mathtt{rc8.resistor8.p.i}\left( t \right) \\
+\mathtt{rc8.resistor8.h.Q\_flow}\left( t \right) =  - \mathtt{rc8.resistor8.v}\left( t \right) \mathtt{rc8.resistor8.p.i}\left( t \right) \\
+\mathtt{rc8.resistor8.v}\left( t \right) = \mathtt{rc8.resistor8.p.v}\left( t \right) - \mathtt{rc8.resistor8.n.v}\left( t \right) \\
+0 = \mathtt{rc8.resistor8.n.i}\left( t \right) + \mathtt{rc8.resistor8.p.i}\left( t \right) \\
+\mathtt{rc8.capacitor8.v}\left( t \right) =  - \mathtt{rc8.capacitor8.n.v}\left( t \right) + \mathtt{rc8.capacitor8.p.v}\left( t \right) \\
+0 = \mathtt{rc8.capacitor8.n.i}\left( t \right) + \mathtt{rc8.capacitor8.p.i}\left( t \right) \\
+\frac{\mathrm{d} \mathtt{rc8.capacitor8.v}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc8.capacitor8.p.i}\left( t \right)}{\mathtt{rc8.capacitor8.C}} \\
+\mathtt{rc8.source.V} = \mathtt{rc8.source.p.v}\left( t \right) - \mathtt{rc8.source.n.v}\left( t \right) \\
+0 = \mathtt{rc8.source.n.i}\left( t \right) + \mathtt{rc8.source.p.i}\left( t \right) \\
+\mathtt{rc8.ground.g.v}\left( t \right) = 0 \\
+\frac{\mathrm{d} \mathtt{rc8.heat\_capacitor8.h.T}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc8.heat\_capacitor8.h.Q\_flow}\left( t \right)}{\mathtt{rc8.heat\_capacitor8.V} \mathtt{rc8.heat\_capacitor8.cp} \mathtt{rc8.heat\_capacitor8.rho}} \\
+\mathrm{connect}\left( source_{+}p, resistor9_{+}p \right) \\
+\mathrm{connect}\left( resistor9_{+}n, capacitor9_{+}p \right) \\
+\mathrm{connect}\left( capacitor9_{+}n, source_{+}n, ground_{+}g \right) \\
+\mathrm{connect}\left( resistor9_{+}h, heat_{capacitor9_{+}h} \right) \\
+\mathtt{rc9.resistor9.RTherm}\left( t \right) = \mathtt{rc9.resistor9.R} \left( 1 + \left(  - \mathtt{rc9.resistor9.TAmbient} + \mathtt{rc9.resistor9.h.T}\left( t \right) \right) \mathtt{rc9.resistor9.alpha} \right) \\
+\mathtt{rc9.resistor9.v}\left( t \right) = \mathtt{rc9.resistor9.RTherm}\left( t \right) \mathtt{rc9.resistor9.p.i}\left( t \right) \\
+\mathtt{rc9.resistor9.h.Q\_flow}\left( t \right) =  - \mathtt{rc9.resistor9.v}\left( t \right) \mathtt{rc9.resistor9.p.i}\left( t \right) \\
+\mathtt{rc9.resistor9.v}\left( t \right) = \mathtt{rc9.resistor9.p.v}\left( t \right) - \mathtt{rc9.resistor9.n.v}\left( t \right) \\
+0 = \mathtt{rc9.resistor9.p.i}\left( t \right) + \mathtt{rc9.resistor9.n.i}\left( t \right) \\
+\mathtt{rc9.capacitor9.v}\left( t \right) = \mathtt{rc9.capacitor9.p.v}\left( t \right) - \mathtt{rc9.capacitor9.n.v}\left( t \right) \\
+0 = \mathtt{rc9.capacitor9.n.i}\left( t \right) + \mathtt{rc9.capacitor9.p.i}\left( t \right) \\
+\frac{\mathrm{d} \mathtt{rc9.capacitor9.v}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc9.capacitor9.p.i}\left( t \right)}{\mathtt{rc9.capacitor9.C}} \\
+\mathtt{rc9.source.V} = \mathtt{rc9.source.p.v}\left( t \right) - \mathtt{rc9.source.n.v}\left( t \right) \\
+0 = \mathtt{rc9.source.n.i}\left( t \right) + \mathtt{rc9.source.p.i}\left( t \right) \\
+\mathtt{rc9.ground.g.v}\left( t \right) = 0 \\
+\frac{\mathrm{d} \mathtt{rc9.heat\_capacitor9.h.T}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc9.heat\_capacitor9.h.Q\_flow}\left( t \right)}{\mathtt{rc9.heat\_capacitor9.V} \mathtt{rc9.heat\_capacitor9.cp} \mathtt{rc9.heat\_capacitor9.rho}} \\
+\mathrm{connect}\left( source_{+}p, resistor10_{+}p \right) \\
+\mathrm{connect}\left( resistor10_{+}n, capacitor10_{+}p \right) \\
+\mathrm{connect}\left( capacitor10_{+}n, source_{+}n, ground_{+}g \right) \\
+\mathrm{connect}\left( resistor10_{+}h, heat_{capacitor10_{+}h} \right) \\
+\mathtt{rc10.resistor10.RTherm}\left( t \right) = \mathtt{rc10.resistor10.R} \left( 1 + \left(  - \mathtt{rc10.resistor10.TAmbient} + \mathtt{rc10.resistor10.h.T}\left( t \right) \right) \mathtt{rc10.resistor10.alpha} \right) \\
+\mathtt{rc10.resistor10.v}\left( t \right) = \mathtt{rc10.resistor10.RTherm}\left( t \right) \mathtt{rc10.resistor10.p.i}\left( t \right) \\
+\mathtt{rc10.resistor10.h.Q\_flow}\left( t \right) =  - \mathtt{rc10.resistor10.p.i}\left( t \right) \mathtt{rc10.resistor10.v}\left( t \right) \\
+\mathtt{rc10.resistor10.v}\left( t \right) =  - \mathtt{rc10.resistor10.n.v}\left( t \right) + \mathtt{rc10.resistor10.p.v}\left( t \right) \\
+0 = \mathtt{rc10.resistor10.n.i}\left( t \right) + \mathtt{rc10.resistor10.p.i}\left( t \right) \\
+\mathtt{rc10.capacitor10.v}\left( t \right) =  - \mathtt{rc10.capacitor10.n.v}\left( t \right) + \mathtt{rc10.capacitor10.p.v}\left( t \right) \\
+0 = \mathtt{rc10.capacitor10.n.i}\left( t \right) + \mathtt{rc10.capacitor10.p.i}\left( t \right) \\
+\frac{\mathrm{d} \mathtt{rc10.capacitor10.v}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc10.capacitor10.p.i}\left( t \right)}{\mathtt{rc10.capacitor10.C}} \\
+\mathtt{rc10.source.V} =  - \mathtt{rc10.source.n.v}\left( t \right) + \mathtt{rc10.source.p.v}\left( t \right) \\
+0 = \mathtt{rc10.source.n.i}\left( t \right) + \mathtt{rc10.source.p.i}\left( t \right) \\
+\mathtt{rc10.ground.g.v}\left( t \right) = 0 \\
+\frac{\mathrm{d} \mathtt{rc10.heat\_capacitor10.h.T}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc10.heat\_capacitor10.h.Q\_flow}\left( t \right)}{\mathtt{rc10.heat\_capacitor10.V} \mathtt{rc10.heat\_capacitor10.cp} \mathtt{rc10.heat\_capacitor10.rho}} \\
+\mathrm{connect}\left( source_{+}p, resistor11_{+}p \right) \\
+\mathrm{connect}\left( resistor11_{+}n, capacitor11_{+}p \right) \\
+\mathrm{connect}\left( capacitor11_{+}n, source_{+}n, ground_{+}g \right) \\
+\mathrm{connect}\left( resistor11_{+}h, heat_{capacitor11_{+}h} \right) \\
+\mathtt{rc11.resistor11.RTherm}\left( t \right) = \mathtt{rc11.resistor11.R} \left( 1 + \left(  - \mathtt{rc11.resistor11.TAmbient} + \mathtt{rc11.resistor11.h.T}\left( t \right) \right) \mathtt{rc11.resistor11.alpha} \right) \\
+\mathtt{rc11.resistor11.v}\left( t \right) = \mathtt{rc11.resistor11.p.i}\left( t \right) \mathtt{rc11.resistor11.RTherm}\left( t \right) \\
+\mathtt{rc11.resistor11.h.Q\_flow}\left( t \right) =  - \mathtt{rc11.resistor11.v}\left( t \right) \mathtt{rc11.resistor11.p.i}\left( t \right) \\
+\mathtt{rc11.resistor11.v}\left( t \right) =  - \mathtt{rc11.resistor11.n.v}\left( t \right) + \mathtt{rc11.resistor11.p.v}\left( t \right) \\
+0 = \mathtt{rc11.resistor11.p.i}\left( t \right) + \mathtt{rc11.resistor11.n.i}\left( t \right) \\
+\mathtt{rc11.capacitor11.v}\left( t \right) =  - \mathtt{rc11.capacitor11.n.v}\left( t \right) + \mathtt{rc11.capacitor11.p.v}\left( t \right) \\
+0 = \mathtt{rc11.capacitor11.n.i}\left( t \right) + \mathtt{rc11.capacitor11.p.i}\left( t \right) \\
+\frac{\mathrm{d} \mathtt{rc11.capacitor11.v}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc11.capacitor11.p.i}\left( t \right)}{\mathtt{rc11.capacitor11.C}} \\
+\mathtt{rc11.source.V} =  - \mathtt{rc11.source.n.v}\left( t \right) + \mathtt{rc11.source.p.v}\left( t \right) \\
+0 = \mathtt{rc11.source.p.i}\left( t \right) + \mathtt{rc11.source.n.i}\left( t \right) \\
+\mathtt{rc11.ground.g.v}\left( t \right) = 0 \\
+\frac{\mathrm{d} \mathtt{rc11.heat\_capacitor11.h.T}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc11.heat\_capacitor11.h.Q\_flow}\left( t \right)}{\mathtt{rc11.heat\_capacitor11.V} \mathtt{rc11.heat\_capacitor11.cp} \mathtt{rc11.heat\_capacitor11.rho}} \\
+\mathrm{connect}\left( source_{+}p, resistor12_{+}p \right) \\
+\mathrm{connect}\left( resistor12_{+}n, capacitor12_{+}p \right) \\
+\mathrm{connect}\left( capacitor12_{+}n, source_{+}n, ground_{+}g \right) \\
+\mathrm{connect}\left( resistor12_{+}h, heat_{capacitor12_{+}h} \right) \\
+\mathtt{rc12.resistor12.RTherm}\left( t \right) = \mathtt{rc12.resistor12.R} \left( 1 + \left(  - \mathtt{rc12.resistor12.TAmbient} + \mathtt{rc12.resistor12.h.T}\left( t \right) \right) \mathtt{rc12.resistor12.alpha} \right) \\
+\mathtt{rc12.resistor12.v}\left( t \right) = \mathtt{rc12.resistor12.p.i}\left( t \right) \mathtt{rc12.resistor12.RTherm}\left( t \right) \\
+\mathtt{rc12.resistor12.h.Q\_flow}\left( t \right) =  - \mathtt{rc12.resistor12.p.i}\left( t \right) \mathtt{rc12.resistor12.v}\left( t \right) \\
+\mathtt{rc12.resistor12.v}\left( t \right) =  - \mathtt{rc12.resistor12.n.v}\left( t \right) + \mathtt{rc12.resistor12.p.v}\left( t \right) \\
+0 = \mathtt{rc12.resistor12.n.i}\left( t \right) + \mathtt{rc12.resistor12.p.i}\left( t \right) \\
+\mathtt{rc12.capacitor12.v}\left( t \right) =  - \mathtt{rc12.capacitor12.n.v}\left( t \right) + \mathtt{rc12.capacitor12.p.v}\left( t \right) \\
+0 = \mathtt{rc12.capacitor12.n.i}\left( t \right) + \mathtt{rc12.capacitor12.p.i}\left( t \right) \\
+\frac{\mathrm{d} \mathtt{rc12.capacitor12.v}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc12.capacitor12.p.i}\left( t \right)}{\mathtt{rc12.capacitor12.C}} \\
+\mathtt{rc12.source.V} = \mathtt{rc12.source.p.v}\left( t \right) - \mathtt{rc12.source.n.v}\left( t \right) \\
+0 = \mathtt{rc12.source.p.i}\left( t \right) + \mathtt{rc12.source.n.i}\left( t \right) \\
+\mathtt{rc12.ground.g.v}\left( t \right) = 0 \\
+\frac{\mathrm{d} \mathtt{rc12.heat\_capacitor12.h.T}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc12.heat\_capacitor12.h.Q\_flow}\left( t \right)}{\mathtt{rc12.heat\_capacitor12.V} \mathtt{rc12.heat\_capacitor12.cp} \mathtt{rc12.heat\_capacitor12.rho}} \\
+\mathrm{connect}\left( source_{+}p, resistor13_{+}p \right) \\
+\mathrm{connect}\left( resistor13_{+}n, capacitor13_{+}p \right) \\
+\mathrm{connect}\left( capacitor13_{+}n, source_{+}n, ground_{+}g \right) \\
+\mathrm{connect}\left( resistor13_{+}h, heat_{capacitor13_{+}h} \right) \\
+\mathtt{rc13.resistor13.RTherm}\left( t \right) = \mathtt{rc13.resistor13.R} \left( 1 + \left(  - \mathtt{rc13.resistor13.TAmbient} + \mathtt{rc13.resistor13.h.T}\left( t \right) \right) \mathtt{rc13.resistor13.alpha} \right) \\
+\mathtt{rc13.resistor13.v}\left( t \right) = \mathtt{rc13.resistor13.RTherm}\left( t \right) \mathtt{rc13.resistor13.p.i}\left( t \right) \\
+\mathtt{rc13.resistor13.h.Q\_flow}\left( t \right) =  - \mathtt{rc13.resistor13.v}\left( t \right) \mathtt{rc13.resistor13.p.i}\left( t \right) \\
+\mathtt{rc13.resistor13.v}\left( t \right) = \mathtt{rc13.resistor13.p.v}\left( t \right) - \mathtt{rc13.resistor13.n.v}\left( t \right) \\
+0 = \mathtt{rc13.resistor13.p.i}\left( t \right) + \mathtt{rc13.resistor13.n.i}\left( t \right) \\
+\mathtt{rc13.capacitor13.v}\left( t \right) =  - \mathtt{rc13.capacitor13.n.v}\left( t \right) + \mathtt{rc13.capacitor13.p.v}\left( t \right) \\
+0 = \mathtt{rc13.capacitor13.p.i}\left( t \right) + \mathtt{rc13.capacitor13.n.i}\left( t \right) \\
+\frac{\mathrm{d} \mathtt{rc13.capacitor13.v}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc13.capacitor13.p.i}\left( t \right)}{\mathtt{rc13.capacitor13.C}} \\
+\mathtt{rc13.source.V} =  - \mathtt{rc13.source.n.v}\left( t \right) + \mathtt{rc13.source.p.v}\left( t \right) \\
+0 = \mathtt{rc13.source.p.i}\left( t \right) + \mathtt{rc13.source.n.i}\left( t \right) \\
+\mathtt{rc13.ground.g.v}\left( t \right) = 0 \\
+\frac{\mathrm{d} \mathtt{rc13.heat\_capacitor13.h.T}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc13.heat\_capacitor13.h.Q\_flow}\left( t \right)}{\mathtt{rc13.heat\_capacitor13.V} \mathtt{rc13.heat\_capacitor13.cp} \mathtt{rc13.heat\_capacitor13.rho}} \\
+\mathrm{connect}\left( source_{+}p, resistor14_{+}p \right) \\
+\mathrm{connect}\left( resistor14_{+}n, capacitor14_{+}p \right) \\
+\mathrm{connect}\left( capacitor14_{+}n, source_{+}n, ground_{+}g \right) \\
+\mathrm{connect}\left( resistor14_{+}h, heat_{capacitor14_{+}h} \right) \\
+\mathtt{rc14.resistor14.RTherm}\left( t \right) = \mathtt{rc14.resistor14.R} \left( 1 + \left(  - \mathtt{rc14.resistor14.TAmbient} + \mathtt{rc14.resistor14.h.T}\left( t \right) \right) \mathtt{rc14.resistor14.alpha} \right) \\
+\mathtt{rc14.resistor14.v}\left( t \right) = \mathtt{rc14.resistor14.RTherm}\left( t \right) \mathtt{rc14.resistor14.p.i}\left( t \right) \\
+\mathtt{rc14.resistor14.h.Q\_flow}\left( t \right) =  - \mathtt{rc14.resistor14.v}\left( t \right) \mathtt{rc14.resistor14.p.i}\left( t \right) \\
+\mathtt{rc14.resistor14.v}\left( t \right) = \mathtt{rc14.resistor14.p.v}\left( t \right) - \mathtt{rc14.resistor14.n.v}\left( t \right) \\
+0 = \mathtt{rc14.resistor14.n.i}\left( t \right) + \mathtt{rc14.resistor14.p.i}\left( t \right) \\
+\mathtt{rc14.capacitor14.v}\left( t \right) =  - \mathtt{rc14.capacitor14.n.v}\left( t \right) + \mathtt{rc14.capacitor14.p.v}\left( t \right) \\
+0 = \mathtt{rc14.capacitor14.p.i}\left( t \right) + \mathtt{rc14.capacitor14.n.i}\left( t \right) \\
+\frac{\mathrm{d} \mathtt{rc14.capacitor14.v}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc14.capacitor14.p.i}\left( t \right)}{\mathtt{rc14.capacitor14.C}} \\
+\mathtt{rc14.source.V} = \mathtt{rc14.source.p.v}\left( t \right) - \mathtt{rc14.source.n.v}\left( t \right) \\
+0 = \mathtt{rc14.source.n.i}\left( t \right) + \mathtt{rc14.source.p.i}\left( t \right) \\
+\mathtt{rc14.ground.g.v}\left( t \right) = 0 \\
+\frac{\mathrm{d} \mathtt{rc14.heat\_capacitor14.h.T}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc14.heat\_capacitor14.h.Q\_flow}\left( t \right)}{\mathtt{rc14.heat\_capacitor14.V} \mathtt{rc14.heat\_capacitor14.cp} \mathtt{rc14.heat\_capacitor14.rho}} \\
+\mathrm{connect}\left( source_{+}p, resistor15_{+}p \right) \\
+\mathrm{connect}\left( resistor15_{+}n, capacitor15_{+}p \right) \\
+\mathrm{connect}\left( capacitor15_{+}n, source_{+}n, ground_{+}g \right) \\
+\mathrm{connect}\left( resistor15_{+}h, heat_{capacitor15_{+}h} \right) \\
+\mathtt{rc15.resistor15.RTherm}\left( t \right) = \mathtt{rc15.resistor15.R} \left( 1 + \left(  - \mathtt{rc15.resistor15.TAmbient} + \mathtt{rc15.resistor15.h.T}\left( t \right) \right) \mathtt{rc15.resistor15.alpha} \right) \\
+\mathtt{rc15.resistor15.v}\left( t \right) = \mathtt{rc15.resistor15.RTherm}\left( t \right) \mathtt{rc15.resistor15.p.i}\left( t \right) \\
+\mathtt{rc15.resistor15.h.Q\_flow}\left( t \right) =  - \mathtt{rc15.resistor15.v}\left( t \right) \mathtt{rc15.resistor15.p.i}\left( t \right) \\
+\mathtt{rc15.resistor15.v}\left( t \right) = \mathtt{rc15.resistor15.p.v}\left( t \right) - \mathtt{rc15.resistor15.n.v}\left( t \right) \\
+0 = \mathtt{rc15.resistor15.n.i}\left( t \right) + \mathtt{rc15.resistor15.p.i}\left( t \right) \\
+\mathtt{rc15.capacitor15.v}\left( t \right) =  - \mathtt{rc15.capacitor15.n.v}\left( t \right) + \mathtt{rc15.capacitor15.p.v}\left( t \right) \\
+0 = \mathtt{rc15.capacitor15.p.i}\left( t \right) + \mathtt{rc15.capacitor15.n.i}\left( t \right) \\
+\frac{\mathrm{d} \mathtt{rc15.capacitor15.v}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc15.capacitor15.p.i}\left( t \right)}{\mathtt{rc15.capacitor15.C}} \\
+\mathtt{rc15.source.V} = \mathtt{rc15.source.p.v}\left( t \right) - \mathtt{rc15.source.n.v}\left( t \right) \\
+0 = \mathtt{rc15.source.p.i}\left( t \right) + \mathtt{rc15.source.n.i}\left( t \right) \\
+\mathtt{rc15.ground.g.v}\left( t \right) = 0 \\
+\frac{\mathrm{d} \mathtt{rc15.heat\_capacitor15.h.T}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc15.heat\_capacitor15.h.Q\_flow}\left( t \right)}{\mathtt{rc15.heat\_capacitor15.V} \mathtt{rc15.heat\_capacitor15.cp} \mathtt{rc15.heat\_capacitor15.rho}} \\
+\mathrm{connect}\left( source_{+}p, resistor16_{+}p \right) \\
+\mathrm{connect}\left( resistor16_{+}n, capacitor16_{+}p \right) \\
+\mathrm{connect}\left( capacitor16_{+}n, source_{+}n, ground_{+}g \right) \\
+\mathrm{connect}\left( resistor16_{+}h, heat_{capacitor16_{+}h} \right) \\
+\mathtt{rc16.resistor16.RTherm}\left( t \right) = \mathtt{rc16.resistor16.R} \left( 1 + \left(  - \mathtt{rc16.resistor16.TAmbient} + \mathtt{rc16.resistor16.h.T}\left( t \right) \right) \mathtt{rc16.resistor16.alpha} \right) \\
+\mathtt{rc16.resistor16.v}\left( t \right) = \mathtt{rc16.resistor16.p.i}\left( t \right) \mathtt{rc16.resistor16.RTherm}\left( t \right) \\
+\mathtt{rc16.resistor16.h.Q\_flow}\left( t \right) =  - \mathtt{rc16.resistor16.p.i}\left( t \right) \mathtt{rc16.resistor16.v}\left( t \right) \\
+\mathtt{rc16.resistor16.v}\left( t \right) = \mathtt{rc16.resistor16.p.v}\left( t \right) - \mathtt{rc16.resistor16.n.v}\left( t \right) \\
+0 = \mathtt{rc16.resistor16.p.i}\left( t \right) + \mathtt{rc16.resistor16.n.i}\left( t \right) \\
+\mathtt{rc16.capacitor16.v}\left( t \right) =  - \mathtt{rc16.capacitor16.n.v}\left( t \right) + \mathtt{rc16.capacitor16.p.v}\left( t \right) \\
+0 = \mathtt{rc16.capacitor16.n.i}\left( t \right) + \mathtt{rc16.capacitor16.p.i}\left( t \right) \\
+\frac{\mathrm{d} \mathtt{rc16.capacitor16.v}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc16.capacitor16.p.i}\left( t \right)}{\mathtt{rc16.capacitor16.C}} \\
+\mathtt{rc16.source.V} =  - \mathtt{rc16.source.n.v}\left( t \right) + \mathtt{rc16.source.p.v}\left( t \right) \\
+0 = \mathtt{rc16.source.p.i}\left( t \right) + \mathtt{rc16.source.n.i}\left( t \right) \\
+\mathtt{rc16.ground.g.v}\left( t \right) = 0 \\
+\frac{\mathrm{d} \mathtt{rc16.heat\_capacitor16.h.T}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc16.heat\_capacitor16.h.Q\_flow}\left( t \right)}{\mathtt{rc16.heat\_capacitor16.V} \mathtt{rc16.heat\_capacitor16.cp} \mathtt{rc16.heat\_capacitor16.rho}} \\
+\mathrm{connect}\left( source_{+}p, resistor17_{+}p \right) \\
+\mathrm{connect}\left( resistor17_{+}n, capacitor17_{+}p \right) \\
+\mathrm{connect}\left( capacitor17_{+}n, source_{+}n, ground_{+}g \right) \\
+\mathrm{connect}\left( resistor17_{+}h, heat_{capacitor17_{+}h} \right) \\
+\mathtt{rc17.resistor17.RTherm}\left( t \right) = \mathtt{rc17.resistor17.R} \left( 1 + \left(  - \mathtt{rc17.resistor17.TAmbient} + \mathtt{rc17.resistor17.h.T}\left( t \right) \right) \mathtt{rc17.resistor17.alpha} \right) \\
+\mathtt{rc17.resistor17.v}\left( t \right) = \mathtt{rc17.resistor17.RTherm}\left( t \right) \mathtt{rc17.resistor17.p.i}\left( t \right) \\
+\mathtt{rc17.resistor17.h.Q\_flow}\left( t \right) =  - \mathtt{rc17.resistor17.p.i}\left( t \right) \mathtt{rc17.resistor17.v}\left( t \right) \\
+\mathtt{rc17.resistor17.v}\left( t \right) = \mathtt{rc17.resistor17.p.v}\left( t \right) - \mathtt{rc17.resistor17.n.v}\left( t \right) \\
+0 = \mathtt{rc17.resistor17.p.i}\left( t \right) + \mathtt{rc17.resistor17.n.i}\left( t \right) \\
+\mathtt{rc17.capacitor17.v}\left( t \right) = \mathtt{rc17.capacitor17.p.v}\left( t \right) - \mathtt{rc17.capacitor17.n.v}\left( t \right) \\
+0 = \mathtt{rc17.capacitor17.n.i}\left( t \right) + \mathtt{rc17.capacitor17.p.i}\left( t \right) \\
+\frac{\mathrm{d} \mathtt{rc17.capacitor17.v}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc17.capacitor17.p.i}\left( t \right)}{\mathtt{rc17.capacitor17.C}} \\
+\mathtt{rc17.source.V} = \mathtt{rc17.source.p.v}\left( t \right) - \mathtt{rc17.source.n.v}\left( t \right) \\
+0 = \mathtt{rc17.source.n.i}\left( t \right) + \mathtt{rc17.source.p.i}\left( t \right) \\
+\mathtt{rc17.ground.g.v}\left( t \right) = 0 \\
+\frac{\mathrm{d} \mathtt{rc17.heat\_capacitor17.h.T}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc17.heat\_capacitor17.h.Q\_flow}\left( t \right)}{\mathtt{rc17.heat\_capacitor17.V} \mathtt{rc17.heat\_capacitor17.cp} \mathtt{rc17.heat\_capacitor17.rho}} \\
+\mathrm{connect}\left( source_{+}p, resistor18_{+}p \right) \\
+\mathrm{connect}\left( resistor18_{+}n, capacitor18_{+}p \right) \\
+\mathrm{connect}\left( capacitor18_{+}n, source_{+}n, ground_{+}g \right) \\
+\mathrm{connect}\left( resistor18_{+}h, heat_{capacitor18_{+}h} \right) \\
+\mathtt{rc18.resistor18.RTherm}\left( t \right) = \mathtt{rc18.resistor18.R} \left( 1 + \left(  - \mathtt{rc18.resistor18.TAmbient} + \mathtt{rc18.resistor18.h.T}\left( t \right) \right) \mathtt{rc18.resistor18.alpha} \right) \\
+\mathtt{rc18.resistor18.v}\left( t \right) = \mathtt{rc18.resistor18.p.i}\left( t \right) \mathtt{rc18.resistor18.RTherm}\left( t \right) \\
+\mathtt{rc18.resistor18.h.Q\_flow}\left( t \right) =  - \mathtt{rc18.resistor18.v}\left( t \right) \mathtt{rc18.resistor18.p.i}\left( t \right) \\
+\mathtt{rc18.resistor18.v}\left( t \right) =  - \mathtt{rc18.resistor18.n.v}\left( t \right) + \mathtt{rc18.resistor18.p.v}\left( t \right) \\
+0 = \mathtt{rc18.resistor18.n.i}\left( t \right) + \mathtt{rc18.resistor18.p.i}\left( t \right) \\
+\mathtt{rc18.capacitor18.v}\left( t \right) = \mathtt{rc18.capacitor18.p.v}\left( t \right) - \mathtt{rc18.capacitor18.n.v}\left( t \right) \\
+0 = \mathtt{rc18.capacitor18.n.i}\left( t \right) + \mathtt{rc18.capacitor18.p.i}\left( t \right) \\
+\frac{\mathrm{d} \mathtt{rc18.capacitor18.v}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc18.capacitor18.p.i}\left( t \right)}{\mathtt{rc18.capacitor18.C}} \\
+\mathtt{rc18.source.V} =  - \mathtt{rc18.source.n.v}\left( t \right) + \mathtt{rc18.source.p.v}\left( t \right) \\
+0 = \mathtt{rc18.source.n.i}\left( t \right) + \mathtt{rc18.source.p.i}\left( t \right) \\
+\mathtt{rc18.ground.g.v}\left( t \right) = 0 \\
+\frac{\mathrm{d} \mathtt{rc18.heat\_capacitor18.h.T}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc18.heat\_capacitor18.h.Q\_flow}\left( t \right)}{\mathtt{rc18.heat\_capacitor18.V} \mathtt{rc18.heat\_capacitor18.cp} \mathtt{rc18.heat\_capacitor18.rho}} \\
+\mathrm{connect}\left( source_{+}p, resistor19_{+}p \right) \\
+\mathrm{connect}\left( resistor19_{+}n, capacitor19_{+}p \right) \\
+\mathrm{connect}\left( capacitor19_{+}n, source_{+}n, ground_{+}g \right) \\
+\mathrm{connect}\left( resistor19_{+}h, heat_{capacitor19_{+}h} \right) \\
+\mathtt{rc19.resistor19.RTherm}\left( t \right) = \mathtt{rc19.resistor19.R} \left( 1 + \left(  - \mathtt{rc19.resistor19.TAmbient} + \mathtt{rc19.resistor19.h.T}\left( t \right) \right) \mathtt{rc19.resistor19.alpha} \right) \\
+\mathtt{rc19.resistor19.v}\left( t \right) = \mathtt{rc19.resistor19.RTherm}\left( t \right) \mathtt{rc19.resistor19.p.i}\left( t \right) \\
+\mathtt{rc19.resistor19.h.Q\_flow}\left( t \right) =  - \mathtt{rc19.resistor19.p.i}\left( t \right) \mathtt{rc19.resistor19.v}\left( t \right) \\
+\mathtt{rc19.resistor19.v}\left( t \right) =  - \mathtt{rc19.resistor19.n.v}\left( t \right) + \mathtt{rc19.resistor19.p.v}\left( t \right) \\
+0 = \mathtt{rc19.resistor19.n.i}\left( t \right) + \mathtt{rc19.resistor19.p.i}\left( t \right) \\
+\mathtt{rc19.capacitor19.v}\left( t \right) =  - \mathtt{rc19.capacitor19.n.v}\left( t \right) + \mathtt{rc19.capacitor19.p.v}\left( t \right) \\
+0 = \mathtt{rc19.capacitor19.n.i}\left( t \right) + \mathtt{rc19.capacitor19.p.i}\left( t \right) \\
+\frac{\mathrm{d} \mathtt{rc19.capacitor19.v}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc19.capacitor19.p.i}\left( t \right)}{\mathtt{rc19.capacitor19.C}} \\
+\mathtt{rc19.source.V} =  - \mathtt{rc19.source.n.v}\left( t \right) + \mathtt{rc19.source.p.v}\left( t \right) \\
+0 = \mathtt{rc19.source.p.i}\left( t \right) + \mathtt{rc19.source.n.i}\left( t \right) \\
+\mathtt{rc19.ground.g.v}\left( t \right) = 0 \\
+\frac{\mathrm{d} \mathtt{rc19.heat\_capacitor19.h.T}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc19.heat\_capacitor19.h.Q\_flow}\left( t \right)}{\mathtt{rc19.heat\_capacitor19.V} \mathtt{rc19.heat\_capacitor19.cp} \mathtt{rc19.heat\_capacitor19.rho}} \\
+\mathrm{connect}\left( source_{+}p, resistor20_{+}p \right) \\
+\mathrm{connect}\left( resistor20_{+}n, capacitor20_{+}p \right) \\
+\mathrm{connect}\left( capacitor20_{+}n, source_{+}n, ground_{+}g \right) \\
+\mathrm{connect}\left( resistor20_{+}h, heat_{capacitor20_{+}h} \right) \\
+\mathtt{rc20.resistor20.RTherm}\left( t \right) = \mathtt{rc20.resistor20.R} \left( 1 + \left(  - \mathtt{rc20.resistor20.TAmbient} + \mathtt{rc20.resistor20.h.T}\left( t \right) \right) \mathtt{rc20.resistor20.alpha} \right) \\
+\mathtt{rc20.resistor20.v}\left( t \right) = \mathtt{rc20.resistor20.RTherm}\left( t \right) \mathtt{rc20.resistor20.p.i}\left( t \right) \\
+\mathtt{rc20.resistor20.h.Q\_flow}\left( t \right) =  - \mathtt{rc20.resistor20.v}\left( t \right) \mathtt{rc20.resistor20.p.i}\left( t \right) \\
+\mathtt{rc20.resistor20.v}\left( t \right) = \mathtt{rc20.resistor20.p.v}\left( t \right) - \mathtt{rc20.resistor20.n.v}\left( t \right) \\
+0 = \mathtt{rc20.resistor20.p.i}\left( t \right) + \mathtt{rc20.resistor20.n.i}\left( t \right) \\
+\mathtt{rc20.capacitor20.v}\left( t \right) = \mathtt{rc20.capacitor20.p.v}\left( t \right) - \mathtt{rc20.capacitor20.n.v}\left( t \right) \\
+0 = \mathtt{rc20.capacitor20.n.i}\left( t \right) + \mathtt{rc20.capacitor20.p.i}\left( t \right) \\
+\frac{\mathrm{d} \mathtt{rc20.capacitor20.v}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc20.capacitor20.p.i}\left( t \right)}{\mathtt{rc20.capacitor20.C}} \\
+\mathtt{rc20.source.V} = \mathtt{rc20.source.p.v}\left( t \right) - \mathtt{rc20.source.n.v}\left( t \right) \\
+0 = \mathtt{rc20.source.p.i}\left( t \right) + \mathtt{rc20.source.n.i}\left( t \right) \\
+\mathtt{rc20.ground.g.v}\left( t \right) = 0 \\
+\frac{\mathrm{d} \mathtt{rc20.heat\_capacitor20.h.T}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc20.heat\_capacitor20.h.Q\_flow}\left( t \right)}{\mathtt{rc20.heat\_capacitor20.V} \mathtt{rc20.heat\_capacitor20.cp} \mathtt{rc20.heat\_capacitor20.rho}} \\
+\mathrm{connect}\left( source_{+}p, resistor21_{+}p \right) \\
+\mathrm{connect}\left( resistor21_{+}n, capacitor21_{+}p \right) \\
+\mathrm{connect}\left( capacitor21_{+}n, source_{+}n, ground_{+}g \right) \\
+\mathrm{connect}\left( resistor21_{+}h, heat_{capacitor21_{+}h} \right) \\
+\mathtt{rc21.resistor21.RTherm}\left( t \right) = \mathtt{rc21.resistor21.R} \left( 1 + \left(  - \mathtt{rc21.resistor21.TAmbient} + \mathtt{rc21.resistor21.h.T}\left( t \right) \right) \mathtt{rc21.resistor21.alpha} \right) \\
+\mathtt{rc21.resistor21.v}\left( t \right) = \mathtt{rc21.resistor21.p.i}\left( t \right) \mathtt{rc21.resistor21.RTherm}\left( t \right) \\
+\mathtt{rc21.resistor21.h.Q\_flow}\left( t \right) =  - \mathtt{rc21.resistor21.p.i}\left( t \right) \mathtt{rc21.resistor21.v}\left( t \right) \\
+\mathtt{rc21.resistor21.v}\left( t \right) = \mathtt{rc21.resistor21.p.v}\left( t \right) - \mathtt{rc21.resistor21.n.v}\left( t \right) \\
+0 = \mathtt{rc21.resistor21.p.i}\left( t \right) + \mathtt{rc21.resistor21.n.i}\left( t \right) \\
+\mathtt{rc21.capacitor21.v}\left( t \right) =  - \mathtt{rc21.capacitor21.n.v}\left( t \right) + \mathtt{rc21.capacitor21.p.v}\left( t \right) \\
+0 = \mathtt{rc21.capacitor21.p.i}\left( t \right) + \mathtt{rc21.capacitor21.n.i}\left( t \right) \\
+\frac{\mathrm{d} \mathtt{rc21.capacitor21.v}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc21.capacitor21.p.i}\left( t \right)}{\mathtt{rc21.capacitor21.C}} \\
+\mathtt{rc21.source.V} = \mathtt{rc21.source.p.v}\left( t \right) - \mathtt{rc21.source.n.v}\left( t \right) \\
+0 = \mathtt{rc21.source.n.i}\left( t \right) + \mathtt{rc21.source.p.i}\left( t \right) \\
+\mathtt{rc21.ground.g.v}\left( t \right) = 0 \\
+\frac{\mathrm{d} \mathtt{rc21.heat\_capacitor21.h.T}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc21.heat\_capacitor21.h.Q\_flow}\left( t \right)}{\mathtt{rc21.heat\_capacitor21.V} \mathtt{rc21.heat\_capacitor21.cp} \mathtt{rc21.heat\_capacitor21.rho}} \\
+\mathrm{connect}\left( source_{+}p, resistor22_{+}p \right) \\
+\mathrm{connect}\left( resistor22_{+}n, capacitor22_{+}p \right) \\
+\mathrm{connect}\left( capacitor22_{+}n, source_{+}n, ground_{+}g \right) \\
+\mathrm{connect}\left( resistor22_{+}h, heat_{capacitor22_{+}h} \right) \\
+\mathtt{rc22.resistor22.RTherm}\left( t \right) = \mathtt{rc22.resistor22.R} \left( 1 + \left(  - \mathtt{rc22.resistor22.TAmbient} + \mathtt{rc22.resistor22.h.T}\left( t \right) \right) \mathtt{rc22.resistor22.alpha} \right) \\
+\mathtt{rc22.resistor22.v}\left( t \right) = \mathtt{rc22.resistor22.p.i}\left( t \right) \mathtt{rc22.resistor22.RTherm}\left( t \right) \\
+\mathtt{rc22.resistor22.h.Q\_flow}\left( t \right) =  - \mathtt{rc22.resistor22.p.i}\left( t \right) \mathtt{rc22.resistor22.v}\left( t \right) \\
+\mathtt{rc22.resistor22.v}\left( t \right) =  - \mathtt{rc22.resistor22.n.v}\left( t \right) + \mathtt{rc22.resistor22.p.v}\left( t \right) \\
+0 = \mathtt{rc22.resistor22.p.i}\left( t \right) + \mathtt{rc22.resistor22.n.i}\left( t \right) \\
+\mathtt{rc22.capacitor22.v}\left( t \right) = \mathtt{rc22.capacitor22.p.v}\left( t \right) - \mathtt{rc22.capacitor22.n.v}\left( t \right) \\
+0 = \mathtt{rc22.capacitor22.n.i}\left( t \right) + \mathtt{rc22.capacitor22.p.i}\left( t \right) \\
+\frac{\mathrm{d} \mathtt{rc22.capacitor22.v}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc22.capacitor22.p.i}\left( t \right)}{\mathtt{rc22.capacitor22.C}} \\
+\mathtt{rc22.source.V} = \mathtt{rc22.source.p.v}\left( t \right) - \mathtt{rc22.source.n.v}\left( t \right) \\
+0 = \mathtt{rc22.source.p.i}\left( t \right) + \mathtt{rc22.source.n.i}\left( t \right) \\
+\mathtt{rc22.ground.g.v}\left( t \right) = 0 \\
+\frac{\mathrm{d} \mathtt{rc22.heat\_capacitor22.h.T}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc22.heat\_capacitor22.h.Q\_flow}\left( t \right)}{\mathtt{rc22.heat\_capacitor22.V} \mathtt{rc22.heat\_capacitor22.cp} \mathtt{rc22.heat\_capacitor22.rho}} \\
+\mathrm{connect}\left( source_{+}p, resistor23_{+}p \right) \\
+\mathrm{connect}\left( resistor23_{+}n, capacitor23_{+}p \right) \\
+\mathrm{connect}\left( capacitor23_{+}n, source_{+}n, ground_{+}g \right) \\
+\mathrm{connect}\left( resistor23_{+}h, heat_{capacitor23_{+}h} \right) \\
+\mathtt{rc23.resistor23.RTherm}\left( t \right) = \mathtt{rc23.resistor23.R} \left( 1 + \left(  - \mathtt{rc23.resistor23.TAmbient} + \mathtt{rc23.resistor23.h.T}\left( t \right) \right) \mathtt{rc23.resistor23.alpha} \right) \\
+\mathtt{rc23.resistor23.v}\left( t \right) = \mathtt{rc23.resistor23.p.i}\left( t \right) \mathtt{rc23.resistor23.RTherm}\left( t \right) \\
+\mathtt{rc23.resistor23.h.Q\_flow}\left( t \right) =  - \mathtt{rc23.resistor23.v}\left( t \right) \mathtt{rc23.resistor23.p.i}\left( t \right) \\
+\mathtt{rc23.resistor23.v}\left( t \right) =  - \mathtt{rc23.resistor23.n.v}\left( t \right) + \mathtt{rc23.resistor23.p.v}\left( t \right) \\
+0 = \mathtt{rc23.resistor23.p.i}\left( t \right) + \mathtt{rc23.resistor23.n.i}\left( t \right) \\
+\mathtt{rc23.capacitor23.v}\left( t \right) =  - \mathtt{rc23.capacitor23.n.v}\left( t \right) + \mathtt{rc23.capacitor23.p.v}\left( t \right) \\
+0 = \mathtt{rc23.capacitor23.n.i}\left( t \right) + \mathtt{rc23.capacitor23.p.i}\left( t \right) \\
+\frac{\mathrm{d} \mathtt{rc23.capacitor23.v}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc23.capacitor23.p.i}\left( t \right)}{\mathtt{rc23.capacitor23.C}} \\
+\mathtt{rc23.source.V} = \mathtt{rc23.source.p.v}\left( t \right) - \mathtt{rc23.source.n.v}\left( t \right) \\
+0 = \mathtt{rc23.source.n.i}\left( t \right) + \mathtt{rc23.source.p.i}\left( t \right) \\
+\mathtt{rc23.ground.g.v}\left( t \right) = 0 \\
+\frac{\mathrm{d} \mathtt{rc23.heat\_capacitor23.h.T}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc23.heat\_capacitor23.h.Q\_flow}\left( t \right)}{\mathtt{rc23.heat\_capacitor23.V} \mathtt{rc23.heat\_capacitor23.cp} \mathtt{rc23.heat\_capacitor23.rho}} \\
+\mathrm{connect}\left( source_{+}p, resistor24_{+}p \right) \\
+\mathrm{connect}\left( resistor24_{+}n, capacitor24_{+}p \right) \\
+\mathrm{connect}\left( capacitor24_{+}n, source_{+}n, ground_{+}g \right) \\
+\mathrm{connect}\left( resistor24_{+}h, heat_{capacitor24_{+}h} \right) \\
+\mathtt{rc24.resistor24.RTherm}\left( t \right) = \mathtt{rc24.resistor24.R} \left( 1 + \left(  - \mathtt{rc24.resistor24.TAmbient} + \mathtt{rc24.resistor24.h.T}\left( t \right) \right) \mathtt{rc24.resistor24.alpha} \right) \\
+\mathtt{rc24.resistor24.v}\left( t \right) = \mathtt{rc24.resistor24.p.i}\left( t \right) \mathtt{rc24.resistor24.RTherm}\left( t \right) \\
+\mathtt{rc24.resistor24.h.Q\_flow}\left( t \right) =  - \mathtt{rc24.resistor24.p.i}\left( t \right) \mathtt{rc24.resistor24.v}\left( t \right) \\
+\mathtt{rc24.resistor24.v}\left( t \right) = \mathtt{rc24.resistor24.p.v}\left( t \right) - \mathtt{rc24.resistor24.n.v}\left( t \right) \\
+0 = \mathtt{rc24.resistor24.p.i}\left( t \right) + \mathtt{rc24.resistor24.n.i}\left( t \right) \\
+\mathtt{rc24.capacitor24.v}\left( t \right) =  - \mathtt{rc24.capacitor24.n.v}\left( t \right) + \mathtt{rc24.capacitor24.p.v}\left( t \right) \\
+0 = \mathtt{rc24.capacitor24.n.i}\left( t \right) + \mathtt{rc24.capacitor24.p.i}\left( t \right) \\
+\frac{\mathrm{d} \mathtt{rc24.capacitor24.v}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc24.capacitor24.p.i}\left( t \right)}{\mathtt{rc24.capacitor24.C}} \\
+\mathtt{rc24.source.V} = \mathtt{rc24.source.p.v}\left( t \right) - \mathtt{rc24.source.n.v}\left( t \right) \\
+0 = \mathtt{rc24.source.p.i}\left( t \right) + \mathtt{rc24.source.n.i}\left( t \right) \\
+\mathtt{rc24.ground.g.v}\left( t \right) = 0 \\
+\frac{\mathrm{d} \mathtt{rc24.heat\_capacitor24.h.T}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc24.heat\_capacitor24.h.Q\_flow}\left( t \right)}{\mathtt{rc24.heat\_capacitor24.V} \mathtt{rc24.heat\_capacitor24.cp} \mathtt{rc24.heat\_capacitor24.rho}} \\
+\mathrm{connect}\left( source_{+}p, resistor25_{+}p \right) \\
+\mathrm{connect}\left( resistor25_{+}n, capacitor25_{+}p \right) \\
+\mathrm{connect}\left( capacitor25_{+}n, source_{+}n, ground_{+}g \right) \\
+\mathrm{connect}\left( resistor25_{+}h, heat_{capacitor25_{+}h} \right) \\
+\mathtt{rc25.resistor25.RTherm}\left( t \right) = \mathtt{rc25.resistor25.R} \left( 1 + \left(  - \mathtt{rc25.resistor25.TAmbient} + \mathtt{rc25.resistor25.h.T}\left( t \right) \right) \mathtt{rc25.resistor25.alpha} \right) \\
+\mathtt{rc25.resistor25.v}\left( t \right) = \mathtt{rc25.resistor25.RTherm}\left( t \right) \mathtt{rc25.resistor25.p.i}\left( t \right) \\
+\mathtt{rc25.resistor25.h.Q\_flow}\left( t \right) =  - \mathtt{rc25.resistor25.v}\left( t \right) \mathtt{rc25.resistor25.p.i}\left( t \right) \\
+\mathtt{rc25.resistor25.v}\left( t \right) =  - \mathtt{rc25.resistor25.n.v}\left( t \right) + \mathtt{rc25.resistor25.p.v}\left( t \right) \\
+0 = \mathtt{rc25.resistor25.p.i}\left( t \right) + \mathtt{rc25.resistor25.n.i}\left( t \right) \\
+\mathtt{rc25.capacitor25.v}\left( t \right) = \mathtt{rc25.capacitor25.p.v}\left( t \right) - \mathtt{rc25.capacitor25.n.v}\left( t \right) \\
+0 = \mathtt{rc25.capacitor25.n.i}\left( t \right) + \mathtt{rc25.capacitor25.p.i}\left( t \right) \\
+\frac{\mathrm{d} \mathtt{rc25.capacitor25.v}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc25.capacitor25.p.i}\left( t \right)}{\mathtt{rc25.capacitor25.C}} \\
+\mathtt{rc25.source.V} = \mathtt{rc25.source.p.v}\left( t \right) - \mathtt{rc25.source.n.v}\left( t \right) \\
+0 = \mathtt{rc25.source.p.i}\left( t \right) + \mathtt{rc25.source.n.i}\left( t \right) \\
+\mathtt{rc25.ground.g.v}\left( t \right) = 0 \\
+\frac{\mathrm{d} \mathtt{rc25.heat\_capacitor25.h.T}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc25.heat\_capacitor25.h.Q\_flow}\left( t \right)}{\mathtt{rc25.heat\_capacitor25.V} \mathtt{rc25.heat\_capacitor25.cp} \mathtt{rc25.heat\_capacitor25.rho}} \\
+\mathrm{connect}\left( source_{+}p, resistor26_{+}p \right) \\
+\mathrm{connect}\left( resistor26_{+}n, capacitor26_{+}p \right) \\
+\mathrm{connect}\left( capacitor26_{+}n, source_{+}n, ground_{+}g \right) \\
+\mathrm{connect}\left( resistor26_{+}h, heat_{capacitor26_{+}h} \right) \\
+\mathtt{rc26.resistor26.RTherm}\left( t \right) = \mathtt{rc26.resistor26.R} \left( 1 + \left(  - \mathtt{rc26.resistor26.TAmbient} + \mathtt{rc26.resistor26.h.T}\left( t \right) \right) \mathtt{rc26.resistor26.alpha} \right) \\
+\mathtt{rc26.resistor26.v}\left( t \right) = \mathtt{rc26.resistor26.p.i}\left( t \right) \mathtt{rc26.resistor26.RTherm}\left( t \right) \\
+\mathtt{rc26.resistor26.h.Q\_flow}\left( t \right) =  - \mathtt{rc26.resistor26.p.i}\left( t \right) \mathtt{rc26.resistor26.v}\left( t \right) \\
+\mathtt{rc26.resistor26.v}\left( t \right) =  - \mathtt{rc26.resistor26.n.v}\left( t \right) + \mathtt{rc26.resistor26.p.v}\left( t \right) \\
+0 = \mathtt{rc26.resistor26.n.i}\left( t \right) + \mathtt{rc26.resistor26.p.i}\left( t \right) \\
+\mathtt{rc26.capacitor26.v}\left( t \right) = \mathtt{rc26.capacitor26.p.v}\left( t \right) - \mathtt{rc26.capacitor26.n.v}\left( t \right) \\
+0 = \mathtt{rc26.capacitor26.n.i}\left( t \right) + \mathtt{rc26.capacitor26.p.i}\left( t \right) \\
+\frac{\mathrm{d} \mathtt{rc26.capacitor26.v}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc26.capacitor26.p.i}\left( t \right)}{\mathtt{rc26.capacitor26.C}} \\
+\mathtt{rc26.source.V} =  - \mathtt{rc26.source.n.v}\left( t \right) + \mathtt{rc26.source.p.v}\left( t \right) \\
+0 = \mathtt{rc26.source.n.i}\left( t \right) + \mathtt{rc26.source.p.i}\left( t \right) \\
+\mathtt{rc26.ground.g.v}\left( t \right) = 0 \\
+\frac{\mathrm{d} \mathtt{rc26.heat\_capacitor26.h.T}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc26.heat\_capacitor26.h.Q\_flow}\left( t \right)}{\mathtt{rc26.heat\_capacitor26.V} \mathtt{rc26.heat\_capacitor26.cp} \mathtt{rc26.heat\_capacitor26.rho}} \\
+\mathrm{connect}\left( source_{+}p, resistor27_{+}p \right) \\
+\mathrm{connect}\left( resistor27_{+}n, capacitor27_{+}p \right) \\
+\mathrm{connect}\left( capacitor27_{+}n, source_{+}n, ground_{+}g \right) \\
+\mathrm{connect}\left( resistor27_{+}h, heat_{capacitor27_{+}h} \right) \\
+\mathtt{rc27.resistor27.RTherm}\left( t \right) = \mathtt{rc27.resistor27.R} \left( 1 + \left(  - \mathtt{rc27.resistor27.TAmbient} + \mathtt{rc27.resistor27.h.T}\left( t \right) \right) \mathtt{rc27.resistor27.alpha} \right) \\
+\mathtt{rc27.resistor27.v}\left( t \right) = \mathtt{rc27.resistor27.RTherm}\left( t \right) \mathtt{rc27.resistor27.p.i}\left( t \right) \\
+\mathtt{rc27.resistor27.h.Q\_flow}\left( t \right) =  - \mathtt{rc27.resistor27.v}\left( t \right) \mathtt{rc27.resistor27.p.i}\left( t \right) \\
+\mathtt{rc27.resistor27.v}\left( t \right) = \mathtt{rc27.resistor27.p.v}\left( t \right) - \mathtt{rc27.resistor27.n.v}\left( t \right) \\
+0 = \mathtt{rc27.resistor27.n.i}\left( t \right) + \mathtt{rc27.resistor27.p.i}\left( t \right) \\
+\mathtt{rc27.capacitor27.v}\left( t \right) =  - \mathtt{rc27.capacitor27.n.v}\left( t \right) + \mathtt{rc27.capacitor27.p.v}\left( t \right) \\
+0 = \mathtt{rc27.capacitor27.p.i}\left( t \right) + \mathtt{rc27.capacitor27.n.i}\left( t \right) \\
+\frac{\mathrm{d} \mathtt{rc27.capacitor27.v}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc27.capacitor27.p.i}\left( t \right)}{\mathtt{rc27.capacitor27.C}} \\
+\mathtt{rc27.source.V} = \mathtt{rc27.source.p.v}\left( t \right) - \mathtt{rc27.source.n.v}\left( t \right) \\
+0 = \mathtt{rc27.source.n.i}\left( t \right) + \mathtt{rc27.source.p.i}\left( t \right) \\
+\mathtt{rc27.ground.g.v}\left( t \right) = 0 \\
+\frac{\mathrm{d} \mathtt{rc27.heat\_capacitor27.h.T}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc27.heat\_capacitor27.h.Q\_flow}\left( t \right)}{\mathtt{rc27.heat\_capacitor27.V} \mathtt{rc27.heat\_capacitor27.cp} \mathtt{rc27.heat\_capacitor27.rho}} \\
+\mathrm{connect}\left( source_{+}p, resistor28_{+}p \right) \\
+\mathrm{connect}\left( resistor28_{+}n, capacitor28_{+}p \right) \\
+\mathrm{connect}\left( capacitor28_{+}n, source_{+}n, ground_{+}g \right) \\
+\mathrm{connect}\left( resistor28_{+}h, heat_{capacitor28_{+}h} \right) \\
+\mathtt{rc28.resistor28.RTherm}\left( t \right) = \mathtt{rc28.resistor28.R} \left( 1 + \left(  - \mathtt{rc28.resistor28.TAmbient} + \mathtt{rc28.resistor28.h.T}\left( t \right) \right) \mathtt{rc28.resistor28.alpha} \right) \\
+\mathtt{rc28.resistor28.v}\left( t \right) = \mathtt{rc28.resistor28.RTherm}\left( t \right) \mathtt{rc28.resistor28.p.i}\left( t \right) \\
+\mathtt{rc28.resistor28.h.Q\_flow}\left( t \right) =  - \mathtt{rc28.resistor28.p.i}\left( t \right) \mathtt{rc28.resistor28.v}\left( t \right) \\
+\mathtt{rc28.resistor28.v}\left( t \right) = \mathtt{rc28.resistor28.p.v}\left( t \right) - \mathtt{rc28.resistor28.n.v}\left( t \right) \\
+0 = \mathtt{rc28.resistor28.n.i}\left( t \right) + \mathtt{rc28.resistor28.p.i}\left( t \right) \\
+\mathtt{rc28.capacitor28.v}\left( t \right) =  - \mathtt{rc28.capacitor28.n.v}\left( t \right) + \mathtt{rc28.capacitor28.p.v}\left( t \right) \\
+0 = \mathtt{rc28.capacitor28.n.i}\left( t \right) + \mathtt{rc28.capacitor28.p.i}\left( t \right) \\
+\frac{\mathrm{d} \mathtt{rc28.capacitor28.v}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc28.capacitor28.p.i}\left( t \right)}{\mathtt{rc28.capacitor28.C}} \\
+\mathtt{rc28.source.V} = \mathtt{rc28.source.p.v}\left( t \right) - \mathtt{rc28.source.n.v}\left( t \right) \\
+0 = \mathtt{rc28.source.n.i}\left( t \right) + \mathtt{rc28.source.p.i}\left( t \right) \\
+\mathtt{rc28.ground.g.v}\left( t \right) = 0 \\
+\frac{\mathrm{d} \mathtt{rc28.heat\_capacitor28.h.T}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc28.heat\_capacitor28.h.Q\_flow}\left( t \right)}{\mathtt{rc28.heat\_capacitor28.V} \mathtt{rc28.heat\_capacitor28.cp} \mathtt{rc28.heat\_capacitor28.rho}} \\
+\mathrm{connect}\left( source_{+}p, resistor29_{+}p \right) \\
+\mathrm{connect}\left( resistor29_{+}n, capacitor29_{+}p \right) \\
+\mathrm{connect}\left( capacitor29_{+}n, source_{+}n, ground_{+}g \right) \\
+\mathrm{connect}\left( resistor29_{+}h, heat_{capacitor29_{+}h} \right) \\
+\mathtt{rc29.resistor29.RTherm}\left( t \right) = \mathtt{rc29.resistor29.R} \left( 1 + \left(  - \mathtt{rc29.resistor29.TAmbient} + \mathtt{rc29.resistor29.h.T}\left( t \right) \right) \mathtt{rc29.resistor29.alpha} \right) \\
+\mathtt{rc29.resistor29.v}\left( t \right) = \mathtt{rc29.resistor29.p.i}\left( t \right) \mathtt{rc29.resistor29.RTherm}\left( t \right) \\
+\mathtt{rc29.resistor29.h.Q\_flow}\left( t \right) =  - \mathtt{rc29.resistor29.v}\left( t \right) \mathtt{rc29.resistor29.p.i}\left( t \right) \\
+\mathtt{rc29.resistor29.v}\left( t \right) = \mathtt{rc29.resistor29.p.v}\left( t \right) - \mathtt{rc29.resistor29.n.v}\left( t \right) \\
+0 = \mathtt{rc29.resistor29.p.i}\left( t \right) + \mathtt{rc29.resistor29.n.i}\left( t \right) \\
+\mathtt{rc29.capacitor29.v}\left( t \right) = \mathtt{rc29.capacitor29.p.v}\left( t \right) - \mathtt{rc29.capacitor29.n.v}\left( t \right) \\
+0 = \mathtt{rc29.capacitor29.n.i}\left( t \right) + \mathtt{rc29.capacitor29.p.i}\left( t \right) \\
+\frac{\mathrm{d} \mathtt{rc29.capacitor29.v}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc29.capacitor29.p.i}\left( t \right)}{\mathtt{rc29.capacitor29.C}} \\
+\mathtt{rc29.source.V} = \mathtt{rc29.source.p.v}\left( t \right) - \mathtt{rc29.source.n.v}\left( t \right) \\
+0 = \mathtt{rc29.source.n.i}\left( t \right) + \mathtt{rc29.source.p.i}\left( t \right) \\
+\mathtt{rc29.ground.g.v}\left( t \right) = 0 \\
+\frac{\mathrm{d} \mathtt{rc29.heat\_capacitor29.h.T}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc29.heat\_capacitor29.h.Q\_flow}\left( t \right)}{\mathtt{rc29.heat\_capacitor29.V} \mathtt{rc29.heat\_capacitor29.cp} \mathtt{rc29.heat\_capacitor29.rho}} \\
+\mathrm{connect}\left( source_{+}p, resistor30_{+}p \right) \\
+\mathrm{connect}\left( resistor30_{+}n, capacitor30_{+}p \right) \\
+\mathrm{connect}\left( capacitor30_{+}n, source_{+}n, ground_{+}g \right) \\
+\mathrm{connect}\left( resistor30_{+}h, heat_{capacitor30_{+}h} \right) \\
+\mathtt{rc30.resistor30.RTherm}\left( t \right) = \mathtt{rc30.resistor30.R} \left( 1 + \left(  - \mathtt{rc30.resistor30.TAmbient} + \mathtt{rc30.resistor30.h.T}\left( t \right) \right) \mathtt{rc30.resistor30.alpha} \right) \\
+\mathtt{rc30.resistor30.v}\left( t \right) = \mathtt{rc30.resistor30.RTherm}\left( t \right) \mathtt{rc30.resistor30.p.i}\left( t \right) \\
+\mathtt{rc30.resistor30.h.Q\_flow}\left( t \right) =  - \mathtt{rc30.resistor30.p.i}\left( t \right) \mathtt{rc30.resistor30.v}\left( t \right) \\
+\mathtt{rc30.resistor30.v}\left( t \right) = \mathtt{rc30.resistor30.p.v}\left( t \right) - \mathtt{rc30.resistor30.n.v}\left( t \right) \\
+0 = \mathtt{rc30.resistor30.n.i}\left( t \right) + \mathtt{rc30.resistor30.p.i}\left( t \right) \\
+\mathtt{rc30.capacitor30.v}\left( t \right) = \mathtt{rc30.capacitor30.p.v}\left( t \right) - \mathtt{rc30.capacitor30.n.v}\left( t \right) \\
+0 = \mathtt{rc30.capacitor30.p.i}\left( t \right) + \mathtt{rc30.capacitor30.n.i}\left( t \right) \\
+\frac{\mathrm{d} \mathtt{rc30.capacitor30.v}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc30.capacitor30.p.i}\left( t \right)}{\mathtt{rc30.capacitor30.C}} \\
+\mathtt{rc30.source.V} = \mathtt{rc30.source.p.v}\left( t \right) - \mathtt{rc30.source.n.v}\left( t \right) \\
+0 = \mathtt{rc30.source.p.i}\left( t \right) + \mathtt{rc30.source.n.i}\left( t \right) \\
+\mathtt{rc30.ground.g.v}\left( t \right) = 0 \\
+\frac{\mathrm{d} \mathtt{rc30.heat\_capacitor30.h.T}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc30.heat\_capacitor30.h.Q\_flow}\left( t \right)}{\mathtt{rc30.heat\_capacitor30.V} \mathtt{rc30.heat\_capacitor30.cp} \mathtt{rc30.heat\_capacitor30.rho}} \\
+\mathrm{connect}\left( source_{+}p, resistor31_{+}p \right) \\
+\mathrm{connect}\left( resistor31_{+}n, capacitor31_{+}p \right) \\
+\mathrm{connect}\left( capacitor31_{+}n, source_{+}n, ground_{+}g \right) \\
+\mathrm{connect}\left( resistor31_{+}h, heat_{capacitor31_{+}h} \right) \\
+\mathtt{rc31.resistor31.RTherm}\left( t \right) = \mathtt{rc31.resistor31.R} \left( 1 + \left(  - \mathtt{rc31.resistor31.TAmbient} + \mathtt{rc31.resistor31.h.T}\left( t \right) \right) \mathtt{rc31.resistor31.alpha} \right) \\
+\mathtt{rc31.resistor31.v}\left( t \right) = \mathtt{rc31.resistor31.RTherm}\left( t \right) \mathtt{rc31.resistor31.p.i}\left( t \right) \\
+\mathtt{rc31.resistor31.h.Q\_flow}\left( t \right) =  - \mathtt{rc31.resistor31.p.i}\left( t \right) \mathtt{rc31.resistor31.v}\left( t \right) \\
+\mathtt{rc31.resistor31.v}\left( t \right) = \mathtt{rc31.resistor31.p.v}\left( t \right) - \mathtt{rc31.resistor31.n.v}\left( t \right) \\
+0 = \mathtt{rc31.resistor31.n.i}\left( t \right) + \mathtt{rc31.resistor31.p.i}\left( t \right) \\
+\mathtt{rc31.capacitor31.v}\left( t \right) =  - \mathtt{rc31.capacitor31.n.v}\left( t \right) + \mathtt{rc31.capacitor31.p.v}\left( t \right) \\
+0 = \mathtt{rc31.capacitor31.n.i}\left( t \right) + \mathtt{rc31.capacitor31.p.i}\left( t \right) \\
+\frac{\mathrm{d} \mathtt{rc31.capacitor31.v}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc31.capacitor31.p.i}\left( t \right)}{\mathtt{rc31.capacitor31.C}} \\
+\mathtt{rc31.source.V} =  - \mathtt{rc31.source.n.v}\left( t \right) + \mathtt{rc31.source.p.v}\left( t \right) \\
+0 = \mathtt{rc31.source.p.i}\left( t \right) + \mathtt{rc31.source.n.i}\left( t \right) \\
+\mathtt{rc31.ground.g.v}\left( t \right) = 0 \\
+\frac{\mathrm{d} \mathtt{rc31.heat\_capacitor31.h.T}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc31.heat\_capacitor31.h.Q\_flow}\left( t \right)}{\mathtt{rc31.heat\_capacitor31.V} \mathtt{rc31.heat\_capacitor31.cp} \mathtt{rc31.heat\_capacitor31.rho}} \\
+\mathrm{connect}\left( source_{+}p, resistor32_{+}p \right) \\
+\mathrm{connect}\left( resistor32_{+}n, capacitor32_{+}p \right) \\
+\mathrm{connect}\left( capacitor32_{+}n, source_{+}n, ground_{+}g \right) \\
+\mathrm{connect}\left( resistor32_{+}h, heat_{capacitor32_{+}h} \right) \\
+\mathtt{rc32.resistor32.RTherm}\left( t \right) = \mathtt{rc32.resistor32.R} \left( 1 + \left(  - \mathtt{rc32.resistor32.TAmbient} + \mathtt{rc32.resistor32.h.T}\left( t \right) \right) \mathtt{rc32.resistor32.alpha} \right) \\
+\mathtt{rc32.resistor32.v}\left( t \right) = \mathtt{rc32.resistor32.RTherm}\left( t \right) \mathtt{rc32.resistor32.p.i}\left( t \right) \\
+\mathtt{rc32.resistor32.h.Q\_flow}\left( t \right) =  - \mathtt{rc32.resistor32.p.i}\left( t \right) \mathtt{rc32.resistor32.v}\left( t \right) \\
+\mathtt{rc32.resistor32.v}\left( t \right) = \mathtt{rc32.resistor32.p.v}\left( t \right) - \mathtt{rc32.resistor32.n.v}\left( t \right) \\
+0 = \mathtt{rc32.resistor32.n.i}\left( t \right) + \mathtt{rc32.resistor32.p.i}\left( t \right) \\
+\mathtt{rc32.capacitor32.v}\left( t \right) = \mathtt{rc32.capacitor32.p.v}\left( t \right) - \mathtt{rc32.capacitor32.n.v}\left( t \right) \\
+0 = \mathtt{rc32.capacitor32.n.i}\left( t \right) + \mathtt{rc32.capacitor32.p.i}\left( t \right) \\
+\frac{\mathrm{d} \mathtt{rc32.capacitor32.v}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc32.capacitor32.p.i}\left( t \right)}{\mathtt{rc32.capacitor32.C}} \\
+\mathtt{rc32.source.V} = \mathtt{rc32.source.p.v}\left( t \right) - \mathtt{rc32.source.n.v}\left( t \right) \\
+0 = \mathtt{rc32.source.n.i}\left( t \right) + \mathtt{rc32.source.p.i}\left( t \right) \\
+\mathtt{rc32.ground.g.v}\left( t \right) = 0 \\
+\frac{\mathrm{d} \mathtt{rc32.heat\_capacitor32.h.T}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc32.heat\_capacitor32.h.Q\_flow}\left( t \right)}{\mathtt{rc32.heat\_capacitor32.V} \mathtt{rc32.heat\_capacitor32.cp} \mathtt{rc32.heat\_capacitor32.rho}} \\
+\mathrm{connect}\left( source_{+}p, resistor33_{+}p \right) \\
+\mathrm{connect}\left( resistor33_{+}n, capacitor33_{+}p \right) \\
+\mathrm{connect}\left( capacitor33_{+}n, source_{+}n, ground_{+}g \right) \\
+\mathrm{connect}\left( resistor33_{+}h, heat_{capacitor33_{+}h} \right) \\
+\mathtt{rc33.resistor33.RTherm}\left( t \right) = \mathtt{rc33.resistor33.R} \left( 1 + \left(  - \mathtt{rc33.resistor33.TAmbient} + \mathtt{rc33.resistor33.h.T}\left( t \right) \right) \mathtt{rc33.resistor33.alpha} \right) \\
+\mathtt{rc33.resistor33.v}\left( t \right) = \mathtt{rc33.resistor33.p.i}\left( t \right) \mathtt{rc33.resistor33.RTherm}\left( t \right) \\
+\mathtt{rc33.resistor33.h.Q\_flow}\left( t \right) =  - \mathtt{rc33.resistor33.p.i}\left( t \right) \mathtt{rc33.resistor33.v}\left( t \right) \\
+\mathtt{rc33.resistor33.v}\left( t \right) =  - \mathtt{rc33.resistor33.n.v}\left( t \right) + \mathtt{rc33.resistor33.p.v}\left( t \right) \\
+0 = \mathtt{rc33.resistor33.p.i}\left( t \right) + \mathtt{rc33.resistor33.n.i}\left( t \right) \\
+\mathtt{rc33.capacitor33.v}\left( t \right) =  - \mathtt{rc33.capacitor33.n.v}\left( t \right) + \mathtt{rc33.capacitor33.p.v}\left( t \right) \\
+0 = \mathtt{rc33.capacitor33.n.i}\left( t \right) + \mathtt{rc33.capacitor33.p.i}\left( t \right) \\
+\frac{\mathrm{d} \mathtt{rc33.capacitor33.v}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc33.capacitor33.p.i}\left( t \right)}{\mathtt{rc33.capacitor33.C}} \\
+\mathtt{rc33.source.V} =  - \mathtt{rc33.source.n.v}\left( t \right) + \mathtt{rc33.source.p.v}\left( t \right) \\
+0 = \mathtt{rc33.source.n.i}\left( t \right) + \mathtt{rc33.source.p.i}\left( t \right) \\
+\mathtt{rc33.ground.g.v}\left( t \right) = 0 \\
+\frac{\mathrm{d} \mathtt{rc33.heat\_capacitor33.h.T}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc33.heat\_capacitor33.h.Q\_flow}\left( t \right)}{\mathtt{rc33.heat\_capacitor33.V} \mathtt{rc33.heat\_capacitor33.cp} \mathtt{rc33.heat\_capacitor33.rho}} \\
+\mathrm{connect}\left( source_{+}p, resistor34_{+}p \right) \\
+\mathrm{connect}\left( resistor34_{+}n, capacitor34_{+}p \right) \\
+\mathrm{connect}\left( capacitor34_{+}n, source_{+}n, ground_{+}g \right) \\
+\mathrm{connect}\left( resistor34_{+}h, heat_{capacitor34_{+}h} \right) \\
+\mathtt{rc34.resistor34.RTherm}\left( t \right) = \mathtt{rc34.resistor34.R} \left( 1 + \left(  - \mathtt{rc34.resistor34.TAmbient} + \mathtt{rc34.resistor34.h.T}\left( t \right) \right) \mathtt{rc34.resistor34.alpha} \right) \\
+\mathtt{rc34.resistor34.v}\left( t \right) = \mathtt{rc34.resistor34.p.i}\left( t \right) \mathtt{rc34.resistor34.RTherm}\left( t \right) \\
+\mathtt{rc34.resistor34.h.Q\_flow}\left( t \right) =  - \mathtt{rc34.resistor34.p.i}\left( t \right) \mathtt{rc34.resistor34.v}\left( t \right) \\
+\mathtt{rc34.resistor34.v}\left( t \right) =  - \mathtt{rc34.resistor34.n.v}\left( t \right) + \mathtt{rc34.resistor34.p.v}\left( t \right) \\
+0 = \mathtt{rc34.resistor34.n.i}\left( t \right) + \mathtt{rc34.resistor34.p.i}\left( t \right) \\
+\mathtt{rc34.capacitor34.v}\left( t \right) = \mathtt{rc34.capacitor34.p.v}\left( t \right) - \mathtt{rc34.capacitor34.n.v}\left( t \right) \\
+0 = \mathtt{rc34.capacitor34.n.i}\left( t \right) + \mathtt{rc34.capacitor34.p.i}\left( t \right) \\
+\frac{\mathrm{d} \mathtt{rc34.capacitor34.v}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc34.capacitor34.p.i}\left( t \right)}{\mathtt{rc34.capacitor34.C}} \\
+\mathtt{rc34.source.V} = \mathtt{rc34.source.p.v}\left( t \right) - \mathtt{rc34.source.n.v}\left( t \right) \\
+0 = \mathtt{rc34.source.n.i}\left( t \right) + \mathtt{rc34.source.p.i}\left( t \right) \\
+\mathtt{rc34.ground.g.v}\left( t \right) = 0 \\
+\frac{\mathrm{d} \mathtt{rc34.heat\_capacitor34.h.T}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc34.heat\_capacitor34.h.Q\_flow}\left( t \right)}{\mathtt{rc34.heat\_capacitor34.V} \mathtt{rc34.heat\_capacitor34.cp} \mathtt{rc34.heat\_capacitor34.rho}} \\
+\mathrm{connect}\left( source_{+}p, resistor35_{+}p \right) \\
+\mathrm{connect}\left( resistor35_{+}n, capacitor35_{+}p \right) \\
+\mathrm{connect}\left( capacitor35_{+}n, source_{+}n, ground_{+}g \right) \\
+\mathrm{connect}\left( resistor35_{+}h, heat_{capacitor35_{+}h} \right) \\
+\mathtt{rc35.resistor35.RTherm}\left( t \right) = \mathtt{rc35.resistor35.R} \left( 1 + \left(  - \mathtt{rc35.resistor35.TAmbient} + \mathtt{rc35.resistor35.h.T}\left( t \right) \right) \mathtt{rc35.resistor35.alpha} \right) \\
+\mathtt{rc35.resistor35.v}\left( t \right) = \mathtt{rc35.resistor35.RTherm}\left( t \right) \mathtt{rc35.resistor35.p.i}\left( t \right) \\
+\mathtt{rc35.resistor35.h.Q\_flow}\left( t \right) =  - \mathtt{rc35.resistor35.v}\left( t \right) \mathtt{rc35.resistor35.p.i}\left( t \right) \\
+\mathtt{rc35.resistor35.v}\left( t \right) =  - \mathtt{rc35.resistor35.n.v}\left( t \right) + \mathtt{rc35.resistor35.p.v}\left( t \right) \\
+0 = \mathtt{rc35.resistor35.n.i}\left( t \right) + \mathtt{rc35.resistor35.p.i}\left( t \right) \\
+\mathtt{rc35.capacitor35.v}\left( t \right) =  - \mathtt{rc35.capacitor35.n.v}\left( t \right) + \mathtt{rc35.capacitor35.p.v}\left( t \right) \\
+0 = \mathtt{rc35.capacitor35.p.i}\left( t \right) + \mathtt{rc35.capacitor35.n.i}\left( t \right) \\
+\frac{\mathrm{d} \mathtt{rc35.capacitor35.v}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc35.capacitor35.p.i}\left( t \right)}{\mathtt{rc35.capacitor35.C}} \\
+\mathtt{rc35.source.V} = \mathtt{rc35.source.p.v}\left( t \right) - \mathtt{rc35.source.n.v}\left( t \right) \\
+0 = \mathtt{rc35.source.p.i}\left( t \right) + \mathtt{rc35.source.n.i}\left( t \right) \\
+\mathtt{rc35.ground.g.v}\left( t \right) = 0 \\
+\frac{\mathrm{d} \mathtt{rc35.heat\_capacitor35.h.T}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc35.heat\_capacitor35.h.Q\_flow}\left( t \right)}{\mathtt{rc35.heat\_capacitor35.V} \mathtt{rc35.heat\_capacitor35.cp} \mathtt{rc35.heat\_capacitor35.rho}} \\
+\mathrm{connect}\left( source_{+}p, resistor36_{+}p \right) \\
+\mathrm{connect}\left( resistor36_{+}n, capacitor36_{+}p \right) \\
+\mathrm{connect}\left( capacitor36_{+}n, source_{+}n, ground_{+}g \right) \\
+\mathrm{connect}\left( resistor36_{+}h, heat_{capacitor36_{+}h} \right) \\
+\mathtt{rc36.resistor36.RTherm}\left( t \right) = \mathtt{rc36.resistor36.R} \left( 1 + \left(  - \mathtt{rc36.resistor36.TAmbient} + \mathtt{rc36.resistor36.h.T}\left( t \right) \right) \mathtt{rc36.resistor36.alpha} \right) \\
+\mathtt{rc36.resistor36.v}\left( t \right) = \mathtt{rc36.resistor36.p.i}\left( t \right) \mathtt{rc36.resistor36.RTherm}\left( t \right) \\
+\mathtt{rc36.resistor36.h.Q\_flow}\left( t \right) =  - \mathtt{rc36.resistor36.p.i}\left( t \right) \mathtt{rc36.resistor36.v}\left( t \right) \\
+\mathtt{rc36.resistor36.v}\left( t \right) =  - \mathtt{rc36.resistor36.n.v}\left( t \right) + \mathtt{rc36.resistor36.p.v}\left( t \right) \\
+0 = \mathtt{rc36.resistor36.p.i}\left( t \right) + \mathtt{rc36.resistor36.n.i}\left( t \right) \\
+\mathtt{rc36.capacitor36.v}\left( t \right) =  - \mathtt{rc36.capacitor36.n.v}\left( t \right) + \mathtt{rc36.capacitor36.p.v}\left( t \right) \\
+0 = \mathtt{rc36.capacitor36.p.i}\left( t \right) + \mathtt{rc36.capacitor36.n.i}\left( t \right) \\
+\frac{\mathrm{d} \mathtt{rc36.capacitor36.v}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc36.capacitor36.p.i}\left( t \right)}{\mathtt{rc36.capacitor36.C}} \\
+\mathtt{rc36.source.V} = \mathtt{rc36.source.p.v}\left( t \right) - \mathtt{rc36.source.n.v}\left( t \right) \\
+0 = \mathtt{rc36.source.p.i}\left( t \right) + \mathtt{rc36.source.n.i}\left( t \right) \\
+\mathtt{rc36.ground.g.v}\left( t \right) = 0 \\
+\frac{\mathrm{d} \mathtt{rc36.heat\_capacitor36.h.T}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc36.heat\_capacitor36.h.Q\_flow}\left( t \right)}{\mathtt{rc36.heat\_capacitor36.V} \mathtt{rc36.heat\_capacitor36.cp} \mathtt{rc36.heat\_capacitor36.rho}} \\
+\mathrm{connect}\left( source_{+}p, resistor37_{+}p \right) \\
+\mathrm{connect}\left( resistor37_{+}n, capacitor37_{+}p \right) \\
+\mathrm{connect}\left( capacitor37_{+}n, source_{+}n, ground_{+}g \right) \\
+\mathrm{connect}\left( resistor37_{+}h, heat_{capacitor37_{+}h} \right) \\
+\mathtt{rc37.resistor37.RTherm}\left( t \right) = \mathtt{rc37.resistor37.R} \left( 1 + \left(  - \mathtt{rc37.resistor37.TAmbient} + \mathtt{rc37.resistor37.h.T}\left( t \right) \right) \mathtt{rc37.resistor37.alpha} \right) \\
+\mathtt{rc37.resistor37.v}\left( t \right) = \mathtt{rc37.resistor37.RTherm}\left( t \right) \mathtt{rc37.resistor37.p.i}\left( t \right) \\
+\mathtt{rc37.resistor37.h.Q\_flow}\left( t \right) =  - \mathtt{rc37.resistor37.v}\left( t \right) \mathtt{rc37.resistor37.p.i}\left( t \right) \\
+\mathtt{rc37.resistor37.v}\left( t \right) = \mathtt{rc37.resistor37.p.v}\left( t \right) - \mathtt{rc37.resistor37.n.v}\left( t \right) \\
+0 = \mathtt{rc37.resistor37.n.i}\left( t \right) + \mathtt{rc37.resistor37.p.i}\left( t \right) \\
+\mathtt{rc37.capacitor37.v}\left( t \right) =  - \mathtt{rc37.capacitor37.n.v}\left( t \right) + \mathtt{rc37.capacitor37.p.v}\left( t \right) \\
+0 = \mathtt{rc37.capacitor37.n.i}\left( t \right) + \mathtt{rc37.capacitor37.p.i}\left( t \right) \\
+\frac{\mathrm{d} \mathtt{rc37.capacitor37.v}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc37.capacitor37.p.i}\left( t \right)}{\mathtt{rc37.capacitor37.C}} \\
+\mathtt{rc37.source.V} = \mathtt{rc37.source.p.v}\left( t \right) - \mathtt{rc37.source.n.v}\left( t \right) \\
+0 = \mathtt{rc37.source.p.i}\left( t \right) + \mathtt{rc37.source.n.i}\left( t \right) \\
+\mathtt{rc37.ground.g.v}\left( t \right) = 0 \\
+\frac{\mathrm{d} \mathtt{rc37.heat\_capacitor37.h.T}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc37.heat\_capacitor37.h.Q\_flow}\left( t \right)}{\mathtt{rc37.heat\_capacitor37.V} \mathtt{rc37.heat\_capacitor37.cp} \mathtt{rc37.heat\_capacitor37.rho}} \\
+\mathrm{connect}\left( source_{+}p, resistor38_{+}p \right) \\
+\mathrm{connect}\left( resistor38_{+}n, capacitor38_{+}p \right) \\
+\mathrm{connect}\left( capacitor38_{+}n, source_{+}n, ground_{+}g \right) \\
+\mathrm{connect}\left( resistor38_{+}h, heat_{capacitor38_{+}h} \right) \\
+\mathtt{rc38.resistor38.RTherm}\left( t \right) = \mathtt{rc38.resistor38.R} \left( 1 + \left(  - \mathtt{rc38.resistor38.TAmbient} + \mathtt{rc38.resistor38.h.T}\left( t \right) \right) \mathtt{rc38.resistor38.alpha} \right) \\
+\mathtt{rc38.resistor38.v}\left( t \right) = \mathtt{rc38.resistor38.RTherm}\left( t \right) \mathtt{rc38.resistor38.p.i}\left( t \right) \\
+\mathtt{rc38.resistor38.h.Q\_flow}\left( t \right) =  - \mathtt{rc38.resistor38.v}\left( t \right) \mathtt{rc38.resistor38.p.i}\left( t \right) \\
+\mathtt{rc38.resistor38.v}\left( t \right) =  - \mathtt{rc38.resistor38.n.v}\left( t \right) + \mathtt{rc38.resistor38.p.v}\left( t \right) \\
+0 = \mathtt{rc38.resistor38.n.i}\left( t \right) + \mathtt{rc38.resistor38.p.i}\left( t \right) \\
+\mathtt{rc38.capacitor38.v}\left( t \right) = \mathtt{rc38.capacitor38.p.v}\left( t \right) - \mathtt{rc38.capacitor38.n.v}\left( t \right) \\
+0 = \mathtt{rc38.capacitor38.p.i}\left( t \right) + \mathtt{rc38.capacitor38.n.i}\left( t \right) \\
+\frac{\mathrm{d} \mathtt{rc38.capacitor38.v}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc38.capacitor38.p.i}\left( t \right)}{\mathtt{rc38.capacitor38.C}} \\
+\mathtt{rc38.source.V} =  - \mathtt{rc38.source.n.v}\left( t \right) + \mathtt{rc38.source.p.v}\left( t \right) \\
+0 = \mathtt{rc38.source.n.i}\left( t \right) + \mathtt{rc38.source.p.i}\left( t \right) \\
+\mathtt{rc38.ground.g.v}\left( t \right) = 0 \\
+\frac{\mathrm{d} \mathtt{rc38.heat\_capacitor38.h.T}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc38.heat\_capacitor38.h.Q\_flow}\left( t \right)}{\mathtt{rc38.heat\_capacitor38.V} \mathtt{rc38.heat\_capacitor38.cp} \mathtt{rc38.heat\_capacitor38.rho}} \\
+\mathrm{connect}\left( source_{+}p, resistor39_{+}p \right) \\
+\mathrm{connect}\left( resistor39_{+}n, capacitor39_{+}p \right) \\
+\mathrm{connect}\left( capacitor39_{+}n, source_{+}n, ground_{+}g \right) \\
+\mathrm{connect}\left( resistor39_{+}h, heat_{capacitor39_{+}h} \right) \\
+\mathtt{rc39.resistor39.RTherm}\left( t \right) = \mathtt{rc39.resistor39.R} \left( 1 + \left(  - \mathtt{rc39.resistor39.TAmbient} + \mathtt{rc39.resistor39.h.T}\left( t \right) \right) \mathtt{rc39.resistor39.alpha} \right) \\
+\mathtt{rc39.resistor39.v}\left( t \right) = \mathtt{rc39.resistor39.RTherm}\left( t \right) \mathtt{rc39.resistor39.p.i}\left( t \right) \\
+\mathtt{rc39.resistor39.h.Q\_flow}\left( t \right) =  - \mathtt{rc39.resistor39.v}\left( t \right) \mathtt{rc39.resistor39.p.i}\left( t \right) \\
+\mathtt{rc39.resistor39.v}\left( t \right) = \mathtt{rc39.resistor39.p.v}\left( t \right) - \mathtt{rc39.resistor39.n.v}\left( t \right) \\
+0 = \mathtt{rc39.resistor39.n.i}\left( t \right) + \mathtt{rc39.resistor39.p.i}\left( t \right) \\
+\mathtt{rc39.capacitor39.v}\left( t \right) = \mathtt{rc39.capacitor39.p.v}\left( t \right) - \mathtt{rc39.capacitor39.n.v}\left( t \right) \\
+0 = \mathtt{rc39.capacitor39.n.i}\left( t \right) + \mathtt{rc39.capacitor39.p.i}\left( t \right) \\
+\frac{\mathrm{d} \mathtt{rc39.capacitor39.v}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc39.capacitor39.p.i}\left( t \right)}{\mathtt{rc39.capacitor39.C}} \\
+\mathtt{rc39.source.V} = \mathtt{rc39.source.p.v}\left( t \right) - \mathtt{rc39.source.n.v}\left( t \right) \\
+0 = \mathtt{rc39.source.p.i}\left( t \right) + \mathtt{rc39.source.n.i}\left( t \right) \\
+\mathtt{rc39.ground.g.v}\left( t \right) = 0 \\
+\frac{\mathrm{d} \mathtt{rc39.heat\_capacitor39.h.T}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc39.heat\_capacitor39.h.Q\_flow}\left( t \right)}{\mathtt{rc39.heat\_capacitor39.V} \mathtt{rc39.heat\_capacitor39.cp} \mathtt{rc39.heat\_capacitor39.rho}} \\
+\mathrm{connect}\left( source_{+}p, resistor40_{+}p \right) \\
+\mathrm{connect}\left( resistor40_{+}n, capacitor40_{+}p \right) \\
+\mathrm{connect}\left( capacitor40_{+}n, source_{+}n, ground_{+}g \right) \\
+\mathrm{connect}\left( resistor40_{+}h, heat_{capacitor40_{+}h} \right) \\
+\mathtt{rc40.resistor40.RTherm}\left( t \right) = \mathtt{rc40.resistor40.R} \left( 1 + \left(  - \mathtt{rc40.resistor40.TAmbient} + \mathtt{rc40.resistor40.h.T}\left( t \right) \right) \mathtt{rc40.resistor40.alpha} \right) \\
+\mathtt{rc40.resistor40.v}\left( t \right) = \mathtt{rc40.resistor40.RTherm}\left( t \right) \mathtt{rc40.resistor40.p.i}\left( t \right) \\
+\mathtt{rc40.resistor40.h.Q\_flow}\left( t \right) =  - \mathtt{rc40.resistor40.p.i}\left( t \right) \mathtt{rc40.resistor40.v}\left( t \right) \\
+\mathtt{rc40.resistor40.v}\left( t \right) =  - \mathtt{rc40.resistor40.n.v}\left( t \right) + \mathtt{rc40.resistor40.p.v}\left( t \right) \\
+0 = \mathtt{rc40.resistor40.n.i}\left( t \right) + \mathtt{rc40.resistor40.p.i}\left( t \right) \\
+\mathtt{rc40.capacitor40.v}\left( t \right) = \mathtt{rc40.capacitor40.p.v}\left( t \right) - \mathtt{rc40.capacitor40.n.v}\left( t \right) \\
+0 = \mathtt{rc40.capacitor40.p.i}\left( t \right) + \mathtt{rc40.capacitor40.n.i}\left( t \right) \\
+\frac{\mathrm{d} \mathtt{rc40.capacitor40.v}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc40.capacitor40.p.i}\left( t \right)}{\mathtt{rc40.capacitor40.C}} \\
+\mathtt{rc40.source.V} =  - \mathtt{rc40.source.n.v}\left( t \right) + \mathtt{rc40.source.p.v}\left( t \right) \\
+0 = \mathtt{rc40.source.n.i}\left( t \right) + \mathtt{rc40.source.p.i}\left( t \right) \\
+\mathtt{rc40.ground.g.v}\left( t \right) = 0 \\
+\frac{\mathrm{d} \mathtt{rc40.heat\_capacitor40.h.T}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc40.heat\_capacitor40.h.Q\_flow}\left( t \right)}{\mathtt{rc40.heat\_capacitor40.V} \mathtt{rc40.heat\_capacitor40.cp} \mathtt{rc40.heat\_capacitor40.rho}} \\
+\mathrm{connect}\left( source_{+}p, resistor41_{+}p \right) \\
+\mathrm{connect}\left( resistor41_{+}n, capacitor41_{+}p \right) \\
+\mathrm{connect}\left( capacitor41_{+}n, source_{+}n, ground_{+}g \right) \\
+\mathrm{connect}\left( resistor41_{+}h, heat_{capacitor41_{+}h} \right) \\
+\mathtt{rc41.resistor41.RTherm}\left( t \right) = \mathtt{rc41.resistor41.R} \left( 1 + \left(  - \mathtt{rc41.resistor41.TAmbient} + \mathtt{rc41.resistor41.h.T}\left( t \right) \right) \mathtt{rc41.resistor41.alpha} \right) \\
+\mathtt{rc41.resistor41.v}\left( t \right) = \mathtt{rc41.resistor41.RTherm}\left( t \right) \mathtt{rc41.resistor41.p.i}\left( t \right) \\
+\mathtt{rc41.resistor41.h.Q\_flow}\left( t \right) =  - \mathtt{rc41.resistor41.v}\left( t \right) \mathtt{rc41.resistor41.p.i}\left( t \right) \\
+\mathtt{rc41.resistor41.v}\left( t \right) =  - \mathtt{rc41.resistor41.n.v}\left( t \right) + \mathtt{rc41.resistor41.p.v}\left( t \right) \\
+0 = \mathtt{rc41.resistor41.n.i}\left( t \right) + \mathtt{rc41.resistor41.p.i}\left( t \right) \\
+\mathtt{rc41.capacitor41.v}\left( t \right) = \mathtt{rc41.capacitor41.p.v}\left( t \right) - \mathtt{rc41.capacitor41.n.v}\left( t \right) \\
+0 = \mathtt{rc41.capacitor41.n.i}\left( t \right) + \mathtt{rc41.capacitor41.p.i}\left( t \right) \\
+\frac{\mathrm{d} \mathtt{rc41.capacitor41.v}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc41.capacitor41.p.i}\left( t \right)}{\mathtt{rc41.capacitor41.C}} \\
+\mathtt{rc41.source.V} =  - \mathtt{rc41.source.n.v}\left( t \right) + \mathtt{rc41.source.p.v}\left( t \right) \\
+0 = \mathtt{rc41.source.n.i}\left( t \right) + \mathtt{rc41.source.p.i}\left( t \right) \\
+\mathtt{rc41.ground.g.v}\left( t \right) = 0 \\
+\frac{\mathrm{d} \mathtt{rc41.heat\_capacitor41.h.T}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc41.heat\_capacitor41.h.Q\_flow}\left( t \right)}{\mathtt{rc41.heat\_capacitor41.V} \mathtt{rc41.heat\_capacitor41.cp} \mathtt{rc41.heat\_capacitor41.rho}} \\
+\mathrm{connect}\left( source_{+}p, resistor42_{+}p \right) \\
+\mathrm{connect}\left( resistor42_{+}n, capacitor42_{+}p \right) \\
+\mathrm{connect}\left( capacitor42_{+}n, source_{+}n, ground_{+}g \right) \\
+\mathrm{connect}\left( resistor42_{+}h, heat_{capacitor42_{+}h} \right) \\
+\mathtt{rc42.resistor42.RTherm}\left( t \right) = \mathtt{rc42.resistor42.R} \left( 1 + \left(  - \mathtt{rc42.resistor42.TAmbient} + \mathtt{rc42.resistor42.h.T}\left( t \right) \right) \mathtt{rc42.resistor42.alpha} \right) \\
+\mathtt{rc42.resistor42.v}\left( t \right) = \mathtt{rc42.resistor42.p.i}\left( t \right) \mathtt{rc42.resistor42.RTherm}\left( t \right) \\
+\mathtt{rc42.resistor42.h.Q\_flow}\left( t \right) =  - \mathtt{rc42.resistor42.p.i}\left( t \right) \mathtt{rc42.resistor42.v}\left( t \right) \\
+\mathtt{rc42.resistor42.v}\left( t \right) = \mathtt{rc42.resistor42.p.v}\left( t \right) - \mathtt{rc42.resistor42.n.v}\left( t \right) \\
+0 = \mathtt{rc42.resistor42.p.i}\left( t \right) + \mathtt{rc42.resistor42.n.i}\left( t \right) \\
+\mathtt{rc42.capacitor42.v}\left( t \right) =  - \mathtt{rc42.capacitor42.n.v}\left( t \right) + \mathtt{rc42.capacitor42.p.v}\left( t \right) \\
+0 = \mathtt{rc42.capacitor42.p.i}\left( t \right) + \mathtt{rc42.capacitor42.n.i}\left( t \right) \\
+\frac{\mathrm{d} \mathtt{rc42.capacitor42.v}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc42.capacitor42.p.i}\left( t \right)}{\mathtt{rc42.capacitor42.C}} \\
+\mathtt{rc42.source.V} =  - \mathtt{rc42.source.n.v}\left( t \right) + \mathtt{rc42.source.p.v}\left( t \right) \\
+0 = \mathtt{rc42.source.p.i}\left( t \right) + \mathtt{rc42.source.n.i}\left( t \right) \\
+\mathtt{rc42.ground.g.v}\left( t \right) = 0 \\
+\frac{\mathrm{d} \mathtt{rc42.heat\_capacitor42.h.T}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc42.heat\_capacitor42.h.Q\_flow}\left( t \right)}{\mathtt{rc42.heat\_capacitor42.V} \mathtt{rc42.heat\_capacitor42.cp} \mathtt{rc42.heat\_capacitor42.rho}} \\
+\mathrm{connect}\left( source_{+}p, resistor43_{+}p \right) \\
+\mathrm{connect}\left( resistor43_{+}n, capacitor43_{+}p \right) \\
+\mathrm{connect}\left( capacitor43_{+}n, source_{+}n, ground_{+}g \right) \\
+\mathrm{connect}\left( resistor43_{+}h, heat_{capacitor43_{+}h} \right) \\
+\mathtt{rc43.resistor43.RTherm}\left( t \right) = \mathtt{rc43.resistor43.R} \left( 1 + \left(  - \mathtt{rc43.resistor43.TAmbient} + \mathtt{rc43.resistor43.h.T}\left( t \right) \right) \mathtt{rc43.resistor43.alpha} \right) \\
+\mathtt{rc43.resistor43.v}\left( t \right) = \mathtt{rc43.resistor43.RTherm}\left( t \right) \mathtt{rc43.resistor43.p.i}\left( t \right) \\
+\mathtt{rc43.resistor43.h.Q\_flow}\left( t \right) =  - \mathtt{rc43.resistor43.p.i}\left( t \right) \mathtt{rc43.resistor43.v}\left( t \right) \\
+\mathtt{rc43.resistor43.v}\left( t \right) = \mathtt{rc43.resistor43.p.v}\left( t \right) - \mathtt{rc43.resistor43.n.v}\left( t \right) \\
+0 = \mathtt{rc43.resistor43.p.i}\left( t \right) + \mathtt{rc43.resistor43.n.i}\left( t \right) \\
+\mathtt{rc43.capacitor43.v}\left( t \right) =  - \mathtt{rc43.capacitor43.n.v}\left( t \right) + \mathtt{rc43.capacitor43.p.v}\left( t \right) \\
+0 = \mathtt{rc43.capacitor43.p.i}\left( t \right) + \mathtt{rc43.capacitor43.n.i}\left( t \right) \\
+\frac{\mathrm{d} \mathtt{rc43.capacitor43.v}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc43.capacitor43.p.i}\left( t \right)}{\mathtt{rc43.capacitor43.C}} \\
+\mathtt{rc43.source.V} =  - \mathtt{rc43.source.n.v}\left( t \right) + \mathtt{rc43.source.p.v}\left( t \right) \\
+0 = \mathtt{rc43.source.p.i}\left( t \right) + \mathtt{rc43.source.n.i}\left( t \right) \\
+\mathtt{rc43.ground.g.v}\left( t \right) = 0 \\
+\frac{\mathrm{d} \mathtt{rc43.heat\_capacitor43.h.T}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc43.heat\_capacitor43.h.Q\_flow}\left( t \right)}{\mathtt{rc43.heat\_capacitor43.V} \mathtt{rc43.heat\_capacitor43.cp} \mathtt{rc43.heat\_capacitor43.rho}} \\
+\mathrm{connect}\left( source_{+}p, resistor44_{+}p \right) \\
+\mathrm{connect}\left( resistor44_{+}n, capacitor44_{+}p \right) \\
+\mathrm{connect}\left( capacitor44_{+}n, source_{+}n, ground_{+}g \right) \\
+\mathrm{connect}\left( resistor44_{+}h, heat_{capacitor44_{+}h} \right) \\
+\mathtt{rc44.resistor44.RTherm}\left( t \right) = \mathtt{rc44.resistor44.R} \left( 1 + \left(  - \mathtt{rc44.resistor44.TAmbient} + \mathtt{rc44.resistor44.h.T}\left( t \right) \right) \mathtt{rc44.resistor44.alpha} \right) \\
+\mathtt{rc44.resistor44.v}\left( t \right) = \mathtt{rc44.resistor44.p.i}\left( t \right) \mathtt{rc44.resistor44.RTherm}\left( t \right) \\
+\mathtt{rc44.resistor44.h.Q\_flow}\left( t \right) =  - \mathtt{rc44.resistor44.p.i}\left( t \right) \mathtt{rc44.resistor44.v}\left( t \right) \\
+\mathtt{rc44.resistor44.v}\left( t \right) =  - \mathtt{rc44.resistor44.n.v}\left( t \right) + \mathtt{rc44.resistor44.p.v}\left( t \right) \\
+0 = \mathtt{rc44.resistor44.n.i}\left( t \right) + \mathtt{rc44.resistor44.p.i}\left( t \right) \\
+\mathtt{rc44.capacitor44.v}\left( t \right) =  - \mathtt{rc44.capacitor44.n.v}\left( t \right) + \mathtt{rc44.capacitor44.p.v}\left( t \right) \\
+0 = \mathtt{rc44.capacitor44.p.i}\left( t \right) + \mathtt{rc44.capacitor44.n.i}\left( t \right) \\
+\frac{\mathrm{d} \mathtt{rc44.capacitor44.v}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc44.capacitor44.p.i}\left( t \right)}{\mathtt{rc44.capacitor44.C}} \\
+\mathtt{rc44.source.V} =  - \mathtt{rc44.source.n.v}\left( t \right) + \mathtt{rc44.source.p.v}\left( t \right) \\
+0 = \mathtt{rc44.source.n.i}\left( t \right) + \mathtt{rc44.source.p.i}\left( t \right) \\
+\mathtt{rc44.ground.g.v}\left( t \right) = 0 \\
+\frac{\mathrm{d} \mathtt{rc44.heat\_capacitor44.h.T}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc44.heat\_capacitor44.h.Q\_flow}\left( t \right)}{\mathtt{rc44.heat\_capacitor44.V} \mathtt{rc44.heat\_capacitor44.cp} \mathtt{rc44.heat\_capacitor44.rho}} \\
+\mathrm{connect}\left( source_{+}p, resistor45_{+}p \right) \\
+\mathrm{connect}\left( resistor45_{+}n, capacitor45_{+}p \right) \\
+\mathrm{connect}\left( capacitor45_{+}n, source_{+}n, ground_{+}g \right) \\
+\mathrm{connect}\left( resistor45_{+}h, heat_{capacitor45_{+}h} \right) \\
+\mathtt{rc45.resistor45.RTherm}\left( t \right) = \mathtt{rc45.resistor45.R} \left( 1 + \left(  - \mathtt{rc45.resistor45.TAmbient} + \mathtt{rc45.resistor45.h.T}\left( t \right) \right) \mathtt{rc45.resistor45.alpha} \right) \\
+\mathtt{rc45.resistor45.v}\left( t \right) = \mathtt{rc45.resistor45.p.i}\left( t \right) \mathtt{rc45.resistor45.RTherm}\left( t \right) \\
+\mathtt{rc45.resistor45.h.Q\_flow}\left( t \right) =  - \mathtt{rc45.resistor45.p.i}\left( t \right) \mathtt{rc45.resistor45.v}\left( t \right) \\
+\mathtt{rc45.resistor45.v}\left( t \right) = \mathtt{rc45.resistor45.p.v}\left( t \right) - \mathtt{rc45.resistor45.n.v}\left( t \right) \\
+0 = \mathtt{rc45.resistor45.p.i}\left( t \right) + \mathtt{rc45.resistor45.n.i}\left( t \right) \\
+\mathtt{rc45.capacitor45.v}\left( t \right) =  - \mathtt{rc45.capacitor45.n.v}\left( t \right) + \mathtt{rc45.capacitor45.p.v}\left( t \right) \\
+0 = \mathtt{rc45.capacitor45.p.i}\left( t \right) + \mathtt{rc45.capacitor45.n.i}\left( t \right) \\
+\frac{\mathrm{d} \mathtt{rc45.capacitor45.v}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc45.capacitor45.p.i}\left( t \right)}{\mathtt{rc45.capacitor45.C}} \\
+\mathtt{rc45.source.V} =  - \mathtt{rc45.source.n.v}\left( t \right) + \mathtt{rc45.source.p.v}\left( t \right) \\
+0 = \mathtt{rc45.source.n.i}\left( t \right) + \mathtt{rc45.source.p.i}\left( t \right) \\
+\mathtt{rc45.ground.g.v}\left( t \right) = 0 \\
+\frac{\mathrm{d} \mathtt{rc45.heat\_capacitor45.h.T}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc45.heat\_capacitor45.h.Q\_flow}\left( t \right)}{\mathtt{rc45.heat\_capacitor45.V} \mathtt{rc45.heat\_capacitor45.cp} \mathtt{rc45.heat\_capacitor45.rho}} \\
+\mathrm{connect}\left( source_{+}p, resistor46_{+}p \right) \\
+\mathrm{connect}\left( resistor46_{+}n, capacitor46_{+}p \right) \\
+\mathrm{connect}\left( capacitor46_{+}n, source_{+}n, ground_{+}g \right) \\
+\mathrm{connect}\left( resistor46_{+}h, heat_{capacitor46_{+}h} \right) \\
+\mathtt{rc46.resistor46.RTherm}\left( t \right) = \mathtt{rc46.resistor46.R} \left( 1 + \left(  - \mathtt{rc46.resistor46.TAmbient} + \mathtt{rc46.resistor46.h.T}\left( t \right) \right) \mathtt{rc46.resistor46.alpha} \right) \\
+\mathtt{rc46.resistor46.v}\left( t \right) = \mathtt{rc46.resistor46.p.i}\left( t \right) \mathtt{rc46.resistor46.RTherm}\left( t \right) \\
+\mathtt{rc46.resistor46.h.Q\_flow}\left( t \right) =  - \mathtt{rc46.resistor46.p.i}\left( t \right) \mathtt{rc46.resistor46.v}\left( t \right) \\
+\mathtt{rc46.resistor46.v}\left( t \right) = \mathtt{rc46.resistor46.p.v}\left( t \right) - \mathtt{rc46.resistor46.n.v}\left( t \right) \\
+0 = \mathtt{rc46.resistor46.p.i}\left( t \right) + \mathtt{rc46.resistor46.n.i}\left( t \right) \\
+\mathtt{rc46.capacitor46.v}\left( t \right) = \mathtt{rc46.capacitor46.p.v}\left( t \right) - \mathtt{rc46.capacitor46.n.v}\left( t \right) \\
+0 = \mathtt{rc46.capacitor46.p.i}\left( t \right) + \mathtt{rc46.capacitor46.n.i}\left( t \right) \\
+\frac{\mathrm{d} \mathtt{rc46.capacitor46.v}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc46.capacitor46.p.i}\left( t \right)}{\mathtt{rc46.capacitor46.C}} \\
+\mathtt{rc46.source.V} = \mathtt{rc46.source.p.v}\left( t \right) - \mathtt{rc46.source.n.v}\left( t \right) \\
+0 = \mathtt{rc46.source.n.i}\left( t \right) + \mathtt{rc46.source.p.i}\left( t \right) \\
+\mathtt{rc46.ground.g.v}\left( t \right) = 0 \\
+\frac{\mathrm{d} \mathtt{rc46.heat\_capacitor46.h.T}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc46.heat\_capacitor46.h.Q\_flow}\left( t \right)}{\mathtt{rc46.heat\_capacitor46.V} \mathtt{rc46.heat\_capacitor46.cp} \mathtt{rc46.heat\_capacitor46.rho}} \\
+\mathrm{connect}\left( source_{+}p, resistor47_{+}p \right) \\
+\mathrm{connect}\left( resistor47_{+}n, capacitor47_{+}p \right) \\
+\mathrm{connect}\left( capacitor47_{+}n, source_{+}n, ground_{+}g \right) \\
+\mathrm{connect}\left( resistor47_{+}h, heat_{capacitor47_{+}h} \right) \\
+\mathtt{rc47.resistor47.RTherm}\left( t \right) = \mathtt{rc47.resistor47.R} \left( 1 + \left(  - \mathtt{rc47.resistor47.TAmbient} + \mathtt{rc47.resistor47.h.T}\left( t \right) \right) \mathtt{rc47.resistor47.alpha} \right) \\
+\mathtt{rc47.resistor47.v}\left( t \right) = \mathtt{rc47.resistor47.RTherm}\left( t \right) \mathtt{rc47.resistor47.p.i}\left( t \right) \\
+\mathtt{rc47.resistor47.h.Q\_flow}\left( t \right) =  - \mathtt{rc47.resistor47.p.i}\left( t \right) \mathtt{rc47.resistor47.v}\left( t \right) \\
+\mathtt{rc47.resistor47.v}\left( t \right) = \mathtt{rc47.resistor47.p.v}\left( t \right) - \mathtt{rc47.resistor47.n.v}\left( t \right) \\
+0 = \mathtt{rc47.resistor47.n.i}\left( t \right) + \mathtt{rc47.resistor47.p.i}\left( t \right) \\
+\mathtt{rc47.capacitor47.v}\left( t \right) =  - \mathtt{rc47.capacitor47.n.v}\left( t \right) + \mathtt{rc47.capacitor47.p.v}\left( t \right) \\
+0 = \mathtt{rc47.capacitor47.n.i}\left( t \right) + \mathtt{rc47.capacitor47.p.i}\left( t \right) \\
+\frac{\mathrm{d} \mathtt{rc47.capacitor47.v}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc47.capacitor47.p.i}\left( t \right)}{\mathtt{rc47.capacitor47.C}} \\
+\mathtt{rc47.source.V} =  - \mathtt{rc47.source.n.v}\left( t \right) + \mathtt{rc47.source.p.v}\left( t \right) \\
+0 = \mathtt{rc47.source.p.i}\left( t \right) + \mathtt{rc47.source.n.i}\left( t \right) \\
+\mathtt{rc47.ground.g.v}\left( t \right) = 0 \\
+\frac{\mathrm{d} \mathtt{rc47.heat\_capacitor47.h.T}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc47.heat\_capacitor47.h.Q\_flow}\left( t \right)}{\mathtt{rc47.heat\_capacitor47.V} \mathtt{rc47.heat\_capacitor47.cp} \mathtt{rc47.heat\_capacitor47.rho}} \\
+\mathrm{connect}\left( source_{+}p, resistor48_{+}p \right) \\
+\mathrm{connect}\left( resistor48_{+}n, capacitor48_{+}p \right) \\
+\mathrm{connect}\left( capacitor48_{+}n, source_{+}n, ground_{+}g \right) \\
+\mathrm{connect}\left( resistor48_{+}h, heat_{capacitor48_{+}h} \right) \\
+\mathtt{rc48.resistor48.RTherm}\left( t \right) = \mathtt{rc48.resistor48.R} \left( 1 + \left(  - \mathtt{rc48.resistor48.TAmbient} + \mathtt{rc48.resistor48.h.T}\left( t \right) \right) \mathtt{rc48.resistor48.alpha} \right) \\
+\mathtt{rc48.resistor48.v}\left( t \right) = \mathtt{rc48.resistor48.p.i}\left( t \right) \mathtt{rc48.resistor48.RTherm}\left( t \right) \\
+\mathtt{rc48.resistor48.h.Q\_flow}\left( t \right) =  - \mathtt{rc48.resistor48.p.i}\left( t \right) \mathtt{rc48.resistor48.v}\left( t \right) \\
+\mathtt{rc48.resistor48.v}\left( t \right) = \mathtt{rc48.resistor48.p.v}\left( t \right) - \mathtt{rc48.resistor48.n.v}\left( t \right) \\
+0 = \mathtt{rc48.resistor48.p.i}\left( t \right) + \mathtt{rc48.resistor48.n.i}\left( t \right) \\
+\mathtt{rc48.capacitor48.v}\left( t \right) =  - \mathtt{rc48.capacitor48.n.v}\left( t \right) + \mathtt{rc48.capacitor48.p.v}\left( t \right) \\
+0 = \mathtt{rc48.capacitor48.n.i}\left( t \right) + \mathtt{rc48.capacitor48.p.i}\left( t \right) \\
+\frac{\mathrm{d} \mathtt{rc48.capacitor48.v}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc48.capacitor48.p.i}\left( t \right)}{\mathtt{rc48.capacitor48.C}} \\
+\mathtt{rc48.source.V} = \mathtt{rc48.source.p.v}\left( t \right) - \mathtt{rc48.source.n.v}\left( t \right) \\
+0 = \mathtt{rc48.source.p.i}\left( t \right) + \mathtt{rc48.source.n.i}\left( t \right) \\
+\mathtt{rc48.ground.g.v}\left( t \right) = 0 \\
+\frac{\mathrm{d} \mathtt{rc48.heat\_capacitor48.h.T}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc48.heat\_capacitor48.h.Q\_flow}\left( t \right)}{\mathtt{rc48.heat\_capacitor48.V} \mathtt{rc48.heat\_capacitor48.cp} \mathtt{rc48.heat\_capacitor48.rho}} \\
+\mathrm{connect}\left( source_{+}p, resistor49_{+}p \right) \\
+\mathrm{connect}\left( resistor49_{+}n, capacitor49_{+}p \right) \\
+\mathrm{connect}\left( capacitor49_{+}n, source_{+}n, ground_{+}g \right) \\
+\mathrm{connect}\left( resistor49_{+}h, heat_{capacitor49_{+}h} \right) \\
+\mathtt{rc49.resistor49.RTherm}\left( t \right) = \mathtt{rc49.resistor49.R} \left( 1 + \left(  - \mathtt{rc49.resistor49.TAmbient} + \mathtt{rc49.resistor49.h.T}\left( t \right) \right) \mathtt{rc49.resistor49.alpha} \right) \\
+\mathtt{rc49.resistor49.v}\left( t \right) = \mathtt{rc49.resistor49.RTherm}\left( t \right) \mathtt{rc49.resistor49.p.i}\left( t \right) \\
+\mathtt{rc49.resistor49.h.Q\_flow}\left( t \right) =  - \mathtt{rc49.resistor49.p.i}\left( t \right) \mathtt{rc49.resistor49.v}\left( t \right) \\
+\mathtt{rc49.resistor49.v}\left( t \right) = \mathtt{rc49.resistor49.p.v}\left( t \right) - \mathtt{rc49.resistor49.n.v}\left( t \right) \\
+0 = \mathtt{rc49.resistor49.n.i}\left( t \right) + \mathtt{rc49.resistor49.p.i}\left( t \right) \\
+\mathtt{rc49.capacitor49.v}\left( t \right) = \mathtt{rc49.capacitor49.p.v}\left( t \right) - \mathtt{rc49.capacitor49.n.v}\left( t \right) \\
+0 = \mathtt{rc49.capacitor49.n.i}\left( t \right) + \mathtt{rc49.capacitor49.p.i}\left( t \right) \\
+\frac{\mathrm{d} \mathtt{rc49.capacitor49.v}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc49.capacitor49.p.i}\left( t \right)}{\mathtt{rc49.capacitor49.C}} \\
+\mathtt{rc49.source.V} = \mathtt{rc49.source.p.v}\left( t \right) - \mathtt{rc49.source.n.v}\left( t \right) \\
+0 = \mathtt{rc49.source.p.i}\left( t \right) + \mathtt{rc49.source.n.i}\left( t \right) \\
+\mathtt{rc49.ground.g.v}\left( t \right) = 0 \\
+\frac{\mathrm{d} \mathtt{rc49.heat\_capacitor49.h.T}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc49.heat\_capacitor49.h.Q\_flow}\left( t \right)}{\mathtt{rc49.heat\_capacitor49.V} \mathtt{rc49.heat\_capacitor49.cp} \mathtt{rc49.heat\_capacitor49.rho}} \\
+\mathrm{connect}\left( source_{+}p, resistor50_{+}p \right) \\
+\mathrm{connect}\left( resistor50_{+}n, capacitor50_{+}p \right) \\
+\mathrm{connect}\left( capacitor50_{+}n, source_{+}n, ground_{+}g \right) \\
+\mathrm{connect}\left( resistor50_{+}h, heat_{capacitor50_{+}h} \right) \\
+\mathtt{rc50.resistor50.RTherm}\left( t \right) = \mathtt{rc50.resistor50.R} \left( 1 + \left(  - \mathtt{rc50.resistor50.TAmbient} + \mathtt{rc50.resistor50.h.T}\left( t \right) \right) \mathtt{rc50.resistor50.alpha} \right) \\
+\mathtt{rc50.resistor50.v}\left( t \right) = \mathtt{rc50.resistor50.RTherm}\left( t \right) \mathtt{rc50.resistor50.p.i}\left( t \right) \\
+\mathtt{rc50.resistor50.h.Q\_flow}\left( t \right) =  - \mathtt{rc50.resistor50.v}\left( t \right) \mathtt{rc50.resistor50.p.i}\left( t \right) \\
+\mathtt{rc50.resistor50.v}\left( t \right) = \mathtt{rc50.resistor50.p.v}\left( t \right) - \mathtt{rc50.resistor50.n.v}\left( t \right) \\
+0 = \mathtt{rc50.resistor50.n.i}\left( t \right) + \mathtt{rc50.resistor50.p.i}\left( t \right) \\
+\mathtt{rc50.capacitor50.v}\left( t \right) =  - \mathtt{rc50.capacitor50.n.v}\left( t \right) + \mathtt{rc50.capacitor50.p.v}\left( t \right) \\
+0 = \mathtt{rc50.capacitor50.n.i}\left( t \right) + \mathtt{rc50.capacitor50.p.i}\left( t \right) \\
+\frac{\mathrm{d} \mathtt{rc50.capacitor50.v}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc50.capacitor50.p.i}\left( t \right)}{\mathtt{rc50.capacitor50.C}} \\
+\mathtt{rc50.source.V} =  - \mathtt{rc50.source.n.v}\left( t \right) + \mathtt{rc50.source.p.v}\left( t \right) \\
+0 = \mathtt{rc50.source.p.i}\left( t \right) + \mathtt{rc50.source.n.i}\left( t \right) \\
+\mathtt{rc50.ground.g.v}\left( t \right) = 0 \\
+\frac{\mathrm{d} \mathtt{rc50.heat\_capacitor50.h.T}\left( t \right)}{\mathrm{d}t} = \frac{\mathtt{rc50.heat\_capacitor50.h.Q\_flow}\left( t \right)}{\mathtt{rc50.heat\_capacitor50.V} \mathtt{rc50.heat\_capacitor50.cp} \mathtt{rc50.heat\_capacitor50.rho}} \\
+\end{array}
+\right]
+\end{equation}
+ \]</p><p>Now let&#39;s say we want to expose a bit more parallelism via running tearing. How do we do that?</p><pre><code class="language-julia hljs">sys = structural_simplify(big_rc)</code></pre><p class="math-container">\[ \begin{align}
+\frac{\mathrm{d} E\left( t \right)}{\mathrm{d}t} &amp;=  - \mathtt{rc11.heat\_capacitor11.h.Q\_flow}\left( t \right) - \mathtt{rc34.heat\_capacitor34.h.Q\_flow}\left( t \right) - \mathtt{rc46.heat\_capacitor46.h.Q\_flow}\left( t \right) - \mathtt{rc16.heat\_capacitor16.h.Q\_flow}\left( t \right) - \mathtt{rc3.heat\_capacitor3.h.Q\_flow}\left( t \right) - \mathtt{rc13.heat\_capacitor13.h.Q\_flow}\left( t \right) - \mathtt{rc45.heat\_capacitor45.h.Q\_flow}\left( t \right) - \mathtt{rc20.heat\_capacitor20.h.Q\_flow}\left( t \right) - \mathtt{rc31.heat\_capacitor31.h.Q\_flow}\left( t \right) - \mathtt{rc47.heat\_capacitor47.h.Q\_flow}\left( t \right) - \mathtt{rc15.heat\_capacitor15.h.Q\_flow}\left( t \right) - \mathtt{rc44.heat\_capacitor44.h.Q\_flow}\left( t \right) - \mathtt{rc37.heat\_capacitor37.h.Q\_flow}\left( t \right) - \mathtt{rc10.heat\_capacitor10.h.Q\_flow}\left( t \right) - \mathtt{rc4.heat\_capacitor4.h.Q\_flow}\left( t \right) - \mathtt{rc36.heat\_capacitor36.h.Q\_flow}\left( t \right) - \mathtt{rc39.heat\_capacitor39.h.Q\_flow}\left( t \right) - \mathtt{rc7.heat\_capacitor7.h.Q\_flow}\left( t \right) - \mathtt{rc1.heat\_capacitor1.h.Q\_flow}\left( t \right) - \mathtt{rc9.heat\_capacitor9.h.Q\_flow}\left( t \right) - \mathtt{rc12.heat\_capacitor12.h.Q\_flow}\left( t \right) - \mathtt{rc30.heat\_capacitor30.h.Q\_flow}\left( t \right) - \mathtt{rc50.heat\_capacitor50.h.Q\_flow}\left( t \right) - \mathtt{rc26.heat\_capacitor26.h.Q\_flow}\left( t \right) - \mathtt{rc27.heat\_capacitor27.h.Q\_flow}\left( t \right) - \mathtt{rc21.heat\_capacitor21.h.Q\_flow}\left( t \right) - \mathtt{rc49.heat\_capacitor49.h.Q\_flow}\left( t \right) - \mathtt{rc40.heat\_capacitor40.h.Q\_flow}\left( t \right) - \mathtt{rc32.heat\_capacitor32.h.Q\_flow}\left( t \right) - \mathtt{rc42.heat\_capacitor42.h.Q\_flow}\left( t \right) - \mathtt{rc6.heat\_capacitor6.h.Q\_flow}\left( t \right) - \mathtt{rc19.heat\_capacitor19.h.Q\_flow}\left( t \right) - \mathtt{rc23.heat\_capacitor23.h.Q\_flow}\left( t \right) - \mathtt{rc18.heat\_capacitor18.h.Q\_flow}\left( t \right) - \mathtt{rc35.heat\_capacitor35.h.Q\_flow}\left( t \right) - \mathtt{rc29.heat\_capacitor29.h.Q\_flow}\left( t \right) - \mathtt{rc5.heat\_capacitor5.h.Q\_flow}\left( t \right) - \mathtt{rc2.heat\_capacitor2.h.Q\_flow}\left( t \right) - \mathtt{rc28.heat\_capacitor28.h.Q\_flow}\left( t \right) - \mathtt{rc38.heat\_capacitor38.h.Q\_flow}\left( t \right) - \mathtt{rc43.heat\_capacitor43.h.Q\_flow}\left( t \right) - \mathtt{rc22.heat\_capacitor22.h.Q\_flow}\left( t \right) - \mathtt{rc33.heat\_capacitor33.h.Q\_flow}\left( t \right) - \mathtt{rc14.heat\_capacitor14.h.Q\_flow}\left( t \right) - \mathtt{rc25.heat\_capacitor25.h.Q\_flow}\left( t \right) - \mathtt{rc17.heat\_capacitor17.h.Q\_flow}\left( t \right) - \mathtt{rc24.heat\_capacitor24.h.Q\_flow}\left( t \right) - \mathtt{rc48.heat\_capacitor48.h.Q\_flow}\left( t \right) - \mathtt{rc41.heat\_capacitor41.h.Q\_flow}\left( t \right) - \mathtt{rc8.heat\_capacitor8.h.Q\_flow}\left( t \right) \\
+\frac{\mathrm{d} \mathtt{rc1.capacitor1.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc1.capacitor1.p.i}\left( t \right)}{\mathtt{rc1.capacitor1.C}} \\
+\frac{\mathrm{d} \mathtt{rc1.heat\_capacitor1.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc1.heat\_capacitor1.h.Q\_flow}\left( t \right)}{\mathtt{rc1.heat\_capacitor1.V} \mathtt{rc1.heat\_capacitor1.cp} \mathtt{rc1.heat\_capacitor1.rho}} \\
+\frac{\mathrm{d} \mathtt{rc2.capacitor2.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc2.capacitor2.p.i}\left( t \right)}{\mathtt{rc2.capacitor2.C}} \\
+\frac{\mathrm{d} \mathtt{rc2.heat\_capacitor2.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc2.heat\_capacitor2.h.Q\_flow}\left( t \right)}{\mathtt{rc2.heat\_capacitor2.V} \mathtt{rc2.heat\_capacitor2.cp} \mathtt{rc2.heat\_capacitor2.rho}} \\
+\frac{\mathrm{d} \mathtt{rc3.capacitor3.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc3.capacitor3.p.i}\left( t \right)}{\mathtt{rc3.capacitor3.C}} \\
+\frac{\mathrm{d} \mathtt{rc3.heat\_capacitor3.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc3.heat\_capacitor3.h.Q\_flow}\left( t \right)}{\mathtt{rc3.heat\_capacitor3.V} \mathtt{rc3.heat\_capacitor3.cp} \mathtt{rc3.heat\_capacitor3.rho}} \\
+\frac{\mathrm{d} \mathtt{rc4.capacitor4.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc4.capacitor4.p.i}\left( t \right)}{\mathtt{rc4.capacitor4.C}} \\
+\frac{\mathrm{d} \mathtt{rc4.heat\_capacitor4.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc4.heat\_capacitor4.h.Q\_flow}\left( t \right)}{\mathtt{rc4.heat\_capacitor4.V} \mathtt{rc4.heat\_capacitor4.cp} \mathtt{rc4.heat\_capacitor4.rho}} \\
+\frac{\mathrm{d} \mathtt{rc5.capacitor5.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc5.capacitor5.p.i}\left( t \right)}{\mathtt{rc5.capacitor5.C}} \\
+\frac{\mathrm{d} \mathtt{rc5.heat\_capacitor5.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc5.heat\_capacitor5.h.Q\_flow}\left( t \right)}{\mathtt{rc5.heat\_capacitor5.V} \mathtt{rc5.heat\_capacitor5.cp} \mathtt{rc5.heat\_capacitor5.rho}} \\
+\frac{\mathrm{d} \mathtt{rc6.capacitor6.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc6.capacitor6.p.i}\left( t \right)}{\mathtt{rc6.capacitor6.C}} \\
+\frac{\mathrm{d} \mathtt{rc6.heat\_capacitor6.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc6.heat\_capacitor6.h.Q\_flow}\left( t \right)}{\mathtt{rc6.heat\_capacitor6.V} \mathtt{rc6.heat\_capacitor6.cp} \mathtt{rc6.heat\_capacitor6.rho}} \\
+\frac{\mathrm{d} \mathtt{rc7.capacitor7.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc7.capacitor7.p.i}\left( t \right)}{\mathtt{rc7.capacitor7.C}} \\
+\frac{\mathrm{d} \mathtt{rc7.heat\_capacitor7.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc7.heat\_capacitor7.h.Q\_flow}\left( t \right)}{\mathtt{rc7.heat\_capacitor7.V} \mathtt{rc7.heat\_capacitor7.cp} \mathtt{rc7.heat\_capacitor7.rho}} \\
+\frac{\mathrm{d} \mathtt{rc8.capacitor8.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc8.capacitor8.p.i}\left( t \right)}{\mathtt{rc8.capacitor8.C}} \\
+\frac{\mathrm{d} \mathtt{rc8.heat\_capacitor8.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc8.heat\_capacitor8.h.Q\_flow}\left( t \right)}{\mathtt{rc8.heat\_capacitor8.V} \mathtt{rc8.heat\_capacitor8.cp} \mathtt{rc8.heat\_capacitor8.rho}} \\
+\frac{\mathrm{d} \mathtt{rc9.capacitor9.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc9.capacitor9.p.i}\left( t \right)}{\mathtt{rc9.capacitor9.C}} \\
+\frac{\mathrm{d} \mathtt{rc9.heat\_capacitor9.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc9.heat\_capacitor9.h.Q\_flow}\left( t \right)}{\mathtt{rc9.heat\_capacitor9.V} \mathtt{rc9.heat\_capacitor9.cp} \mathtt{rc9.heat\_capacitor9.rho}} \\
+\frac{\mathrm{d} \mathtt{rc10.capacitor10.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc10.capacitor10.p.i}\left( t \right)}{\mathtt{rc10.capacitor10.C}} \\
+\frac{\mathrm{d} \mathtt{rc10.heat\_capacitor10.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc10.heat\_capacitor10.h.Q\_flow}\left( t \right)}{\mathtt{rc10.heat\_capacitor10.V} \mathtt{rc10.heat\_capacitor10.cp} \mathtt{rc10.heat\_capacitor10.rho}} \\
+\frac{\mathrm{d} \mathtt{rc11.capacitor11.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc11.capacitor11.p.i}\left( t \right)}{\mathtt{rc11.capacitor11.C}} \\
+\frac{\mathrm{d} \mathtt{rc11.heat\_capacitor11.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc11.heat\_capacitor11.h.Q\_flow}\left( t \right)}{\mathtt{rc11.heat\_capacitor11.V} \mathtt{rc11.heat\_capacitor11.cp} \mathtt{rc11.heat\_capacitor11.rho}} \\
+\frac{\mathrm{d} \mathtt{rc12.capacitor12.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc12.capacitor12.p.i}\left( t \right)}{\mathtt{rc12.capacitor12.C}} \\
+\frac{\mathrm{d} \mathtt{rc12.heat\_capacitor12.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc12.heat\_capacitor12.h.Q\_flow}\left( t \right)}{\mathtt{rc12.heat\_capacitor12.V} \mathtt{rc12.heat\_capacitor12.cp} \mathtt{rc12.heat\_capacitor12.rho}} \\
+\frac{\mathrm{d} \mathtt{rc13.capacitor13.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc13.capacitor13.p.i}\left( t \right)}{\mathtt{rc13.capacitor13.C}} \\
+\frac{\mathrm{d} \mathtt{rc13.heat\_capacitor13.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc13.heat\_capacitor13.h.Q\_flow}\left( t \right)}{\mathtt{rc13.heat\_capacitor13.V} \mathtt{rc13.heat\_capacitor13.cp} \mathtt{rc13.heat\_capacitor13.rho}} \\
+\frac{\mathrm{d} \mathtt{rc14.capacitor14.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc14.capacitor14.p.i}\left( t \right)}{\mathtt{rc14.capacitor14.C}} \\
+\frac{\mathrm{d} \mathtt{rc14.heat\_capacitor14.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc14.heat\_capacitor14.h.Q\_flow}\left( t \right)}{\mathtt{rc14.heat\_capacitor14.V} \mathtt{rc14.heat\_capacitor14.cp} \mathtt{rc14.heat\_capacitor14.rho}} \\
+\frac{\mathrm{d} \mathtt{rc15.capacitor15.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc15.capacitor15.p.i}\left( t \right)}{\mathtt{rc15.capacitor15.C}} \\
+\frac{\mathrm{d} \mathtt{rc15.heat\_capacitor15.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc15.heat\_capacitor15.h.Q\_flow}\left( t \right)}{\mathtt{rc15.heat\_capacitor15.V} \mathtt{rc15.heat\_capacitor15.cp} \mathtt{rc15.heat\_capacitor15.rho}} \\
+\frac{\mathrm{d} \mathtt{rc16.capacitor16.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc16.capacitor16.p.i}\left( t \right)}{\mathtt{rc16.capacitor16.C}} \\
+\frac{\mathrm{d} \mathtt{rc16.heat\_capacitor16.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc16.heat\_capacitor16.h.Q\_flow}\left( t \right)}{\mathtt{rc16.heat\_capacitor16.V} \mathtt{rc16.heat\_capacitor16.cp} \mathtt{rc16.heat\_capacitor16.rho}} \\
+\frac{\mathrm{d} \mathtt{rc17.capacitor17.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc17.capacitor17.p.i}\left( t \right)}{\mathtt{rc17.capacitor17.C}} \\
+\frac{\mathrm{d} \mathtt{rc17.heat\_capacitor17.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc17.heat\_capacitor17.h.Q\_flow}\left( t \right)}{\mathtt{rc17.heat\_capacitor17.V} \mathtt{rc17.heat\_capacitor17.cp} \mathtt{rc17.heat\_capacitor17.rho}} \\
+\frac{\mathrm{d} \mathtt{rc18.capacitor18.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc18.capacitor18.p.i}\left( t \right)}{\mathtt{rc18.capacitor18.C}} \\
+\frac{\mathrm{d} \mathtt{rc18.heat\_capacitor18.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc18.heat\_capacitor18.h.Q\_flow}\left( t \right)}{\mathtt{rc18.heat\_capacitor18.V} \mathtt{rc18.heat\_capacitor18.cp} \mathtt{rc18.heat\_capacitor18.rho}} \\
+\frac{\mathrm{d} \mathtt{rc19.capacitor19.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc19.capacitor19.p.i}\left( t \right)}{\mathtt{rc19.capacitor19.C}} \\
+\frac{\mathrm{d} \mathtt{rc19.heat\_capacitor19.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc19.heat\_capacitor19.h.Q\_flow}\left( t \right)}{\mathtt{rc19.heat\_capacitor19.V} \mathtt{rc19.heat\_capacitor19.cp} \mathtt{rc19.heat\_capacitor19.rho}} \\
+\frac{\mathrm{d} \mathtt{rc20.capacitor20.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc20.capacitor20.p.i}\left( t \right)}{\mathtt{rc20.capacitor20.C}} \\
+\frac{\mathrm{d} \mathtt{rc20.heat\_capacitor20.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc20.heat\_capacitor20.h.Q\_flow}\left( t \right)}{\mathtt{rc20.heat\_capacitor20.V} \mathtt{rc20.heat\_capacitor20.cp} \mathtt{rc20.heat\_capacitor20.rho}} \\
+\frac{\mathrm{d} \mathtt{rc21.capacitor21.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc21.capacitor21.p.i}\left( t \right)}{\mathtt{rc21.capacitor21.C}} \\
+\frac{\mathrm{d} \mathtt{rc21.heat\_capacitor21.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc21.heat\_capacitor21.h.Q\_flow}\left( t \right)}{\mathtt{rc21.heat\_capacitor21.V} \mathtt{rc21.heat\_capacitor21.cp} \mathtt{rc21.heat\_capacitor21.rho}} \\
+\frac{\mathrm{d} \mathtt{rc22.capacitor22.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc22.capacitor22.p.i}\left( t \right)}{\mathtt{rc22.capacitor22.C}} \\
+\frac{\mathrm{d} \mathtt{rc22.heat\_capacitor22.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc22.heat\_capacitor22.h.Q\_flow}\left( t \right)}{\mathtt{rc22.heat\_capacitor22.V} \mathtt{rc22.heat\_capacitor22.cp} \mathtt{rc22.heat\_capacitor22.rho}} \\
+\frac{\mathrm{d} \mathtt{rc23.capacitor23.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc23.capacitor23.p.i}\left( t \right)}{\mathtt{rc23.capacitor23.C}} \\
+\frac{\mathrm{d} \mathtt{rc23.heat\_capacitor23.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc23.heat\_capacitor23.h.Q\_flow}\left( t \right)}{\mathtt{rc23.heat\_capacitor23.V} \mathtt{rc23.heat\_capacitor23.cp} \mathtt{rc23.heat\_capacitor23.rho}} \\
+\frac{\mathrm{d} \mathtt{rc24.capacitor24.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc24.capacitor24.p.i}\left( t \right)}{\mathtt{rc24.capacitor24.C}} \\
+\frac{\mathrm{d} \mathtt{rc24.heat\_capacitor24.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc24.heat\_capacitor24.h.Q\_flow}\left( t \right)}{\mathtt{rc24.heat\_capacitor24.V} \mathtt{rc24.heat\_capacitor24.cp} \mathtt{rc24.heat\_capacitor24.rho}} \\
+\frac{\mathrm{d} \mathtt{rc25.capacitor25.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc25.capacitor25.p.i}\left( t \right)}{\mathtt{rc25.capacitor25.C}} \\
+\frac{\mathrm{d} \mathtt{rc25.heat\_capacitor25.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc25.heat\_capacitor25.h.Q\_flow}\left( t \right)}{\mathtt{rc25.heat\_capacitor25.V} \mathtt{rc25.heat\_capacitor25.cp} \mathtt{rc25.heat\_capacitor25.rho}} \\
+\frac{\mathrm{d} \mathtt{rc26.capacitor26.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc26.capacitor26.p.i}\left( t \right)}{\mathtt{rc26.capacitor26.C}} \\
+\frac{\mathrm{d} \mathtt{rc26.heat\_capacitor26.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc26.heat\_capacitor26.h.Q\_flow}\left( t \right)}{\mathtt{rc26.heat\_capacitor26.V} \mathtt{rc26.heat\_capacitor26.cp} \mathtt{rc26.heat\_capacitor26.rho}} \\
+\frac{\mathrm{d} \mathtt{rc27.capacitor27.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc27.capacitor27.p.i}\left( t \right)}{\mathtt{rc27.capacitor27.C}} \\
+\frac{\mathrm{d} \mathtt{rc27.heat\_capacitor27.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc27.heat\_capacitor27.h.Q\_flow}\left( t \right)}{\mathtt{rc27.heat\_capacitor27.V} \mathtt{rc27.heat\_capacitor27.cp} \mathtt{rc27.heat\_capacitor27.rho}} \\
+\frac{\mathrm{d} \mathtt{rc28.capacitor28.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc28.capacitor28.p.i}\left( t \right)}{\mathtt{rc28.capacitor28.C}} \\
+\frac{\mathrm{d} \mathtt{rc28.heat\_capacitor28.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc28.heat\_capacitor28.h.Q\_flow}\left( t \right)}{\mathtt{rc28.heat\_capacitor28.V} \mathtt{rc28.heat\_capacitor28.cp} \mathtt{rc28.heat\_capacitor28.rho}} \\
+\frac{\mathrm{d} \mathtt{rc29.capacitor29.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc29.capacitor29.p.i}\left( t \right)}{\mathtt{rc29.capacitor29.C}} \\
+\frac{\mathrm{d} \mathtt{rc29.heat\_capacitor29.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc29.heat\_capacitor29.h.Q\_flow}\left( t \right)}{\mathtt{rc29.heat\_capacitor29.V} \mathtt{rc29.heat\_capacitor29.cp} \mathtt{rc29.heat\_capacitor29.rho}} \\
+\frac{\mathrm{d} \mathtt{rc30.capacitor30.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc30.capacitor30.p.i}\left( t \right)}{\mathtt{rc30.capacitor30.C}} \\
+\frac{\mathrm{d} \mathtt{rc30.heat\_capacitor30.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc30.heat\_capacitor30.h.Q\_flow}\left( t \right)}{\mathtt{rc30.heat\_capacitor30.V} \mathtt{rc30.heat\_capacitor30.cp} \mathtt{rc30.heat\_capacitor30.rho}} \\
+\frac{\mathrm{d} \mathtt{rc31.capacitor31.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc31.capacitor31.p.i}\left( t \right)}{\mathtt{rc31.capacitor31.C}} \\
+\frac{\mathrm{d} \mathtt{rc31.heat\_capacitor31.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc31.heat\_capacitor31.h.Q\_flow}\left( t \right)}{\mathtt{rc31.heat\_capacitor31.V} \mathtt{rc31.heat\_capacitor31.cp} \mathtt{rc31.heat\_capacitor31.rho}} \\
+\frac{\mathrm{d} \mathtt{rc32.capacitor32.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc32.capacitor32.p.i}\left( t \right)}{\mathtt{rc32.capacitor32.C}} \\
+\frac{\mathrm{d} \mathtt{rc32.heat\_capacitor32.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc32.heat\_capacitor32.h.Q\_flow}\left( t \right)}{\mathtt{rc32.heat\_capacitor32.V} \mathtt{rc32.heat\_capacitor32.cp} \mathtt{rc32.heat\_capacitor32.rho}} \\
+\frac{\mathrm{d} \mathtt{rc33.capacitor33.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc33.capacitor33.p.i}\left( t \right)}{\mathtt{rc33.capacitor33.C}} \\
+\frac{\mathrm{d} \mathtt{rc33.heat\_capacitor33.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc33.heat\_capacitor33.h.Q\_flow}\left( t \right)}{\mathtt{rc33.heat\_capacitor33.V} \mathtt{rc33.heat\_capacitor33.cp} \mathtt{rc33.heat\_capacitor33.rho}} \\
+\frac{\mathrm{d} \mathtt{rc34.capacitor34.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc34.capacitor34.p.i}\left( t \right)}{\mathtt{rc34.capacitor34.C}} \\
+\frac{\mathrm{d} \mathtt{rc34.heat\_capacitor34.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc34.heat\_capacitor34.h.Q\_flow}\left( t \right)}{\mathtt{rc34.heat\_capacitor34.V} \mathtt{rc34.heat\_capacitor34.cp} \mathtt{rc34.heat\_capacitor34.rho}} \\
+\frac{\mathrm{d} \mathtt{rc35.capacitor35.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc35.capacitor35.p.i}\left( t \right)}{\mathtt{rc35.capacitor35.C}} \\
+\frac{\mathrm{d} \mathtt{rc35.heat\_capacitor35.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc35.heat\_capacitor35.h.Q\_flow}\left( t \right)}{\mathtt{rc35.heat\_capacitor35.V} \mathtt{rc35.heat\_capacitor35.cp} \mathtt{rc35.heat\_capacitor35.rho}} \\
+\frac{\mathrm{d} \mathtt{rc36.capacitor36.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc36.capacitor36.p.i}\left( t \right)}{\mathtt{rc36.capacitor36.C}} \\
+\frac{\mathrm{d} \mathtt{rc36.heat\_capacitor36.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc36.heat\_capacitor36.h.Q\_flow}\left( t \right)}{\mathtt{rc36.heat\_capacitor36.V} \mathtt{rc36.heat\_capacitor36.cp} \mathtt{rc36.heat\_capacitor36.rho}} \\
+\frac{\mathrm{d} \mathtt{rc37.capacitor37.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc37.capacitor37.p.i}\left( t \right)}{\mathtt{rc37.capacitor37.C}} \\
+\frac{\mathrm{d} \mathtt{rc37.heat\_capacitor37.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc37.heat\_capacitor37.h.Q\_flow}\left( t \right)}{\mathtt{rc37.heat\_capacitor37.V} \mathtt{rc37.heat\_capacitor37.cp} \mathtt{rc37.heat\_capacitor37.rho}} \\
+\frac{\mathrm{d} \mathtt{rc38.capacitor38.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc38.capacitor38.p.i}\left( t \right)}{\mathtt{rc38.capacitor38.C}} \\
+\frac{\mathrm{d} \mathtt{rc38.heat\_capacitor38.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc38.heat\_capacitor38.h.Q\_flow}\left( t \right)}{\mathtt{rc38.heat\_capacitor38.V} \mathtt{rc38.heat\_capacitor38.cp} \mathtt{rc38.heat\_capacitor38.rho}} \\
+\frac{\mathrm{d} \mathtt{rc39.capacitor39.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc39.capacitor39.p.i}\left( t \right)}{\mathtt{rc39.capacitor39.C}} \\
+\frac{\mathrm{d} \mathtt{rc39.heat\_capacitor39.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc39.heat\_capacitor39.h.Q\_flow}\left( t \right)}{\mathtt{rc39.heat\_capacitor39.V} \mathtt{rc39.heat\_capacitor39.cp} \mathtt{rc39.heat\_capacitor39.rho}} \\
+\frac{\mathrm{d} \mathtt{rc40.capacitor40.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc40.capacitor40.p.i}\left( t \right)}{\mathtt{rc40.capacitor40.C}} \\
+\frac{\mathrm{d} \mathtt{rc40.heat\_capacitor40.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc40.heat\_capacitor40.h.Q\_flow}\left( t \right)}{\mathtt{rc40.heat\_capacitor40.V} \mathtt{rc40.heat\_capacitor40.cp} \mathtt{rc40.heat\_capacitor40.rho}} \\
+\frac{\mathrm{d} \mathtt{rc41.capacitor41.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc41.capacitor41.p.i}\left( t \right)}{\mathtt{rc41.capacitor41.C}} \\
+\frac{\mathrm{d} \mathtt{rc41.heat\_capacitor41.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc41.heat\_capacitor41.h.Q\_flow}\left( t \right)}{\mathtt{rc41.heat\_capacitor41.V} \mathtt{rc41.heat\_capacitor41.cp} \mathtt{rc41.heat\_capacitor41.rho}} \\
+\frac{\mathrm{d} \mathtt{rc42.capacitor42.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc42.capacitor42.p.i}\left( t \right)}{\mathtt{rc42.capacitor42.C}} \\
+\frac{\mathrm{d} \mathtt{rc42.heat\_capacitor42.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc42.heat\_capacitor42.h.Q\_flow}\left( t \right)}{\mathtt{rc42.heat\_capacitor42.V} \mathtt{rc42.heat\_capacitor42.cp} \mathtt{rc42.heat\_capacitor42.rho}} \\
+\frac{\mathrm{d} \mathtt{rc43.capacitor43.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc43.capacitor43.p.i}\left( t \right)}{\mathtt{rc43.capacitor43.C}} \\
+\frac{\mathrm{d} \mathtt{rc43.heat\_capacitor43.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc43.heat\_capacitor43.h.Q\_flow}\left( t \right)}{\mathtt{rc43.heat\_capacitor43.V} \mathtt{rc43.heat\_capacitor43.cp} \mathtt{rc43.heat\_capacitor43.rho}} \\
+\frac{\mathrm{d} \mathtt{rc44.capacitor44.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc44.capacitor44.p.i}\left( t \right)}{\mathtt{rc44.capacitor44.C}} \\
+\frac{\mathrm{d} \mathtt{rc44.heat\_capacitor44.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc44.heat\_capacitor44.h.Q\_flow}\left( t \right)}{\mathtt{rc44.heat\_capacitor44.V} \mathtt{rc44.heat\_capacitor44.cp} \mathtt{rc44.heat\_capacitor44.rho}} \\
+\frac{\mathrm{d} \mathtt{rc45.capacitor45.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc45.capacitor45.p.i}\left( t \right)}{\mathtt{rc45.capacitor45.C}} \\
+\frac{\mathrm{d} \mathtt{rc45.heat\_capacitor45.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc45.heat\_capacitor45.h.Q\_flow}\left( t \right)}{\mathtt{rc45.heat\_capacitor45.V} \mathtt{rc45.heat\_capacitor45.cp} \mathtt{rc45.heat\_capacitor45.rho}} \\
+\frac{\mathrm{d} \mathtt{rc46.capacitor46.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc46.capacitor46.p.i}\left( t \right)}{\mathtt{rc46.capacitor46.C}} \\
+\frac{\mathrm{d} \mathtt{rc46.heat\_capacitor46.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc46.heat\_capacitor46.h.Q\_flow}\left( t \right)}{\mathtt{rc46.heat\_capacitor46.V} \mathtt{rc46.heat\_capacitor46.cp} \mathtt{rc46.heat\_capacitor46.rho}} \\
+\frac{\mathrm{d} \mathtt{rc47.capacitor47.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc47.capacitor47.p.i}\left( t \right)}{\mathtt{rc47.capacitor47.C}} \\
+\frac{\mathrm{d} \mathtt{rc47.heat\_capacitor47.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc47.heat\_capacitor47.h.Q\_flow}\left( t \right)}{\mathtt{rc47.heat\_capacitor47.V} \mathtt{rc47.heat\_capacitor47.cp} \mathtt{rc47.heat\_capacitor47.rho}} \\
+\frac{\mathrm{d} \mathtt{rc48.capacitor48.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc48.capacitor48.p.i}\left( t \right)}{\mathtt{rc48.capacitor48.C}} \\
+\frac{\mathrm{d} \mathtt{rc48.heat\_capacitor48.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc48.heat\_capacitor48.h.Q\_flow}\left( t \right)}{\mathtt{rc48.heat\_capacitor48.V} \mathtt{rc48.heat\_capacitor48.cp} \mathtt{rc48.heat\_capacitor48.rho}} \\
+\frac{\mathrm{d} \mathtt{rc49.capacitor49.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc49.capacitor49.p.i}\left( t \right)}{\mathtt{rc49.capacitor49.C}} \\
+\frac{\mathrm{d} \mathtt{rc49.heat\_capacitor49.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc49.heat\_capacitor49.h.Q\_flow}\left( t \right)}{\mathtt{rc49.heat\_capacitor49.V} \mathtt{rc49.heat\_capacitor49.cp} \mathtt{rc49.heat\_capacitor49.rho}} \\
+\frac{\mathrm{d} \mathtt{rc50.capacitor50.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc50.capacitor50.p.i}\left( t \right)}{\mathtt{rc50.capacitor50.C}} \\
+\frac{\mathrm{d} \mathtt{rc50.heat\_capacitor50.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc50.heat\_capacitor50.h.Q\_flow}\left( t \right)}{\mathtt{rc50.heat\_capacitor50.V} \mathtt{rc50.heat\_capacitor50.cp} \mathtt{rc50.heat\_capacitor50.rho}} \\
+0 &amp;=  - \mathtt{rc1.resistor1.v}\left( t \right) + \mathtt{rc1.resistor1.RTherm}\left( t \right) \mathtt{rc1.resistor1.p.i}\left( t \right) \\
+0 &amp;=  - \mathtt{rc2.resistor2.v}\left( t \right) + \mathtt{rc2.resistor2.p.i}\left( t \right) \mathtt{rc2.resistor2.RTherm}\left( t \right) \\
+0 &amp;=  - \mathtt{rc3.resistor3.v}\left( t \right) + \mathtt{rc3.resistor3.p.i}\left( t \right) \mathtt{rc3.resistor3.RTherm}\left( t \right) \\
+0 &amp;=  - \mathtt{rc4.resistor4.v}\left( t \right) + \mathtt{rc4.resistor4.RTherm}\left( t \right) \mathtt{rc4.resistor4.p.i}\left( t \right) \\
+0 &amp;=  - \mathtt{rc5.resistor5.v}\left( t \right) + \mathtt{rc5.resistor5.p.i}\left( t \right) \mathtt{rc5.resistor5.RTherm}\left( t \right) \\
+0 &amp;=  - \mathtt{rc6.resistor6.v}\left( t \right) + \mathtt{rc6.resistor6.p.i}\left( t \right) \mathtt{rc6.resistor6.RTherm}\left( t \right) \\
+0 &amp;=  - \mathtt{rc7.resistor7.v}\left( t \right) + \mathtt{rc7.resistor7.RTherm}\left( t \right) \mathtt{rc7.resistor7.p.i}\left( t \right) \\
+0 &amp;=  - \mathtt{rc8.resistor8.v}\left( t \right) + \mathtt{rc8.resistor8.RTherm}\left( t \right) \mathtt{rc8.resistor8.p.i}\left( t \right) \\
+0 &amp;=  - \mathtt{rc9.resistor9.v}\left( t \right) + \mathtt{rc9.resistor9.RTherm}\left( t \right) \mathtt{rc9.resistor9.p.i}\left( t \right) \\
+0 &amp;=  - \mathtt{rc10.resistor10.v}\left( t \right) + \mathtt{rc10.resistor10.RTherm}\left( t \right) \mathtt{rc10.resistor10.p.i}\left( t \right) \\
+0 &amp;=  - \mathtt{rc11.resistor11.v}\left( t \right) + \mathtt{rc11.resistor11.p.i}\left( t \right) \mathtt{rc11.resistor11.RTherm}\left( t \right) \\
+0 &amp;=  - \mathtt{rc12.resistor12.v}\left( t \right) + \mathtt{rc12.resistor12.p.i}\left( t \right) \mathtt{rc12.resistor12.RTherm}\left( t \right) \\
+0 &amp;=  - \mathtt{rc13.resistor13.v}\left( t \right) + \mathtt{rc13.resistor13.RTherm}\left( t \right) \mathtt{rc13.resistor13.p.i}\left( t \right) \\
+0 &amp;=  - \mathtt{rc14.resistor14.v}\left( t \right) + \mathtt{rc14.resistor14.RTherm}\left( t \right) \mathtt{rc14.resistor14.p.i}\left( t \right) \\
+0 &amp;=  - \mathtt{rc15.resistor15.v}\left( t \right) + \mathtt{rc15.resistor15.RTherm}\left( t \right) \mathtt{rc15.resistor15.p.i}\left( t \right) \\
+0 &amp;=  - \mathtt{rc16.resistor16.v}\left( t \right) + \mathtt{rc16.resistor16.p.i}\left( t \right) \mathtt{rc16.resistor16.RTherm}\left( t \right) \\
+0 &amp;=  - \mathtt{rc17.resistor17.v}\left( t \right) + \mathtt{rc17.resistor17.RTherm}\left( t \right) \mathtt{rc17.resistor17.p.i}\left( t \right) \\
+0 &amp;=  - \mathtt{rc18.resistor18.v}\left( t \right) + \mathtt{rc18.resistor18.p.i}\left( t \right) \mathtt{rc18.resistor18.RTherm}\left( t \right) \\
+0 &amp;=  - \mathtt{rc19.resistor19.v}\left( t \right) + \mathtt{rc19.resistor19.RTherm}\left( t \right) \mathtt{rc19.resistor19.p.i}\left( t \right) \\
+0 &amp;=  - \mathtt{rc20.resistor20.v}\left( t \right) + \mathtt{rc20.resistor20.RTherm}\left( t \right) \mathtt{rc20.resistor20.p.i}\left( t \right) \\
+0 &amp;=  - \mathtt{rc21.resistor21.v}\left( t \right) + \mathtt{rc21.resistor21.p.i}\left( t \right) \mathtt{rc21.resistor21.RTherm}\left( t \right) \\
+0 &amp;=  - \mathtt{rc22.resistor22.v}\left( t \right) + \mathtt{rc22.resistor22.p.i}\left( t \right) \mathtt{rc22.resistor22.RTherm}\left( t \right) \\
+0 &amp;=  - \mathtt{rc23.resistor23.v}\left( t \right) + \mathtt{rc23.resistor23.p.i}\left( t \right) \mathtt{rc23.resistor23.RTherm}\left( t \right) \\
+0 &amp;=  - \mathtt{rc24.resistor24.v}\left( t \right) + \mathtt{rc24.resistor24.p.i}\left( t \right) \mathtt{rc24.resistor24.RTherm}\left( t \right) \\
+0 &amp;=  - \mathtt{rc25.resistor25.v}\left( t \right) + \mathtt{rc25.resistor25.RTherm}\left( t \right) \mathtt{rc25.resistor25.p.i}\left( t \right) \\
+0 &amp;=  - \mathtt{rc26.resistor26.v}\left( t \right) + \mathtt{rc26.resistor26.p.i}\left( t \right) \mathtt{rc26.resistor26.RTherm}\left( t \right) \\
+0 &amp;=  - \mathtt{rc27.resistor27.v}\left( t \right) + \mathtt{rc27.resistor27.RTherm}\left( t \right) \mathtt{rc27.resistor27.p.i}\left( t \right) \\
+0 &amp;=  - \mathtt{rc28.resistor28.v}\left( t \right) + \mathtt{rc28.resistor28.RTherm}\left( t \right) \mathtt{rc28.resistor28.p.i}\left( t \right) \\
+0 &amp;=  - \mathtt{rc29.resistor29.v}\left( t \right) + \mathtt{rc29.resistor29.p.i}\left( t \right) \mathtt{rc29.resistor29.RTherm}\left( t \right) \\
+0 &amp;=  - \mathtt{rc30.resistor30.v}\left( t \right) + \mathtt{rc30.resistor30.RTherm}\left( t \right) \mathtt{rc30.resistor30.p.i}\left( t \right) \\
+0 &amp;=  - \mathtt{rc31.resistor31.v}\left( t \right) + \mathtt{rc31.resistor31.RTherm}\left( t \right) \mathtt{rc31.resistor31.p.i}\left( t \right) \\
+0 &amp;=  - \mathtt{rc32.resistor32.v}\left( t \right) + \mathtt{rc32.resistor32.RTherm}\left( t \right) \mathtt{rc32.resistor32.p.i}\left( t \right) \\
+0 &amp;=  - \mathtt{rc33.resistor33.v}\left( t \right) + \mathtt{rc33.resistor33.p.i}\left( t \right) \mathtt{rc33.resistor33.RTherm}\left( t \right) \\
+0 &amp;=  - \mathtt{rc34.resistor34.v}\left( t \right) + \mathtt{rc34.resistor34.p.i}\left( t \right) \mathtt{rc34.resistor34.RTherm}\left( t \right) \\
+0 &amp;=  - \mathtt{rc35.resistor35.v}\left( t \right) + \mathtt{rc35.resistor35.RTherm}\left( t \right) \mathtt{rc35.resistor35.p.i}\left( t \right) \\
+0 &amp;=  - \mathtt{rc36.resistor36.v}\left( t \right) + \mathtt{rc36.resistor36.p.i}\left( t \right) \mathtt{rc36.resistor36.RTherm}\left( t \right) \\
+0 &amp;=  - \mathtt{rc37.resistor37.v}\left( t \right) + \mathtt{rc37.resistor37.RTherm}\left( t \right) \mathtt{rc37.resistor37.p.i}\left( t \right) \\
+0 &amp;=  - \mathtt{rc38.resistor38.v}\left( t \right) + \mathtt{rc38.resistor38.RTherm}\left( t \right) \mathtt{rc38.resistor38.p.i}\left( t \right) \\
+0 &amp;=  - \mathtt{rc39.resistor39.v}\left( t \right) + \mathtt{rc39.resistor39.RTherm}\left( t \right) \mathtt{rc39.resistor39.p.i}\left( t \right) \\
+0 &amp;=  - \mathtt{rc40.resistor40.v}\left( t \right) + \mathtt{rc40.resistor40.RTherm}\left( t \right) \mathtt{rc40.resistor40.p.i}\left( t \right) \\
+0 &amp;=  - \mathtt{rc41.resistor41.v}\left( t \right) + \mathtt{rc41.resistor41.RTherm}\left( t \right) \mathtt{rc41.resistor41.p.i}\left( t \right) \\
+0 &amp;=  - \mathtt{rc42.resistor42.v}\left( t \right) + \mathtt{rc42.resistor42.p.i}\left( t \right) \mathtt{rc42.resistor42.RTherm}\left( t \right) \\
+0 &amp;=  - \mathtt{rc43.resistor43.v}\left( t \right) + \mathtt{rc43.resistor43.RTherm}\left( t \right) \mathtt{rc43.resistor43.p.i}\left( t \right) \\
+0 &amp;=  - \mathtt{rc44.resistor44.v}\left( t \right) + \mathtt{rc44.resistor44.p.i}\left( t \right) \mathtt{rc44.resistor44.RTherm}\left( t \right) \\
+0 &amp;=  - \mathtt{rc45.resistor45.v}\left( t \right) + \mathtt{rc45.resistor45.p.i}\left( t \right) \mathtt{rc45.resistor45.RTherm}\left( t \right) \\
+0 &amp;=  - \mathtt{rc46.resistor46.v}\left( t \right) + \mathtt{rc46.resistor46.p.i}\left( t \right) \mathtt{rc46.resistor46.RTherm}\left( t \right) \\
+0 &amp;=  - \mathtt{rc47.resistor47.v}\left( t \right) + \mathtt{rc47.resistor47.RTherm}\left( t \right) \mathtt{rc47.resistor47.p.i}\left( t \right) \\
+0 &amp;=  - \mathtt{rc48.resistor48.v}\left( t \right) + \mathtt{rc48.resistor48.p.i}\left( t \right) \mathtt{rc48.resistor48.RTherm}\left( t \right) \\
+0 &amp;=  - \mathtt{rc49.resistor49.v}\left( t \right) + \mathtt{rc49.resistor49.RTherm}\left( t \right) \mathtt{rc49.resistor49.p.i}\left( t \right) \\
+0 &amp;=  - \mathtt{rc50.resistor50.v}\left( t \right) + \mathtt{rc50.resistor50.RTherm}\left( t \right) \mathtt{rc50.resistor50.p.i}\left( t \right)
+\end{align}
+ \]</p><p>Done, that&#39;s it. There&#39;s no more to it.</p><h2 id="What-Happened?"><a class="docs-heading-anchor" href="#What-Happened?">What Happened?</a><a id="What-Happened?-1"></a><a class="docs-heading-anchor-permalink" href="#What-Happened?" title="Permalink"></a></h2><p>Yes, that&#39;s a good question! Let&#39;s investigate a little bit more what had happened. If you look at the system we defined:</p><pre><code class="language-julia hljs">length(equations(big_rc))</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">801</code></pre><p>You see, it started as a massive 1051 set of equations. However, after eliminating redundancies, we arrive at 151 equations:</p><pre><code class="language-julia hljs">equations(sys)</code></pre><p class="math-container">\[ \begin{align}
+\frac{\mathrm{d} E\left( t \right)}{\mathrm{d}t} &amp;=  - \mathtt{rc11.heat\_capacitor11.h.Q\_flow}\left( t \right) - \mathtt{rc34.heat\_capacitor34.h.Q\_flow}\left( t \right) - \mathtt{rc46.heat\_capacitor46.h.Q\_flow}\left( t \right) - \mathtt{rc16.heat\_capacitor16.h.Q\_flow}\left( t \right) - \mathtt{rc3.heat\_capacitor3.h.Q\_flow}\left( t \right) - \mathtt{rc13.heat\_capacitor13.h.Q\_flow}\left( t \right) - \mathtt{rc45.heat\_capacitor45.h.Q\_flow}\left( t \right) - \mathtt{rc20.heat\_capacitor20.h.Q\_flow}\left( t \right) - \mathtt{rc31.heat\_capacitor31.h.Q\_flow}\left( t \right) - \mathtt{rc47.heat\_capacitor47.h.Q\_flow}\left( t \right) - \mathtt{rc15.heat\_capacitor15.h.Q\_flow}\left( t \right) - \mathtt{rc44.heat\_capacitor44.h.Q\_flow}\left( t \right) - \mathtt{rc37.heat\_capacitor37.h.Q\_flow}\left( t \right) - \mathtt{rc10.heat\_capacitor10.h.Q\_flow}\left( t \right) - \mathtt{rc4.heat\_capacitor4.h.Q\_flow}\left( t \right) - \mathtt{rc36.heat\_capacitor36.h.Q\_flow}\left( t \right) - \mathtt{rc39.heat\_capacitor39.h.Q\_flow}\left( t \right) - \mathtt{rc7.heat\_capacitor7.h.Q\_flow}\left( t \right) - \mathtt{rc1.heat\_capacitor1.h.Q\_flow}\left( t \right) - \mathtt{rc9.heat\_capacitor9.h.Q\_flow}\left( t \right) - \mathtt{rc12.heat\_capacitor12.h.Q\_flow}\left( t \right) - \mathtt{rc30.heat\_capacitor30.h.Q\_flow}\left( t \right) - \mathtt{rc50.heat\_capacitor50.h.Q\_flow}\left( t \right) - \mathtt{rc26.heat\_capacitor26.h.Q\_flow}\left( t \right) - \mathtt{rc27.heat\_capacitor27.h.Q\_flow}\left( t \right) - \mathtt{rc21.heat\_capacitor21.h.Q\_flow}\left( t \right) - \mathtt{rc49.heat\_capacitor49.h.Q\_flow}\left( t \right) - \mathtt{rc40.heat\_capacitor40.h.Q\_flow}\left( t \right) - \mathtt{rc32.heat\_capacitor32.h.Q\_flow}\left( t \right) - \mathtt{rc42.heat\_capacitor42.h.Q\_flow}\left( t \right) - \mathtt{rc6.heat\_capacitor6.h.Q\_flow}\left( t \right) - \mathtt{rc19.heat\_capacitor19.h.Q\_flow}\left( t \right) - \mathtt{rc23.heat\_capacitor23.h.Q\_flow}\left( t \right) - \mathtt{rc18.heat\_capacitor18.h.Q\_flow}\left( t \right) - \mathtt{rc35.heat\_capacitor35.h.Q\_flow}\left( t \right) - \mathtt{rc29.heat\_capacitor29.h.Q\_flow}\left( t \right) - \mathtt{rc5.heat\_capacitor5.h.Q\_flow}\left( t \right) - \mathtt{rc2.heat\_capacitor2.h.Q\_flow}\left( t \right) - \mathtt{rc28.heat\_capacitor28.h.Q\_flow}\left( t \right) - \mathtt{rc38.heat\_capacitor38.h.Q\_flow}\left( t \right) - \mathtt{rc43.heat\_capacitor43.h.Q\_flow}\left( t \right) - \mathtt{rc22.heat\_capacitor22.h.Q\_flow}\left( t \right) - \mathtt{rc33.heat\_capacitor33.h.Q\_flow}\left( t \right) - \mathtt{rc14.heat\_capacitor14.h.Q\_flow}\left( t \right) - \mathtt{rc25.heat\_capacitor25.h.Q\_flow}\left( t \right) - \mathtt{rc17.heat\_capacitor17.h.Q\_flow}\left( t \right) - \mathtt{rc24.heat\_capacitor24.h.Q\_flow}\left( t \right) - \mathtt{rc48.heat\_capacitor48.h.Q\_flow}\left( t \right) - \mathtt{rc41.heat\_capacitor41.h.Q\_flow}\left( t \right) - \mathtt{rc8.heat\_capacitor8.h.Q\_flow}\left( t \right) \\
+\frac{\mathrm{d} \mathtt{rc1.capacitor1.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc1.capacitor1.p.i}\left( t \right)}{\mathtt{rc1.capacitor1.C}} \\
+\frac{\mathrm{d} \mathtt{rc1.heat\_capacitor1.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc1.heat\_capacitor1.h.Q\_flow}\left( t \right)}{\mathtt{rc1.heat\_capacitor1.V} \mathtt{rc1.heat\_capacitor1.cp} \mathtt{rc1.heat\_capacitor1.rho}} \\
+\frac{\mathrm{d} \mathtt{rc2.capacitor2.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc2.capacitor2.p.i}\left( t \right)}{\mathtt{rc2.capacitor2.C}} \\
+\frac{\mathrm{d} \mathtt{rc2.heat\_capacitor2.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc2.heat\_capacitor2.h.Q\_flow}\left( t \right)}{\mathtt{rc2.heat\_capacitor2.V} \mathtt{rc2.heat\_capacitor2.cp} \mathtt{rc2.heat\_capacitor2.rho}} \\
+\frac{\mathrm{d} \mathtt{rc3.capacitor3.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc3.capacitor3.p.i}\left( t \right)}{\mathtt{rc3.capacitor3.C}} \\
+\frac{\mathrm{d} \mathtt{rc3.heat\_capacitor3.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc3.heat\_capacitor3.h.Q\_flow}\left( t \right)}{\mathtt{rc3.heat\_capacitor3.V} \mathtt{rc3.heat\_capacitor3.cp} \mathtt{rc3.heat\_capacitor3.rho}} \\
+\frac{\mathrm{d} \mathtt{rc4.capacitor4.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc4.capacitor4.p.i}\left( t \right)}{\mathtt{rc4.capacitor4.C}} \\
+\frac{\mathrm{d} \mathtt{rc4.heat\_capacitor4.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc4.heat\_capacitor4.h.Q\_flow}\left( t \right)}{\mathtt{rc4.heat\_capacitor4.V} \mathtt{rc4.heat\_capacitor4.cp} \mathtt{rc4.heat\_capacitor4.rho}} \\
+\frac{\mathrm{d} \mathtt{rc5.capacitor5.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc5.capacitor5.p.i}\left( t \right)}{\mathtt{rc5.capacitor5.C}} \\
+\frac{\mathrm{d} \mathtt{rc5.heat\_capacitor5.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc5.heat\_capacitor5.h.Q\_flow}\left( t \right)}{\mathtt{rc5.heat\_capacitor5.V} \mathtt{rc5.heat\_capacitor5.cp} \mathtt{rc5.heat\_capacitor5.rho}} \\
+\frac{\mathrm{d} \mathtt{rc6.capacitor6.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc6.capacitor6.p.i}\left( t \right)}{\mathtt{rc6.capacitor6.C}} \\
+\frac{\mathrm{d} \mathtt{rc6.heat\_capacitor6.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc6.heat\_capacitor6.h.Q\_flow}\left( t \right)}{\mathtt{rc6.heat\_capacitor6.V} \mathtt{rc6.heat\_capacitor6.cp} \mathtt{rc6.heat\_capacitor6.rho}} \\
+\frac{\mathrm{d} \mathtt{rc7.capacitor7.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc7.capacitor7.p.i}\left( t \right)}{\mathtt{rc7.capacitor7.C}} \\
+\frac{\mathrm{d} \mathtt{rc7.heat\_capacitor7.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc7.heat\_capacitor7.h.Q\_flow}\left( t \right)}{\mathtt{rc7.heat\_capacitor7.V} \mathtt{rc7.heat\_capacitor7.cp} \mathtt{rc7.heat\_capacitor7.rho}} \\
+\frac{\mathrm{d} \mathtt{rc8.capacitor8.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc8.capacitor8.p.i}\left( t \right)}{\mathtt{rc8.capacitor8.C}} \\
+\frac{\mathrm{d} \mathtt{rc8.heat\_capacitor8.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc8.heat\_capacitor8.h.Q\_flow}\left( t \right)}{\mathtt{rc8.heat\_capacitor8.V} \mathtt{rc8.heat\_capacitor8.cp} \mathtt{rc8.heat\_capacitor8.rho}} \\
+\frac{\mathrm{d} \mathtt{rc9.capacitor9.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc9.capacitor9.p.i}\left( t \right)}{\mathtt{rc9.capacitor9.C}} \\
+\frac{\mathrm{d} \mathtt{rc9.heat\_capacitor9.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc9.heat\_capacitor9.h.Q\_flow}\left( t \right)}{\mathtt{rc9.heat\_capacitor9.V} \mathtt{rc9.heat\_capacitor9.cp} \mathtt{rc9.heat\_capacitor9.rho}} \\
+\frac{\mathrm{d} \mathtt{rc10.capacitor10.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc10.capacitor10.p.i}\left( t \right)}{\mathtt{rc10.capacitor10.C}} \\
+\frac{\mathrm{d} \mathtt{rc10.heat\_capacitor10.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc10.heat\_capacitor10.h.Q\_flow}\left( t \right)}{\mathtt{rc10.heat\_capacitor10.V} \mathtt{rc10.heat\_capacitor10.cp} \mathtt{rc10.heat\_capacitor10.rho}} \\
+\frac{\mathrm{d} \mathtt{rc11.capacitor11.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc11.capacitor11.p.i}\left( t \right)}{\mathtt{rc11.capacitor11.C}} \\
+\frac{\mathrm{d} \mathtt{rc11.heat\_capacitor11.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc11.heat\_capacitor11.h.Q\_flow}\left( t \right)}{\mathtt{rc11.heat\_capacitor11.V} \mathtt{rc11.heat\_capacitor11.cp} \mathtt{rc11.heat\_capacitor11.rho}} \\
+\frac{\mathrm{d} \mathtt{rc12.capacitor12.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc12.capacitor12.p.i}\left( t \right)}{\mathtt{rc12.capacitor12.C}} \\
+\frac{\mathrm{d} \mathtt{rc12.heat\_capacitor12.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc12.heat\_capacitor12.h.Q\_flow}\left( t \right)}{\mathtt{rc12.heat\_capacitor12.V} \mathtt{rc12.heat\_capacitor12.cp} \mathtt{rc12.heat\_capacitor12.rho}} \\
+\frac{\mathrm{d} \mathtt{rc13.capacitor13.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc13.capacitor13.p.i}\left( t \right)}{\mathtt{rc13.capacitor13.C}} \\
+\frac{\mathrm{d} \mathtt{rc13.heat\_capacitor13.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc13.heat\_capacitor13.h.Q\_flow}\left( t \right)}{\mathtt{rc13.heat\_capacitor13.V} \mathtt{rc13.heat\_capacitor13.cp} \mathtt{rc13.heat\_capacitor13.rho}} \\
+\frac{\mathrm{d} \mathtt{rc14.capacitor14.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc14.capacitor14.p.i}\left( t \right)}{\mathtt{rc14.capacitor14.C}} \\
+\frac{\mathrm{d} \mathtt{rc14.heat\_capacitor14.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc14.heat\_capacitor14.h.Q\_flow}\left( t \right)}{\mathtt{rc14.heat\_capacitor14.V} \mathtt{rc14.heat\_capacitor14.cp} \mathtt{rc14.heat\_capacitor14.rho}} \\
+\frac{\mathrm{d} \mathtt{rc15.capacitor15.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc15.capacitor15.p.i}\left( t \right)}{\mathtt{rc15.capacitor15.C}} \\
+\frac{\mathrm{d} \mathtt{rc15.heat\_capacitor15.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc15.heat\_capacitor15.h.Q\_flow}\left( t \right)}{\mathtt{rc15.heat\_capacitor15.V} \mathtt{rc15.heat\_capacitor15.cp} \mathtt{rc15.heat\_capacitor15.rho}} \\
+\frac{\mathrm{d} \mathtt{rc16.capacitor16.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc16.capacitor16.p.i}\left( t \right)}{\mathtt{rc16.capacitor16.C}} \\
+\frac{\mathrm{d} \mathtt{rc16.heat\_capacitor16.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc16.heat\_capacitor16.h.Q\_flow}\left( t \right)}{\mathtt{rc16.heat\_capacitor16.V} \mathtt{rc16.heat\_capacitor16.cp} \mathtt{rc16.heat\_capacitor16.rho}} \\
+\frac{\mathrm{d} \mathtt{rc17.capacitor17.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc17.capacitor17.p.i}\left( t \right)}{\mathtt{rc17.capacitor17.C}} \\
+\frac{\mathrm{d} \mathtt{rc17.heat\_capacitor17.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc17.heat\_capacitor17.h.Q\_flow}\left( t \right)}{\mathtt{rc17.heat\_capacitor17.V} \mathtt{rc17.heat\_capacitor17.cp} \mathtt{rc17.heat\_capacitor17.rho}} \\
+\frac{\mathrm{d} \mathtt{rc18.capacitor18.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc18.capacitor18.p.i}\left( t \right)}{\mathtt{rc18.capacitor18.C}} \\
+\frac{\mathrm{d} \mathtt{rc18.heat\_capacitor18.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc18.heat\_capacitor18.h.Q\_flow}\left( t \right)}{\mathtt{rc18.heat\_capacitor18.V} \mathtt{rc18.heat\_capacitor18.cp} \mathtt{rc18.heat\_capacitor18.rho}} \\
+\frac{\mathrm{d} \mathtt{rc19.capacitor19.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc19.capacitor19.p.i}\left( t \right)}{\mathtt{rc19.capacitor19.C}} \\
+\frac{\mathrm{d} \mathtt{rc19.heat\_capacitor19.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc19.heat\_capacitor19.h.Q\_flow}\left( t \right)}{\mathtt{rc19.heat\_capacitor19.V} \mathtt{rc19.heat\_capacitor19.cp} \mathtt{rc19.heat\_capacitor19.rho}} \\
+\frac{\mathrm{d} \mathtt{rc20.capacitor20.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc20.capacitor20.p.i}\left( t \right)}{\mathtt{rc20.capacitor20.C}} \\
+\frac{\mathrm{d} \mathtt{rc20.heat\_capacitor20.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc20.heat\_capacitor20.h.Q\_flow}\left( t \right)}{\mathtt{rc20.heat\_capacitor20.V} \mathtt{rc20.heat\_capacitor20.cp} \mathtt{rc20.heat\_capacitor20.rho}} \\
+\frac{\mathrm{d} \mathtt{rc21.capacitor21.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc21.capacitor21.p.i}\left( t \right)}{\mathtt{rc21.capacitor21.C}} \\
+\frac{\mathrm{d} \mathtt{rc21.heat\_capacitor21.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc21.heat\_capacitor21.h.Q\_flow}\left( t \right)}{\mathtt{rc21.heat\_capacitor21.V} \mathtt{rc21.heat\_capacitor21.cp} \mathtt{rc21.heat\_capacitor21.rho}} \\
+\frac{\mathrm{d} \mathtt{rc22.capacitor22.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc22.capacitor22.p.i}\left( t \right)}{\mathtt{rc22.capacitor22.C}} \\
+\frac{\mathrm{d} \mathtt{rc22.heat\_capacitor22.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc22.heat\_capacitor22.h.Q\_flow}\left( t \right)}{\mathtt{rc22.heat\_capacitor22.V} \mathtt{rc22.heat\_capacitor22.cp} \mathtt{rc22.heat\_capacitor22.rho}} \\
+\frac{\mathrm{d} \mathtt{rc23.capacitor23.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc23.capacitor23.p.i}\left( t \right)}{\mathtt{rc23.capacitor23.C}} \\
+\frac{\mathrm{d} \mathtt{rc23.heat\_capacitor23.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc23.heat\_capacitor23.h.Q\_flow}\left( t \right)}{\mathtt{rc23.heat\_capacitor23.V} \mathtt{rc23.heat\_capacitor23.cp} \mathtt{rc23.heat\_capacitor23.rho}} \\
+\frac{\mathrm{d} \mathtt{rc24.capacitor24.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc24.capacitor24.p.i}\left( t \right)}{\mathtt{rc24.capacitor24.C}} \\
+\frac{\mathrm{d} \mathtt{rc24.heat\_capacitor24.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc24.heat\_capacitor24.h.Q\_flow}\left( t \right)}{\mathtt{rc24.heat\_capacitor24.V} \mathtt{rc24.heat\_capacitor24.cp} \mathtt{rc24.heat\_capacitor24.rho}} \\
+\frac{\mathrm{d} \mathtt{rc25.capacitor25.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc25.capacitor25.p.i}\left( t \right)}{\mathtt{rc25.capacitor25.C}} \\
+\frac{\mathrm{d} \mathtt{rc25.heat\_capacitor25.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc25.heat\_capacitor25.h.Q\_flow}\left( t \right)}{\mathtt{rc25.heat\_capacitor25.V} \mathtt{rc25.heat\_capacitor25.cp} \mathtt{rc25.heat\_capacitor25.rho}} \\
+\frac{\mathrm{d} \mathtt{rc26.capacitor26.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc26.capacitor26.p.i}\left( t \right)}{\mathtt{rc26.capacitor26.C}} \\
+\frac{\mathrm{d} \mathtt{rc26.heat\_capacitor26.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc26.heat\_capacitor26.h.Q\_flow}\left( t \right)}{\mathtt{rc26.heat\_capacitor26.V} \mathtt{rc26.heat\_capacitor26.cp} \mathtt{rc26.heat\_capacitor26.rho}} \\
+\frac{\mathrm{d} \mathtt{rc27.capacitor27.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc27.capacitor27.p.i}\left( t \right)}{\mathtt{rc27.capacitor27.C}} \\
+\frac{\mathrm{d} \mathtt{rc27.heat\_capacitor27.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc27.heat\_capacitor27.h.Q\_flow}\left( t \right)}{\mathtt{rc27.heat\_capacitor27.V} \mathtt{rc27.heat\_capacitor27.cp} \mathtt{rc27.heat\_capacitor27.rho}} \\
+\frac{\mathrm{d} \mathtt{rc28.capacitor28.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc28.capacitor28.p.i}\left( t \right)}{\mathtt{rc28.capacitor28.C}} \\
+\frac{\mathrm{d} \mathtt{rc28.heat\_capacitor28.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc28.heat\_capacitor28.h.Q\_flow}\left( t \right)}{\mathtt{rc28.heat\_capacitor28.V} \mathtt{rc28.heat\_capacitor28.cp} \mathtt{rc28.heat\_capacitor28.rho}} \\
+\frac{\mathrm{d} \mathtt{rc29.capacitor29.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc29.capacitor29.p.i}\left( t \right)}{\mathtt{rc29.capacitor29.C}} \\
+\frac{\mathrm{d} \mathtt{rc29.heat\_capacitor29.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc29.heat\_capacitor29.h.Q\_flow}\left( t \right)}{\mathtt{rc29.heat\_capacitor29.V} \mathtt{rc29.heat\_capacitor29.cp} \mathtt{rc29.heat\_capacitor29.rho}} \\
+\frac{\mathrm{d} \mathtt{rc30.capacitor30.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc30.capacitor30.p.i}\left( t \right)}{\mathtt{rc30.capacitor30.C}} \\
+\frac{\mathrm{d} \mathtt{rc30.heat\_capacitor30.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc30.heat\_capacitor30.h.Q\_flow}\left( t \right)}{\mathtt{rc30.heat\_capacitor30.V} \mathtt{rc30.heat\_capacitor30.cp} \mathtt{rc30.heat\_capacitor30.rho}} \\
+\frac{\mathrm{d} \mathtt{rc31.capacitor31.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc31.capacitor31.p.i}\left( t \right)}{\mathtt{rc31.capacitor31.C}} \\
+\frac{\mathrm{d} \mathtt{rc31.heat\_capacitor31.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc31.heat\_capacitor31.h.Q\_flow}\left( t \right)}{\mathtt{rc31.heat\_capacitor31.V} \mathtt{rc31.heat\_capacitor31.cp} \mathtt{rc31.heat\_capacitor31.rho}} \\
+\frac{\mathrm{d} \mathtt{rc32.capacitor32.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc32.capacitor32.p.i}\left( t \right)}{\mathtt{rc32.capacitor32.C}} \\
+\frac{\mathrm{d} \mathtt{rc32.heat\_capacitor32.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc32.heat\_capacitor32.h.Q\_flow}\left( t \right)}{\mathtt{rc32.heat\_capacitor32.V} \mathtt{rc32.heat\_capacitor32.cp} \mathtt{rc32.heat\_capacitor32.rho}} \\
+\frac{\mathrm{d} \mathtt{rc33.capacitor33.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc33.capacitor33.p.i}\left( t \right)}{\mathtt{rc33.capacitor33.C}} \\
+\frac{\mathrm{d} \mathtt{rc33.heat\_capacitor33.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc33.heat\_capacitor33.h.Q\_flow}\left( t \right)}{\mathtt{rc33.heat\_capacitor33.V} \mathtt{rc33.heat\_capacitor33.cp} \mathtt{rc33.heat\_capacitor33.rho}} \\
+\frac{\mathrm{d} \mathtt{rc34.capacitor34.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc34.capacitor34.p.i}\left( t \right)}{\mathtt{rc34.capacitor34.C}} \\
+\frac{\mathrm{d} \mathtt{rc34.heat\_capacitor34.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc34.heat\_capacitor34.h.Q\_flow}\left( t \right)}{\mathtt{rc34.heat\_capacitor34.V} \mathtt{rc34.heat\_capacitor34.cp} \mathtt{rc34.heat\_capacitor34.rho}} \\
+\frac{\mathrm{d} \mathtt{rc35.capacitor35.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc35.capacitor35.p.i}\left( t \right)}{\mathtt{rc35.capacitor35.C}} \\
+\frac{\mathrm{d} \mathtt{rc35.heat\_capacitor35.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc35.heat\_capacitor35.h.Q\_flow}\left( t \right)}{\mathtt{rc35.heat\_capacitor35.V} \mathtt{rc35.heat\_capacitor35.cp} \mathtt{rc35.heat\_capacitor35.rho}} \\
+\frac{\mathrm{d} \mathtt{rc36.capacitor36.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc36.capacitor36.p.i}\left( t \right)}{\mathtt{rc36.capacitor36.C}} \\
+\frac{\mathrm{d} \mathtt{rc36.heat\_capacitor36.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc36.heat\_capacitor36.h.Q\_flow}\left( t \right)}{\mathtt{rc36.heat\_capacitor36.V} \mathtt{rc36.heat\_capacitor36.cp} \mathtt{rc36.heat\_capacitor36.rho}} \\
+\frac{\mathrm{d} \mathtt{rc37.capacitor37.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc37.capacitor37.p.i}\left( t \right)}{\mathtt{rc37.capacitor37.C}} \\
+\frac{\mathrm{d} \mathtt{rc37.heat\_capacitor37.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc37.heat\_capacitor37.h.Q\_flow}\left( t \right)}{\mathtt{rc37.heat\_capacitor37.V} \mathtt{rc37.heat\_capacitor37.cp} \mathtt{rc37.heat\_capacitor37.rho}} \\
+\frac{\mathrm{d} \mathtt{rc38.capacitor38.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc38.capacitor38.p.i}\left( t \right)}{\mathtt{rc38.capacitor38.C}} \\
+\frac{\mathrm{d} \mathtt{rc38.heat\_capacitor38.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc38.heat\_capacitor38.h.Q\_flow}\left( t \right)}{\mathtt{rc38.heat\_capacitor38.V} \mathtt{rc38.heat\_capacitor38.cp} \mathtt{rc38.heat\_capacitor38.rho}} \\
+\frac{\mathrm{d} \mathtt{rc39.capacitor39.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc39.capacitor39.p.i}\left( t \right)}{\mathtt{rc39.capacitor39.C}} \\
+\frac{\mathrm{d} \mathtt{rc39.heat\_capacitor39.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc39.heat\_capacitor39.h.Q\_flow}\left( t \right)}{\mathtt{rc39.heat\_capacitor39.V} \mathtt{rc39.heat\_capacitor39.cp} \mathtt{rc39.heat\_capacitor39.rho}} \\
+\frac{\mathrm{d} \mathtt{rc40.capacitor40.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc40.capacitor40.p.i}\left( t \right)}{\mathtt{rc40.capacitor40.C}} \\
+\frac{\mathrm{d} \mathtt{rc40.heat\_capacitor40.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc40.heat\_capacitor40.h.Q\_flow}\left( t \right)}{\mathtt{rc40.heat\_capacitor40.V} \mathtt{rc40.heat\_capacitor40.cp} \mathtt{rc40.heat\_capacitor40.rho}} \\
+\frac{\mathrm{d} \mathtt{rc41.capacitor41.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc41.capacitor41.p.i}\left( t \right)}{\mathtt{rc41.capacitor41.C}} \\
+\frac{\mathrm{d} \mathtt{rc41.heat\_capacitor41.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc41.heat\_capacitor41.h.Q\_flow}\left( t \right)}{\mathtt{rc41.heat\_capacitor41.V} \mathtt{rc41.heat\_capacitor41.cp} \mathtt{rc41.heat\_capacitor41.rho}} \\
+\frac{\mathrm{d} \mathtt{rc42.capacitor42.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc42.capacitor42.p.i}\left( t \right)}{\mathtt{rc42.capacitor42.C}} \\
+\frac{\mathrm{d} \mathtt{rc42.heat\_capacitor42.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc42.heat\_capacitor42.h.Q\_flow}\left( t \right)}{\mathtt{rc42.heat\_capacitor42.V} \mathtt{rc42.heat\_capacitor42.cp} \mathtt{rc42.heat\_capacitor42.rho}} \\
+\frac{\mathrm{d} \mathtt{rc43.capacitor43.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc43.capacitor43.p.i}\left( t \right)}{\mathtt{rc43.capacitor43.C}} \\
+\frac{\mathrm{d} \mathtt{rc43.heat\_capacitor43.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc43.heat\_capacitor43.h.Q\_flow}\left( t \right)}{\mathtt{rc43.heat\_capacitor43.V} \mathtt{rc43.heat\_capacitor43.cp} \mathtt{rc43.heat\_capacitor43.rho}} \\
+\frac{\mathrm{d} \mathtt{rc44.capacitor44.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc44.capacitor44.p.i}\left( t \right)}{\mathtt{rc44.capacitor44.C}} \\
+\frac{\mathrm{d} \mathtt{rc44.heat\_capacitor44.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc44.heat\_capacitor44.h.Q\_flow}\left( t \right)}{\mathtt{rc44.heat\_capacitor44.V} \mathtt{rc44.heat\_capacitor44.cp} \mathtt{rc44.heat\_capacitor44.rho}} \\
+\frac{\mathrm{d} \mathtt{rc45.capacitor45.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc45.capacitor45.p.i}\left( t \right)}{\mathtt{rc45.capacitor45.C}} \\
+\frac{\mathrm{d} \mathtt{rc45.heat\_capacitor45.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc45.heat\_capacitor45.h.Q\_flow}\left( t \right)}{\mathtt{rc45.heat\_capacitor45.V} \mathtt{rc45.heat\_capacitor45.cp} \mathtt{rc45.heat\_capacitor45.rho}} \\
+\frac{\mathrm{d} \mathtt{rc46.capacitor46.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc46.capacitor46.p.i}\left( t \right)}{\mathtt{rc46.capacitor46.C}} \\
+\frac{\mathrm{d} \mathtt{rc46.heat\_capacitor46.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc46.heat\_capacitor46.h.Q\_flow}\left( t \right)}{\mathtt{rc46.heat\_capacitor46.V} \mathtt{rc46.heat\_capacitor46.cp} \mathtt{rc46.heat\_capacitor46.rho}} \\
+\frac{\mathrm{d} \mathtt{rc47.capacitor47.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc47.capacitor47.p.i}\left( t \right)}{\mathtt{rc47.capacitor47.C}} \\
+\frac{\mathrm{d} \mathtt{rc47.heat\_capacitor47.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc47.heat\_capacitor47.h.Q\_flow}\left( t \right)}{\mathtt{rc47.heat\_capacitor47.V} \mathtt{rc47.heat\_capacitor47.cp} \mathtt{rc47.heat\_capacitor47.rho}} \\
+\frac{\mathrm{d} \mathtt{rc48.capacitor48.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc48.capacitor48.p.i}\left( t \right)}{\mathtt{rc48.capacitor48.C}} \\
+\frac{\mathrm{d} \mathtt{rc48.heat\_capacitor48.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc48.heat\_capacitor48.h.Q\_flow}\left( t \right)}{\mathtt{rc48.heat\_capacitor48.V} \mathtt{rc48.heat\_capacitor48.cp} \mathtt{rc48.heat\_capacitor48.rho}} \\
+\frac{\mathrm{d} \mathtt{rc49.capacitor49.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc49.capacitor49.p.i}\left( t \right)}{\mathtt{rc49.capacitor49.C}} \\
+\frac{\mathrm{d} \mathtt{rc49.heat\_capacitor49.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc49.heat\_capacitor49.h.Q\_flow}\left( t \right)}{\mathtt{rc49.heat\_capacitor49.V} \mathtt{rc49.heat\_capacitor49.cp} \mathtt{rc49.heat\_capacitor49.rho}} \\
+\frac{\mathrm{d} \mathtt{rc50.capacitor50.v}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc50.capacitor50.p.i}\left( t \right)}{\mathtt{rc50.capacitor50.C}} \\
+\frac{\mathrm{d} \mathtt{rc50.heat\_capacitor50.h.T}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{rc50.heat\_capacitor50.h.Q\_flow}\left( t \right)}{\mathtt{rc50.heat\_capacitor50.V} \mathtt{rc50.heat\_capacitor50.cp} \mathtt{rc50.heat\_capacitor50.rho}} \\
+0 &amp;=  - \mathtt{rc1.resistor1.v}\left( t \right) + \mathtt{rc1.resistor1.RTherm}\left( t \right) \mathtt{rc1.resistor1.p.i}\left( t \right) \\
+0 &amp;=  - \mathtt{rc2.resistor2.v}\left( t \right) + \mathtt{rc2.resistor2.p.i}\left( t \right) \mathtt{rc2.resistor2.RTherm}\left( t \right) \\
+0 &amp;=  - \mathtt{rc3.resistor3.v}\left( t \right) + \mathtt{rc3.resistor3.p.i}\left( t \right) \mathtt{rc3.resistor3.RTherm}\left( t \right) \\
+0 &amp;=  - \mathtt{rc4.resistor4.v}\left( t \right) + \mathtt{rc4.resistor4.RTherm}\left( t \right) \mathtt{rc4.resistor4.p.i}\left( t \right) \\
+0 &amp;=  - \mathtt{rc5.resistor5.v}\left( t \right) + \mathtt{rc5.resistor5.p.i}\left( t \right) \mathtt{rc5.resistor5.RTherm}\left( t \right) \\
+0 &amp;=  - \mathtt{rc6.resistor6.v}\left( t \right) + \mathtt{rc6.resistor6.p.i}\left( t \right) \mathtt{rc6.resistor6.RTherm}\left( t \right) \\
+0 &amp;=  - \mathtt{rc7.resistor7.v}\left( t \right) + \mathtt{rc7.resistor7.RTherm}\left( t \right) \mathtt{rc7.resistor7.p.i}\left( t \right) \\
+0 &amp;=  - \mathtt{rc8.resistor8.v}\left( t \right) + \mathtt{rc8.resistor8.RTherm}\left( t \right) \mathtt{rc8.resistor8.p.i}\left( t \right) \\
+0 &amp;=  - \mathtt{rc9.resistor9.v}\left( t \right) + \mathtt{rc9.resistor9.RTherm}\left( t \right) \mathtt{rc9.resistor9.p.i}\left( t \right) \\
+0 &amp;=  - \mathtt{rc10.resistor10.v}\left( t \right) + \mathtt{rc10.resistor10.RTherm}\left( t \right) \mathtt{rc10.resistor10.p.i}\left( t \right) \\
+0 &amp;=  - \mathtt{rc11.resistor11.v}\left( t \right) + \mathtt{rc11.resistor11.p.i}\left( t \right) \mathtt{rc11.resistor11.RTherm}\left( t \right) \\
+0 &amp;=  - \mathtt{rc12.resistor12.v}\left( t \right) + \mathtt{rc12.resistor12.p.i}\left( t \right) \mathtt{rc12.resistor12.RTherm}\left( t \right) \\
+0 &amp;=  - \mathtt{rc13.resistor13.v}\left( t \right) + \mathtt{rc13.resistor13.RTherm}\left( t \right) \mathtt{rc13.resistor13.p.i}\left( t \right) \\
+0 &amp;=  - \mathtt{rc14.resistor14.v}\left( t \right) + \mathtt{rc14.resistor14.RTherm}\left( t \right) \mathtt{rc14.resistor14.p.i}\left( t \right) \\
+0 &amp;=  - \mathtt{rc15.resistor15.v}\left( t \right) + \mathtt{rc15.resistor15.RTherm}\left( t \right) \mathtt{rc15.resistor15.p.i}\left( t \right) \\
+0 &amp;=  - \mathtt{rc16.resistor16.v}\left( t \right) + \mathtt{rc16.resistor16.p.i}\left( t \right) \mathtt{rc16.resistor16.RTherm}\left( t \right) \\
+0 &amp;=  - \mathtt{rc17.resistor17.v}\left( t \right) + \mathtt{rc17.resistor17.RTherm}\left( t \right) \mathtt{rc17.resistor17.p.i}\left( t \right) \\
+0 &amp;=  - \mathtt{rc18.resistor18.v}\left( t \right) + \mathtt{rc18.resistor18.p.i}\left( t \right) \mathtt{rc18.resistor18.RTherm}\left( t \right) \\
+0 &amp;=  - \mathtt{rc19.resistor19.v}\left( t \right) + \mathtt{rc19.resistor19.RTherm}\left( t \right) \mathtt{rc19.resistor19.p.i}\left( t \right) \\
+0 &amp;=  - \mathtt{rc20.resistor20.v}\left( t \right) + \mathtt{rc20.resistor20.RTherm}\left( t \right) \mathtt{rc20.resistor20.p.i}\left( t \right) \\
+0 &amp;=  - \mathtt{rc21.resistor21.v}\left( t \right) + \mathtt{rc21.resistor21.p.i}\left( t \right) \mathtt{rc21.resistor21.RTherm}\left( t \right) \\
+0 &amp;=  - \mathtt{rc22.resistor22.v}\left( t \right) + \mathtt{rc22.resistor22.p.i}\left( t \right) \mathtt{rc22.resistor22.RTherm}\left( t \right) \\
+0 &amp;=  - \mathtt{rc23.resistor23.v}\left( t \right) + \mathtt{rc23.resistor23.p.i}\left( t \right) \mathtt{rc23.resistor23.RTherm}\left( t \right) \\
+0 &amp;=  - \mathtt{rc24.resistor24.v}\left( t \right) + \mathtt{rc24.resistor24.p.i}\left( t \right) \mathtt{rc24.resistor24.RTherm}\left( t \right) \\
+0 &amp;=  - \mathtt{rc25.resistor25.v}\left( t \right) + \mathtt{rc25.resistor25.RTherm}\left( t \right) \mathtt{rc25.resistor25.p.i}\left( t \right) \\
+0 &amp;=  - \mathtt{rc26.resistor26.v}\left( t \right) + \mathtt{rc26.resistor26.p.i}\left( t \right) \mathtt{rc26.resistor26.RTherm}\left( t \right) \\
+0 &amp;=  - \mathtt{rc27.resistor27.v}\left( t \right) + \mathtt{rc27.resistor27.RTherm}\left( t \right) \mathtt{rc27.resistor27.p.i}\left( t \right) \\
+0 &amp;=  - \mathtt{rc28.resistor28.v}\left( t \right) + \mathtt{rc28.resistor28.RTherm}\left( t \right) \mathtt{rc28.resistor28.p.i}\left( t \right) \\
+0 &amp;=  - \mathtt{rc29.resistor29.v}\left( t \right) + \mathtt{rc29.resistor29.p.i}\left( t \right) \mathtt{rc29.resistor29.RTherm}\left( t \right) \\
+0 &amp;=  - \mathtt{rc30.resistor30.v}\left( t \right) + \mathtt{rc30.resistor30.RTherm}\left( t \right) \mathtt{rc30.resistor30.p.i}\left( t \right) \\
+0 &amp;=  - \mathtt{rc31.resistor31.v}\left( t \right) + \mathtt{rc31.resistor31.RTherm}\left( t \right) \mathtt{rc31.resistor31.p.i}\left( t \right) \\
+0 &amp;=  - \mathtt{rc32.resistor32.v}\left( t \right) + \mathtt{rc32.resistor32.RTherm}\left( t \right) \mathtt{rc32.resistor32.p.i}\left( t \right) \\
+0 &amp;=  - \mathtt{rc33.resistor33.v}\left( t \right) + \mathtt{rc33.resistor33.p.i}\left( t \right) \mathtt{rc33.resistor33.RTherm}\left( t \right) \\
+0 &amp;=  - \mathtt{rc34.resistor34.v}\left( t \right) + \mathtt{rc34.resistor34.p.i}\left( t \right) \mathtt{rc34.resistor34.RTherm}\left( t \right) \\
+0 &amp;=  - \mathtt{rc35.resistor35.v}\left( t \right) + \mathtt{rc35.resistor35.RTherm}\left( t \right) \mathtt{rc35.resistor35.p.i}\left( t \right) \\
+0 &amp;=  - \mathtt{rc36.resistor36.v}\left( t \right) + \mathtt{rc36.resistor36.p.i}\left( t \right) \mathtt{rc36.resistor36.RTherm}\left( t \right) \\
+0 &amp;=  - \mathtt{rc37.resistor37.v}\left( t \right) + \mathtt{rc37.resistor37.RTherm}\left( t \right) \mathtt{rc37.resistor37.p.i}\left( t \right) \\
+0 &amp;=  - \mathtt{rc38.resistor38.v}\left( t \right) + \mathtt{rc38.resistor38.RTherm}\left( t \right) \mathtt{rc38.resistor38.p.i}\left( t \right) \\
+0 &amp;=  - \mathtt{rc39.resistor39.v}\left( t \right) + \mathtt{rc39.resistor39.RTherm}\left( t \right) \mathtt{rc39.resistor39.p.i}\left( t \right) \\
+0 &amp;=  - \mathtt{rc40.resistor40.v}\left( t \right) + \mathtt{rc40.resistor40.RTherm}\left( t \right) \mathtt{rc40.resistor40.p.i}\left( t \right) \\
+0 &amp;=  - \mathtt{rc41.resistor41.v}\left( t \right) + \mathtt{rc41.resistor41.RTherm}\left( t \right) \mathtt{rc41.resistor41.p.i}\left( t \right) \\
+0 &amp;=  - \mathtt{rc42.resistor42.v}\left( t \right) + \mathtt{rc42.resistor42.p.i}\left( t \right) \mathtt{rc42.resistor42.RTherm}\left( t \right) \\
+0 &amp;=  - \mathtt{rc43.resistor43.v}\left( t \right) + \mathtt{rc43.resistor43.RTherm}\left( t \right) \mathtt{rc43.resistor43.p.i}\left( t \right) \\
+0 &amp;=  - \mathtt{rc44.resistor44.v}\left( t \right) + \mathtt{rc44.resistor44.p.i}\left( t \right) \mathtt{rc44.resistor44.RTherm}\left( t \right) \\
+0 &amp;=  - \mathtt{rc45.resistor45.v}\left( t \right) + \mathtt{rc45.resistor45.p.i}\left( t \right) \mathtt{rc45.resistor45.RTherm}\left( t \right) \\
+0 &amp;=  - \mathtt{rc46.resistor46.v}\left( t \right) + \mathtt{rc46.resistor46.p.i}\left( t \right) \mathtt{rc46.resistor46.RTherm}\left( t \right) \\
+0 &amp;=  - \mathtt{rc47.resistor47.v}\left( t \right) + \mathtt{rc47.resistor47.RTherm}\left( t \right) \mathtt{rc47.resistor47.p.i}\left( t \right) \\
+0 &amp;=  - \mathtt{rc48.resistor48.v}\left( t \right) + \mathtt{rc48.resistor48.p.i}\left( t \right) \mathtt{rc48.resistor48.RTherm}\left( t \right) \\
+0 &amp;=  - \mathtt{rc49.resistor49.v}\left( t \right) + \mathtt{rc49.resistor49.RTherm}\left( t \right) \mathtt{rc49.resistor49.p.i}\left( t \right) \\
+0 &amp;=  - \mathtt{rc50.resistor50.v}\left( t \right) + \mathtt{rc50.resistor50.RTherm}\left( t \right) \mathtt{rc50.resistor50.p.i}\left( t \right)
+\end{align}
+ \]</p><p>That&#39;s not all though. In addition, the tearing process has turned the sets of nonlinear equations into separate blocks and constructed a DAG for the dependencies between the blocks. We can use the bipartite graph functionality to dig in and investigate what this means:</p><pre><code class="language-julia hljs">using ModelingToolkit.BipartiteGraphs
+ts = TearingState(expand_connections(big_rc))
+inc_org = BipartiteGraphs.incidence_matrix(ts.structure.graph)
+blt_org = StructuralTransformations.sorted_incidence_matrix(ts, only_algeqs = true,
+    only_algvars = true)
+blt_reduced = StructuralTransformations.sorted_incidence_matrix(
+    ModelingToolkit.get_tearing_state(sys),
+    only_algeqs = true,
+    only_algvars = true)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">151×252 SparseArrays.SparseMatrixCSC{Bool, Int64} with 50 stored entries:
+⎡⠑⢤⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⎤
+⎢⠀⠀⠑⢤⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⎥
+⎢⠀⠀⠀⠀⠑⢤⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⎥
+⎢⠀⠀⠀⠀⠀⠀⠙⢦⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⎥
+⎢⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⎥
+⎢⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⎥
+⎢⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⎥
+⎢⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⎥
+⎢⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⎥
+⎢⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⎥
+⎢⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⎥
+⎣⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⎦</code></pre><p><img src="https://user-images.githubusercontent.com/1814174/110589027-d4ec9b00-8143-11eb-8880-651da986504d.PNG" alt/></p><p>The figure on the left is the original incidence matrix of the algebraic equations. Notice that the original formulation of the model has dependencies between different equations, and so the full set of equations must be solved together. That exposes no parallelism. However, the Block Lower Triangular (BLT) transformation exposes independent blocks. This is then further improved by the tearing process, which removes 90% of the equations and transforms the nonlinear equations into 50 independent blocks, <em>which can now all be solved in parallel</em>. The conclusion is that, your attempts to parallelize are neigh: performing parallelism after structural simplification greatly improves the problem that can be parallelized, so this is better than trying to do it by hand.</p><p>After performing this, you can construct the <code>ODEProblem</code> and set <code>parallel_form</code> to use the exposed parallelism in multithreaded function constructions, but this showcases why <code>structural_simplify</code> is so important to that process.</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../remake/">« Optimizing through an ODE solve and re-creating MTK Problems</a><a class="docs-footer-nextpage" href="../sparse_jacobians/">Automated Sparse Analytical Jacobians »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.7.0 on <span class="colophon-date" title="Monday 4 November 2024 05:01">Monday 4 November 2024</span>. Using Julia version 1.10.6.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
