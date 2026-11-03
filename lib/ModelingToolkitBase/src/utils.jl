@@ -1724,10 +1724,27 @@ const DEFAULT_STABLE_INDEX = SU.StableIndex(Int[])
 """
     $TYPEDSIGNATURES
 
+Determine whether `x` could be an indexed array symbolic, i.e. whether it could
+match the non-fallback arms of `_split_indexed_var`. Inputs for which this returns
+`false` trivially produce `x, false` from `split_indexed_var`, so it is used as
+the `key_filter` of its cache: caching such inputs would only retain the key in
+task-local storage without saving any work.
+"""
+function _matches_indexed_var_pattern(x::SymbolicT)
+    return Moshi.Match.@match x begin
+        BSImpl.Term(; f, args) => f === getindex || (f isa Operator && length(args) == 1)
+        BSImpl.ArrayOp(; term) => term isa SymbolicT
+        _ => false
+    end
+end
+
+"""
+    $TYPEDSIGNATURES
+
 Given a symbolic variable `x`, check whether it is an indexed array symbolic. If it is,
 return the array and `true`. Otherwise, return `x, false`.
 """
-SU.@cache limit = 500_000 function split_indexed_var(x::SymbolicT)::Tuple{SymbolicT, Bool}
+SU.@cache limit = 500_000 key_filter = _matches_indexed_var_pattern function split_indexed_var(x::SymbolicT)::Tuple{SymbolicT, Bool}
     return _split_indexed_var(x)
 end
 
