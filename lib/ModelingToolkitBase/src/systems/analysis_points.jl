@@ -560,7 +560,7 @@ function unknown_to_parameter!(dvs::Vector{SymbolicT}, ps::Vector{SymbolicT}, va
     elseif SU.is_array_shape(SU.shape(var))
         n = length(dvs)
         filter!(!isequal(var) ∘ first ∘ split_indexed_var, dvs)
-        length(dvs) == n - length(elems) ||
+        length(dvs) == n - prod(length, SU.shape(var)) ||
             error(lazy"Not all elements of the array variable $var are unknowns of the system.")
     else
         error(lazy"Variable $var is not an unknown of the system.")
