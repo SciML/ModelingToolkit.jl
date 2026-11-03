@@ -48,21 +48,35 @@ function large_linear_sccs(state::TearingState, structure, max_size::Int)
     eqs = equations(state)
     for scc in StateSelection.find_var_sccs(graph, matching)
         length(scc) > max_size || continue
-        scc_vars = Set{SymbolicT}(state.fullvars[scc])
-        all(v -> matching[v] isa Int && is_linear_in(eqs[matching[v]], scc_vars), scc) || continue
+        scc_vars = BitSet(scc)
+        all(v -> matching[v] isa Int && is_linear_in(state, graph, matching[v], scc_vars), scc) || continue
         union!(big_linear_vars, scc)
         union!(big_linear_eqs, matching[v] for v in scc)
     end
     return big_linear_vars, big_linear_eqs
 end
 
-function is_linear_in(eq::Equation, vars::Set{SymbolicT})
-    expr = eq.rhs - eq.lhs
-    for v in Symbolics.get_variables(expr)
-        v in vars || continue
-        coeff, _, islinear = Symbolics.linear_expansion(expr, v)
+"""
+    $(TYPEDSIGNATURES)
+
+Check whether equation `ieq` is linear in the variables `scc_vars` it is incident on, with
+coefficients that do not depend on any of them. This follows the check for inlining linear
+SCCs in reassembly: incidence comes from `graph`, and each variable is expanded with the
+cached `get_linear_expander_for!`, continuing with the remainder.
+"""
+function is_linear_in(state::TearingState, graph, ieq::Int, scc_vars::BitSet)
+    eq = equations(state)[ieq]
+    expr = SU._iszero(eq.lhs) ? eq.rhs : eq.rhs - eq.lhs
+    vars = [v for v in 𝑠neighbors(graph, ieq) if v in scc_vars]
+    for (i, v) in enumerate(vars)
+        coeff, expr, islinear = MTKBase.get_linear_expander_for!(state.sys, state.fullvars[v], true)(expr)
         islinear || return false
-        any(in(vars), Symbolics.get_variables(coeff)) && return false
+        SU.isconst(coeff) && continue
+        # A coefficient containing another unknown of the block makes the equation nonlinear.
+        for w in @view vars[(i + 1):end]
+            dcoeff, _, coeff_linear = MTKBase.get_linear_expander_for!(state.sys, state.fullvars[w], true)(coeff)
+            coeff_linear && SU._iszero(dcoeff) || return false
+        end
     end
     return true
 end

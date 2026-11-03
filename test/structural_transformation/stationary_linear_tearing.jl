@@ -4,7 +4,7 @@ using NonlinearSolve
 
 # 5-point Laplace stencil on an n x n grid with u = x * y on the boundary, scaled by 1 / h^2
 # so that the centre coefficient exceeds the integer-linear subsystem's coefficient cap.
-function laplace_system(n; nonlinear = false)
+function laplace_system(n; nonlinear = false, coupled = false)
     h = 1 / (n - 1)
     @variables u[1:n, 1:n]
     eqs = Equation[]
@@ -14,7 +14,10 @@ function laplace_system(n; nonlinear = false)
             push!(eqs, u[i, j] ~ x * y)
         else
             stencil = (u[i + 1, j] + u[i - 1, j] + u[i, j + 1] + u[i, j - 1] - 4 * u[i, j]) / h^2
-            push!(eqs, 0 ~ stencil + (nonlinear ? 0.01 * u[i, j]^2 - 0.01 * x^2 * y^2 : 0))
+            push!(
+                eqs, 0 ~ stencil + (nonlinear ? 0.01 * u[i, j]^2 - 0.01 * x^2 * y^2 : 0) +
+                    (coupled ? 0.01 * u[i, j] * u[i + 1, j] : 0)
+            )
         end
     end
     return System(eqs, nothing, vec(collect(u)), []; name = :laplace), u
@@ -46,5 +49,9 @@ end
 
     # The same grid with a nonlinear term
     sys, u = laplace_system(9; nonlinear = true)
+    @test length(unknowns(mtkcompile(sys))) == length(unknowns(mtkcompile(sys; max_linear_scc_tearing = typemax(Int))))
+
+    # Linear in each unknown separately, but with a coefficient that contains another unknown
+    sys, u = laplace_system(9; coupled = true)
     @test length(unknowns(mtkcompile(sys))) == length(unknowns(mtkcompile(sys; max_linear_scc_tearing = typemax(Int))))
 end
