@@ -831,9 +831,9 @@ function _chunk_ranges(ir::IRStructure{VartypeT}, expr, chunk_size::Int)
     expr isa AbstractVector{SymbolicT} || return nothing
     auto = chunk_size < 0
     target = auto ? DEFAULT_CHUNK_SIZE : chunk_size
-    idxs = Int32[get(ir.definition, e, Int32(0)) for e in expr]
+    idxs = map(Base.Fix1(getindex, ir), expr)
     any(iszero, idxs) && return nothing
-    nverts = Graphs.nv(ir.dependency_graph)
+    nverts = length(ir)
     visited = falses(nverts)
     reachable = Int32[]
     for idx in idxs
