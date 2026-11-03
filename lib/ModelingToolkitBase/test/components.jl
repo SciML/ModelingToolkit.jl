@@ -1,4 +1,5 @@
 using Test
+import SciMLLogging
 using ModelingToolkitBase, OrdinaryDiffEq
 using OrdinaryDiffEqRosenbrock, OrdinaryDiffEqBDF
 using ModelingToolkitBase: get_component_type, complete
@@ -160,7 +161,8 @@ if @isdefined(ModelingToolkit)
         @test length(equations(sys)) == 2
         u0 = unknowns(sys) .=> 0
         @test_nowarn ODEProblem(
-            sys, [], (0, 10.0), guesses = u0, warn_initialize_determined = false
+            sys, [], (0, 10.0), guesses = u0,
+            verbose = MTKVerbosity(initialization = SciMLLogging.Silent)
         )
         prob = DAEProblem(sys, D.(unknowns(sys)) .=> 0, (0, 0.5), guesses = u0)
         sol = solve(prob, DFBDF())
@@ -435,29 +437,70 @@ end
 end
 
 @testset "Causal connections generate causal equations" begin
-    # test interpretation of `Equality` cset as causal connection
-    @named input = RealInput()
-    @named comp1 = System(Equation[], t; systems = [input])
-    @named output = RealOutput()
-    @named comp2 = System(Equation[], t; systems = [output])
-    @named sys = System([connect(comp2.output, comp1.input)], t; systems = [comp1, comp2])
-    eq = only(equations(expand_connections(sys)))
-    # as opposed to `output.u ~ input.u`
-    @test isequal(eq, comp2.output.u ~ comp1.input.u)
+    function input_output_components()
+        @named input = RealInput()
+        @named comp1 = System(Equation[], t; systems = [input])
+        @named output = RealOutput()
+        @named comp2 = System(Equation[], t; systems = [output])
+        return comp1, comp2
+    end
 
-    # test causal ordering of true causal cset
-    @named input = RealInput()
-    @named comp1 = System(Equation[], t; systems = [input])
-    @named output = RealOutput()
-    @named comp2 = System(Equation[], t; systems = [output])
-    @named sys = System(
-        [connect(comp2.output.u, comp1.input.u)], t; systems = [
-            comp1, comp2,
+    # `Equality` csets between whole ports are interpreted as causal connections,
+    # and causal variable csets keep their causal ordering: both emit
+    # `destination ~ source` (`input.u ~ output.u`), as opposed to
+    # `output.u ~ input.u`, regardless of the `connect` argument order.
+    for (port_connection, var_connection) in [
+            (
+                (comp1, comp2) -> connect(comp2.output, comp1.input),
+                (comp1, comp2) -> connect(comp2.output.u, comp1.input.u),
+            ),
+            (
+                (comp1, comp2) -> connect(comp1.input, comp2.output),
+                (comp1, comp2) -> connect(comp1.input.u, comp2.output.u),
+            ),
         ]
-    )
-    eq = only(equations(expand_connections(sys)))
-    # as opposed to `output.u ~ input.u`
-    @test isequal(eq, comp1.input.u ~ comp2.output.u)
+        for connection in (port_connection, var_connection)
+            comp1, comp2 = input_output_components()
+            @named sys = System([connection(comp1, comp2)], t; systems = [comp1, comp2])
+            eq = only(equations(expand_connections(sys)))
+            @test isequal(eq, comp1.input.u ~ comp2.output.u)
+        end
+    end
+
+    # every destination in the connection set gets a `destination ~ source` equation
+    comp1, comp2 = input_output_components()
+    @named input2 = RealInput()
+    @named comp3 = System(Equation[], t; systems = [input2])
+    for connection in [
+            connect(comp2.output, comp1.input, comp3.input2),
+            connect(comp2.output.u, comp1.input.u, comp3.input2.u),
+        ]
+        @named sys = System([connection], t; systems = [comp1, comp2, comp3])
+        eqs = equations(expand_connections(sys))
+        @test length(eqs) == 2 &&
+            isequal(eqs[1], comp1.input.u ~ comp2.output.u) &&
+            isequal(eqs[2], comp3.input2.u ~ comp2.output.u)
+    end
+end
+
+@testset "Causal `Equality` cset with an outer connector, in any argument order" begin
+    # the inner output is the only source; every other member is equated to it
+    orders = [
+        (:outer, :src, :dst), (:outer, :dst, :src), (:src, :outer, :dst),
+        (:src, :dst, :outer), (:dst, :outer, :src), (:dst, :src, :outer),
+    ]
+    @testset "$order" for order in orders
+        @named src = System(Equation[], t; systems = [RealOutput(; name = :output)])
+        @named dst = System(Equation[], t; systems = [RealInput(; name = :input)])
+        @named output = RealOutput()
+        connectors = Dict(:outer => output, :src => src.output, :dst => dst.input)
+        @named sys = System(
+            [connect((connectors[k] for k in order)...)], t; systems = [src, dst, output]
+        )
+        eqs = equations(expand_connections(sys))
+        @test length(eqs) == 2
+        @test all(eq -> isequal(eq.rhs, src.output.u), eqs)
+    end
 end
 
 @testset "Source information propagation through `expand_connections`" begin

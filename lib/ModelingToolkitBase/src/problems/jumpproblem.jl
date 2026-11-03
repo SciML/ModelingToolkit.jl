@@ -1,8 +1,16 @@
+const JUMPPROBLEM_SPECIALIZATION_DOCS = """
+Unlike the other problem constructors, `JumpProblem` defaults to
+`specialize = SciMLBase.FullSpecialize`. JumpProcesses' aggregators need concrete
+parameters: under `SciMLBase.AutoDespecialize`, most of them throw when the jumps are
+coupled to an ODE, and the others run much slower. Passing a specialization other than
+`SciMLBase.FullSpecialize` is deprecated.
+"""
+
 # `tspan` has no default here, unlike every other time-dependent problem constructor:
 # `JumpProcesses` already defines `JumpProblem(prob, jumps...)`, so a two-argument method
 # with an untyped `op` is ambiguous with it (Aqua reports 14 ambiguities).
-"""$(problem_docstring(JumpProcesses.JumpProblem, "inner SciMLFunction", true; init = false, tspan_default = false))"""
-@fallback_iip_specialize function JumpProcesses.JumpProblem{iip, spec}(
+"""$(problem_docstring(JumpProcesses.JumpProblem, "inner SciMLFunction", true; init = false, tspan_default = false, extra_body = JUMPPROBLEM_SPECIALIZATION_DOCS))"""
+@fallback_iip_specialize SciMLBase.FullSpecialize function JumpProcesses.JumpProblem{iip, spec}(
         sys::System, op, tspan::Union{Tuple, Nothing};
         check_compatibility = true, eval_expression = false, eval_module = @__MODULE__,
         checkbounds = false, aggregator = JumpProcesses.NullAggregator(),
@@ -10,6 +18,14 @@
     ) where {iip, spec}
     check_complete(sys, JumpProblem)
     check_compatibility && check_compatible_system(JumpProblem, sys)
+    if spec !== SciMLBase.FullSpecialize
+        Base.depwarn(
+            "`JumpProblem{iip, $spec}(sys::System, ...)` is deprecated: `JumpProblem` " *
+                "for a `System` will only support `SciMLBase.FullSpecialize`, its default. " *
+                "Use `JumpProblem(sys, op, tspan)` or `JumpProblem{iip}(sys, op, tspan)`.",
+            :JumpProblem
+        )
+    end
     if haskey(kwargs, :tstops)
         throw(
             ArgumentError(
@@ -58,7 +74,9 @@
             )
             f = (du, u, p, t) -> (du .= 0; nothing)
             df = ODEFunction{true, spec}(f; sys, observed = observedfun)
-            prob = ODEProblem{true}(df, u0, tspan, p; kwargs...)
+            prob = ODEProblem{true}(
+                df, u0, tspan, p; _solver_kwargs(ODEProblem, filter_kwargs(kwargs))...
+            )
         end
     else
         _f, u0,
@@ -76,7 +94,9 @@
             f; sys = sys, observed = observedfun,
             initialization_data = get(_f.kwargs, :initialization_data, nothing)
         )
-        prob = DiscreteProblem(df, u0, tspan, p; kwargs...)
+        prob = DiscreteProblem(
+            df, u0, tspan, p; _solver_kwargs(DiscreteProblem, filter_kwargs(kwargs))...
+        )
     end
 
     # Create SymbolicTstops for all paths and forward via JumpProblem kwargs.
@@ -126,7 +146,7 @@
     op_processed = operating_point_preprocess(sys, op)
     cbs = process_events(
         sys; callback, eval_expression, eval_module, op = op_processed, reset_jumps = true,
-        tspan
+        tspan, mtk_verbosity = _problem_verbosity(kwargs)
     )
 
     if tstops !== nothing
@@ -135,7 +155,7 @@
     return JumpProblem(
         prob, aggregator, jset; dep_graph = jtoj, vartojumps_map = vtoj,
         jumptovars_map = jtov, nocopy = true,
-        callback = cbs, save_positions, kwargs...
+        callback = cbs, save_positions, _solver_kwargs(JumpProblem, kwargs)...
     )
 end
 
@@ -209,19 +229,21 @@ function collect_vars!(
 end
 
 ### Functions to determine which unknowns a jump depends on
-function SU.search_variables!(dep, jump::Union{ConstantRateJump, VariableRateJump}; kw...)
+_get_variables!(dep, expr, variables) = get_variables!(dep, expr, variables)
+
+function _get_variables!(dep, jump::Union{ConstantRateJump, VariableRateJump}, variables)
     jr = unwrap(jump.rate)
-    (jr isa SymbolicT) && SU.search_variables!(dep, jr; kw...)
+    (jr isa SymbolicT) && get_variables!(dep, jr, variables)
     return dep
 end
 
-function SU.search_variables!(dep, jump::MassActionJump; is_atomic = SU.default_is_atomic, kw...)
+function _get_variables!(dep, jump::MassActionJump, variables)
     sr = unwrap(jump.scaled_rates)
-    (sr isa SymbolicT) && SU.search_variables!(dep, sr; is_atomic, kw...)
+    (sr isa SymbolicT) && get_variables!(dep, sr, variables)
     for varasop in jump.reactant_stoch
         var = unwrap(varasop[1])
         var isa SymbolicT || continue
-        is_atomic(var) && push!(dep, var)
+        get_variables!(dep, var, variables)
     end
     return dep
 end
