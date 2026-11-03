@@ -50,6 +50,7 @@ end
             @safetestset "Input Output Test" include("input_output_handling.jl")
             @safetestset "System Building Tests" include("system_building.jl")
             @safetestset "Simple `mtkcompile`" include("simple_mtkcompile.jl")
+            @safetestset "SciMLLogging verbosity" include("verbosity.jl")
             @safetestset "`@mtkcomplete`" include("mtkcomplete.jl")
             @safetestset "ODESystem Test" include("odesystem.jl")
             @safetestset "System `tspan`" include("system_tspan.jl")
@@ -70,6 +71,7 @@ end
             @safetestset "Precompiled Modules Test" include("precompile_test.jl")
             @safetestset "DAE Jacobians Test" include("dae_jacobian.jl")
             @safetestset "Array equations reach `DAEProblem`" include("array_equation_dae.jl")
+            @safetestset "Array unknowns resolve from varmaps" include("array_varmap_resolve.jl")
             @safetestset "Jacobian Sparsity" include("jacobiansparsity.jl")
             @safetestset "Modelingtoolkitize Test" include("modelingtoolkitize.jl")
             @safetestset "Constants Test" include("constants.jl")
@@ -84,6 +86,7 @@ end
         @safetestset "Guess Propagation" include("guess_propagation.jl")
         @safetestset "InitializationSystem Test" include("initializationsystem.jl")
         @safetestset "Initial Values Test" include("initial_values.jl")
+        @safetestset "Nonnumeric parameter reconstruction" include("nonnumeric_reconstruction.jl")
     end
 
     if GROUP == "All" || GROUP == "InterfaceII"
@@ -130,6 +133,7 @@ end
         println("C compilation test requires gcc available in the path!")
         @safetestset "C Compilation Test" include("ccompile.jl")
         @safetestset "Multithreading test" include("multithreading.jl")
+        @safetestset "PerTaskValue test" include("per_task_value.jl")
         @testset "Distributed Test" include("distributed.jl")
         @testset "Serialization" include("serialization.jl")
     end
