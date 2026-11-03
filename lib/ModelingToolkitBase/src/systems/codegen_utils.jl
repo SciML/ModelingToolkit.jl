@@ -832,7 +832,6 @@ function _chunk_ranges(ir::IRStructure{VartypeT}, expr, chunk_size::Int)
     auto = chunk_size < 0
     target = auto ? DEFAULT_CHUNK_SIZE : chunk_size
     idxs = map(Base.Fix1(getindex, ir), expr)
-    any(iszero, idxs) && return nothing
     nverts = length(ir)
     visited = falses(nverts)
     reachable = Int32[]
