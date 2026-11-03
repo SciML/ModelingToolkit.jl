@@ -2392,9 +2392,11 @@ function initialization_equations(
     # Always a fresh vector, so the system's own `initialization_eqs` is never mutated
     eqs = Vector{Equation}(eqs)
     for subsys in systems
-        append!(eqs, namespace_initialization_equations(
-            subsys, independent_variables(subsys), visitor
-        ))
+        append!(
+            eqs, namespace_initialization_equations(
+                subsys, independent_variables(subsys), visitor
+            )
+        )
     end
     ascend_visitor!(visitor, sys, get_initialization_eqs)
     return eqs
