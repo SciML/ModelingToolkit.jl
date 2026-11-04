@@ -90,6 +90,7 @@ end
 
     if GROUP == "All" || GROUP == "InterfaceII"
         @safetestset "Code Generation Test" include("code_generation.jl")
+        @safetestset "Function Chunking Test" include("function_chunking.jl")
         @safetestset "Array Equation ODEProblem Test" include("array_equation_ode.jl")
         @safetestset "IndexCache Test" include("index_cache.jl")
         @safetestset "Variable Utils Test" include("variable_utils.jl")
@@ -132,6 +133,7 @@ end
         println("C compilation test requires gcc available in the path!")
         @safetestset "C Compilation Test" include("ccompile.jl")
         @safetestset "Multithreading test" include("multithreading.jl")
+        @safetestset "PerTaskValue test" include("per_task_value.jl")
         @testset "Distributed Test" include("distributed.jl")
         @testset "Serialization" include("serialization.jl")
     end
