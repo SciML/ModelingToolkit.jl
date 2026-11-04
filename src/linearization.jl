@@ -227,6 +227,50 @@ function linearization_function(
     inputs isa AbstractVector || (inputs = [inputs])
     outputs isa AbstractVector || (outputs = [outputs])
     ssys = mtkcompile(sys; inputs, outputs, simplify, verbose = verbosity, kwargs...)
+    zero_dummy_der_vars = zero_dummy_der ? setdiff(unknowns(ssys), unknowns(sys)) : SymbolicT[]
+    return _linearization_function_compiled(
+        ssys, inputs, outputs; initialize, initializealg, initialization_abstol,
+        initialization_reltol, op, p, initialization_solver_alg, autodiff, eval_expression,
+        eval_module, verbosity, warn_initialize_determined, guesses, missing_guess_value, t,
+        ignore_system_initial_conditions, loop_opening_params, loop_opening_drivers,
+        zero_dummy_der_vars
+    )
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+The part of [`linearization_function`](@ref) that operates on a system `ssys` that has
+already been compiled with `inputs` and `outputs`. `zero_dummy_der_vars` are the unknowns
+whose operating-point value is set to zero. Keyword arguments are documented in
+[`linearization_function`](@ref).
+"""
+function _linearization_function_compiled(
+        ssys::AbstractSystem, inputs, outputs;
+        initialize = true,
+        initializealg = nothing,
+        initialization_abstol = 1.0e-5,
+        initialization_reltol = 1.0e-3,
+        op = Dict{SymbolicT, SymbolicT}(),
+        p = SciMLBase.NullParameters(),
+        initialization_solver_alg = nothing,
+        autodiff = AutoForwardDiff(),
+        eval_expression = false, eval_module = @__MODULE__,
+        verbosity = MTKVerbosity(),
+        warn_initialize_determined = nothing,
+        guesses = Dict{SymbolicT, SymbolicT}(),
+        missing_guess_value = MTKBase.default_missing_guess_value(),
+        t = 0.0,
+        ignore_system_initial_conditions = false,
+        loop_opening_params = SymbolicT[],
+        loop_opening_drivers = SymbolicT[],
+        zero_dummy_der_vars = SymbolicT[],
+        initialization_eqs = Equation[],
+        algebraic_only = isempty(initialization_eqs)
+    )
+    op = Dict(op)
+    inputs isa AbstractVector || (inputs = [inputs])
+    outputs isa AbstractVector || (outputs = [outputs])
     if ignore_system_initial_conditions
         ics = copy(initial_conditions(ssys))
         filter!(Base.Fix2(SU.hasmetadata, MTKBase.AnalysisVariable) ∘ first, ics)
@@ -236,10 +280,9 @@ function linearization_function(
         op, loop_opening_params, loop_opening_drivers, initial_conditions(ssys)
     )
     diff_idxs, alge_idxs = eq_idxs(ssys)
-    if zero_dummy_der
-        dummyder = setdiff(unknowns(ssys), unknowns(sys))
+    if !isempty(zero_dummy_der_vars)
         ics = initial_conditions(ssys)
-        for x in dummyder
+        for x in zero_dummy_der_vars
             ics[x] = Symbolics.COMMON_ZERO
         end
     end
@@ -270,8 +313,8 @@ function linearization_function(
 
     prob = ODEProblem{true}(
         sys, merge(op, anydict(p)), (t, t); allow_incomplete = true,
-        algebraic_only = true, guesses, missing_guess_value, verbose = verbosity,
-        initialization_eqs = held_eqs,
+        algebraic_only, guesses, missing_guess_value, verbose = verbosity,
+        initialization_eqs = [initialization_eqs; held_eqs],
         # the problem constructor applies and deprecates this keyword
         warn_initialize_determined
     )

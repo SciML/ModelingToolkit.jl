@@ -8,6 +8,8 @@ Linear analysis refers to the process of linearizing a nonlinear model and analy
   - [`linearize`](@ref) can be called with two analysis points denoting the input and output of the linearized system.
   - [`open_loop`](@ref) return a new (nonlinear) system where the loop has been broken in the analysis point, i.e., the connection the analysis point usually implies has been removed.
 
+For models with clocked (synchronous) subsystems, `get_sensitivity`, `get_comp_sensitivity` and `get_looptransfer` accept the keyword argument `hybrid = true`, and `linearize_hybrid` accepts analysis points as inputs and outputs. They return one linear system per clock partition together with the connections between the partitions, see [Hybrid systems with clock partitions](@ref).
+
 An analysis point can be created explicitly using the constructor [`AnalysisPoint`](@ref), or automatically when connecting two causal components using `connect`:
 
 ```julia
