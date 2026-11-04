@@ -660,6 +660,12 @@ end
         plant_to_ctrl = clock_boundary(hl, hl.continuous_index, 2)
         @test all(iszero, cont.C[plant_to_ctrl.outputs, :])
         @test all(iszero, cont.D[plant_to_ctrl.outputs, :])
+        # The loop openings apply also when the inputs and outputs are variables.
+        hl_var = @test_nowarn linearize_hybrid(
+            syso, [], [y]; loop_openings = [:measurement], op = Dict(x => 0.5)
+        )
+        cont_var = hl_var.partitions[hl_var.continuous_index]
+        @test all(iszero, cont_var.C[clock_boundary(hl_var, hl_var.continuous_index, 2).outputs, :])
         hl_closed = linearize_hybrid(syso, :plant_input, [y]; op = Dict(x => 0.5))
         cont_closed = hl_closed.partitions[hl_closed.continuous_index]
         @test cont_closed.C[clock_boundary(hl_closed, hl_closed.continuous_index, 2).outputs, :] ≈ [1.0;;]

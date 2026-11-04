@@ -1205,8 +1205,8 @@ reported by a warning.
 - `initialize`, `initializealg`, `initialization_abstol`, `initialization_reltol`,
   `initialization_solver_alg`, `guesses`, `missing_guess_value`, `eval_expression`,
   `eval_module`: See [`linearization_function`](@ref). They apply to the continuous partition.
-- `loop_openings`, `system_modifier`: See [`get_sensitivity`](@ref). Only for analysis
-  points. As in [`linearization_function`](@ref), an opened signal without a value in `op`
+- `loop_openings`, `system_modifier`: See [`get_sensitivity`](@ref). The loop openings
+  apply also when `inputs` and `outputs` are variables. As in [`linearization_function`](@ref), an opened signal without a value in `op`
   is held at the value of the signal that drove it. Loop openings are supported at
   connections of continuous-time signals only.
 - Remaining keyword arguments are forwarded to the structural simplification of each
@@ -1222,6 +1222,7 @@ function linearize_hybrid(
         allow_input_derivatives = false, warn_missing_op = true, warn_unsupported = true,
         warn_zero = true,
         loop_opening_params = SymbolicT[], loop_opening_drivers = SymbolicT[],
+        loop_openings = [], system_modifier = identity,
         initialize = true, initializealg = nothing,
         initialization_abstol = 1.0e-5, initialization_reltol = 1.0e-3,
         initialization_solver_alg = nothing, guesses = Dict{SymbolicT, SymbolicT}(),
@@ -1233,6 +1234,12 @@ function linearize_hybrid(
     outputs isa AbstractVector || (outputs = [outputs])
     inputs = _scalarized_vars(inputs)
     outputs = _scalarized_vars(outputs)
+    if !isempty(loop_openings)
+        sys, opened, drivers = handle_loop_openings(sys, loop_openings)
+        loop_opening_params = SymbolicT[loop_opening_params; opened]
+        loop_opening_drivers = SymbolicT[loop_opening_drivers; drivers]
+    end
+    sys = system_modifier(sys)
     hop = HybridOperatingPoint(op, t)
     t = hop.t
 
