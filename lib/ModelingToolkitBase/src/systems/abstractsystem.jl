@@ -1412,9 +1412,10 @@ function namespace_equations(sys::AbstractSystem, visitor = NoVisitor())
 end
 
 function namespace_initialization_equations(
-        sys::AbstractSystem, ivs = independent_variables(sys)
+        sys::AbstractSystem, ivs = independent_variables(sys),
+        visitor = NoVisitor()
     )
-    eqs = initialization_equations(sys)
+    eqs = initialization_equations(sys, visitor)
     isempty(eqs) && return Equation[]
     cache = Base.IdDict{SymbolicT, SymbolicT}()
     return map(eq -> namespace_equation(eq, sys; cache, ivs), eqs)
@@ -2373,26 +2374,32 @@ end
 """
 $(TYPEDSIGNATURES)
 
-Get the initialization equations of the system `sys` and its subsystems.
+Get the initialization equations of the system `sys` and its subsystems. `visitor` is
+notified as the hierarchy is traversed (see `ModelingToolkitBase.SourceInformationVisitor`).
 
 See also [`guesses`](@ref), [`initial_conditions`](@ref) and [`ModelingToolkitBase.get_initialization_eqs`](@ref).
 """
-function initialization_equations(sys::AbstractSystem)
+function initialization_equations(
+        sys::AbstractSystem, visitor::AbstractRecursivePropertyVisitor = NoVisitor()
+    )
     eqs = get_initialization_eqs(sys)
     systems = get_systems(sys)
+    descend_visitor!(visitor, sys, get_initialization_eqs)
     if isempty(systems)
-        return eqs
-    else
-        eqs = Equation[
-            eqs;
-            reduce(
-                vcat,
-                namespace_initialization_equations.(get_systems(sys));
-                init = Equation[]
-            )
-        ]
+        ascend_visitor!(visitor, sys, get_initialization_eqs)
         return eqs
     end
+    # Always a fresh vector, so the system's own `initialization_eqs` is never mutated
+    eqs = Vector{Equation}(eqs)
+    for subsys in systems
+        append!(
+            eqs, namespace_initialization_equations(
+                subsys, independent_variables(subsys), visitor
+            )
+        )
+    end
+    ascend_visitor!(visitor, sys, get_initialization_eqs)
+    return eqs
 end
 
 """
