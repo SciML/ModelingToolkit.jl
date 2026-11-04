@@ -170,6 +170,11 @@ The `simplified_sys` has undergone [`ModelingToolkitBase.mtkcompile`](@ref) and 
   - `autodiff`: An `ADType` supported by DifferentiationInterface.jl to use for calculating the necessary jacobians. Defaults to using `AutoForwardDiff()`
   - `op`: The operating point, a dictionary or a [`LinearizationOpPoint`](@ref). A `LinearizationOpPoint` determines the operating point and `t` from its solution at its first time point, and implies `ignore_system_initial_conditions = true`, as in [`linearize`](@ref). This allows passing a `LinearizationOpPoint` to the functions that build on `linearization_function`, such as [`get_sensitivity`](@ref).
   - `ignore_system_initial_conditions`: Whether to ignore `initial_conditions(sys)` and only use `op`.
+  - `loop_openings`: Analysis points whose connections are removed before linearization, also
+    when `inputs` and `outputs` are variables. A signal disconnected by a loop opening is held
+    at the value of the signal that drove it unless `op` provides a value for it.
+  - `system_modifier`: A function applied to the system after the loop openings and before
+    structural simplification.
   - `verbose`: An [`MTKVerbosity`](@ref), a `SciMLLogging` preset, or a `Bool` controlling
     diagnostic output (the `empty_operating_point` toggle and the initialization toggles).
     The deprecated boolean keywords `warn_empty_op` and `warn_initialize_determined`
@@ -200,6 +205,8 @@ function linearization_function(
         ignore_system_initial_conditions = false,
         loop_opening_params = SymbolicT[],
         loop_opening_drivers = SymbolicT[],
+        loop_openings = [],
+        system_modifier = identity,
         kwargs...
     )
     verbosity = verbose === nothing ? MTKVerbosity() : MTKVerbosity(verbose)
@@ -226,6 +233,12 @@ function linearization_function(
     end
     inputs isa AbstractVector || (inputs = [inputs])
     outputs isa AbstractVector || (outputs = [outputs])
+    if !isempty(loop_openings)
+        sys, opened, drivers = handle_loop_openings(sys, loop_openings)
+        loop_opening_params = SymbolicT[loop_opening_params; opened]
+        loop_opening_drivers = SymbolicT[loop_opening_drivers; drivers]
+    end
+    sys = system_modifier(sys)
     ssys = mtkcompile(sys; inputs, outputs, simplify, verbose = verbosity, kwargs...)
     if ignore_system_initial_conditions
         ics = copy(initial_conditions(ssys))
