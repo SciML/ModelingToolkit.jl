@@ -313,10 +313,13 @@ function generate_rhs(
             (; wrap_code = (wrap_oop_similar_for_residual ∘ oop_wrap, iip_wrap))
         )
     end
+    # Very large right-hand sides are chunked automatically. This is sound because in-place
+    # SciML functions are called with an `out` (`du`) that is distinct from `u` and `p`, as the
+    # SciMLBase in-place function documentation states for `f(du, u, p, t)`.
     res = build_function_wrapper(
         sys, rhss, collect(Any, args), BuildFunctionWrapperOptions(;
             p_start, extra_assignments, u_arg, n_param_buffers, p_end_kw...,
-            codegen_function_options = codegen_opts
+            chunk_size = -1, codegen_function_options = codegen_opts
         )
     )
     nargs = length(args) - length(p) + 1
