@@ -55,3 +55,28 @@ end
     sys, u = laplace_system(9; coupled = true)
     @test length(unknowns(mtkcompile(sys))) == length(unknowns(mtkcompile(sys; max_linear_scc_tearing = typemax(Int))))
 end
+
+# Records its calls and delegates to the default algorithm.
+struct RecordingTearing <: ModelingToolkit.StateSelection.TearingAlgorithm
+    calls::Vector{Int}
+end
+function (alg::RecordingTearing)(args...; kwargs...)
+    push!(alg.calls, 1)
+    return ModelingToolkit.StateSelection.DummyDerivativeTearing()(args...; kwargs...)
+end
+
+@testset "The underlying tearing algorithm is configurable" begin
+    sys, u = laplace_system(9)
+    default_count = length(unknowns(mtkcompile(sys)))
+
+    alg = RecordingTearing(Int[])
+    custom = mtkcompile(sys; tearing_alg = alg)
+    @test length(alg.calls) == 1
+    @test length(unknowns(custom)) == default_count
+
+    # The wrapper also sees the system when linear blocks are torn.
+    alg = RecordingTearing(Int[])
+    torn = mtkcompile(sys; tearing_alg = alg, max_linear_scc_tearing = typemax(Int))
+    @test length(alg.calls) == 1
+    @test length(unknowns(torn)) == length(unknowns(mtkcompile(sys; max_linear_scc_tearing = typemax(Int))))
+end

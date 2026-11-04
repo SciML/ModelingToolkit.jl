@@ -1,21 +1,32 @@
 """
     $TYPEDEF
 
-Tearing algorithm for stationary (no independent variable) systems. Behaves like the default
-`DummyDerivativeTearing`, except that every strongly connected component with more than
+Tearing algorithm for stationary (no independent variable) systems. Behaves like the
+underlying `tearing_alg` (default `StateSelection.DummyDerivativeTearing()`), except that every strongly connected component with more than
 `max_linear_scc_tearing` equations, all of which are linear in the component's own unknowns, is
 left untorn. Tearing such a block (for example the interior of a discretized Laplace
 equation) selects a few iteration variables and expresses the rest by a recursion whose
 conditioning degrades exponentially with the block size, whereas the untorn block is a linear
 system the nonlinear solver handles directly.
+
+The underlying algorithm `tearing_alg` is called as `tearing_alg(structure, dummy_derivatives; mm)`
+and may be any `StateSelection.TearingAlgorithm`.
 """
-struct LinearBlockTearing{S <: TearingState} <: StateSelection.TearingAlgorithm
+struct LinearBlockTearing{S <: TearingState, T <: StateSelection.TearingAlgorithm} <:
+    StateSelection.TearingAlgorithm
     state::S
     max_linear_scc_tearing::Int
+    tearing_alg::T
+end
+
+function LinearBlockTearing(state::TearingState, max_linear_scc_tearing::Int)
+    return LinearBlockTearing(
+        state, max_linear_scc_tearing, StateSelection.DummyDerivativeTearing()
+    )
 end
 
 function (alg::LinearBlockTearing)(structure, dummy_derivatives = ())
-    (; state, max_linear_scc_tearing) = alg
+    (; state, max_linear_scc_tearing, tearing_alg) = alg
     mm = state.mm
     big_linear_vars, big_linear_eqs = large_linear_sccs(state, structure, max_linear_scc_tearing)
     if !isempty(big_linear_vars) && mm !== nothing
@@ -25,7 +36,7 @@ function (alg::LinearBlockTearing)(structure, dummy_derivatives = ())
             mm.nparentrows, mm.ncols, mm.nzrows[keep], mm.row_cols[keep], mm.row_vals[keep]
         )
     end
-    tearing_result, extra = StateSelection.DummyDerivativeTearing()(structure, dummy_derivatives; mm)
+    tearing_result, extra = tearing_alg(structure, dummy_derivatives; mm)
     # A block with no matched variable is solved all at once by the nonlinear solver.
     for v in big_linear_vars
         tearing_result.var_eq_matching[v] = unassigned
@@ -148,12 +159,15 @@ the system is balanced.
 For systems without an independent variable, strongly connected components of more than
 `max_linear_scc_tearing` (default 16) equations that are all linear in their own unknowns
 are not torn, see `LinearBlockTearing`. Pass `max_linear_scc_tearing = typemax(Int)` to
-tear them as before.
+tear them as before. The algorithm used for the remaining equations is the keyword
+`tearing_alg` (default `StateSelection.DummyDerivativeTearing()`); it is only used for systems
+without an independent variable.
 """
 function dummy_derivative(
         sys, state = TearingState(sys);
         reassemble_alg::ReassembleAlgorithm = DefaultReassembleAlgorithm(),
         fully_determined = true, max_linear_scc_tearing::Int = 16,
+        tearing_alg::StateSelection.TearingAlgorithm = StateSelection.DummyDerivativeTearing(),
         # Not forwarded: StateSelection and MTKTearing do not accept `verbose`.
         verbose::MTKVerbosity = MTKVerbosity(),
         kwargs...
@@ -185,7 +199,7 @@ function dummy_derivative(
         var_eq_matching = complete(StateSelection.pantelides!(state; kwargs...))
         StateSelection.dummy_derivative_graph!(
             state.structure, var_eq_matching, jac, state_priority, Val(false);
-            tearing_alg = LinearBlockTearing(state, max_linear_scc_tearing),
+            tearing_alg = LinearBlockTearing(state, max_linear_scc_tearing, tearing_alg),
             mm = StateSelection.get_mm(state)
         )
     else
