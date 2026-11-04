@@ -441,6 +441,24 @@ end
         @test !isfinite(only(hl.partitions[1].B))
         @test_nowarn linearize_hybrid(syss, [us], [ys]; op = Dict(xs => 0.0, us => 1.0))
     end
+
+    @testset "Zero linearization of a saturated signal" begin
+        @variables xc(t) yc(t) ycd(t) ucd(t)
+        eqs_c = [
+            D(xc) ~ -xc + Hold(ucd)
+            yc ~ xc
+            ycd ~ Sample(dt)(yc)
+            ucd ~ clamp(-2ycd, -1.0, 1.0)
+        ]
+        @named sysc = System(eqs_c, t)
+        # The controller output saturates at the operating point.
+        hl = @test_logs (:warn, r"saturations") match_mode = :any linearize_hybrid(
+            sysc, [], [yc]; op = Dict(xc => 1.0)
+        )
+        @test all(iszero, hl.partitions[2].D)
+        @test_nowarn linearize_hybrid(sysc, [], [yc]; op = Dict(xc => 1.0), warn_zero = false)
+        @test_nowarn linearize_hybrid(sysc, [], [yc]; op = Dict(xc => 0.1))
+    end
 end
 
 @testset "Model constructs that partitions must not inherit" begin

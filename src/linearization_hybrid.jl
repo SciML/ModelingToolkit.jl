@@ -1114,6 +1114,35 @@ function _held_loop_openings(
 end
 
 """
+    $(TYPEDSIGNATURES)
+
+Warn about the inputs of the partition linearization `p` whose columns of `B` and `D` are
+zero and, if `check_outputs`, the outputs whose rows of `C` and `D` are zero, except for the
+signals in `skip`.
+Such a signal has no effect on, or is not affected by, the partition at the operating point,
+which commonly indicates a saturation at the operating point.
+"""
+function _warn_zero_signals(
+        p::ClockPartitionLinearization, description, skip::Set{SymbolicT}, check_outputs::Bool
+    )
+    # With input derivatives, `B` has additional columns for the derivatives of the inputs.
+    zero_inputs = SymbolicT[
+        p.inputs[j] for j in eachindex(p.inputs)
+            if !(p.inputs[j] in skip) && iszero(view(p.B, :, j)) && iszero(view(p.D, :, j))
+    ]
+    zero_outputs = SymbolicT[
+        p.outputs[i] for i in axes(p.C, 1)
+            if check_outputs && !(p.outputs[i] in skip) && iszero(view(p.C, i, :)) && iszero(view(p.D, i, :))
+    ]
+    isempty(zero_inputs) && isempty(zero_outputs) && return nothing
+    signals = String[]
+    isempty(zero_inputs) || push!(signals, "the inputs $(join(string.(zero_inputs), ", ")) have no effect on the partition")
+    isempty(zero_outputs) || push!(signals, "the outputs $(join(string.(zero_outputs), ", ")) do not depend on the state or the inputs of the partition")
+    @warn "In the linearization of the $description, $(join(signals, ", and ")). If this is unintended, check the model for saturations or similar nonlinearities, such as the functions `max`, `min` and `clamp`, that have a zero derivative at the operating point. For a discrete partition, this may also indicate an operating point that is not stationary across ticks, since the history values of a discrete partition default to the values of their variables or to zero. Disable this warning with `warn_zero = false`."
+    return nothing
+end
+
+"""
     hl = linearize_hybrid(sys, inputs, outputs; op = Dict(), t = 0.0, kwargs...)
 
 Linearize the hybrid (clocked) system `sys` partition by partition. The model may contain
@@ -1169,6 +1198,9 @@ reported by a warning.
   `AutoFiniteDiff()`; pass `nothing` to disable the fallback.
 - `allow_input_derivatives`: See [`linearize`](@ref). Applies to the continuous partition.
 - `warn_missing_op`: Whether to warn about operating-point values that default to zero.
+- `warn_zero`: Whether to warn about inputs and outputs of a partition whose columns of `B`
+  and `D`, or rows of `C` and `D`, are zero. Signals disconnected by `loop_openings`, and the
+  outputs of a partition that such a signal enters, are exempt.
 - `warn_unsupported`: Whether to warn about constructs that are not accounted for.
 - `initialize`, `initializealg`, `initialization_abstol`, `initialization_reltol`,
   `initialization_solver_alg`, `guesses`, `missing_guess_value`, `eval_expression`,
@@ -1188,6 +1220,7 @@ function linearize_hybrid(
         op = Dict{SymbolicT, SymbolicT}(), t = 0.0,
         autodiff = AutoForwardDiff(), fallback_autodiff = AutoFiniteDiff(),
         allow_input_derivatives = false, warn_missing_op = true, warn_unsupported = true,
+        warn_zero = true,
         loop_opening_params = SymbolicT[], loop_opening_drivers = SymbolicT[],
         initialize = true, initializealg = nothing,
         initialization_abstol = 1.0e-5, initialization_reltol = 1.0e-3,
@@ -1259,6 +1292,7 @@ function linearize_hybrid(
         haskey(opened_driver, var) && return partition_of(opened_driver[var])
         throw(IONotFoundError("inputs or outputs", nameof(sys), [var]))
     end
+    opened_signals = Set{SymbolicT}(unwrap(p) for p in loop_opening_params)
     held_params, held_drivers, held_vars = _held_loop_openings(
         loop_opening_params, loop_opening_drivers, partition_of, continuous_id,
         Dict{SymbolicT, SymbolicT}(zip(inputs, input_params))
@@ -1281,6 +1315,7 @@ function linearize_hybrid(
     # another partition `j`. Terms that no equation of their partition reads are compiled as
     # parameters but not exposed. `SampleTime()` terms are parameters of their partition whose
     # value is the sample interval of its clock.
+    opened_input = falses(npart)
     struct_conn = @NamedTuple{from::Int, source::SymbolicT, to::Int, term::SymbolicT}
     connections = struct_conn[]
     sample_time_terms = [SymbolicT[] for _ in 1:npart]
@@ -1298,7 +1333,10 @@ function linearize_hybrid(
             j = findfirst(vars -> source in vars, partition_vars)
             # An opened signal entering the partition is not connected to the partition it
             # was driven from. Its value is that of its driver, see `opened_drivers` below.
-            j === nothing && haskey(opened_driver, source) && continue
+            if j === nothing && haskey(opened_driver, source)
+                opened_input[i] = true
+                continue
+            end
             if j === nothing
                 error("The signal $source crossing a clock boundary through $term could not be assigned to a clock partition.")
             end
@@ -1468,6 +1506,8 @@ function linearize_hybrid(
             [user_inputs[i]; boundary_in[i]], pd.outs, length(user_inputs[i]), length(user_outputs[i]),
             pd.clock, _sample_interval(pd.clock), x0, pd.ssys
         )
+        # The outputs of a partition that an opened signal enters may legitimately be constant.
+        warn_zero && _warn_zero_signals(results[i], description, opened_signals, !opened_input[i])
     end
     if warn_missing_op && !isempty(missing_vars)
         unique!(missing_vars)
