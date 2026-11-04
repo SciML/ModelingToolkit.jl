@@ -457,6 +457,16 @@ end
         sys, :u, :u; op = Dict(csys.P.x => 0.0, csys.C.x => 0.0)
     )
     @test_throws ArgumentError linearization_function(sys, [:u, :y], [:u])
+
+    # Loop openings also apply when the inputs and outputs are variables.
+    op = Dict(csys.P.x => 0.0, csys.C.x => 0.0)
+    m_closed, _ = linearize(sys, [], [csys.P.y]; op)
+    m_open, _ = linearize(sys, [], [csys.P.y]; loop_openings = [:u], op)
+    m_open_ap, _ = linearize(sys, :u, :y; loop_openings = [:u], op)
+    @test m_closed.A ≈ [-1.0 1.0; -2.0 -1.0]
+    # With the connection to `P.u` removed, the state of `C` does not affect `P`.
+    @test m_open.A ≈ [-1.0 0.0; -2.0 -1.0]
+    @test m_open.A ≈ m_open_ap.A
 end
 
 @testset "Linearization without inputs" begin
