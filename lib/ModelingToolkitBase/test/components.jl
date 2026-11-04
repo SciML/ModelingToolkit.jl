@@ -533,6 +533,34 @@ end
     is_connect_truth = falses(22)
     is_connect_truth[(end - 7):end] .= true
     @test source_info.is_connection_equation == is_connect_truth
+    # `RCModel` has no initialization equations
+    @test isempty(source_info.init_eqs_source)
+end
+
+@testset "Initialization equation source information through `expand_connections`" begin
+    @variables x(t) y(t)
+    @named leaf = System([D(x) ~ -x], t, [x], []; initialization_eqs = [x ~ 1.0])
+    @named mid = System(
+        [D(y) ~ -y], t, [y], []; systems = [leaf],
+        initialization_eqs = [y ~ 2.0, D(y) ~ -2.0]
+    )
+    @named other = System([D(x) ~ x], t, [x], []; initialization_eqs = [x ~ 3.0])
+    @named root = System(
+        Equation[], t; systems = [mid, other], initialization_eqs = [mid.y ~ other.x - 1]
+    )
+    sys, source_info = expand_connections(root, Val(true))
+    @test source_info.init_eqs_source == [
+        [:root],
+        [:root, :mid],
+        [:root, :mid],
+        [:root, :mid, :leaf],
+        [:root, :other],
+    ]
+    @test length(initialization_equations(sys)) == length(source_info.init_eqs_source)
+    @test isequal(initialization_equations(sys), initialization_equations(root))
+    @test isequal(initialization_equations(sys)[4], mid.leaf.x ~ 1.0)
+    # The two-argument constructor does not track initialization equation sources
+    @test isempty(ModelingToolkitBase.EquationSourceInformation(Vector{Symbol}[], falses(0)).init_eqs_source)
 end
 
 @testset "Issue #4195: Indexed IO variables" begin

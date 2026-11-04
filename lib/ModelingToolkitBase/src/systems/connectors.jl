@@ -1108,6 +1108,20 @@ struct EquationSourceInformation
     A mask indicating which equations arise from `connect` statements.
     """
     is_connection_equation::BitVector
+    """
+    For each initialization equation, a `Vector{Symbol}` denoting the path from the root
+    system to the subsystem where this equation comes from, following the same convention
+    as `eqs_source`. Empty if initialization equation sources are not tracked.
+    """
+    init_eqs_source::Vector{Vector{Symbol}}
+end
+
+function EquationSourceInformation(
+        eqs_source::Vector{Vector{Symbol}}, is_connection_equation::BitVector
+    )
+    return EquationSourceInformation(
+        eqs_source, is_connection_equation, Vector{Symbol}[]
+    )
 end
 
 """
@@ -1126,6 +1140,8 @@ function expand_connections(sys::AbstractSystem, ::Val{with_source_info} = Val(f
     ceqs, instream_csets = generate_connection_equations_and_stream_connections(sys, csets)
     source_visitor = SourceInformationVisitor()
     eqs = with_source_info ? equations(sys, source_visitor) : equations(sys)
+    init_source_visitor = SourceInformationVisitor()
+    init_eqs = with_source_info ? initialization_equations(sys, init_source_visitor) : nothing
     stream_eqs, instream_subs = expand_instream(instream_csets, sys; tol = tol, eqs)
 
     if with_source_info
@@ -1147,7 +1163,11 @@ function expand_connections(sys::AbstractSystem, ::Val{with_source_info} = Val(f
             push!(sources, Symbol[])
             push!(is_connection_equation, true)
         end
-        source_info = EquationSourceInformation(sources, is_connection_equation)
+        init_sources = init_source_visitor.sources
+        foreach(reverse!, init_sources)
+        source_info = EquationSourceInformation(
+            sources, is_connection_equation, init_sources
+        )
     else
         source_info = nothing
         eqs = [eqs; ceqs; stream_eqs]
@@ -1168,6 +1188,9 @@ function expand_connections(sys::AbstractSystem, ::Val{with_source_info} = Val(f
     @set! sys.eqs = eqs
     @set! sys.bindings = newbinds
     @set! sys.parent = _sys
+    # Reuse the initialization equations that the source information was collected from,
+    # so that the two are aligned by construction.
+    init_eqs === nothing || (@set! sys.initialization_eqs = init_eqs)
 
     if with_source_info
         return sys, source_info
