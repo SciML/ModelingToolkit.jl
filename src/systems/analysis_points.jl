@@ -294,7 +294,7 @@ function linearization_ap_transform(
         output isa AnalysisPoint && nameof(output) in input_names || continue
         throw(
             ArgumentError(
-                "The analysis point $(nameof(output)) is used both as an input and as an output of the linearization. The transfer function from a perturbation at an analysis point to the signal at the same analysis point depends on whether the perturbation is added before or after the signal is measured: it is the sensitivity function in one case and the complementary sensitivity function in the other. Use `get_sensitivity` or `get_comp_sensitivity` instead."
+                lazy"The analysis point $(nameof(output)) is used both as an input and as an output of the linearization. The transfer function from a perturbation at an analysis point to the signal at the same analysis point depends on whether the perturbation is added before or after the signal is measured: it is the sensitivity function in one case and the complementary sensitivity function in the other. Use `get_sensitivity` or `get_comp_sensitivity` instead."
             )
         )
     end
