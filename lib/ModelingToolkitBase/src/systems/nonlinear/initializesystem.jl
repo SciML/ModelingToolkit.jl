@@ -51,7 +51,7 @@ function register_dd_var!(
         guesses::AtomicArrayDict{SymbolicT}, d::SymbolicT, dd_guess_sym::SymbolicT
     )
     ttk = default_toterm(d)
-    if !has_possibly_indexed_key(guesses, d) && !has_possibly_indexed_key(guesses, ttk)
+    if !has_possibly_indexed_value(guesses, d) && !has_possibly_indexed_value(guesses, ttk)
         write_possibly_indexed_array!(guesses, ttk, dd_guess_sym, COMMON_NOTHING)
     end
     push_as_atomic_array!(init_vars_set, ttk)
@@ -159,7 +159,7 @@ function generate_initializesystem_timevarying(
     if has_schedule(_sys) && (schedule = get_schedule(_sys); schedule isa Schedule)
         for (k, v) in schedule.dummy_sub
             ttk = default_toterm(k)
-            if !has_possibly_indexed_key(guesses, k) && !has_possibly_indexed_key(guesses, ttk)
+            if !has_possibly_indexed_value(guesses, k) && !has_possibly_indexed_value(guesses, ttk)
                 write_possibly_indexed_array!(guesses, ttk, dd_guess_sym, COMMON_NOTHING)
             end
             # For DDEs, the derivatives can have delayed terms
@@ -230,7 +230,7 @@ function generate_initializesystem_timevarying(
         # doing so would require all observed equations to be symbolically differentiable.
         get!(derivative_rules, D(eq.lhs), D(eq.rhs))
         # Add as guesses
-        if !has_possibly_indexed_key(guesses, eq.lhs)
+        if !has_possibly_indexed_value(guesses, eq.lhs)
             write_possibly_indexed_array!(guesses, eq.lhs, eq.rhs, COMMON_NOTHING)
         end
     end

@@ -469,6 +469,25 @@ end
 """
     $TYPEDSIGNATURES
 
+Whether `dd` already holds a value for `k`, for deciding if a guess still needs writing.
+
+A record is stored whole, so its presence as a key says nothing about the field asked
+about - a sibling field may have put it there, leaving this one unset. Ask for the field's
+own value instead. Everything else keeps the cheaper key test: the dummy derivative of an
+array variable is registered as a whole rather than element by element, so an array key
+really does mean every element is accounted for.
+"""
+function has_possibly_indexed_value(dd::AtomicArrayDict, k::SymbolicT)
+    root, isrec = record_key_root(k)
+    if isrec && !isequal(root, k)
+        return get_possibly_indexed(dd, k, COMMON_NOTHING) !== COMMON_NOTHING
+    end
+    return has_possibly_indexed_key(dd, k)
+end
+
+"""
+    $TYPEDSIGNATURES
+
 The innermost proper ancestor of `k` that is a key of `dd`, or `nothing`. A struct
 projection is found under the record it belongs to, which is stored atomically and is not
 necessarily its immediate parent.
