@@ -1954,7 +1954,7 @@ function _record_leaves(root::SymbolicT)
         SU.shape(root) isa SU.ShapeVecT || throw(ArgumentError(LazyString(
             "Cannot enumerate the leaves of `", root, "`, an array of records whose ",
             "shape is not known. Declare the variable with a concrete shape.")))
-        leaves = SymbolicT[]yeah 
+        leaves = SymbolicT[]
         for i in SU.stable_eachindex(root)
             append!(leaves, record_leaves(root[i]))
         end
