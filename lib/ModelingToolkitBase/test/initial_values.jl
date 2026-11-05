@@ -556,4 +556,14 @@ end
     narrowed = ModelingToolkitBase.narrow_buffer_type(AbstractVector[Float64[], [big]])
     @test narrowed[2][1] === big
     @test eltype(narrowed[2]) == Int
+end   
+@testset "Partial indexed Initial overrides keep explicit values (#5299)" begin
+    @independent_variables t
+    @variables x(t)[1:2]
+    D = Differential(t)
+    sys = complete(System([D(x) ~ -x], t, [x], []; name = :partial_initial))
+    prob = DAEProblem(sys,
+       [x => [1.0, 2.0], D(x) => [-1.0, -2.0], Initial(x[1]) => 7.0],
+       (0.0, 1.0); build_initializeprob = false)
+    @test getp(sys, Initial(x[1]))(prob) == 7.0
 end
