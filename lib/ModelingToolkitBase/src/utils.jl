@@ -958,7 +958,7 @@ end
 
 function (::OperatorIsAtomic{O})(ex::SymbolicT) where {O}
     return (SU.default_is_atomic(ex) || is_symstruct_field(ex)) &&
-           Moshi.Match.@match ex begin
+        Moshi.Match.@match ex begin
         BSImpl.Term(; f) && if f isa Operator end => f isa O
         _ => true
     end
@@ -1912,7 +1912,8 @@ function record_leaf_entry(leaf::SymbolicT, node::SymbolicT, value::SymbolicT)::
             base = record_leaf_entry(args[1]::SymbolicT, node, value)
             if SU.isconst(base)
                 BSImpl.Const{VartypeT}(
-                    getproperty(unwrap_const(base), Symbolics.field_name(f)::Symbol))
+                    getproperty(unwrap_const(base), Symbolics.field_name(f)::Symbol)
+                )
             else
                 f(base)::SymbolicT
             end
@@ -1951,9 +1952,14 @@ function _record_leaves(root::SymbolicT)
     # An array of records is not itself a record, so `SymStruct` cannot iterate it.
     # Expand over the indices and concatenate the leaves of each element.
     if T <: AbstractArray && Symbolics.is_symstruct_type(eltype(T))
-        SU.shape(root) isa SU.ShapeVecT || throw(ArgumentError(LazyString(
-            "Cannot enumerate the leaves of `", root, "`, an array of records whose ",
-            "shape is not known. Declare the variable with a concrete shape.")))
+        SU.shape(root) isa SU.ShapeVecT || throw(
+            ArgumentError(
+                LazyString(
+                    "Cannot enumerate the leaves of `", root, "`, an array of records whose ",
+                    "shape is not known. Declare the variable with a concrete shape."
+                )
+            )
+        )
         leaves = SymbolicT[]
         for i in SU.stable_eachindex(root)
             append!(leaves, record_leaves(root[i]))
@@ -1994,6 +2000,7 @@ function is_record_descendant(x::SymbolicT, node::SymbolicT)
             _ => return false
         end
     end
+    return
 end
 
 """

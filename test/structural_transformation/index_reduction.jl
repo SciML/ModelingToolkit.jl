@@ -95,9 +95,11 @@ let
     @parameters L g
     @variables p(t)::PendulumState
 
-    eqs = [D(D(p.x)) ~ p.λ * p.x
-           D(D(p.y)) ~ p.λ * p.y - g
-           0 ~ p.x^2 + p.y^2 - L^2]
+    eqs = [
+        D(D(p.x)) ~ p.λ * p.x
+        D(D(p.y)) ~ p.λ * p.y - g
+        0 ~ p.x^2 + p.y^2 - L^2
+    ]
     struct_sys = mtkcompile(System(eqs, t, [p], [L, g]; name = :pendulum_struct))
     scalar_sys = mtkcompile(pendulum2)
 
@@ -117,13 +119,13 @@ let
     @test struct_prob.f.mass_matrix == scalar_prob.f.mass_matrix
     @test !(struct_prob.f.mass_matrix === I)
 
-    kw = (; saveat = 0.05, reltol = 1e-10, abstol = 1e-10)
+    kw = (; saveat = 0.05, reltol = 1.0e-10, abstol = 1.0e-10)
     ssol = solve(struct_prob, FBDF(); kw...)
     csol = solve(scalar_prob, FBDF(); kw...)
     @test SciMLBase.successful_retcode(ssol)
     @test ssol.t == csol.t
-    @test maximum(abs.(ssol[p.x] .- csol[x])) < 1e-8
-    @test maximum(abs.(ssol[p.y] .- csol[y])) < 1e-8
+    @test maximum(abs.(ssol[p.x] .- csol[x])) < 1.0e-8
+    @test maximum(abs.(ssol[p.y] .- csol[y])) < 1.0e-8
     # The constraint is respected along the whole trajectory.
     @test norm(ssol[p.x] .^ 2 + ssol[p.y] .^ 2 .- 1) < 1.0e-2
 end

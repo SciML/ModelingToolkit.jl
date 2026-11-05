@@ -186,8 +186,10 @@ function as_atomic_dict_with_defaults(dict::AbstractDict{SymbolicT, SymbolicT}, 
             # Collected rather than applied here: the buffer they are applied to depends
             # on whether `dict` also writes the whole array, which may come later in
             # iteration order.
-            push!(get!(() -> Pair{Any, SymbolicT}[], indexed_array_writes, root),
-                get_stable_index(k) => v)
+            push!(
+                get!(() -> Pair{Any, SymbolicT}[], indexed_array_writes, root),
+                get_stable_index(k) => v
+            )
         else
             dd[k] = v
         end
@@ -552,7 +554,6 @@ function record_ancestor_value(dd::AtomicArrayDict, k::SymbolicT, default)
     anc === nothing && return default
     return record_leaf_entry(k, anc, dd[anc])
 end
-
 
 
 """

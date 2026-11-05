@@ -69,8 +69,8 @@ end
 
     sol = solve(prob, Tsit5())
     @test SciMLBase.successful_retcode(sol)
-    @test sol[s.x][end]≈exp(-1) rtol=1e-5
-    @test sol[s.y][end]≈1 - exp(-1) rtol=1e-5
+    @test sol[s.x][end] ≈ exp(-1) rtol = 1.0e-5
+    @test sol[s.y][end] ≈ 1 - exp(-1) rtol = 1.0e-5
 end
 
 @testset "nested record integrates" begin
@@ -78,9 +78,11 @@ end
     # n.x'   = n.x + t         => n.x   = 2e^t - t - 1
     # n.f.x' = n.x + n.f.x + 1 => n.f.x = e^t + 2t*e^t + t + 1
     # n.f.y' = n.f.y           => n.f.y = 3e^t
-    eqs = [D(n.x) ~ n.x + t
-           D(n.f.x) ~ n.x + n.f.x + 1
-           D(n.f.y) ~ n.f.y]
+    eqs = [
+        D(n.x) ~ n.x + t
+        D(n.f.x) ~ n.x + n.f.x + 1
+        D(n.f.y) ~ n.f.y
+    ]
     sys = mtkcompile(System(eqs, t, [n], []; name = :nested))
 
     @test issetequal(unknowns(sys), Symbolics.unwrap.([n.x, n.f.x, n.f.y]))
@@ -88,9 +90,9 @@ end
     prob = ODEProblem(sys, [n.x => 1.0, n.f.x => 2.0, n.f.y => 3.0], (0.0, 1.0))
     sol = solve(prob, Tsit5())
     @test SciMLBase.successful_retcode(sol)
-    @test sol[n.x][end]≈2exp(1) - 2 rtol=1e-5
-    @test sol[n.f.x][end]≈3exp(1) + 2 rtol=1e-5
-    @test sol[n.f.y][end]≈3exp(1) rtol=1e-5
+    @test sol[n.x][end] ≈ 2exp(1) - 2 rtol = 1.0e-5
+    @test sol[n.f.x][end] ≈ 3exp(1) + 2 rtol = 1.0e-5
+    @test sol[n.f.y][end] ≈ 3exp(1) rtol = 1.0e-5
 end
 
 @testset "unknowns are inferred from field accesses" begin
@@ -115,13 +117,15 @@ end
 
     # Field-wise late initial conditions are equivalent.
     leafwise = ODEProblem(
-        sys, [n.x => 1.0, n.f.x => 2.0, n.f.y => 3.0], (0.0, 1.0))
+        sys, [n.x => 1.0, n.f.x => 2.0, n.f.y => 3.0], (0.0, 1.0)
+    )
     @test leafwise.u0 == whole.u0
 
     # A field entry overrides the record it came from, by specificity rather than by the
     # order the entries happen to be iterated in.
     override = ODEProblem(
-        sys, [n => Nested(1, Pair2(2, 3)), n.f.y => 99.0], (0.0, 1.0))
+        sys, [n => Nested(1, Pair2(2, 3)), n.f.y => 99.0], (0.0, 1.0)
+    )
     @test override.u0[idx(n.f.y)] == 99
     @test override.u0[idx(n.x)] == 1
 end
@@ -140,11 +144,14 @@ end
     # A field is filled into that record rather than stored beside it.
     ModelingToolkitBase.write_possibly_indexed_array!(
         ics, Symbolics.unwrap(n.f.y), Symbolics.unwrap(Symbolics.wrap(99.0)),
-        ModelingToolkitBase.COMMON_NOTHING)
+        ModelingToolkitBase.COMMON_NOTHING
+    )
     @test isequal(only(collect(keys(ics))), Symbolics.unwrap(n))
     read_leaf = v -> ModelingToolkitBase.unwrap_const(
         ModelingToolkitBase.get_possibly_indexed(
-            ics, Symbolics.unwrap(v), ModelingToolkitBase.COMMON_NOTHING))
+            ics, Symbolics.unwrap(v), ModelingToolkitBase.COMMON_NOTHING
+        )
+    )
     @test read_leaf(n.f.y) == 99.0
     @test read_leaf(n.x) == 1
 end
@@ -156,21 +163,26 @@ end
     eqs = [D(n.x) ~ n.x, D(n.f.x) ~ n.f.x, D(n.f.y) ~ n.f.y]
     for kw in (:initial_conditions, :guesses, :bindings)
         @test_throws ModelingToolkitBase.RecordFieldKeyError System(
-            eqs, t, [n], []; kw => [n.f.y => 1.0], name = :a)
+            eqs, t, [n], []; kw => [n.f.y => 1.0], name = :a
+        )
         @test_throws ModelingToolkitBase.IndexedArrayKeyError System(
-            [D(m) ~ m], t, [m], []; kw => [m[1] => 1.0], name = :a)
+            [D(m) ~ m], t, [m], []; kw => [m[1] => 1.0], name = :a
+        )
     end
     # A field that is itself an array is a projection at either depth.
     arreqs = [D(av.v[1]) ~ av.v[1], D(av.v[2]) ~ av.v[2], D(av.w) ~ av.w]
     @test_throws ModelingToolkitBase.RecordFieldKeyError System(
-        arreqs, t, [av], []; initial_conditions = [av.v => [1.0, 2.0]], name = :a)
+        arreqs, t, [av], []; initial_conditions = [av.v => [1.0, 2.0]], name = :a
+    )
     @test_throws ModelingToolkitBase.RecordFieldKeyError System(
-        arreqs, t, [av], []; initial_conditions = [av.v[1] => 1.0], name = :a)
+        arreqs, t, [av], []; initial_conditions = [av.v[1] => 1.0], name = :a
+    )
 
     # The record itself is a key, and so is a whole array.
     sys = System(eqs, t, [n], []; initial_conditions = [n => Nested(1, Pair2(2, 3))], name = :a)
     @test isequal(
-        only(collect(keys(ModelingToolkitBase.initial_conditions(sys)))), Symbolics.unwrap(n))
+        only(collect(keys(ModelingToolkitBase.initial_conditions(sys)))), Symbolics.unwrap(n)
+    )
 end
 
 @testset "initial conditions for a numeric-array field" begin
@@ -194,22 +206,24 @@ end
     # field, and individual elements.
     fieldwise = ODEProblem(sys, [av.v => [1.0, 2.0], av.w => 3.0], (0.0, 1.0))
     elementwise = ODEProblem(
-        sys, [av.v[1] => 1.0, av.v[2] => 2.0, av.w => 3.0], (0.0, 1.0))
+        sys, [av.v[1] => 1.0, av.v[2] => 2.0, av.w => 3.0], (0.0, 1.0)
+    )
     @test whole.u0 == fieldwise.u0 == elementwise.u0
 
     # Precedence is by specificity: an element beats the field it belongs to, which beats
     # the whole record.
     override = ODEProblem(
-        sys, [av => ArrField([1.0, 2.0], 3.0), av.v[2] => 99.0], (0.0, 1.0))
+        sys, [av => ArrField([1.0, 2.0], 3.0), av.v[2] => 99.0], (0.0, 1.0)
+    )
     @test override.u0[idx(av.v[1])] == 1.0
     @test override.u0[idx(av.v[2])] == 99.0
     @test override.u0[idx(av.w)] == 3.0
 
     sol = solve(whole, Tsit5())
     @test SciMLBase.successful_retcode(sol)
-    @test sol[av.v[1]][end]≈exp(-1) rtol=1e-5
-    @test sol[av.v[2]][end]≈2exp(-2) rtol=1e-5
-    @test sol[av.w][end]≈3exp(-1) rtol=1e-5
+    @test sol[av.v[1]][end] ≈ exp(-1) rtol = 1.0e-5
+    @test sol[av.v[2]][end] ≈ 2exp(-2) rtol = 1.0e-5
+    @test sol[av.w][end] ≈ 3exp(-1) rtol = 1.0e-5
 end
 
 @testset "matrix-valued field keeps its shape" begin
@@ -230,8 +244,11 @@ end
 
 @testset "symbolic indexing" begin
     @variables n(t)::Nested
-    sys = mtkcompile(System(
-        [D(n.x) ~ -n.x, D(n.f.x) ~ n.x, D(n.f.y) ~ n.f.y], t, [n], []; name = :sii))
+    sys = mtkcompile(
+        System(
+            [D(n.x) ~ -n.x, D(n.f.x) ~ n.x, D(n.f.y) ~ n.f.y], t, [n], []; name = :sii
+        )
+    )
     prob = ODEProblem(sys, [n.x => 1.0, n.f.x => 2.0, n.f.y => 3.0], (0.0, 1.0))
 
     for (leaf, val) in ((n.x, 1.0), (n.f.x, 2.0), (n.f.y, 3.0))
@@ -275,38 +292,47 @@ end
     # The whole chain resolves to the record, in either order.
     @test isequal(
         ModelingToolkitBase.split_field_access(Symbolics.unwrap(n.f.x)),
-        (Symbolics.unwrap(n), true))
+        (Symbolics.unwrap(n), true)
+    )
     @test isequal(
         ModelingToolkitBase.split_field_access(Symbolics.unwrap(h.x[1].y)),
-        (Symbolics.unwrap(h), true))
+        (Symbolics.unwrap(h), true)
+    )
 
     # Paths are recorded outermost last, so the index sits where it was written.
     @test isequal(ModelingToolkitBase.get_struct_access(Symbolics.unwrap(n.f.x)), [:f, :x])
     @test isequal(
         ModelingToolkitBase.get_struct_access(Symbolics.unwrap(h.x[1].y)),
-        [:x, SI([1]), :y])
+        [:x, SI([1]), :y]
+    )
 
     # Commutes with operators, as `split_indexed_var` does.
     @test isequal(
         ModelingToolkitBase.split_field_access(Symbolics.unwrap(D(h.x[2].z)))[1],
-        D(Symbolics.unwrap(h)))
+        D(Symbolics.unwrap(h))
+    )
     @test isequal(
         ModelingToolkitBase.get_struct_access(Symbolics.unwrap(D(h.x[2].z))),
-        [:x, SI([2]), :z])
+        [:x, SI([2]), :z]
+    )
 
     # Plain arrays still resolve to the array; plain scalars are not access paths.
     @test isequal(
         ModelingToolkitBase.split_field_access(Symbolics.unwrap(u[1])),
-        (Symbolics.unwrap(u), true))
+        (Symbolics.unwrap(u), true)
+    )
     @test isequal(
         ModelingToolkitBase.split_field_access(Symbolics.unwrap(w)),
-        (Symbolics.unwrap(w), false))
+        (Symbolics.unwrap(w), false)
+    )
 end
 
 @testset "record of records-array integrates" begin
     @variables h(t)::Holder
-    eqs = [D(h.x[1].y) ~ -h.x[1].y, D(h.x[1].z) ~ h.x[1].y,
-           D(h.x[2].y) ~ -h.x[2].y, D(h.x[2].z) ~ h.x[2].y]
+    eqs = [
+        D(h.x[1].y) ~ -h.x[1].y, D(h.x[1].z) ~ h.x[1].y,
+        D(h.x[2].y) ~ -h.x[2].y, D(h.x[2].z) ~ h.x[2].y,
+    ]
     sys = mtkcompile(System(eqs, t, [h], []; name = :holder))
     @test issetequal(
         unknowns(sys),
@@ -320,8 +346,8 @@ end
     )
     sol = solve(prob, Tsit5())
     @test SciMLBase.successful_retcode(sol)
-    @test sol[h.x[1].y][end]≈exp(-1) rtol=1e-5
-    @test sol[h.x[2].y][end]≈2exp(-1) rtol=1e-5
+    @test sol[h.x[1].y][end] ≈ exp(-1) rtol = 1.0e-5
+    @test sol[h.x[2].y][end] ≈ 2exp(-1) rtol = 1.0e-5
 end
 
 @testset "array variables are unaffected" begin
@@ -358,8 +384,10 @@ end
 
     @named src = Src()
     @named snk = Sink()
-    @named sys = System([connect(src.outp, snk.inp)], t; systems = [src, snk],
-        initialization_eqs = [snk.e ~ 0.0])
+    @named sys = System(
+        [connect(src.outp, snk.inp)], t; systems = [src, snk],
+        initialization_eqs = [snk.e ~ 0.0]
+    )
 
     # A whole-record connection has no arithmetic, so it must not survive connector
     # expansion as a single equation - `canonicalize_eq!` would fail to build `rhs - lhs`.
@@ -379,24 +407,30 @@ end
     # previously the entry was silently dropped, losing the concrete entry with it.
     d = Dict{ModelingToolkitBase.SymbolicT, ModelingToolkitBase.SymbolicT}(
         Symbolics.unwrap(af.v[1]) => Symbolics.unwrap(q),
-        Symbolics.unwrap(af.v[2]) => Symbolics.unwrap(Symbolics.wrap(2.0)))
+        Symbolics.unwrap(af.v[2]) => Symbolics.unwrap(Symbolics.wrap(2.0))
+    )
     out = ModelingToolkitBase.as_atomic_dict_with_defaults(
-        d, ModelingToolkitBase.COMMON_NOTHING)
+        d, ModelingToolkitBase.COMMON_NOTHING
+    )
     @test !isempty(out)
     # Stored under the record, with the symbolic entry intact and the field never written
     # left unfilled. Previously the whole entry was dropped, losing the concrete one too.
     @test haskey(out, Symbolics.unwrap(af))
     @test Symbolics.is_record_literal(out[Symbolics.unwrap(af)])
     read_leaf = v -> ModelingToolkitBase.get_possibly_indexed(
-        out, Symbolics.unwrap(v), ModelingToolkitBase.COMMON_NOTHING)
+        out, Symbolics.unwrap(v), ModelingToolkitBase.COMMON_NOTHING
+    )
     @test isequal(read_leaf(af.v[1]), Symbolics.unwrap(q))
     @test ModelingToolkitBase.unwrap_const(read_leaf(af.v[2])) == 2.0
 end
 
 @testset "a stored record merges with later field writes" begin
     @variables r(t)::Nested
-    sys = mtkcompile(System(
-        [D(r.x) ~ -r.x, D(r.f.x) ~ -r.f.x, D(r.f.y) ~ -r.f.y], t, [r], []; name = :mrg))
+    sys = mtkcompile(
+        System(
+            [D(r.x) ~ -r.x, D(r.f.x) ~ -r.f.x, D(r.f.y) ~ -r.f.y], t, [r], []; name = :mrg
+        )
+    )
 
     # Two of three fields given up front, the third left unfilled - as an array holds
     # `[1.0, 2.0, nothing]`.
@@ -405,7 +439,8 @@ end
     for (f, val) in ((r.x, 1.0), (r.f.x, 2.0))
         ModelingToolkitBase.write_possibly_indexed_array!(
             ics, Symbolics.unwrap(f), Symbolics.unwrap(Symbolics.wrap(val)),
-            ModelingToolkitBase.COMMON_NOTHING)
+            ModelingToolkitBase.COMMON_NOTHING
+        )
     end
 
     # A later write overrides one of them and supplies the one that was missing. What the

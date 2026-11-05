@@ -988,7 +988,8 @@ function generate_connection_equations_and_stream_connections(
             for cvert in cset
                 isequal(cvert, root_vert) && continue
                 push_connection_equation!(
-                    eqs, variable_from_vertex(sys, cvert)::SymbolicT, root_var)
+                    eqs, variable_from_vertex(sys, cvert)::SymbolicT, root_var
+                )
             end
         elseif vtype === Stream
             push!(stream_connections, cset)
