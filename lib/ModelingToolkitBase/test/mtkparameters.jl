@@ -439,6 +439,24 @@ with_updated_parameter_timeseries_values(
     @test ps2.nonnumeric isa Tuple{Vector{Any}}
 end
 
+struct ReplaceFoo
+    x::Float64
+end
+
+@testset "`replace` keeps the types of nonnumeric and cache buffers" begin
+    @variables x(t)
+    @parameters k h::ReplaceFoo
+    @named sys = System(D(x) ~ -k * x, t, [x], [k, h])
+    sys, _ = ModelingToolkitBase.add_diffcache(sys, 3)
+    sys = complete(sys)
+    ps = MTKParameters(sys, [k => 2.0, h => ReplaceFoo(1.0)])
+    for portion in (ModelingToolkitBase.NONNUMERIC_PORTION, SciMLStructures.Caches())
+        buffer, repack, _ = canonicalize(portion, ps)
+        @test typeof(SciMLStructures.replace(portion, ps, deepcopy(buffer))) == typeof(ps)
+        @test typeof(repack(buffer)) == typeof(ps)
+    end
+end
+
 if @isdefined(ModelingToolkit)
     @testset "Issue#3925: Autodiff after `subset_tunables`" begin
         function circuit_model()
