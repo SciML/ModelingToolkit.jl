@@ -1288,12 +1288,8 @@ function linearize(
     for (k, v) in op
         isequal(v, COMMON_NOTHING) && continue
         v === COMMON_MISSING && continue
-        v = _resolve_op_value(prob, v)
-        if is_parameter(prob, Initial(k))
-            setu(prob, Initial(k))(prob, v)
-        else
-            setu(prob, k)(prob, v)
-        end
+        target = is_parameter(prob, Initial(k)) ? Initial(k) : k
+        setu(prob, target)(prob, _complete_array_value(prob, target, _resolve_op_value(prob, v)))
     end
     p = anydict(p)
     for (k, v) in p
@@ -1316,6 +1312,15 @@ function _resolve_op_value(prob, v)
     else
         return v
     end
+end
+
+# An operating point that gives values for some elements of an array variable only is
+# collected into an array with `nothing` at the remaining elements. These elements keep the
+# value that `prob` currently holds for `target`.
+function _complete_array_value(prob, target, v)
+    v isa AbstractArray && any(isnothing, v) || return v
+    current = getu(prob, target)(prob)
+    return map((vi, ci) -> vi === nothing ? ci : vi, v, current)
 end
 
 # The opened signals in `held_params` are held at the value of their driver by an
@@ -1357,18 +1362,17 @@ function __linearize_multiple_op_barrier(ssys, lin_fun; ops, ts, allow_input_der
     # The op keys are identical across time points, so checking the first one suffices.
     _check_held_signals(lin_fun.loop_opening_params, op1)
     op_keys = collect(keys(op1))
-    setters = map(op_keys) do k
-        is_parameter(prob, Initial(k)) ? setu(prob, Initial(k)) : setu(prob, k)
-    end
+    targets = map(k -> is_parameter(prob, Initial(k)) ? Initial(k) : k, op_keys)
+    setters = map(target -> setu(prob, target), targets)
 
     for (op, t) in zip(ops, ts)
         op = as_atomic_dict_with_defaults(Dict{SymbolicT, SymbolicT}(op), COMMON_NOTHING)
         evaluate_varmap!(op, keys(op))
-        for (setter, k) in zip(setters, op_keys)
+        for (setter, target, k) in zip(setters, targets, op_keys)
             v = get(op, k, COMMON_NOTHING)
             isequal(v, COMMON_NOTHING) && continue
             v === COMMON_MISSING && continue
-            setter(prob, _resolve_op_value(prob, v))
+            setter(prob, _complete_array_value(prob, target, _resolve_op_value(prob, v)))
         end
         prob.t = t
         res, xpt = solve(prob; allow_input_derivatives)::Tuple{eltype(results), eltype(xpts)}
