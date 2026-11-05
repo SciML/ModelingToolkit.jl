@@ -917,6 +917,25 @@ end
 """
     $(TYPEDSIGNATURES)
 
+Push the connection equation `lhs ~ rhs` onto `eqs`, expanding it into one equation per
+leaf if the connected variable is a symbolic struct. A record has no arithmetic, so the
+whole-record equation would fail to canonicalize into residual form downstream. This is
+the same reason the `Flow` branch below emits scalar equations rather than array ones.
+"""
+function push_connection_equation!(eqs::Vector{Equation}, lhs::SymbolicT, rhs::SymbolicT)
+    if Symbolics.issymstruct(lhs)
+        for leaf in record_leaves(lhs)
+            push!(eqs, leaf ~ record_leaf_entry(leaf, lhs, rhs))
+        end
+    else
+        push!(eqs, lhs ~ rhs)
+    end
+    return eqs
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
 Generate connection equations for the connection sets given by `csets`. This does not
 handle stream connections. Return the generated equations and the stream connection sets.
 """
@@ -968,7 +987,9 @@ function generate_connection_equations_and_stream_connections(
             root_var = variable_from_vertex(sys, root_vert)::SymbolicT
             for cvert in cset
                 isequal(cvert, root_vert) && continue
-                push!(eqs, variable_from_vertex(sys, cvert)::SymbolicT ~ root_var)
+                push_connection_equation!(
+                    eqs, variable_from_vertex(sys, cvert)::SymbolicT, root_var
+                )
             end
         elseif vtype === Stream
             push!(stream_connections, cset)
@@ -1006,13 +1027,13 @@ function generate_connection_equations_and_stream_connections(
                 root_var = vars[root_vert_i]
                 for (i, var) in enumerate(vars)
                     i == root_vert_i && continue
-                    push!(eqs, var ~ root_var)
+                    push_connection_equation!(eqs, var, root_var)
                 end
             else
                 base = vars[1]
                 for i in 2:length(cset)
                     v = vars[i]
-                    push!(eqs, base ~ v)
+                    push_connection_equation!(eqs, base, v)
                 end
             end
         end
@@ -1088,6 +1109,20 @@ struct EquationSourceInformation
     A mask indicating which equations arise from `connect` statements.
     """
     is_connection_equation::BitVector
+    """
+    For each initialization equation, a `Vector{Symbol}` denoting the path from the root
+    system to the subsystem where this equation comes from, following the same convention
+    as `eqs_source`. Empty if initialization equation sources are not tracked.
+    """
+    init_eqs_source::Vector{Vector{Symbol}}
+end
+
+function EquationSourceInformation(
+        eqs_source::Vector{Vector{Symbol}}, is_connection_equation::BitVector
+    )
+    return EquationSourceInformation(
+        eqs_source, is_connection_equation, Vector{Symbol}[]
+    )
 end
 
 """
@@ -1106,6 +1141,8 @@ function expand_connections(sys::AbstractSystem, ::Val{with_source_info} = Val(f
     ceqs, instream_csets = generate_connection_equations_and_stream_connections(sys, csets)
     source_visitor = SourceInformationVisitor()
     eqs = with_source_info ? equations(sys, source_visitor) : equations(sys)
+    init_source_visitor = SourceInformationVisitor()
+    init_eqs = with_source_info ? initialization_equations(sys, init_source_visitor) : nothing
     stream_eqs, instream_subs = expand_instream(instream_csets, sys; tol = tol, eqs)
 
     if with_source_info
@@ -1127,7 +1164,11 @@ function expand_connections(sys::AbstractSystem, ::Val{with_source_info} = Val(f
             push!(sources, Symbol[])
             push!(is_connection_equation, true)
         end
-        source_info = EquationSourceInformation(sources, is_connection_equation)
+        init_sources = init_source_visitor.sources
+        foreach(reverse!, init_sources)
+        source_info = EquationSourceInformation(
+            sources, is_connection_equation, init_sources
+        )
     else
         source_info = nothing
         eqs = [eqs; ceqs; stream_eqs]
@@ -1148,6 +1189,9 @@ function expand_connections(sys::AbstractSystem, ::Val{with_source_info} = Val(f
     @set! sys.eqs = eqs
     @set! sys.bindings = newbinds
     @set! sys.parent = _sys
+    # Reuse the initialization equations that the source information was collected from,
+    # so that the two are aligned by construction.
+    init_eqs === nothing || (@set! sys.initialization_eqs = init_eqs)
 
     if with_source_info
         return sys, source_info

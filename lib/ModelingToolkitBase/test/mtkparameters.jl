@@ -296,8 +296,7 @@ VDual = Vector{<:ForwardDiff.Dual}
 VVDual = Vector{<:Vector{<:ForwardDiff.Dual}}
 
 @testset "A portion with many buffer types is indexed without dynamic dispatch" begin
-    # One `Constants` buffer per element type, five in all. Indexed with a runtime number,
-    # a tuple of that many buffers gives a buffer of unknown type.
+    # Five element types, so five `Constants` buffers, indexed with a runtime number.
     @parameters i8::Int8 i16::Int16 i32::Int32 i64::Int64 u32::UInt32
     @named manybufs = System(Equation[], t, [], [i8, i16, i32, i64, u32])
     manybufs = complete(manybufs)
@@ -307,8 +306,7 @@ VVDual = Vector{<:Vector{<:ForwardDiff.Dual}}
     @test parameter_values(ps, idx) === Int32(3)
     # Julia 1.10 widens the union of the five element types to `Any`.
     @test only(Base.return_types(parameter_values, (typeof(ps), typeof(idx)))) !== Any skip = VERSION < v"1.11"
-    # Measured inside a function, so that only `set_parameter!` is counted. A dynamic
-    # dispatch in it would box the value.
+    # Measured inside a function so only `set_parameter!` is counted; dynamic dispatch would box.
     write_allocs(ps, val, idx) = @allocated set_parameter!(ps, val, idx)
     write_allocs(ps, Int32(100_000), idx)
     @test parameter_values(ps, idx) === Int32(100_000)
