@@ -78,7 +78,7 @@ function array_derivative_arguments!(rhss::Vector{SymbolicT}, dvs, D, ir::IRStru
     groups = Dict{SymbolicT, Vector{Int}}()
     for (i, v) in enumerate(dvs)
         parent, indexed = split_indexed_var(v)
-        indexed && push!(get!(groups, parent, Int[]), i)
+        indexed && push!(get!(Vector{Int}, groups, parent), i)
     end
     arrays = Dict{SymbolicT, SymbolicT}()
     for (parent, positions) in groups
@@ -92,7 +92,7 @@ function array_derivative_arguments!(rhss::Vector{SymbolicT}, dvs, D, ir::IRStru
             du_view = Symbolics.STerm(
                 view,
                 Symbolics.SArgsT((du, a:b));
-                type = Any, shape = SU.ShapeVecT([1:(b - a + 1)])
+                type = Any, shape = SU.ShapeVecT((1:(b - a + 1),))
             )
             arrays[parent] = Symbolics.STerm(
                 reshape,
@@ -101,17 +101,20 @@ function array_derivative_arguments!(rhss::Vector{SymbolicT}, dvs, D, ir::IRStru
             )
         end
     end
+    parent_subs = Dict{SymbolicT, SymbolicT}()
     for term in terms
         op = operation(term)
         arg = only(arguments(term))
         parent, _ = split_indexed_var(arg)
-        if isequal(op, D) && haskey(arrays, parent)
-            subs[term] = unwrap(Symbolics.substitute(wrap(arg), Dict(wrap(parent) => wrap(arrays[parent]))))
+        if isequal(op, D)::Bool && haskey(arrays, parent)
+            empty!(parent_subs)
+            parent_subs[parent] = arrays[parent]
+            subs[term] = SU.IRSubstituter{false}(ir, parent_subs)(arg)
         else
             # Noncontiguous or interleaved layouts cannot share a single `du` view.
             expanded = SymbolicT[term]
             expand_array_derivatives!(expanded, ir)
-            subs[term] = unwrap(Symbolics.substitute(wrap(only(expanded)), subs))
+            subs[term] = SU.IRSubstituter{false}(ir, subs)(only(expanded))
         end
     end
     subber = SU.IRSubstituter{false}(ir, subs)
