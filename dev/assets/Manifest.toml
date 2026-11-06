@@ -526,9 +526,9 @@ version = "1.1.2+1"
 
 [[deps.ComplexityMeasures]]
 deps = ["Combinatorics", "DelayEmbeddings", "Distances", "FFTW", "KrylovKit", "LinearAlgebra", "Neighborhood", "QuadGK", "Random", "Reexport", "SparseArrays", "SpecialFunctions", "StateSpaceSets", "StaticArrays", "Statistics", "StatsBase", "StatsFuns", "Wavelets"]
-git-tree-sha1 = "ced0421a4933a5c9775dcb9f7ab96caf6b22cb77"
+git-tree-sha1 = "1f8771588d8fe4bbdb387af3e8ba9e62db0c40ab"
 uuid = "ab4b797d-85ee-42ba-b621-05d793b346a2"
-version = "3.12.0"
+version = "3.12.1"
 
 [[deps.ComponentArrays]]
 deps = ["Adapt", "ArrayInterface", "ChainRulesCore", "ConstructionBase", "Functors", "LinearAlgebra", "PrecompileTools", "Random", "StaticArrayInterface", "StaticArraysCore"]
@@ -1050,9 +1050,9 @@ version = "9.0.2+0"
 
 [[deps.FFTA]]
 deps = ["AbstractFFTs", "DocStringExtensions", "LinearAlgebra", "MuladdMacro", "Primes", "Random", "Reexport"]
-git-tree-sha1 = "16aa62b6b2c5c65a642155bd1bce90633b8d3130"
+git-tree-sha1 = "f4d904e7ff5aadd8e7fe9ab8544a0a295dfa8904"
 uuid = "b86e33f2-c0db-4aa1-a6e0-ab43e668529e"
-version = "0.3.2"
+version = "0.3.3"
 
 [[deps.FFTW]]
 deps = ["AbstractFFTs", "FFTW_jll", "Libdl", "LinearAlgebra", "MKL_jll", "Preferences", "Reexport"]
@@ -1074,9 +1074,9 @@ version = "0.14.3"
 
 [[deps.FMIBase]]
 deps = ["ChainRulesCore", "DiffEqCallbacks", "EzXML", "FMICore", "FiniteDiff", "ProgressMeter", "Reexport", "SciMLBase", "ZipFile"]
-git-tree-sha1 = "da52b0930131e87cc526576e1343f278f12d14f4"
+git-tree-sha1 = "a4769722fae34330771e74da77bf71fcab3c4215"
 uuid = "900ee838-d029-460e-b485-d98a826ceef2"
-version = "1.6.1"
+version = "1.6.3"
 
     [deps.FMIBase.extensions]
     CSVExt = ["CSV", "DataFrames"]
@@ -1110,9 +1110,9 @@ version = "0.4.1"
 
 [[deps.FMIImport]]
 deps = ["Downloads", "FMIBase", "Libdl", "LinearAlgebra", "RelocatableFolders"]
-git-tree-sha1 = "5c9d531e64a4a839f033aadc6d0d3b27c640842c"
+git-tree-sha1 = "da422855b641500a91ce096d2d0729b212e951ca"
 uuid = "9fcbc62e-52a0-44e9-a616-1359a0008194"
-version = "1.4.1"
+version = "1.4.2"
 
     [deps.FMIImport.extensions]
     FMIZooExt = ["FMIZoo"]
@@ -1404,9 +1404,10 @@ uuid = "d2c73de3-f751-5644-a686-071e5b155ba9"
 version = "0.73.27+0"
 
 [[deps.Gamma]]
-git-tree-sha1 = "86f86b6168a016ed88e4ae4e64577b98c3b59e8e"
+deps = ["LogExpFunctions"]
+git-tree-sha1 = "becc397f7cfb06e343496ae6ffb04818a851da51"
 uuid = "a0844989-3bd2-4988-8bea-c9407ab0941b"
-version = "1.1.0"
+version = "1.2.0"
 
 [[deps.GenericSchur]]
 deps = ["LinearAlgebra", "MatrixFactorizations", "Preferences", "Printf", "UUIDs"]
@@ -2120,9 +2121,9 @@ version = "5.18.3"
 
 [[deps.LogExpFunctions]]
 deps = ["DocStringExtensions", "IrrationalConstants", "LinearAlgebra"]
-git-tree-sha1 = "13ca9e2586b89836fd20cccf56e57e2b9ae7f38f"
+git-tree-sha1 = "28d620bcdb37a3fb02de9f521928ee453690f414"
 uuid = "2ab3a3ac-af41-5b50-aa03-7779005ae688"
-version = "0.3.29"
+version = "1.0.3"
 
     [deps.LogExpFunctions.extensions]
     LogExpFunctionsChainRulesCoreExt = "ChainRulesCore"
@@ -2865,9 +2866,9 @@ version = "1.41.7"
 
 [[deps.PoissonRandom]]
 deps = ["LogExpFunctions", "PrecompileTools", "Random"]
-git-tree-sha1 = "faa278c0dc901606775554f6171350ad962d0e18"
+git-tree-sha1 = "7b7becc6ada13786479af8c5d08e7f7fe7d68301"
 uuid = "e409e4f3-bfea-5376-8464-e040bb5c01ab"
-version = "0.4.13"
+version = "0.4.14"
 
 [[deps.PolygonOps]]
 git-tree-sha1 = "77b3d3605fc1cd0b42d95eba87dfcd2bf67d5ff6"
@@ -3616,9 +3617,9 @@ version = "0.34.13"
 
 [[deps.StatsFuns]]
 deps = ["HypergeometricFunctions", "IrrationalConstants", "LogExpFunctions", "Reexport", "Rmath", "SpecialFunctions"]
-git-tree-sha1 = "0aa97471d55945556e8d2859568b8317cef98351"
+git-tree-sha1 = "91a5737baed20ee31f3faea0e51f57461f6a689e"
 uuid = "4c63d2b9-4356-54db-8cca-17b64c39e42c"
-version = "1.5.3"
+version = "2.2.1"
 weakdeps = ["ChainRulesCore", "InverseFunctions"]
 
     [deps.StatsFuns.extensions]
