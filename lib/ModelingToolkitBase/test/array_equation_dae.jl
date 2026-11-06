@@ -211,6 +211,51 @@ end
     @test maximum(abs, sol.u[end] .- [exp(-pi^2 * 0.1) * sinpi(x) for x in xs]) < 1.0e-2
 end
 
+@testset "structural keywords passed to DAEProblem are dropped with a warning" begin
+    sys, u, t, D = heat_array_system(5)
+    op = vcat([u[i] => 0.0 for i in 1:5], [D(u[i]) => 0.0 for i in 1:5])
+    prob = DAEProblem(sys, op, (0.0, 0.1); build_initializeprob = false)
+    prob2 = @test_logs (:warn, r"differential_vars") DAEProblem(
+        sys, op, (0.0, 0.1); build_initializeprob = false,
+        differential_vars = fill(true, 5)
+    )
+    @test prob2.differential_vars == prob.differential_vars
+end
+
+@testset "structural keyword warns exactly once with default initialization" begin
+    sys, u, t, D = heat_array_system(5)
+    op = vcat([u[i] => 0.0 for i in 1:5], [D(u[i]) => 0.0 for i in 1:5])
+    logs, _ = Test.collect_test_logs() do
+        DAEProblem(sys, op, (0.0, 0.1); differential_vars = fill(true, 5))
+    end
+    @test count(l -> occursin("differential_vars", l.message), logs) == 1
+end
+
+@testset "recommended remedies for dropped structural keywords take effect" begin
+    sys, u, t, D = heat_array_system(5)
+    op = vcat([u[i] => 0.0 for i in 1:5], [D(u[i]) => 0.0 for i in 1:5])
+    prob = DAEProblem(sys, op, (0.0, 0.1); build_initializeprob = false)
+    mask = fill(true, 5)
+    @test prob.differential_vars != mask
+    logs, _ = Test.collect_test_logs() do
+        DAEProblem(sys, op, (0.0, 0.1); build_initializeprob = false, differential_vars = mask)
+    end
+    @test occursin("remake(prob; differential_vars = mask)", only(logs).message)
+    @test remake(prob; differential_vars = mask).differential_vars == mask
+
+    @variables x(t)
+    @named odesys = System([D(x) ~ -x], t)
+    odesys = complete(odesys)
+    M = reshape([2.0], 1, 1)
+    odeprob = ODEProblem(odesys, [x => 1.0], (0.0, 1.0))
+    logs, _ = Test.collect_test_logs() do
+        ODEProblem(odesys, [x => 1.0], (0.0, 1.0); mass_matrix = M)
+    end
+    @test occursin("remake(prob; f = remake(prob.f; mass_matrix = M))", only(logs).message)
+    @test odeprob.f.mass_matrix != M
+    @test remake(odeprob; f = remake(odeprob.f; mass_matrix = M)).f.mass_matrix == M
+end
+
 @testset "mixed array initial parameters with split=$split" for split in (true, false)
     @independent_variables t
     @variables a(t)[1:2, 1:3] b(t)[1:2] z(t)
