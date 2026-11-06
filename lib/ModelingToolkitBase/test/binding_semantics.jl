@@ -1,5 +1,6 @@
 using ModelingToolkitBase
 using ModelingToolkitBase: t_nounits as t, D_nounits as D, SymbolicContinuousCallback, SymbolicDiscreteCallback
+using OrdinaryDiffEqTsit5: Tsit5
 using Symbolics: SConst
 using Test
 
@@ -111,4 +112,45 @@ end
     @test_throws "only valid for solvable" System(Equation[], t, [], [p]; bindings = [p => missing], name = :a)
     @parameters p::Int q::String
     @test_throws "only valid for solvable" System(Equation[], t, [], [q]; bindings = [q => missing], name = :a)
+end
+
+@testset "Binding shape must match array parameter (#5259)" begin
+    @parameters B[1:2, 1:1] L = 2.0
+    @variables x(t)[1:2]
+    eqs = [D(x[i]) ~ B[i, 1] - x[i] for i in 1:2]
+    # Vector bound to 2×1 parameter
+    @test_throws ["binding for", "size (2,)", "size (2, 1)"] System(
+        eqs, t, [x], [B, L]; name = :col, bindings = Dict(B => [0.0, 0.5])
+    )
+    # Symbolic vector (column literal without ;;)
+    @test_throws ["binding for", "size (2,)", "size (2, 1)"] System(
+        eqs, t, [x], [B, L]; name = :col, bindings = Dict(B => [0.0; 1 / L])
+    )
+    # Transposed matrix
+    @test_throws ["binding for", "size (1, 2)", "size (2, 1)"] System(
+        eqs, t, [x], [B, L]; name = :col, bindings = Dict(B => [0.0 1 / L])
+    )
+    # Matching 2×1 shape is accepted
+    sys = System(eqs, t, [x], [B, L]; name = :col, bindings = Dict(B => [0.0; 1 / L;;]))
+    @test size(bindings(sys)[B]) == (2, 1)
+end
+
+@testset "Callable parameter bound to a function via `bindings` (#5259)" begin
+    array_parameter(x) = [x, 2x]
+    @parameters foo(::Real)[1:2]
+    @variables z(t)
+    sys = System(
+        [D(z) ~ foo(z)[2]], t, [z], [foo];
+        name = :c, bindings = Dict(foo => array_parameter)
+    )
+    @test haskey(bindings(sys), foo)
+    # `build_initializeprob = false` skips the initialization system, where the
+    # substituted call `(array_parameter(z))[2]` has symtype `Any` and tearing
+    # cannot form `0 ~ rhs - lhs` from it:
+    # https://github.com/SciML/ModelingToolkit.jl/issues/5282
+    prob = ODEProblem(
+        mtkcompile(sys), [z => 1.0], (0.0, 1.0); build_initializeprob = false
+    )
+    sol = solve(prob, Tsit5())
+    @test sol[z][end] ≈ exp(2) rtol = 1.0e-5
 end
