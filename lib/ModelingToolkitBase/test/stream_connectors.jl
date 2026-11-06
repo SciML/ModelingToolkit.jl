@@ -724,3 +724,5 @@ end
     term = Symbolics.STerm(ModelingToolkitBase.instream_rt, [Val(1), Val(1), x, y, a, b]; type = Real, shape = UnitRange{Int}[])
     @test isequal(term, SU.scalarize(term))
 end
+
+include("instream_jacobian.jl")
