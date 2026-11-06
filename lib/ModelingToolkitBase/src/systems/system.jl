@@ -475,7 +475,13 @@ defsdict(x::Vector{Any}) = isempty(x) ? SymmapT() : defsdict(Dict(x))
 function defsdict(x::Union{AbstractDict, AbstractArray{<:Pair}})
     result = SymmapT()
     for (k, v) in x
-        result[unwrap(k)] = SU.Const{VartypeT}(v)
+        k = unwrap(k)
+        # This is where a user's own map enters the system, so it gets the strict check:
+        # a projection of a composite is not a key, whether that composite is an array or
+        # a record. A `SymmapT` passes through the method above instead, which is how
+        # initialization hands back maps keyed on the leaves `Initial` is defined for.
+        validate_given_atomic_array_key(k)
+        result[k] = SU.Const{VartypeT}(v)
     end
     return result
 end
