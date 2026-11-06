@@ -116,6 +116,36 @@ macro parameters(xs...)
     )
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Create a parameter `name` of the (non-`Real`) type `T` that is declared to have the array
+shape `dims`, one `Int` or `AbstractUnitRange` per dimension. `@parameters K::T` leaves the
+shape unknown, so `K * u` takes the shape of `u`, and `@parameters K[1:m, 1:n]::T` builds an
+array of `T`. This is the way to declare a rectangular opaque operator, for example a
+`SparseMatrixCSC` or a user-defined struct used through `@register_array_symbolic`:
+
+```julia
+Kop = shaped_parameter(:Kop, FEMOp, 4, 6)   # maps R^6 -> R^4
+@register_array_symbolic apply_op(op::FEMOp, x::AbstractVector) begin
+    size = (size(op, 1),); eltype = Float64; ndims = 1
+end
+```
+
+`T` must be a concrete type. The parameter is not tunable unless `tunable = true`.
+"""
+function shaped_parameter(
+        name::Symbol, T::Type, dims::Union{Int, AbstractUnitRange{Int}}...;
+        tunable::Bool = false
+    )
+    isconcretetype(T) || throw(ArgumentError("`shaped_parameter` requires a concrete type, got `$T`."))
+    isempty(dims) && throw(ArgumentError("`shaped_parameter` requires at least one dimension."))
+    shape = SymbolicUtils.ShapeVecT(map(d -> d isa Int ? (1:d) : UnitRange{Int}(d), dims))
+    sym = SymbolicUtils.Sym{SymReal}(name; type = T, shape)
+    sym = setmetadata(sym, VariableTunable, tunable)
+    return wrap(toparam(sym))
+end
+
 function find_types(array)
     by = let set = Dict{Any, Int}(), counter = Ref(0)
         x -> begin
