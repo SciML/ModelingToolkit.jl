@@ -451,6 +451,13 @@ end
     @test m1.C ≈ m2.C
     @test m1.D ≈ m2.D
 
+    # The same analysis point as input and output is ambiguous between the sensitivity
+    # function and the complementary sensitivity function.
+    @test_throws "get_sensitivity` or `get_comp_sensitivity" linearize(
+        sys, :u, :u; op = Dict(csys.P.x => 0.0, csys.C.x => 0.0)
+    )
+    @test_throws ArgumentError linearization_function(sys, [:u, :y], [:u])
+
     # Loop openings also apply when the inputs and outputs are variables.
     op = Dict(csys.P.x => 0.0, csys.C.x => 0.0)
     m_closed, _ = linearize(sys, [], [csys.P.y]; op)
