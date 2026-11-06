@@ -507,3 +507,26 @@ end
     linfun, _ = linearization_function(sys, [u], [y]; op = Dict(u => 3.0))
     @test only(linfun(nothing, [u => 5.0], 0.0).h_u) ≈ 10.0
 end
+
+@testset "Operating point with values for some elements of an array variable" begin
+    import OrdinaryDiffEqDefault
+    @variables x(t)[1:2] u(t) [input = true] y(t) [output = true]
+    @named sys = System([D(x[1]) ~ -x[1] + u^2, x[2] ~ 2x[1], y ~ x[2]^2], t)
+    # Only `x[1]` is an unknown of the compiled system; `x[2]` is observed.
+    mats, _, extras = linearize(sys, [u], [y]; op = Dict(x[1] => 3.0, u => 2.0))
+    @test mats.A ≈ [-1.0;;]
+    @test mats.B ≈ [4.0;;]
+    @test mats.C ≈ [24.0;;]
+    @test extras.x ≈ [3.0]
+
+    ssys = mtkcompile(sys; inputs = [u], outputs = [y])
+    prob = ODEProblem(ssys, [x[1] => 1.0, u => 2.0], (0.0, 1.0))
+    sol = solve(prob)
+    x1 = sol(1.0; idxs = x[1])
+    mats, _, extras = linearize(sys, [u], [y]; op = LinearizationOpPoint(sol, 1.0))
+    @test mats.C ≈ [8x1;;] rtol = 1.0e-4
+    @test extras.x ≈ [x1] rtol = 1.0e-4
+    ress, _, extrass = linearize(sys, [u], [y]; op = LinearizationOpPoint(sol, [0.5, 1.0]))
+    @test ress[1].C ≈ [8sol(0.5; idxs = x[1]);;] rtol = 1.0e-4
+    @test ress[2].C ≈ [8x1;;] rtol = 1.0e-4
+end
