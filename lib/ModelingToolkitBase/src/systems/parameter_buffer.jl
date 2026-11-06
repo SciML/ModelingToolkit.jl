@@ -366,7 +366,9 @@ end
 function _split_helper(_, buf_v, _, raw, idx)
     res = reshape(raw[idx[]:(idx[] + length(buf_v) - 1)], size(buf_v))
     idx[] += length(buf_v)
-    return res
+    # The canonical vector of a nonnumeric or cache portion is untyped, so the slice takes the
+    # buffer's type, which its values have to match.
+    return isconcretetype(eltype(raw)) ? res : copyto!(similar(buf_v), res)
 end
 
 function _split_helper(_, buf_v::BlockedArray, _, raw, idx)
