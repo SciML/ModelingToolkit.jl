@@ -1,5 +1,7 @@
 using BifurcationKit, ModelingToolkitBase, Test
 using ModelingToolkitBase: t_nounits as t, D_nounits as D
+# BifurcationKit v0.8.9 changed the `bothside` keyword from a `Bool` to a `Val`.
+const BOTHSIDE = pkgversion(BifurcationKit) >= v"0.8.9" ? Val(true) : true
 # Simple pitchfork diagram, compares solution to native BifurcationKit, checks they are identical.
 # Checks using `jac=false` option.
 if @isdefined(ModelingToolkit)
@@ -29,7 +31,7 @@ if @isdefined(ModelingToolkit)
     # Conputes bifurcation diagram.
     p_span = (-4.0, 6.0)
     opts_br = ContinuationPar(max_steps = 500, p_min = p_span[1], p_max = p_span[2])
-    bif_dia = bifurcationdiagram(bprob, PALC(), 2, (args...) -> opts_br; bothside = true)
+    bif_dia = bifurcationdiagram(bprob, PALC(), 2, (args...) -> opts_br; bothside = BOTHSIDE)
 
     # Computes bifurcation diagram using BifurcationKit directly (without going through MTK).
     function f_BK(u, p)
@@ -49,7 +51,7 @@ if @isdefined(ModelingToolkit)
         PALC(),
         2,
         (args...) -> opts_br;
-        bothside = true
+        bothside = BOTHSIDE
     )
 
     # Compares results.
@@ -92,7 +94,7 @@ let
         p_max = p_span[2],
         n_inversion = 4
     )
-    bif_dia = bifurcationdiagram(bprob, PALC(), 2, (args...) -> opts_br; bothside = true)
+    bif_dia = bifurcationdiagram(bprob, PALC(), 2, (args...) -> opts_br; bothside = BOTHSIDE)
 
     # Tests that the diagram has the correct values (x = b)
     all([b.x ≈ b.param for b in bif_dia.γ.branch])
@@ -143,7 +145,7 @@ if @isdefined(ModelingToolkit)
         p_max = p_span[2],
         n_inversion = 4
     )
-    bif_dia = bifurcationdiagram(bprob, PALC(), 2, (args...) -> opts_br; bothside = true)
+    bif_dia = bifurcationdiagram(bprob, PALC(), 2, (args...) -> opts_br; bothside = BOTHSIDE)
 
     # Tests that the diagram has the correct values (x = b)
     all([b.x ≈ 2 * b.param for b in bif_dia.γ.branch])
@@ -242,8 +244,8 @@ end
         nsys, [:x => 1.0, :y => 1.0], [:mu => -1.0, :alpha => 1.0], :mu; plot_var = :x
     )
 
-    dia_sym = bifurcationdiagram(bprob_sym, PALC(), 2, (args...) -> opts_br; bothside = true)
-    dia_symbol = bifurcationdiagram(bprob_symbol, PALC(), 2, (args...) -> opts_br; bothside = true)
+    dia_sym = bifurcationdiagram(bprob_sym, PALC(), 2, (args...) -> opts_br; bothside = BOTHSIDE)
+    dia_symbol = bifurcationdiagram(bprob_symbol, PALC(), 2, (args...) -> opts_br; bothside = BOTHSIDE)
 
     @test getfield.(dia_symbol.γ.branch, :x) ≈ getfield.(dia_sym.γ.branch, :x)
     @test getfield.(dia_symbol.γ.branch, :param) ≈ getfield.(dia_sym.γ.branch, :param)

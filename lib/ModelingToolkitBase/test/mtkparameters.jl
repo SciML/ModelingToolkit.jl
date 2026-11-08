@@ -295,6 +295,25 @@ end
 VDual = Vector{<:ForwardDiff.Dual}
 VVDual = Vector{<:Vector{<:ForwardDiff.Dual}}
 
+@testset "A portion with many buffer types is indexed without dynamic dispatch" begin
+    # Five element types, so five `Constants` buffers, indexed with a runtime number.
+    @parameters i8::Int8 i16::Int16 i32::Int32 i64::Int64 u32::UInt32
+    @named manybufs = System(Equation[], t, [], [i8, i16, i32, i64, u32])
+    manybufs = complete(manybufs)
+    ps = MTKParameters(manybufs, Dict(i8 => 1, i16 => 2, i32 => 3, i64 => 4, u32 => 5))
+    @test length(ps.constant) == 5
+    idx = parameter_index(manybufs, i32)
+    @test parameter_values(ps, idx) === Int32(3)
+    # Julia 1.10 widens the union of the five element types to `Any`.
+    @test only(Base.return_types(parameter_values, (typeof(ps), typeof(idx)))) !== Any skip = VERSION < v"1.11"
+    # Measured inside a function so only `set_parameter!` is counted; dynamic dispatch would box.
+    write_allocs(ps, val, idx) = @allocated set_parameter!(ps, val, idx)
+    write_allocs(ps, Int32(100_000), idx)
+    @test parameter_values(ps, idx) === Int32(100_000)
+    @test write_allocs(ps, Int32(200_000), idx) == 0
+    @test parameter_values(ps, idx) === Int32(200_000)
+end
+
 @testset "Parameter type validation" begin
     abstract type AbstractFooT end
     struct Foo{T} <: AbstractFooT
@@ -418,6 +437,24 @@ with_updated_parameter_timeseries_values(
     @test ps.nonnumeric isa Tuple{Vector{Any}}
     ps2 = remake_buffer(sys, ps, [p], [:a])
     @test ps2.nonnumeric isa Tuple{Vector{Any}}
+end
+
+struct ReplaceFoo
+    x::Float64
+end
+
+@testset "`replace` keeps the types of nonnumeric and cache buffers" begin
+    @variables x(t)
+    @parameters k h::ReplaceFoo
+    @named sys = System(D(x) ~ -k * x, t, [x], [k, h])
+    sys, _ = ModelingToolkitBase.add_diffcache(sys, 3)
+    sys = complete(sys)
+    ps = MTKParameters(sys, [k => 2.0, h => ReplaceFoo(1.0)])
+    for portion in (ModelingToolkitBase.NONNUMERIC_PORTION, SciMLStructures.Caches())
+        buffer, repack, _ = canonicalize(portion, ps)
+        @test typeof(SciMLStructures.replace(portion, ps, deepcopy(buffer))) == typeof(ps)
+        @test typeof(repack(buffer)) == typeof(ps)
+    end
 end
 
 if @isdefined(ModelingToolkit)
