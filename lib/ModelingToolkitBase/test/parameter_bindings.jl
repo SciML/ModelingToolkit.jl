@@ -277,11 +277,11 @@ end
     parammap = [γ => 0.01]
     jprob = JumpProblem(
         js2, [u₀map; parammap], tspan; aggregator = Direct(),
-        save_positions = (false, false), rng = rng
+        save_positions = (false, false)
     )
     @test jprob.ps[γ] == 0.01
     @test jprob.ps[β] == 0.0001
-    @test_nowarn solve(jprob, SSAStepper())
+    @test_nowarn solve(jprob, SSAStepper(); rng)
 end
 
 @testset "NonlinearSystem" begin

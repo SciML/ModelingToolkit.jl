@@ -66,10 +66,10 @@ Here, `p_span` sets the interval over which we wish to compute the diagram.
 Next, we can use this as input to our bifurcation diagram, and then plot it.
 
 ```@example Bif1
-bf = bifurcationdiagram(bprob, PALC(), 2, (args...) -> opts_br; bothside = true)
+bf = bifurcationdiagram(bprob, PALC(), 2, (args...) -> opts_br; bothside = Val(true))
 ```
 
-Here, the value `2` sets how sub-branches of the diagram that BifurcationKit should compute. Generally, for bifurcation diagrams, it is recommended to use the `bothside=true` argument.
+Here, the value `2` sets how sub-branches of the diagram that BifurcationKit should compute. Generally, for bifurcation diagrams, it is recommended to use the `bothside = Val(true)` argument.
 
 ```@example Bif1
 using Plots
@@ -113,7 +113,7 @@ p_span = (-3.0, 3.0)
 opts_br = ContinuationPar(nev = 2,
     p_max = p_span[2], p_min = p_span[1])
 
-bf = bifurcationdiagram(bprob, PALC(), 2, (args...) -> opts_br; bothside = true)
+bf = bifurcationdiagram(bprob, PALC(), 2, (args...) -> opts_br; bothside = Val(true))
 using Plots
 plot(bf;
     putspecialptlegend = false,
