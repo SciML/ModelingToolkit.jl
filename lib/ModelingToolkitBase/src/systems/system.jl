@@ -1409,15 +1409,13 @@ function NonlinearSystem(sys::System; bind_iv::Bool = true)
     eqs = copy(get_eqs(sys))
     obs = get_observed(sys)
     D = Differential(get_iv(sys))
-    # Whole-array keys cover `D(x)`; element keys cover `D(x[i])` when unknowns stay
-    # unscalarized (as after hierarchical flattening). Slice derivatives are expanded
-    # below so the same element keys catch them on the second pass.
     subrules = Dict{SymbolicT, SymbolicT}()
+    symbolic_zero = SU.zero_of_vartype(VartypeT)
     for x in unknowns(sys)
-        subrules[D(x)] = Symbolics.COMMON_ZERO
+        subrules[D(x)] = symbolic_zero
         if SU.is_array_shape(SU.shape(x))
             for i in SU.stable_eachindex(x)
-                subrules[D(x[i])] = Symbolics.COMMON_ZERO
+                subrules[D(x[i])] = symbolic_zero
             end
         end
     end

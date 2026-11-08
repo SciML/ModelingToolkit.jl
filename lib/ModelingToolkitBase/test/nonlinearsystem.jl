@@ -565,12 +565,10 @@ end
 end
 
 @testset "NonlinearSystem conversion: array-element derivatives are zeroed" begin
-    # https://github.com/SciML/ModelingToolkit.jl/issues/5066 facet A
     @independent_variables t
     D = Differential(t)
     @variables x(t)[1:2] y(t)
     eqs = [D(x[1]) ~ -x[1] + y, D(x[2]) ~ -2x[2] + x[1], 0 ~ y - 1.0 + x[2]]
-    # Unknowns listed unscalarized — what flattening a hierarchy produces.
     sys = complete(System(eqs, t, [x, y], []; name = :A))
     nlsys = NonlinearSystem(sys)
     @test length(equations(nlsys)) == 3
