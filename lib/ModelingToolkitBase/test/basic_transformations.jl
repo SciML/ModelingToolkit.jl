@@ -2,7 +2,7 @@ using ModelingToolkitBase, OrdinaryDiffEq, DataInterpolations, DynamicQuantities
 using LinearAlgebra, Symbolics
 using ModelingToolkitStandardLibrary.Blocks: RealInput, RealOutput
 using Symbolics: value
-using SymbolicUtils: symtype, _iszero
+using SymbolicUtils: symtype, _iszero, FnType
 using ModelingToolkitBase: SymbolicContinuousCallback
 
 @independent_variables t
@@ -458,6 +458,46 @@ foofn(x) = 4
 
     @parameters foo::AbstractFoo
     @test_throws ["does not exist"] respecialize(sys, [foo => Bar()])
+
+    # `MTKParameters` creates the value of a buffer added by `add_diffcache`, so it has no default.
+    sysd, buffer = ModelingToolkitBase.add_diffcache(sys1, 4)
+    sysd = complete(sysd)
+    initial_conditions(sysd)[p2] = Baz()
+    sys2 = respecialize(sysd, [p => Bar()]; all = true)
+    delete!(initial_conditions(sysd), p2)
+    ps = ModelingToolkitBase.get_ps(sys2)
+    @test any(isequal(buffer), ps)
+    @test symtype(ps[findfirst(isequal(rp2), ps)]) <: Baz
+    prob = ODEProblem(sys2, [q => [Bar(), Bar()], r => 1], (0.0, 1.0))
+    @test prob.p.caches[1] isa Vector{ModelingToolkitBase.DiffCacheAllocatorAPIWrapper{Float64}}
+end
+
+struct Gain <: AbstractFoo
+    k::Float64
+end
+(g::Gain)(x) = g.k * x
+
+@testset "`respecialize` with callable parameters" begin
+    itp = LinearInterpolation([0.0, 3.0], [0.0, 1.0])
+    @parameters (f::AbstractFoo)(..) = Gain(2.0)
+    @parameters interp(::Real)::Real = itp
+    @variables x(t) = 1.0 y(t) = 1.0
+    @named sys = System([D(x) ~ -f(x), D(y) ~ -interp(y)], t)
+    sys = complete(sys)
+
+    sys2 = respecialize(sys)
+    ps = ModelingToolkitBase.get_ps(sys2)
+    newf = only(filter(p -> string(p) == "f", ps))
+    newinterp = only(filter(p -> string(p) == "interp", ps))
+    @test symtype(newf) == FnType{Tuple, Real, Gain}
+    @test symtype(newinterp) == FnType{Tuple{Real}, Real, typeof(itp)}
+    @test value(initial_conditions(sys2)[newf]) == Gain(2.0)
+    prob = ODEProblem(sys2, [], (0.0, 1.0))
+    @test any(x -> x isa Vector{Gain} && length(x) == 1, prob.p.nonnumeric)
+    @test any(x -> x isa Vector{typeof(itp)} && length(x) == 1, prob.p.nonnumeric)
+    sol = solve(prob, Tsit5(); abstol = 1.0e-10, reltol = 1.0e-10)
+    @test sol[x][end] ≈ exp(-2.0) rtol = 1.0e-8
+    @test sol[y][end] ≈ exp(-3.0) rtol = 1.0e-8
 end
 
 @testset "`truncate_constant_floats`" begin
