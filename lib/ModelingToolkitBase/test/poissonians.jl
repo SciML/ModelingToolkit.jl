@@ -667,8 +667,6 @@ end
 # ============================================================================
 
 @testset "Poissonian Mathematical Correctness" begin
-    rng = StableRNG(12345)
-
     @testset "Pure Poisson counter: E[N(t)] = λt, Var[N(t)] = λt" begin
         # Simple counting process: dN = dN(λ)
         # N(t) ~ Poisson(λt), so E[N(t)] = λt, Var[N(t)] = λt
@@ -691,16 +689,16 @@ end
         Nsims = 2000
 
         # Pure jump system with ConstantRateJump → use SSAStepper
-        # SSAStepper accepts seed kwarg for reproducibility (not save_everystep!)
+        # SSAStepper accepts an rng kwarg for reproducibility (not save_everystep!)
         jprob = JumpProblem(
             compiled_sys, [N => 0.0, λ => λ_val], (0.0, T);
-            aggregator = Direct(), save_positions = (false, false), rng
+            aggregator = Direct(), save_positions = (false, false)
         )
 
         seed = 1111
         Nfinal = zeros(Nsims)
         for i in 1:Nsims
-            sol = solve(jprob, SSAStepper(); seed)
+            sol = solve(jprob, SSAStepper(); rng = StableRNG(seed))
             Nfinal[i] = sol[N, end]
             seed += 1
         end
@@ -742,13 +740,13 @@ end
         # VariableRateJumps require ODE solver
         jprob_sym = JumpProblem(
             compiled_sys, [X => X0, b => b_val, d => d_val], (0.0, T);
-            save_positions = (false, false), rng
+            save_positions = (false, false)
         )
 
         seed = 2222
         Xfinal_sym = zeros(Nsims)
         for i in 1:Nsims
-            sol = solve(jprob_sym, Tsit5(); save_everystep = false, seed)
+            sol = solve(jprob_sym, Tsit5(); save_everystep = false, rng = StableRNG(seed))
             Xfinal_sym[i] = sol[X, end]
             seed += 1
         end
@@ -792,13 +790,13 @@ end
         jprob_sym = JumpProblem(
             compiled_sys,
             [S => S0, I => I0, R => R0, β => β_val, γ => γ_val], (0.0, T);
-            save_positions = (false, false), rng
+            save_positions = (false, false)
         )
 
         seed = 3333
         R_sym = zeros(Nsims, Ntimes)
         for i in 1:Nsims
-            sol = solve(jprob_sym, Tsit5(); seed)
+            sol = solve(jprob_sym, Tsit5(); rng = StableRNG(seed))
             for (k, t_) in enumerate(save_times)
                 R_sym[i, k] = sol(t_; idxs = R)
             end
@@ -821,14 +819,13 @@ end
         end
         j2 = VariableRateJump(r2, a2!)
         jprob_direct = JumpProblem(
-            oprob_direct, Direct(), j1, j2;
-            rng, save_positions = (false, false)
+            oprob_direct, Direct(), j1, j2; save_positions = (false, false)
         )
 
         seed = 3333
         R_direct = zeros(Nsims, Ntimes)
         for i in 1:Nsims
-            sol = solve(jprob_direct, Tsit5(); seed)
+            sol = solve(jprob_direct, Tsit5(); rng = StableRNG(seed))
             for (k, t_) in enumerate(save_times)
                 R_direct[i, k] = sol(t_)[3]
             end
@@ -868,13 +865,13 @@ end
         jprob_sym = JumpProblem(
             compiled_sys,
             [X => 0.0, σ => σ_val, λ => λ_val, δ => δ_val], (0.0, T);
-            save_positions = (false, false), rng
+            save_positions = (false, false)
         )
 
         seed = 4444
         Xfinal_sym = zeros(Nsims)
         for i in 1:Nsims
-            sol = solve(jprob_sym, SOSRI(); save_everystep = false, seed)
+            sol = solve(jprob_sym, SOSRI(); save_everystep = false, rng = StableRNG(seed))
             Xfinal_sym[i] = sol[X, end]
             seed += 1
         end
@@ -915,13 +912,13 @@ end
         # Has ODE part, so needs ODE solver
         jprob = JumpProblem(
             compiled_sys, [X => X0, a => a_val, λ => λ_val], (0.0, T);
-            save_positions = (false, false), rng
+            save_positions = (false, false)
         )
 
         seed = 5555
         Xfinal = zeros(Nsims)
         for i in 1:Nsims
-            sol = solve(jprob, Tsit5(); save_everystep = false, seed)
+            sol = solve(jprob, Tsit5(); save_everystep = false, rng = StableRNG(seed))
             Xfinal[i] = sol[X, end]
             seed += 1
         end
@@ -963,13 +960,13 @@ end
         # Pure jump system with CRJ → can use SSAStepper
         jprob = JumpProblem(
             compiled_sys, [X => X0, λ => λ_val, δ => δ_val], (0.0, T);
-            aggregator = Direct(), save_positions = (false, false), rng
+            aggregator = Direct(), save_positions = (false, false)
         )
 
         seed = 6666
         Xfinal = zeros(Nsims)
         for i in 1:Nsims
-            sol = solve(jprob, SSAStepper(); seed)
+            sol = solve(jprob, SSAStepper(); rng = StableRNG(seed))
             Xfinal[i] = sol[X, end]
             seed += 1
         end
@@ -1001,13 +998,13 @@ end
         # Symbolic version
         jprob_sym = JumpProblem(
             compiled_sys, [X => X0, λ => λ_val, δ => δ_val], (0.0, T);
-            aggregator = Direct(), save_positions = (false, false), rng
+            aggregator = Direct(), save_positions = (false, false)
         )
 
         seed = 7777
         Xfinal_sym = zeros(Nsims)
         for i in 1:Nsims
-            sol = solve(jprob_sym, SSAStepper(); seed)
+            sol = solve(jprob_sym, SSAStepper(); rng = StableRNG(seed))
             Xfinal_sym[i] = sol[X, end]
             seed += 1
         end
@@ -1020,12 +1017,12 @@ end
             integ.u[1] -= integ.p[2] * integ.u[1]  # X -= δ*X
         end
         crj_direct = ConstantRateJump(rate_direct, affect_direct!)
-        jprob_direct = JumpProblem(dprob, Direct(), crj_direct; rng)
+        jprob_direct = JumpProblem(dprob, Direct(), crj_direct)
 
         seed = 7777
         Xfinal_direct = zeros(Nsims)
         for i in 1:Nsims
-            sol = solve(jprob_direct, SSAStepper(); seed)
+            sol = solve(jprob_direct, SSAStepper(); rng = StableRNG(seed))
             Xfinal_direct[i] = sol[end][1]
             seed += 1
         end

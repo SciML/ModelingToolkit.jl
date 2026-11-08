@@ -5,7 +5,7 @@
   - Both Modelica and ModelingToolkit.jl are acausal modeling languages.
   - Modelica is a language with many different implementations, such as
     [Dymola](https://www.3ds.com/products/catia/dymola/) and
-    [OpenModelica](https://openmodelica.org/), which have differing levels of
+    [OpenModelica](https://github.com/OpenModelica/OpenModelica), which have differing levels of
     performance and can give different results on the same model. Many of the
     commonly used Modelica compilers are not open-source. ModelingToolkit.jl
     is a language with a single canonical open-source implementation.
