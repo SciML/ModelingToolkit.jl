@@ -263,10 +263,14 @@ function generate_control_function(
         implicit_dae = false,
         simplify = false,
         split = true,
-        reassemble_alg = nothing
+        reassemble_alg = nothing,
+        verbose = DEFAULT_MTK_VERBOSE
     )
     (; eval_expression, eval_module) = opts
-    isempty(inputs) && @warn("No unbound inputs were found in system.")
+    verbose = _route_problem_verbose(verbose)
+    isempty(inputs) && @SciMLMessage(
+        "No unbound inputs were found in system.", verbose, :no_unbound_inputs
+    )
 
     # Handle backward compatibility for disturbance_argument
     if disturbance_argument
@@ -291,11 +295,13 @@ function generate_control_function(
 
     if !isscheduled(sys)
         sys = if reassemble_alg === nothing
-            mtkcompile(sys; inputs, disturbance_inputs = all_disturbances, split, simplify)
+            mtkcompile(
+                sys; inputs, disturbance_inputs = all_disturbances, split, simplify, verbose
+            )
         else
             mtkcompile(
                 sys; inputs, disturbance_inputs = all_disturbances, split, simplify,
-                reassemble_alg
+                reassemble_alg, verbose
             )
         end
     end
