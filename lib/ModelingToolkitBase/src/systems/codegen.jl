@@ -463,6 +463,7 @@ function generate_rhs(
         codegen_opts = with_residual_allocator(codegen_opts, similar_for_residual)
     end
     wrapper_opts = function (codegen_function_options)
+        # In-place SciML functions receive an output buffer distinct from their inputs.
         return BuildFunctionWrapperOptions(;
             p_start, extra_assignments = copy(extra_assignments), u_arg, n_param_buffers,
             p_end_kw..., chunk_size = -1, codegen_function_options
@@ -470,10 +471,11 @@ function generate_rhs(
     end
     if implicit_dae && assemble_residuals &&
             hasfield(typeof(codegen_opts), :scalarize_single_element_regions)
+        # Write one-element slice equations through an output view for arrays without scalar indexing.
         codegen_opts = setproperties(codegen_opts, (; scalarize_single_element_regions = false))
     end
     res = build_function_wrapper(sys, rhss, collect(Any, args), wrapper_opts(codegen_opts))
-    if alloc_residual && implicit_dae
+    if alloc_residual && implicit_dae && codegen_opts.iip_config[1]
         promoted_opts = wrapper_opts(with_residual_allocator(codegen_opts, promoted_zeros))
         promoted = build_function_wrapper(sys, rhss, collect(Any, args), promoted_opts)
         res = (branch_on_residual_eltype(res[1], promoted[1]), res[2])
