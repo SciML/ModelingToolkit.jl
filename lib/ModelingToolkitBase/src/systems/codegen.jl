@@ -50,12 +50,16 @@ function array_derivative_arguments!(rhss::Vector{SymbolicT}, dvs, D, ir::IRStru
         return map(D, dvs), identity
     end
 
-    du_name = :__mtk_dae_du
+    reserved_names = Set{Symbol}()
     for v in reserved_symbols
         parent, _ = split_indexed_var(v)
-        if hasname(parent) && getname(parent) === du_name
-            throw(ArgumentError("the array derivative sentinel `$du_name` collides with a symbol of the system; this name is reserved for internal use."))
-        end
+        hasname(parent) && push!(reserved_names, getname(parent))
+    end
+    du_name = :__mtk_dae_du
+    suffix = 1
+    while du_name in reserved_names
+        du_name = Symbol(:__mtk_dae_du_, suffix)
+        suffix += 1
     end
     du = unwrap(only(@variables $du_name[1:length(dvs)]))
     subs = Dict{SymbolicT, SymbolicT}(D(v) => du[i] for (i, v) in enumerate(dvs))
@@ -299,7 +303,7 @@ function generate_rhs(
             rhss = SymbolicT[_iszero(eq.lhs) ? eq.rhs : eq.rhs - eq.lhs for eq in eqs]
             extra_expressions = SymbolicT[unwrap(eq.rhs) for eq in obs]
             assertion_expr === nothing || push!(extra_expressions, assertion_expr)
-            reserved_symbols = Iterators.flatten((dvs, parameters(sys; initial_parameters = true), (eq.lhs for eq in obs)))
+            reserved_symbols = Iterators.flatten((dvs, parameters(sys; initial_parameters = true), (eq.lhs for eq in obs), (t,)))
             ddvs, derivative_subber = array_derivative_arguments!(rhss, dvs, D, get_irstructure(sys); extra_expressions, reserved_symbols)
             if derivative_subber !== identity && !isempty(obs)
                 @set! sys.observed = [eq.lhs ~ derivative_subber(unwrap(eq.rhs)) for eq in obs]

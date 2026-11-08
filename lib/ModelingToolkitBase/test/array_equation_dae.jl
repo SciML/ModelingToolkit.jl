@@ -269,15 +269,28 @@ end
 @testset "array derivative sentinel collision" begin
     @independent_variables t
     @variables x(t)[1:6]
-    @parameters __mtk_dae_du[1:6]
+    @parameters __mtk_dae_du[1:6] __mtk_dae_du_1[1:6] __mtk_dae_du_2[1:6]
     D = Differential(t)
-    sys = complete(
-        System(
-            [D(x) ~ -x .+ __mtk_dae_du], t, collect(x),
-            [__mtk_dae_du]; name = :collision
+    ps = [__mtk_dae_du, __mtk_dae_du_1, __mtk_dae_du_2]
+    for n in eachindex(ps)
+        sys = complete(
+            System(
+                [D(x) ~ -x .+ sum(ps[1:n])], t, collect(x),
+                ps[1:n]; name = :collision
+            )
         )
-    )
-    @test_throws ArgumentError DAEFunction(sys)
+        prob = DAEProblem(
+            sys, [
+                x => ones(6), D(x) => fill(sum(1:n) - 1.0, 6),
+                [p => fill(Float64(i), 6) for (i, p) in enumerate(ps[1:n])]...,
+            ],
+            (0.0, 1.0); build_initializeprob = false
+        )
+        out = zeros(6)
+        prob.f(out, prob.du0, prob.u0, prob.p, 0.0)
+        @test out == zeros(6)
+        @test prob.f(prob.du0, prob.u0, prob.p, 0.0) == zeros(6)
+    end
 end
 
 @testset "Multidimensional derivative code size" begin
