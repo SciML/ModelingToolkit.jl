@@ -380,7 +380,7 @@ function generate_rhs(
         )
     end
     res = build_function_wrapper(sys, rhss, collect(Any, args), wrapper_opts(codegen_opts))
-    if alloc_residual && implicit_dae
+    if alloc_residual && implicit_dae && codegen_opts.iip_config[1]
         # Keep the default lowering for `Float64` arguments and only allocate through
         # `promoted_zeros` when an argument (e.g. a `Dual`) needs a wider eltype.
         promoted_opts = wrapper_opts(with_residual_allocator(codegen_opts, promoted_zeros))

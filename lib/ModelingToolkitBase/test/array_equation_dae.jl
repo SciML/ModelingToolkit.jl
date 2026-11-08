@@ -341,3 +341,22 @@ end
         @test getp(sys, sym)(initial_prob) == value
     end
 end
+
+@testset "IIP-only array DAE residual" begin
+    @independent_variables t
+    @parameters k
+    @variables z(t)[1:20]
+    D = Differential(t)
+    for split in (true, false), expression in (Val{true}, Val{false})
+        sys = complete(System([D(z) ~ k .* z], t, [z], [k]; name = :sys); split)
+        prob = DAEProblem(
+            sys, [z => ones(20), D(z) => zeros(20), k => 2.0], (0.0, 1.0);
+            build_initializeprob = false
+        )
+        _, iip = generate_rhs(sys; implicit_dae = true, iip_config = (false, true), expression)
+        f = expression === Val{true} ? eval_or_rgf(iip) : iip
+        out = zeros(20)
+        f(out, prob.du0, prob.u0, prob.p, 0.0)
+        @test out == 2 .* prob.u0 .- prob.du0
+    end
+end
