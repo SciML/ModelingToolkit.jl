@@ -21,8 +21,9 @@ only solve for solvable parameters of the system.
 - `guesses`: Additional guesses to use apart from those in `guesses(sys)`.
 - `default_dd_guess`: Default guess for dummy derivative variables in time-dependent
   initialization.
-- `algebraic_only`: If `false`, does not use initialization equations (provided via the
-  keyword or part of the system) to construct initialization.
+- `algebraic_only`: If `true`, does not use the initialization equations of the system
+  to construct initialization. Equations passed via the `initialization_eqs` keyword are
+  used regardless.
 - `name`: The name of the initialization system.
 
 All other keyword arguments are forwarded to the [`System`](@ref) constructor.
@@ -50,7 +51,7 @@ function register_dd_var!(
         guesses::AtomicArrayDict{SymbolicT}, d::SymbolicT, dd_guess_sym::SymbolicT
     )
     ttk = default_toterm(d)
-    if !has_possibly_indexed_key(guesses, d) && !has_possibly_indexed_key(guesses, ttk)
+    if !has_possibly_indexed_value(guesses, d) && !has_possibly_indexed_value(guesses, ttk)
         write_possibly_indexed_array!(guesses, ttk, dd_guess_sym, COMMON_NOTHING)
     end
     push_as_atomic_array!(init_vars_set, ttk)
@@ -137,6 +138,13 @@ function generate_initializesystem_timevarying(
     else
         build_operating_point(sys, op)
     end
+
+    # Initialization works in leaves; storage keeps records whole. Translate here, once,
+    # rather than at each place below that asks for `Initial` of a key. Both maps are
+    # normalized by now, which is what this needs - `op` can arrive as a vector of pairs.
+    expand_record_keys!(op)
+    expand_record_keys!(guesses)
+
     subber = get_ir_info(_sys).obs_subber
     obsvars = as_atomic_array_set(observables(_sys))
     initsys_sort_system_bindings!(subber, init_vars_set, init_ps, obsvars, eqs_ics, binds, op, guesses)
@@ -151,7 +159,7 @@ function generate_initializesystem_timevarying(
     if has_schedule(_sys) && (schedule = get_schedule(_sys); schedule isa Schedule)
         for (k, v) in schedule.dummy_sub
             ttk = default_toterm(k)
-            if !has_possibly_indexed_key(guesses, k) && !has_possibly_indexed_key(guesses, ttk)
+            if !has_possibly_indexed_value(guesses, k) && !has_possibly_indexed_value(guesses, ttk)
                 write_possibly_indexed_array!(guesses, ttk, dd_guess_sym, COMMON_NOTHING)
             end
             # For DDEs, the derivatives can have delayed terms
@@ -222,7 +230,7 @@ function generate_initializesystem_timevarying(
         # doing so would require all observed equations to be symbolically differentiable.
         get!(derivative_rules, D(eq.lhs), D(eq.rhs))
         # Add as guesses
-        if !has_possibly_indexed_key(guesses, eq.lhs)
+        if !has_possibly_indexed_value(guesses, eq.lhs)
             write_possibly_indexed_array!(guesses, eq.lhs, eq.rhs, COMMON_NOTHING)
         end
     end
@@ -239,13 +247,14 @@ function generate_initializesystem_timevarying(
     end
     timevaring_initsys_process_op!(subber, init_vars_set, init_ps, eqs_ics, op, der_subber, guesses)
 
-    # process explicitly provided initialization equations
+    # process explicitly provided initialization equations. `algebraic_only` ignores the
+    # initialization equations of the system, but not those passed as a keyword argument.
     if !algebraic_only
         initialization_eqs = [get_initialization_eqs(sys); initialization_eqs]
-        for eq in initialization_eqs
-            eq = subber(der_subber(eq))
-            push!(eqs_ics, eq)
-        end
+    end
+    for eq in initialization_eqs
+        eq = subber(der_subber(eq))
+        push!(eqs_ics, eq)
     end
     # TODO
     # 8) use observed equations for guesses of observed variables if not provided
@@ -354,6 +363,9 @@ function generate_initializesystem_timeindependent(
             get!(guesses, k, v)
         else
             newbinds[k] = v
+            # Bound parameters cannot have initial conditions; their binding
+            # determines the value, so only solvable parameters keep guesses.
+            delete!(guesses, split_indexed_var(k)[1])
         end
     end
 
@@ -363,8 +375,17 @@ function generate_initializesystem_timeindependent(
         build_operating_point(sys, op)
     end
 
+    # Initialization works in leaves; storage keeps records whole. Translate here, once,
+    # rather than at each place below that asks for `Initial` of a key. Both maps are
+    # normalized by now, which is what this needs - `op` can arrive as a vector of pairs.
+    expand_record_keys!(op)
+    expand_record_keys!(guesses)
+
     valid_initial_parameters = AtomicArraySet{OrderedDict{SymbolicT, Nothing}}()
-    for (k, v) in op
+    # Iterate over a copy: the loop inserts `Initial` keys into `op`. An insertion can rehash
+    # the `Dict`, which moves its keys to new slots, and an iteration in progress then yields
+    # some keys twice and skips others.
+    for (k, v) in collect(op)
         if is_variable(sys, k) || has_observed_with_lhs(sys, k) ||
                 Moshi.Match.@match k begin
                 BSImpl.Term(; f, args) && if f isa Differential end => is_variable(sys, args[1])
@@ -430,6 +451,7 @@ function generate_initializesystem_timeindependent(
         Vector{Equation}(eqs_ics),
         vars,
         pars;
+        bindings = newbinds,
         initial_conditions = guesses,
         checks = check_units,
         name,
@@ -502,7 +524,10 @@ function timevaring_initsys_process_op!(
         der_subber::Symbolics.FixpointSubstituter,
         guesses::SymmapT
     )
-    for (k, v) in op
+    # Iterate over a copy: the loop inserts `Initial` keys into `op`. An insertion can rehash
+    # the `Dict`, which moves its keys to new slots, and an iteration in progress then yields
+    # some keys twice and skips others.
+    for (k, v) in collect(op)
         # Late binding `missing` also makes the key solvable
         if v === COMMON_MISSING
             push!(init_vars_set, k)
@@ -546,15 +571,28 @@ function timevaring_initsys_process_op!(
             # will be passed to the `NonlinearProblem` constructor, and guesses will not take
             # priority over it. So instead of adding `Initial(x) => v` as a guess, add `x => v`.
             op[ik] = k
-            left_merge!(guesses, AtomicArrayDict(k => v))
+            rroot, isrec = record_key_root(k)
+            if isrec && !isequal(rroot, k)
+                merge_record_field!(guesses, k, v)
+            else
+                left_merge!(guesses, AtomicArrayDict(k => v))
+            end
             if !SU.is_array_shape(shk)
                 push!(eqs_ics, subk ~ ik)
                 continue
             end
+            # Writing element-wise with `write_possibly_indexed_array!` copies the whole
+            # array for every element, which is quadratic. Fill a buffer and store it once.
+            buffer = collect(op[ik])
             for i in SU.stable_eachindex(k)
                 v[i] === COMMON_NOTHING && continue
                 push!(eqs_ics, subk[i] ~ ik[i])
-                write_possibly_indexed_array!(op, ik[i], v[i], COMMON_FALSE)
+                buffer[i] = v[i]
+            end
+            op[ik] = if all(SU.isconst, buffer)
+                BSImpl.Const{VartypeT}(unwrap_const.(buffer))
+            else
+                BSImpl.Const{VartypeT}(buffer)
             end
             continue
         end
@@ -748,9 +786,11 @@ function _remake_initialization_data_impl(
     floatT = float_type_from_varmap(op)
     u0_constructor = get_u0_constructor(identity, typeof(newu0), floatT, false)
     p_constructor = get_p_constructor(identity, typeof(newu0), floatT)
+    # `remake` has no `verbose` keyword, so use the verbosity stored on the system.
     opts = SciMLProblemOptions(
         sys;
         fn_opts = SciMLFunctionOptions(), floatT, u0_constructor, p_constructor,
+        verbose = _system_verbosity(sys),
         use_scc, initialization_eqs, time_dependent_init, allow_incomplete = true,
         check_initialization_units = false, missing_guess_value = meta.missing_guess_value,
         circular_dependency_max_cycle_length = length(all_symbols(sys)),

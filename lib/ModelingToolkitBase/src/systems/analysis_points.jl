@@ -87,16 +87,17 @@ struct AnalysisPoint
     outputs::Union{Nothing, Vector{System}, Vector{SymbolicT}}
 
     function AnalysisPoint(input, name::Symbol, outputs; verbose = true)
+        verb = _process_verbose_param(verbose)
         # input to analysis point should be an output variable
-        if verbose && input !== nothing
+        if _toggle_enabled(verb, :analysis_point_causality) && input !== nothing
             var = ap_var(input)
-            isoutput(var) || ap_warning(1, name, true)
+            isoutput(var) || ap_warning(1, name, true, verb)
         end
         # outputs of analysis points should be input variables
-        if verbose && outputs !== nothing
+        if _toggle_enabled(verb, :analysis_point_causality) && outputs !== nothing
             for (i, output) in enumerate(outputs)
                 var = ap_var(output)
-                isinput(var) || ap_warning(2 + i, name, false)
+                isinput(var) || ap_warning(2 + i, name, false, verb)
             end
         end
 
@@ -104,17 +105,21 @@ struct AnalysisPoint
     end
 end
 
-function ap_warning(arg::Int, name::Symbol, should_be_output)
+function ap_warning(arg::Int, name::Symbol, should_be_output, verb::MTKVerbosity)
     causality = should_be_output ? "output" : "input"
-    return @warn """
-    The $(arg)-th argument to analysis point $(name) was not a $causality. This is supported in \
-    order to handle inverse models, but may not be what you intended.
+    @SciMLMessage(verb, :analysis_point_causality) do
+        """
+        The $(arg)-th argument to analysis point $(name) was not a $causality. This is supported in \
+        order to handle inverse models, but may not be what you intended.
 
-    If you are building a forward mode (causal), you may want to swap this argument with \
-    one on the opposite side of the name of the analysis point provided to `connect`. \
-    Learn more about the causality of analysis points in the docstring for `AnalysisPoint`. \
-    Silence this message using `connect(out, :name, in...; warn = false)`.
-    """
+        If you are building a forward mode (causal), you may want to swap this argument with \
+        one on the opposite side of the name of the analysis point provided to `connect`. \
+        Learn more about the causality of analysis points in the docstring for `AnalysisPoint`. \
+        Silence this message using `connect(out, :name, in...; verbose = false)` or \
+        `verbose = MTKVerbosity(analysis_point_causality = SciMLLogging.Silent)`.
+        """
+    end
+    return nothing
 end
 
 AnalysisPoint() = AnalysisPoint(nothing, Symbol(), nothing)
@@ -232,7 +237,9 @@ typically is not (unless the model is an inverse model).
 # Keyword arguments
 
 - `verbose`: Warn if an input is connected to an output (reverse causality). Silence this
-  warning if you are analyzing an inverse model.
+  warning if you are analyzing an inverse model. Accepts a `Bool`, a `SciMLLogging`
+  preset, or an [`MTKVerbosity`](@ref) (the warning is controlled by its
+  `analysis_point_causality` toggle).
 """
 function connect(in::AbstractSystem, name::Symbol, out, outs...; verbose = true)
     return AnalysisPoint() ~ AnalysisPoint(in, name, System[out; collect(outs)]; verbose)
@@ -543,6 +550,25 @@ end
 
 Break(ap::AnalysisPoint) = Break(ap, false)
 
+# Remove the unknown `var` from `dvs` and add it to `ps`. The unknowns of a system store an
+# array variable either as the array itself or as its individual elements; in the latter
+# case all elements are removed and the array is added to `ps` as a whole.
+function unknown_to_parameter!(dvs::Vector{SymbolicT}, ps::Vector{SymbolicT}, var::SymbolicT)
+    idx = findfirst(isequal(var), dvs)
+    if idx !== nothing
+        deleteat!(dvs, idx)
+    elseif SU.is_array_shape(SU.shape(var))
+        n = length(dvs)
+        filter!(!isequal(var) ∘ first ∘ split_indexed_var, dvs)
+        length(dvs) == n - prod(length, SU.shape(var)) ||
+            error(lazy"Not all elements of the array variable $var are unknowns of the system.")
+    else
+        error(lazy"Variable $var is not an unknown of the system.")
+    end
+    push!(ps, var)
+    return nothing
+end
+
 function apply_transformation(tf::Break, sys::AbstractSystem)
     return modify_nested_subsystem(sys, tf.ap) do breaksys
         # get analysis point
@@ -569,8 +595,7 @@ function apply_transformation(tf::Break, sys::AbstractSystem)
                         @set! outsys.ps = new_ps
 
                         out_var = ap_var(toggle_namespacing(outsys, false))
-                        deleteat!(new_dvs, findfirst(isequal(out_var), new_dvs)::Int)
-                        push!(new_ps, out_var)
+                        unknown_to_parameter!(new_dvs, new_ps, out_var)
 
                         return outsys, (out_var,)
                     end
@@ -583,16 +608,18 @@ function apply_transformation(tf::Break, sys::AbstractSystem)
             for out in outs
                 out_var = ap_var(out)
                 if tf.outputs_to_params
+                    split_indexed_var(out_var)[2] && error(
+                        lazy"Analysis point $(nameof(ap)) connects to the element $out_var of an array variable. Opening the loop at this analysis point requires turning a single element of the array into a parameter, which is not supported. Connect the analysis point to the entire array variable instead."
+                    )
                     namespace = namespace_hierarchy(getname(out_var))
                     insert!(namespace, 1, nameof(breaksys))
                     breaksys, _ = modify_nested_subsystem(breaksys, @view(namespace[1:(end - 1)])) do apsys
                         new_dvs = copy(get_unknowns(apsys))
-                        var_in_apsys = getvar(apsys, namespace[end]; namespace = false)
-                        deleteat!(new_dvs, findfirst(isequal(var_in_apsys), new_dvs)::Int)
                         @set! apsys.unknowns = new_dvs
                         new_ps = copy(get_ps(apsys))
-                        push!(new_ps, var_in_apsys)
                         @set! apsys.ps = new_ps
+                        var_in_apsys = getvar(apsys, namespace[end]; namespace = false)
+                        unknown_to_parameter!(new_dvs, new_ps, unwrap(var_in_apsys))
                         return apsys, ()
                     end
                 end
