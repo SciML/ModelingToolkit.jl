@@ -368,7 +368,7 @@ function generate_control_function(
         disturbance_inputs = disturbances(sys);
         known_disturbance_inputs = nothing, disturbance_argument = false,
         implicit_dae = false, simplify = false, eval_expression = false,
-        eval_module = @__MODULE__, split = true, kwargs...
+        eval_module = @__MODULE__, split = true, verbose = Standard(), kwargs...
     )
     return generate_control_function(
         sys, inputs, disturbance_inputs,
@@ -376,6 +376,7 @@ function generate_control_function(
             eval_expression, eval_module,
             codegen_function_options = Symbolics.CodegenFunctionOptions(; kwargs...)
         );
-        known_disturbance_inputs, disturbance_argument, implicit_dae, simplify, split
+        known_disturbance_inputs, disturbance_argument, implicit_dae, simplify, split,
+        verbose
     )
 end
