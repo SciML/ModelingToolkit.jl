@@ -950,8 +950,29 @@ of one. The array counterpart is the `getindex` case of `SymbolicUtils.default_i
 """
 function is_symstruct_field(ex::SymbolicT)
     return Moshi.Match.@match ex begin
-        BSImpl.Term(; f) && if f isa Symbolics.SymbolicGetproperty end => true
+        BSImpl.Term(; f, args) && if f isa Symbolics.SymbolicGetproperty end =>
+            is_symstruct_base(args[1]::SymbolicT)
         BSImpl.Term(; f, args) && if f === getindex end => is_symstruct_field(args[1])
+        _ => false
+    end
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Whether a field of `ex` names a variable rather than something computed. A call
+returning a record does not: `f(x).y` is an expression to traverse, not a name.
+"""
+function is_symstruct_base(ex::SymbolicT)
+    return Moshi.Match.@match ex begin
+        BSImpl.Sym() => true
+        BSImpl.Term(; f, args) && if f isa Symbolics.SymbolicGetproperty end =>
+            is_symstruct_base(args[1]::SymbolicT)
+        BSImpl.Term(; f, args) && if f === getindex end => is_symstruct_base(args[1]::SymbolicT)
+        # A variable applied to the independent variable, as in `p(t)`.
+        BSImpl.Term(; f) && if f isa SymbolicT end => true
+        BSImpl.Term(; f, args) && if f isa SU.Operator && length(args) == 1 end =>
+            is_symstruct_base(args[1]::SymbolicT)
         _ => false
     end
 end
@@ -1657,6 +1678,9 @@ Given an equation that may be an array equation, return a `Vector{Equation}` rep
 its scalarized form.
 """
 function flatten_equation(eq::Equation)::Vector{Equation}
+    if is_record_equation(eq)
+        return flatten_record_equation(eq)
+    end
     if !SU.is_array_shape(SU.shape(eq.lhs))
         return [eq]
     end
@@ -1665,6 +1689,47 @@ function flatten_equation(eq::Equation)::Vector{Equation}
     result = Equation[]
     for (l, r) in zip(lhs, rhs)
         push!(result, l ~ r)
+    end
+    return result
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Whether `eq` equates two records, and so stands for one equation per leaf.
+"""
+function is_record_equation(eq::Equation)
+    return (eq.lhs isa SymbolicT && Symbolics.issymstruct(eq.lhs)) ||
+        (eq.rhs isa SymbolicT && Symbolics.issymstruct(eq.rhs))
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Split an equation between two records into one per leaf: `a ~ b` becomes `a.x ~ b.x`,
+`a.y ~ b.y`, recursing through nested records and array-valued fields. The right side is
+projected, so it may be a record, a record literal, or a call returning one.
+"""
+function flatten_record_equation(eq::Equation)::Vector{Equation}
+    lhs = eq.lhs
+    rhs = eq.rhs
+    lT = lhs isa SymbolicT ? SU.symtype(lhs) : typeof(lhs)
+    rT = rhs isa SymbolicT ? SU.symtype(rhs) : typeof(rhs)
+    # Differing field lists would pair up by position and silently produce nonsense.
+    lT === rT || throw(
+        ArgumentError(
+            LazyString(
+                "Cannot split `", eq, "` into one equation per field: the left side holds `",
+                lT, "` and the right side `", rT, "`. Both sides of an equation between ",
+                "records must be the same record type."
+            )
+        )
+    )
+    leaves = record_leaves(lhs)
+    result = Equation[]
+    sizehint!(result, length(leaves))
+    for leaf in leaves
+        push!(result, leaf ~ record_leaf_entry(leaf, lhs, rhs))
     end
     return result
 end
