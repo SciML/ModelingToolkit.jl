@@ -221,18 +221,10 @@ end
         ]
 
         @named sys = System(eqs, t)
-        # Under `--depwarn=error` the depwarn throws before the call returns,
-        # so `@test_deprecated` yields a `Pass` rather than the function tuple
-        # and the value assertions can only run when depwarn is not `error`.
-        if Base.JLOptions().depwarn == 2
-            @test_deprecated ModelingToolkitBase.generate_control_function(
-                sys, [u], [d];
-                simplify, split, disturbance_argument = true
-            )
-        else
+        @test_deprecated begin
             f, dvs,
                 ps,
-                io_sys = @test_deprecated ModelingToolkitBase.generate_control_function(
+                io_sys = ModelingToolkitBase.generate_control_function(
                 sys, [u], [d];
                 simplify, split, disturbance_argument = true
             )
