@@ -64,18 +64,18 @@ vals = [1, 2, 3, 4]
 
 u = u"m^3/s"
 @variables begin
-    x = [1, 2], [connect = Flow, unit = u]
+    x[1:2] = [1, 2], [connect = Flow, unit = u]
     y = 2
 end
 
-@test getmetadata(x, VariableDefaultValue) == [1, 2]
+@test ModelingToolkitBase.getdefault(x) == [1, 2]
 @test getmetadata(x, VariableConnectType) == Flow
 @test getmetadata(x, VariableUnit) == u
 @test getmetadata(y, VariableDefaultValue) === 2
 
-@variables x = [1, 2] [connect = Flow, unit = u] y = 2
+@variables x[1:2] = [1, 2] [connect = Flow, unit = u] y = 2
 
-@test getmetadata(x, VariableDefaultValue) == [1, 2]
+@test ModelingToolkitBase.getdefault(x) == [1, 2]
 @test getmetadata(x, VariableConnectType) == Flow
 @test getmetadata(x, VariableUnit) == u
 @test getmetadata(y, VariableDefaultValue) === 2

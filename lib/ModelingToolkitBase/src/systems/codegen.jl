@@ -313,10 +313,13 @@ function generate_rhs(
             (; wrap_code = (wrap_oop_similar_for_residual ∘ oop_wrap, iip_wrap))
         )
     end
+    # Very large right-hand sides are chunked automatically. This is sound because in-place
+    # SciML functions are called with an `out` (`du`) that is distinct from `u` and `p`, as the
+    # SciMLBase in-place function documentation states for `f(du, u, p, t)`.
     res = build_function_wrapper(
         sys, rhss, collect(Any, args), BuildFunctionWrapperOptions(;
             p_start, extra_assignments, u_arg, n_param_buffers, p_end_kw...,
-            codegen_function_options = codegen_opts
+            chunk_size = -1, codegen_function_options = codegen_opts
         )
     )
     nargs = length(args) - length(p) + 1
@@ -1246,12 +1249,15 @@ function scalarized_dims_reduction(ex::SymbolicT)
         SU.is_array_shape(SU.shape(arg)) ? collect(arg)::Array{SymbolicT} : arg
     end
     mapped_axes = axes(first(x for x in xs if x isa Array))
+    nd = length(mapped_axes)
+    # like Julia, `dims > ndims` reduces over a trailing singleton axis
+    reduced_axis = d <= nd ? mapped_axes[d] : Base.OneTo(1)
     elements = Array{SymbolicT}(undef, Tuple(length.(SU.shape(ex)::SU.ShapeVecT)))
     for I in CartesianIndices(elements)
         acc = op.init
-        for j in mapped_axes[d]
+        for j in reduced_axis
             J = CartesianIndex(
-                ntuple(length(mapped_axes)) do i
+                ntuple(nd) do i
                     i == d ? j : first(mapped_axes[i]) + I[i] - 1
                 end
             )
@@ -1896,7 +1902,7 @@ struct CheckInvalidAndTrackNamespaced
 end
 
 function (pred::CheckInvalidAndTrackNamespaced)(x::SymbolicT)
-    isatomic1 = SU.default_is_atomic(x)
+    isatomic1 = SU.default_is_atomic(x) || is_symstruct_field(x)
     isatomic1 || return false
 
     newx = get(pred.ns_map, x, nothing)
@@ -1915,6 +1921,8 @@ function (pred::CheckInvalidAndTrackNamespaced)(x::SymbolicT)
         end
     end
     arrx in pred.simplevars && return true
+    # `simplevars` keys struct variables on the whole record, so also try the record.
+    split_field_access(arrx)[1] in pred.simplevars && return true
     if x in pred.dervars
         push!(pred.present_dervars, x)
         return true
@@ -2506,7 +2514,7 @@ function generate_custom_function(
             sys, exprs,
             [Any[dvs]; p; collect(cachesyms); Any[get_iv(sys)]],
             BuildFunctionWrapperOptions(;
-                u_arg = 1,
+                u_arg = 1, n_param_buffers = length(p),
                 codegen_function_options = opts.codegen
             )
         )

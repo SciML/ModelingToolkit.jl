@@ -146,11 +146,22 @@ Domain connectors have a single `Flow` unknown. Stream connectors have a single
 a "regular" connector.
 """
 function connector_type(sys::AbstractSystem)
-    unkvars = get_unknowns(sys)
+    n_stream, n_flow, _ = connector_variable_counts(sys)
+    (n_stream > 0 && n_flow > 1) &&
+        error("There are multiple flow variables in the stream connector $(nameof(sys))!")
+    if n_flow == 1 && length(get_unknowns(sys)) == 1
+        return DomainConnector()
+    end
+    return n_stream > 0 ? StreamConnector() : RegularConnector()
+end
+
+# The numbers of stream, flow, and regular (not input, output, stream, or flow) unknowns
+# of the connector `sys`.
+function connector_variable_counts(sys::AbstractSystem)
     n_stream = 0
     n_flow = 0
-    n_regular = 0 # unknown that is not input, output, stream, or flow.
-    for s in unkvars
+    n_regular = 0
+    for s in get_unknowns(sys)
         vtype = get_connection_type(s)
         if vtype === Stream
             isarray(s) && error(lazy"Array stream variables are not supported. Got $s.")
@@ -161,18 +172,47 @@ function connector_type(sys::AbstractSystem)
             n_regular += 1
         end
     end
-    (n_stream > 0 && n_flow > 1) &&
-        error("There are multiple flow variables in the stream connector $(nameof(sys))!")
-    if n_flow == 1 && length(unkvars) == 1
-        return DomainConnector()
+    return n_stream, n_flow, n_regular
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Emit the `unbalanced_connector` diagnostic for each connector in the hierarchy of `sys`
+that has a different number of flow and regular variables. `mtkcompile` calls this with
+its `verbose`, so the diagnostic shows once for each unbalanced connector type. A
+connector whose own stored verbosity (see `System(...; verbose)`) silences the toggle is
+skipped.
+"""
+function warn_unbalanced_connectors(sys::AbstractSystem, verbose::MTKVerbosity)
+    _toggle_enabled(verbose, :unbalanced_connector) || return nothing
+    seen = Set{Union{GlobalRef, Symbol}}()
+    stack = AbstractSystem[sys]
+    while !isempty(stack)
+        s = pop!(stack)
+        append!(stack, get_systems(s))
+        isconnector(s) || continue
+        get_connector_type(s) isa DomainConnector && continue
+        isframe(s) && continue
+        # connectors from the same `@connector` function have the same `gui_metadata`
+        gui = get_gui_metadata(s)
+        key = gui === nothing ? nameof(s) : gui.type
+        key in seen && continue
+        # the author of a connector can silence it with `System(...; verbose)`
+        _toggle_enabled(_system_verbosity(s), :unbalanced_connector) || continue
+        _, n_flow, n_regular = connector_variable_counts(s)
+        n_flow == n_regular && continue
+        # record the type only when it emits, so a balanced instance of the same
+        # connector type does not hide an unbalanced one
+        push!(seen, key)
+        @SciMLMessage(verbose, :unbalanced_connector) do
+            "Connector $key contains $n_flow flow variables, yet $n_regular regular " *
+                "(non-flow, non-stream, non-input, non-output) variables. " *
+                "This could lead to imbalanced model that are difficult to debug. " *
+                "Consider marking some of the regular variables as input/output variables."
+        end
     end
-    if n_flow != n_regular && !isframe(sys)
-        @warn "$(nameof(sys)) contains $n_flow flow variables, yet $n_regular regular " *
-            "(non-flow, non-stream, non-input, non-output) variables. " *
-            "This could lead to imbalanced model that are difficult to debug. " *
-            "Consider marking some of the regular variables as input/output variables."
-    end
-    return n_stream > 0 ? StreamConnector() : RegularConnector()
+    return nothing
 end
 
 is_domain_connector(s) = isconnector(s) && get_connector_type(s) === DomainConnector()
@@ -877,6 +917,25 @@ end
 """
     $(TYPEDSIGNATURES)
 
+Push the connection equation `lhs ~ rhs` onto `eqs`, expanding it into one equation per
+leaf if the connected variable is a symbolic struct. A record has no arithmetic, so the
+whole-record equation would fail to canonicalize into residual form downstream. This is
+the same reason the `Flow` branch below emits scalar equations rather than array ones.
+"""
+function push_connection_equation!(eqs::Vector{Equation}, lhs::SymbolicT, rhs::SymbolicT)
+    if Symbolics.issymstruct(lhs)
+        for leaf in record_leaves(lhs)
+            push!(eqs, leaf ~ record_leaf_entry(leaf, lhs, rhs))
+        end
+    else
+        push!(eqs, lhs ~ rhs)
+    end
+    return eqs
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
 Generate connection equations for the connection sets given by `csets`. This does not
 handle stream connections. Return the generated equations and the stream connection sets.
 """
@@ -928,7 +987,9 @@ function generate_connection_equations_and_stream_connections(
             root_var = variable_from_vertex(sys, root_vert)::SymbolicT
             for cvert in cset
                 isequal(cvert, root_vert) && continue
-                push!(eqs, variable_from_vertex(sys, cvert)::SymbolicT ~ root_var)
+                push_connection_equation!(
+                    eqs, variable_from_vertex(sys, cvert)::SymbolicT, root_var
+                )
             end
         elseif vtype === Stream
             push!(stream_connections, cset)
@@ -952,9 +1013,10 @@ function generate_connection_equations_and_stream_connections(
                 is_o = isoutput(vert)
                 all_io &= is_i || is_o
                 all_io || break
-                if cvert.isouter && is_i && outer_input === nothing
+                isouter = cset[i].isouter
+                if isouter && is_i && outer_input === 0
                     outer_input = i
-                elseif !cvert.isouter && is_o && inner_output === nothing
+                elseif !isouter && is_o && inner_output === 0
                     inner_output = i
                 end
             end
@@ -965,13 +1027,13 @@ function generate_connection_equations_and_stream_connections(
                 root_var = vars[root_vert_i]
                 for (i, var) in enumerate(vars)
                     i == root_vert_i && continue
-                    push!(eqs, var ~ root_var)
+                    push_connection_equation!(eqs, var, root_var)
                 end
             else
                 base = vars[1]
                 for i in 2:length(cset)
                     v = vars[i]
-                    push!(eqs, base ~ v)
+                    push_connection_equation!(eqs, base, v)
                 end
             end
         end
@@ -1047,6 +1109,20 @@ struct EquationSourceInformation
     A mask indicating which equations arise from `connect` statements.
     """
     is_connection_equation::BitVector
+    """
+    For each initialization equation, a `Vector{Symbol}` denoting the path from the root
+    system to the subsystem where this equation comes from, following the same convention
+    as `eqs_source`. Empty if initialization equation sources are not tracked.
+    """
+    init_eqs_source::Vector{Vector{Symbol}}
+end
+
+function EquationSourceInformation(
+        eqs_source::Vector{Vector{Symbol}}, is_connection_equation::BitVector
+    )
+    return EquationSourceInformation(
+        eqs_source, is_connection_equation, Vector{Symbol}[]
+    )
 end
 
 """
@@ -1065,6 +1141,8 @@ function expand_connections(sys::AbstractSystem, ::Val{with_source_info} = Val(f
     ceqs, instream_csets = generate_connection_equations_and_stream_connections(sys, csets)
     source_visitor = SourceInformationVisitor()
     eqs = with_source_info ? equations(sys, source_visitor) : equations(sys)
+    init_source_visitor = SourceInformationVisitor()
+    init_eqs = with_source_info ? initialization_equations(sys, init_source_visitor) : nothing
     stream_eqs, instream_subs = expand_instream(instream_csets, sys; tol = tol, eqs)
 
     if with_source_info
@@ -1086,7 +1164,11 @@ function expand_connections(sys::AbstractSystem, ::Val{with_source_info} = Val(f
             push!(sources, Symbol[])
             push!(is_connection_equation, true)
         end
-        source_info = EquationSourceInformation(sources, is_connection_equation)
+        init_sources = init_source_visitor.sources
+        foreach(reverse!, init_sources)
+        source_info = EquationSourceInformation(
+            sources, is_connection_equation, init_sources
+        )
     else
         source_info = nothing
         eqs = [eqs; ceqs; stream_eqs]
@@ -1107,6 +1189,9 @@ function expand_connections(sys::AbstractSystem, ::Val{with_source_info} = Val(f
     @set! sys.eqs = eqs
     @set! sys.bindings = newbinds
     @set! sys.parent = _sys
+    # Reuse the initialization equations that the source information was collected from,
+    # so that the two are aligned by construction.
+    init_eqs === nothing || (@set! sys.initialization_eqs = init_eqs)
 
     if with_source_info
         return sys, source_info
