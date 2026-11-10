@@ -244,21 +244,90 @@ variable to an expression representing its value. In case `varmap` already conta
 entry for `eq.lhs`, insert the reverse mapping if `eq.rhs` is not a number.
 """
 function add_observed_equations!(varmap::AtomicArrayDict{SymbolicT}, eqs::Vector{Equation}, bound_ps::Union{Nothing, ROSymmapT} = nothing)
+    # `write_possibly_indexed_array!` rebuilds the whole array for every element written,
+    # which is quadratic for the element-wise observed equations of a scalarized array.
+    # Element writes are collected in a buffer per array and stored once. Later equations
+    # may read elements written earlier, so element reads of a buffered array are served
+    # from the buffer, and any other access to the array stores the buffer first.
+    buffers = Dict{SymbolicT, Array{SymbolicT}}()
     for eq in eqs
-        if get_possibly_indexed(varmap, eq.lhs, COMMON_NOTHING) !== COMMON_NOTHING
+        if lookup_observed(varmap, buffers, eq.lhs) !== COMMON_NOTHING
             SU.isconst(eq.rhs) && continue
-            get_possibly_indexed(varmap, eq.rhs, COMMON_NOTHING) !== COMMON_NOTHING && continue
+            lookup_observed(varmap, buffers, eq.rhs) !== COMMON_NOTHING && continue
             bound_ps isa ROSymmapT && has_possibly_indexed_key(parent(bound_ps), eq.rhs) && continue
             Moshi.Match.@match eq.rhs begin
                 BSImpl.Term(; f, args) && if f isa SymbolicT end => nothing
                 BSImpl.Sym() => nothing
                 _ => continue
             end
-            write_possibly_indexed_array!(varmap, eq.rhs, eq.lhs, COMMON_NOTHING)
+            write_observed!(varmap, buffers, eq.rhs, eq.lhs)
         else
-            write_possibly_indexed_array!(varmap, eq.lhs, eq.rhs, COMMON_NOTHING)
+            write_observed!(varmap, buffers, eq.lhs, eq.rhs)
         end
     end
+    flush_observed_buffers!(varmap, buffers)
+    return
+end
+
+# Store all buffered element writes in `varmap`.
+function flush_observed_buffers!(varmap::AtomicArrayDict{SymbolicT}, buffers::Dict{SymbolicT, Array{SymbolicT}})
+    for arr in collect(keys(buffers))
+        store_observed_buffer!(varmap, buffers, arr)
+    end
+    return
+end
+
+# Store the buffered element writes of the array `x` belongs to, if any, in `varmap`.
+function store_observed_buffer!(varmap::AtomicArrayDict{SymbolicT}, buffers::Dict{SymbolicT, Array{SymbolicT}}, x::SymbolicT)
+    arr, _ = split_indexed_var(x)
+    buffer = pop!(buffers, arr, nothing)
+    buffer === nothing && return
+    varmap[arr] = if all(SU.isconst, buffer)
+        BSImpl.Const{VartypeT}(unwrap_const.(buffer))
+    else
+        BSImpl.Const{VartypeT}(buffer)
+    end
+    return
+end
+
+# `get_possibly_indexed(varmap, x, COMMON_NOTHING)`, seeing the buffered element writes.
+function lookup_observed(varmap::AtomicArrayDict{SymbolicT}, buffers::Dict{SymbolicT, Array{SymbolicT}}, x::SymbolicT)
+    arr, isarr = split_indexed_var(x)
+    buffer = get(buffers, arr, nothing)
+    if buffer !== nothing
+        if isarr && ndims(x) == 0 && has_const_int_indices(x)
+            return buffer[get_stable_index(x)]
+        end
+        store_observed_buffer!(varmap, buffers, x)
+    end
+    return get_possibly_indexed(varmap, x, COMMON_NOTHING)
+end
+
+# `write_possibly_indexed_array!(varmap, k, v, COMMON_NOTHING)`, buffering element writes.
+function write_observed!(varmap::AtomicArrayDict{SymbolicT}, buffers::Dict{SymbolicT, Array{SymbolicT}}, k::SymbolicT, v::SymbolicT)
+    arr, isarr = split_indexed_var(k)
+    if !isarr || ndims(k) != 0
+        store_observed_buffer!(varmap, buffers, k)
+        write_possibly_indexed_array!(varmap, k, v, COMMON_NOTHING)
+        return
+    end
+    # As in `write_possibly_indexed_array!`, elements of an empty array are not
+    # written and do not create the key.
+    isempty(SU.stable_eachindex(arr)) && return
+    idx = get_stable_index(k)
+    buffer = get(buffers, arr, nothing)
+    if buffer === nothing
+        if haskey(varmap, arr)
+            buffer = collect(varmap[arr])
+        else
+            buffer = fill(COMMON_NOTHING, size(arr))
+            # Create the key now, as the unbuffered write would, so the keys of
+            # `varmap` are inserted in the same order.
+            varmap[arr] = BSImpl.Const{VartypeT}(copy(buffer))
+        end
+        buffers[arr] = buffer
+    end
+    buffer[idx] = v
     return
 end
 
@@ -285,9 +354,9 @@ function Base.showerror(io::IO, err::UnexpectedSymbolicValueInVarmap)
         `symbolic_u0 = true`. In case the initial conditions are not cyclic but \
         require more substitutions to resolve, increase `substitution_limit`. To report \
         cycles in initial conditions of unknowns/parameters, pass \
-        `warn_cyclic_dependency = true`. If the cycles are still not reported, you \
-        may need to pass a larger value for `circular_dependency_max_cycle_length` \
-        or `circular_dependency_max_cycles`.
+        `verbose = MTKVerbosity(cyclic_dependency = SciMLLogging.WarnLevel)`. If the \
+        cycles are still not reported, you may need to pass a larger value for \
+        `circular_dependency_max_cycle_length` or `circular_dependency_max_cycles`.
         """
     )
 end
@@ -584,30 +653,76 @@ Performs symbolic substitution on the values in `varmap` for the keys in `vars`,
 in `varmap`, it is ignored.
 """
 function evaluate_varmap!(varmap::AbstractDict{SymbolicT, SymbolicT}, vars; limit = 100, allow_symbolic = false)
+    # Array keys whose substitution changed nothing; no rule can apply to them later.
+    settled = Set{SymbolicT}()
     for k in vars
         arr, _ = split_indexed_var(unwrap(k))
+        arr in settled && continue
         v = get(varmap, arr, COMMON_NOTHING)
         v === COMMON_NOTHING && continue
         SU.isconst(v) && continue
-        varmap[arr] = fixpoint_sub(v, varmap; maxiters = limit, fold = Val(true), warn_maxiters = !allow_symbolic)
+        newv = fixpoint_sub(v, varmap; maxiters = limit, fold = Val(true), warn_maxiters = !allow_symbolic)
+        varmap[arr] = newv
+        isequal(newv, v) && push!(settled, arr)
     end
     return
+end
+
+# The buffer of `arr` if `k` is a scalar element `arr[idxs...]` with constant integer
+# indices of an array whose value is a constant array or an array literal, else `nothing`.
+function pending_element_buffer!(dd::PendingWritesWrapper, k::SymbolicT)
+    return Moshi.Match.@match k begin
+        BSImpl.Term(; f, args) && if f === getindex && has_const_int_indices(k) end => begin
+            SU.is_array_shape(SU.shape(k)) && return nothing
+            arr = args[1]
+            buffer = get(dd.buffers, arr, nothing)
+            buffer === nothing || return buffer
+            val = get(dd.base.dict, arr, COMMON_NOTHING)
+            val === COMMON_NOTHING && return nothing
+            # other array expressions keep `(expr)[i]` on first read so that rules for
+            # `expr` still apply
+            SU.isconst(val) || SU.iscall(val) && SU.operation(val) === SU.array_literal ||
+                return nothing
+            shape = SU.shape(val)
+            SU.is_array_shape(shape) && !(shape isa SU.Unknown) || return nothing
+            return dd.buffers[arr] = collect(val)
+        end
+        _ => return nothing
+    end
 end
 
 function evaluate_varmap!(
         ir::IRStructure{SymReal}, varmap::AtomicArrayDictSubstitutionWrapper, vars;
         limit = 100, allow_symbolic = false
     )
+    pending = PendingWritesWrapper(varmap)
     subber = Symbolics.FixpointSubstituter(
-        SU.IRSubstituter{true}(ir, varmap; filterer = Symbolics.FPSubFilterer{Nothing}());
+        SU.IRSubstituter{true}(ir, pending; filterer = Symbolics.FPSubFilterer{Nothing}());
         maxiters = limit, warn_maxiters = !allow_symbolic
     )
     for k in vars
+        k = unwrap(k)
+        buffer = pending_element_buffer!(pending, k)
+        if buffer !== nothing
+            idx = get_stable_index(k)
+            v = buffer[idx]::SymbolicT
+            if v !== varmap.default
+                if !SU.isconst(v)
+                    newv = subber(v)
+                    # substitution flushes the buffer if it reads this array
+                    pending_element_buffer!(pending, k)[idx] = newv
+                end
+                continue
+            end
+        end
+        # holes and every other kind of key take the ordinary path
+        flush_pending_writes!(pending)
         v = get(varmap, k, COMMON_NOTHING)
         v === COMMON_NOTHING && continue
         SU.isconst(v) && continue
         varmap[k] = subber(v)
     end
+    flush_pending_writes!(pending)
     return
 end
 
@@ -705,7 +820,7 @@ already contain that key.
 """
 function add_initials!(sys::AbstractSystem, op::SymmapT)
     for p in get_ps(sys)
-        haskey(op, p) && continue
+        get_possibly_indexed(op, p, COMMON_NOTHING) === COMMON_NOTHING || continue
         Moshi.Match.@match p begin
             BSImpl.Term(; f, args) && if f isa Initial end => begin
                 write_possibly_indexed_array!(op, p, COMMON_FALSE, COMMON_FALSE)
@@ -770,7 +885,7 @@ Note that the getter ONLY works for problem-like objects, since it generates an 
 function. It does NOT work for solutions.
 """
 Base.@nospecializeinfer function concrete_getu(
-        indp, syms; wrap_as_any = false,
+        indp, syms; despecialize = false, wrap_as_any = despecialize,
         eval_expression, eval_module, force_time_independent = false, kwargs...
     )
     @nospecialize
@@ -968,8 +1083,10 @@ end
 
 @inline _static_buffer(bufs::Tuple, ::StaticBufferIndex{P, I}) where {P, I} = bufs[I]
 
-Base.@nospecializeinfer function __specialize_templates(template::Vector{Any}, elem_types::Set{DataType})
-    if length(template) <= 4
+Base.@nospecializeinfer function __specialize_templates(
+        template::Vector{Any}, elem_types::Set{DataType}, despecialize::Bool = false
+    )
+    if !despecialize && length(template) <= 4
         return Tuple(template)
     elseif length(elem_types) <= 4
         return Vector{Union{collect(elem_types)...}}(template)
@@ -1002,7 +1119,7 @@ function cached_template_getu(srcsys::AbstractSystem, batch::Vector{SymbolicT}; 
     end
 end
 
-function CopyParamsByTemplate(srcsys::AbstractSystem, syms::AbstractArray{SymbolicT}; kws...)
+function CopyParamsByTemplate(srcsys::AbstractSystem, syms::AbstractArray{SymbolicT}; despecialize = false, kws...)
     template = []
     elem_types = Set{DataType}()
     iv = get_iv(srcsys)
@@ -1144,18 +1261,18 @@ function CopyParamsByTemplate(srcsys::AbstractSystem, syms::AbstractArray{Symbol
     end
 
     return CopyParamsByTemplate{true}(
-        __specialize_templates(template, elem_types), size(syms), fallback_getter
+        __specialize_templates(template, elem_types, despecialize), size(syms), fallback_getter
     )
 end
 
-function CopyParamsByTemplate(srcsys::AbstractSystem, syms::AbstractArray; kws...)
+function CopyParamsByTemplate(srcsys::AbstractSystem, syms::AbstractArray; despecialize = false, kws...)
     template = []
     elem_types = Set{DataType}()
     for sym in syms
-        push!(template, CopyParamsByTemplate(srcsys, sym; kws...))
+        push!(template, CopyParamsByTemplate(srcsys, sym; despecialize, kws...))
         push!(elem_types, typeof(template[end]))
     end
-    return CopyParamsByTemplate{false}(__specialize_templates(template, elem_types), size(syms))
+    return CopyParamsByTemplate{false}(__specialize_templates(template, elem_types, despecialize), size(syms))
 end
 
 struct MTKParametersReconstructor{T, I, D, C, N}
@@ -1300,14 +1417,12 @@ function MTKParametersReconstructor(
         Returns(())
     else
         ic = get_index_cache(dstsys)
-        buftypes = Tuple(
-            map(ic.nonnumeric_buffer_sizes) do bufsize
-                Vector{bufsize.type}
-            end
-        )
         # nonnumerics retain the assigned buffer type without narrowing
-        Base.Fix1(broadcast, _p_constructor) ∘
-            Base.Fix1(Broadcast.BroadcastFunction(call), buftypes) ∘ Tuple ∘ CopyParamsByTemplate(srcsys, syms[5]; kwargs...)
+        getters = Tuple(
+            NonnumericBufferGetter{Vector{bufsize.type}}(CopyParamsByTemplate(srcsys, buf; kwargs...))
+                for (bufsize, buf) in zip(ic.nonnumeric_buffer_sizes, syms[5])
+        )
+        NonnumericBuffersGetter(getters, _p_constructor)
     end
 
     # `DiffCache` buffers live in `caches` and are taken from the destination, not `src`.
@@ -1324,6 +1439,34 @@ end
 function call(f, args...)
     return f(args...)
 end
+
+"""
+    $(TYPEDEF)
+
+Getter for one nonnumeric buffer of an `MTKParametersReconstructor`: the values `getter` returns,
+converted to the buffer's type `T`.
+"""
+struct NonnumericBufferGetter{T, G}
+    getter::G
+end
+
+NonnumericBufferGetter{T}(getter::G) where {T, G} = NonnumericBufferGetter{T, G}(getter)
+
+(b::NonnumericBufferGetter{T})(src) where {T} = T(b.getter(src))
+
+"""
+    $(TYPEDEF)
+
+The nonnumeric portion of an `MTKParametersReconstructor`: a tuple of `NonnumericBufferGetter`s,
+one per nonnumeric buffer of the destination, each result passed to `p_constructor`. The result
+is a tuple of known length and types.
+"""
+struct NonnumericBuffersGetter{G <: Tuple, P}
+    getters::G
+    p_constructor::P
+end
+
+(nb::NonnumericBuffersGetter)(src) = map(g -> nb.p_constructor(g(src)), nb.getters)
 
 """
     $(TYPEDSIGNATURES)
@@ -1454,6 +1597,14 @@ function (rip::ReconstructInitializeprob)(srcvalp, dstvalp)
     return u0, newp
 end
 
+struct InitializeprobParameterMap{G}
+    getter::G
+end
+
+function (pm::InitializeprobParameterMap)(prob, initsol)
+    return pm.getter(initsol, prob)
+end
+
 """
     $(TYPEDSIGNATURES)
 
@@ -1462,16 +1613,21 @@ Given `sys` and its corresponding initialization system `initsys`, return the
 """
 function construct_initializeprobpmap(
         sys::AbstractSystem, initsys::AbstractSystem; p_constructor = identity, eval_expression, eval_module,
-        kwargs...
+        despecialize = false, kwargs...
     )
     @assert is_initializesystem(initsys)
     if is_split(sys)
-        return let getter = MTKParametersReconstructor(
-                initsys, sys; initials = true, unwrap_initials = true, p_constructor,
-                eval_expression, eval_module, kwargs...
-            )
-            function initprobpmap_split(prob, initsol)
-                return getter(initsol, prob)
+        getter = MTKParametersReconstructor(
+            initsys, sys; initials = true, unwrap_initials = true, p_constructor,
+            eval_expression, eval_module, despecialize, kwargs...
+        )
+        if despecialize
+            return InitializeprobParameterMap(getter)
+        else
+            return let getter = getter
+                function initprobpmap_split(prob, initsol)
+                    return getter(initsol, prob)
+                end
             end
         end
     else
@@ -1890,6 +2046,12 @@ function _static_initialization_buffer(prototype, values)
         return SVector{length(values), T}(values)
     elseif P <: StaticArray && isbitstype(T)
         return MVector{length(values), T}(values)
+    elseif T === Bool && (P <: BitArray || (P <: BlockedArray && fieldtype(P, :blocks) <: BitArray))
+        buffer = BitVector(undef, length(values))
+        for (i, value) in enumerate(values)
+            buffer[i] = value
+        end
+        return buffer
     else
         # A plain mutable buffer stays plain. The map rebuilds `p`, and solve-time
         # initialization assigns the result straight back (`integrator.p = pmap(...)`),
@@ -2032,7 +2194,13 @@ function _construct_fullspecialize_initializeprobpmap(
                 buffer = _parameter_buffer_expr(prototype, raw, idxs, p_constructor)
                 if field === :discrete
                     sizes = get_index_cache(sys).discrete_buffer_sizes[buffer_idx]
-                    block_sizes = Expr(:call, Expr(:curly, SVector, length(sizes), Int))
+                    # Block sizes match the container `MTKParameters` builds: a `Vector{Int}`,
+                    # passed through `p_constructor` when one is given.
+                    block_sizes = if p_constructor === identity
+                        Expr(:vect)
+                    else
+                        Expr(:call, Expr(:curly, SVector, length(sizes), Int))
+                    end
                     for sz in sizes
                         push!(block_sizes.args, sz.length)
                     end
@@ -2171,6 +2339,60 @@ function operating_point_preprocess(sys::AbstractSystem, op; name = "operating_p
     return op
 end
 
+"""
+    $(TYPEDEF)
+
+Error thrown when an element of an array parameter is given the value `missing` in the
+operating point. Array parameters are atomic: only the whole array can be marked as
+solvable during initialization.
+"""
+struct ElementwiseMissingArrayParameterError <: Exception
+    """
+    The array parameters with at least one element given as `missing`.
+    """
+    arrays::Vector{SymbolicT}
+    """
+    The elements given as `missing`.
+    """
+    elements::Vector{SymbolicT}
+end
+
+function Base.showerror(io::IO, err::ElementwiseMissingArrayParameterError)
+    println(
+        io, """
+        Individual elements of the array parameter(s) $(join(err.arrays, ", ")) were given \
+        the value `missing` in the operating point: $(join(err.elements, ", ")). Array \
+        parameters are atomic, so an array parameter can only be solved for during \
+        initialization as a whole. Specify the entire array instead, for example \
+        `$(first(err.arrays)) => missing`, and provide a guess for the entire array, for \
+        example `guesses = [$(first(err.arrays)) => [...]]`.
+        """
+    )
+    return
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Throw an [`ElementwiseMissingArrayParameterError`](@ref) if `op` maps an element of an
+array parameter of `sys` to `missing`.
+"""
+function check_elementwise_missing_array_parameters(sys::AbstractSystem, op::AbstractDict{SymbolicT, SymbolicT})
+    arrays = SymbolicT[]
+    elements = SymbolicT[]
+    for (k, v) in op
+        v === COMMON_MISSING || continue
+        arr, isarr = split_indexed_var(k)
+        isarr || continue
+        is_parameter(sys, arr) || continue
+        any(isequal(arr), arrays) || push!(arrays, arr)
+        push!(elements, k)
+    end
+    sort!(elements; by = string)
+    isempty(arrays) || throw(ElementwiseMissingArrayParameterError(arrays, elements))
+    return
+end
+
 function build_operating_point(sys::AbstractSystem, op; fast_path = false)
     if !fast_path
         op = operating_point_preprocess(sys, op)
@@ -2179,12 +2401,15 @@ function build_operating_point(sys::AbstractSystem, op; fast_path = false)
     # and doesn't override them. This is because explicit `nothing` values in `op`
     # should be considered as overrides for initial conditions in `ics`.
     map!(x -> @something(x, CommonSentinel()), values(op))
-    op = as_atomic_dict_with_defaults(Dict{SymbolicT, SymbolicT}(op), COMMON_NOTHING)
+    op = Dict{SymbolicT, SymbolicT}(op)
+    check_elementwise_missing_array_parameters(sys, op)
+    op = as_atomic_dict_with_defaults(op, COMMON_NOTHING)
     ics = add_toterms(initial_conditions(sys); replace = is_discrete_system(sys))
     left_merge!(op, ics)
     map!(values(op)) do v
         v === COMMON_SENTINEL && return COMMON_NOTHING
         Symbolics.isarraysymbolic(v) || return v
+        is_numeric_const_array(v) && return v
         any(Base.Fix2(===, COMMON_SENTINEL) ∘ Base.Fix1(getindex, v), SU.stable_eachindex(v)) || return v
 
         new_v = map(SU.stable_eachindex(v)) do i
@@ -2237,6 +2462,12 @@ problem — none of which are meaningful to a `*Function` constructor on their o
 to resolve any `Symbol` keys in `guesses` to the corresponding symbolic variable of `sys`
 (via [`symbols_to_symbolics!`](@ref)) before `guesses` is converted to a `SymmapT`.
 
+The `verbosity::MTKVerbosity` field carries the diagnostic settings for problem
+construction. The keyword constructor assembles it from the `verbose` keyword (an
+`MTKVerbosity`, a `SciMLLogging` preset, or a `Bool`); the deprecated boolean keywords
+`warn_initialize_determined` and `warn_cyclic_dependency` remain accepted and, when
+explicitly passed, override the corresponding toggles.
+
 `expression` is a type parameter (matching `SciMLFunctionOptions`) so that `fn_opts` is
 concretely typed; `__process_SciMLProblem` itself never branches on it.
 
@@ -2253,7 +2484,7 @@ struct SciMLProblemOptions{expression}
     build_initializeprob::Bool
     implicit_dae::Bool
     guesses::SymmapT
-    warn_initialize_determined::Bool
+    verbosity::MTKVerbosity
     initialization_eqs::Vector{Equation}
     fully_determined::Union{Nothing, Bool}
     check_initialization_units::Bool
@@ -2262,7 +2493,6 @@ struct SciMLProblemOptions{expression}
     p_constructor::Any
     check_length::Bool
     symbolic_u0::Bool
-    warn_cyclic_dependency::Bool
     circular_dependency_max_cycle_length::Int
     circular_dependency_max_cycles::Int
     initsys_mtkcompile_kwargs::Any
@@ -2288,11 +2518,12 @@ function SciMLProblemOptions(
         # opts::SciMLProblemOptions)` always recomputes and overrides them from `op`.
         floatT = Float64, u0Type = Nothing, u0_eltype = nothing,
         build_initializeprob::Bool = false, implicit_dae::Bool = false, guesses = AnyDict(),
-        warn_initialize_determined::Bool = true, initialization_eqs = Equation[],
+        verbose = nothing, warn_initialize_determined = nothing,
+        initialization_eqs = Equation[],
         fully_determined = nothing, check_initialization_units::Bool = false,
         tofloat::Bool = true, u0_constructor = identity, p_constructor = identity,
         check_length::Bool = true, symbolic_u0::Bool = false,
-        warn_cyclic_dependency::Bool = false, circular_dependency_max_cycle_length,
+        warn_cyclic_dependency = nothing, circular_dependency_max_cycle_length,
         circular_dependency_max_cycles = 10, initsys_mtkcompile_kwargs = (;),
         substitution_limit = 100, use_scc::Bool = true, time_dependent_init::Bool,
         algebraic_only::Bool = false, missing_guess_value = default_missing_guess_value(),
@@ -2305,11 +2536,23 @@ function SciMLProblemOptions(
         symbols_to_symbolics!(sys, guesses)
         guesses = as_atomic_dict_with_defaults(Dict{SymbolicT, SymbolicT}(guesses), COMMON_NOTHING)
     end
+    verbosity = _route_problem_verbose(verbose)
+    # Deprecated boolean keywords override the corresponding toggles when explicitly
+    # passed (`nothing` = not passed).
+    verbosity = _deprecated_override_toggle(
+        verbosity, warn_initialize_determined,
+        :warn_initialize_determined, :SciMLProblemOptions,
+        _INITIALIZE_DETERMINED_TOGGLES...
+    )
+    verbosity = _deprecated_override_toggle(
+        verbosity, warn_cyclic_dependency, :warn_cyclic_dependency,
+        :SciMLProblemOptions, :cyclic_dependency => WarnLevel
+    )
     return SciMLProblemOptions{E}(
         fn_opts, floatT, u0Type, u0_eltype, build_initializeprob, implicit_dae, guesses,
-        warn_initialize_determined, initialization_eqs, fully_determined,
+        verbosity, initialization_eqs, fully_determined,
         check_initialization_units, tofloat, u0_constructor, p_constructor, check_length,
-        symbolic_u0, warn_cyclic_dependency, circular_dependency_max_cycle_length,
+        symbolic_u0, circular_dependency_max_cycle_length,
         circular_dependency_max_cycles, initsys_mtkcompile_kwargs, substitution_limit,
         use_scc, time_dependent_init, algebraic_only, missing_guess_value, allow_incomplete,
         is_initializeprob, is_steadystateprob, return_operating_point, init_compiler_options,
@@ -2354,9 +2597,9 @@ function maybe_build_initialization_problem(
         expression = Val{false}, kwargs...
     )
     (;
-        floatT, implicit_dae, warn_initialize_determined, initialization_eqs,
+        floatT, implicit_dae, initialization_eqs,
         fully_determined, check_initialization_units, u0_constructor, p_constructor,
-        warn_cyclic_dependency, circular_dependency_max_cycle_length,
+        circular_dependency_max_cycle_length,
         circular_dependency_max_cycles, initsys_mtkcompile_kwargs, use_scc,
         time_dependent_init, algebraic_only, missing_guess_value, allow_incomplete,
         is_steadystateprob,
@@ -2427,7 +2670,10 @@ function maybe_build_initialization_problem(
     end
 
     get_initial_unknowns = if time_dependent_init
-        GetUpdatedU0(sys, initsys, op; eval_expression, eval_module, kwargs...)
+        GetUpdatedU0(
+            sys, initsys, op; eval_expression, eval_module,
+            despecialize = specialize === SciMLBase.AutoDespecialize, kwargs...
+        )
     else
         nothing
     end
@@ -2438,7 +2684,8 @@ function maybe_build_initialization_problem(
         use_scc, time_dependent_init,
         ReconstructInitializeprob(
             sys, initsys; u0_constructor,
-            p_constructor, eval_expression, eval_module, is_steadystateprob, kwargs...
+            p_constructor, eval_expression, eval_module, is_steadystateprob,
+            despecialize = specialize === SciMLBase.AutoDespecialize, kwargs...
         ),
         get_initial_unknowns, SetInitialUnknowns(sys), missing_guess_value
     )
@@ -2459,7 +2706,8 @@ function maybe_build_initialization_problem(
                 PromoteToTunableEltype(
                     CopyParamsByTemplate(
                         initializeprob.f.sys, solved_unknowns;
-                        eval_expression, eval_module, kwargs...
+                        eval_expression, eval_module,
+                        despecialize = map_specialize === SciMLBase.AutoDespecialize, kwargs...
                     ),
                     floatT
                 )
@@ -2509,7 +2757,8 @@ function maybe_build_initialization_problem(
             nothing
         else
             construct_initializeprobpmap(
-                sys, initsys; p_constructor, eval_expression, eval_module, kwargs...
+                sys, initsys; p_constructor, eval_expression, eval_module,
+                despecialize = map_specialize === SciMLBase.AutoDespecialize, kwargs...
             )
         end
         initializeprobpmap = if isempty(solved_ddvs)
@@ -2576,15 +2825,18 @@ function maybe_build_initialization_problem(
     end
     missingvars = collect(missingvars)
 
+    buffers = Dict{SymbolicT, Array{SymbolicT}}()
     for (i, v) in enumerate(unknowns(initsys))
-        write_possibly_indexed_array!(temp_op, v, SConst(_u0[i]), COMMON_NOTHING)
+        write_observed!(temp_op, buffers, v, SConst(_u0[i]))
     end
+    flush_observed_buffers!(temp_op, buffers)
     add_observed!(initsys, temp_op)
     left_merge!(temp_op, ModelingToolkitBase.guesses(sys))
     subber = Symbolics.FixpointSubstituter{true}(AADSubWrapper(temp_op))
     for p in missingvars
-        write_possibly_indexed_array!(op, p, subber(p), COMMON_NOTHING)
+        write_observed!(op, buffers, p, subber(p))
     end
+    flush_observed_buffers!(op, buffers)
 
     return (;
         initialization_data = SciMLBase.OverrideInitData(
@@ -2654,10 +2906,10 @@ Base.@nospecializeinfer function process_SciMLProblem(
         symbolic_u0 = false,
         build_initializeprob = supports_initialization(sys),
         implicit_dae = false, t = nothing, guesses = AnyDict(),
-        warn_initialize_determined = true, initialization_eqs = [],
+        verbose = nothing, warn_initialize_determined = nothing, initialization_eqs = [],
         eval_expression = false, eval_module = @__MODULE__, fully_determined = nothing,
         check_initialization_units = false, tofloat = true,
-        check_length = true, warn_cyclic_dependency = false,
+        check_length = true, warn_cyclic_dependency = nothing,
         circular_dependency_max_cycle_length = length(all_symbols(sys)),
         circular_dependency_max_cycles = 10, initsys_mtkcompile_kwargs = (;),
         substitution_limit = 100, use_scc = true, time_dependent_init = is_time_dependent(sys),
@@ -2672,7 +2924,7 @@ Base.@nospecializeinfer function process_SciMLProblem(
     opts = SciMLProblemOptions(
         sys;
         fn_opts, u0_eltype, build_initializeprob, implicit_dae, guesses,
-        warn_initialize_determined, initialization_eqs, fully_determined,
+        verbose, warn_initialize_determined, initialization_eqs, fully_determined,
         check_initialization_units, tofloat, u0_constructor, p_constructor, check_length,
         symbolic_u0, warn_cyclic_dependency, circular_dependency_max_cycle_length,
         circular_dependency_max_cycles, initsys_mtkcompile_kwargs, substitution_limit,
@@ -2719,9 +2971,9 @@ function __process_SciMLProblem(
     )
     (;
         fn_opts, floatT, u0Type, u0_eltype, build_initializeprob, implicit_dae, guesses,
-        warn_initialize_determined, initialization_eqs, fully_determined,
+        verbosity, initialization_eqs, fully_determined,
         check_initialization_units, tofloat, u0_constructor, p_constructor, check_length,
-        symbolic_u0, warn_cyclic_dependency, circular_dependency_max_cycle_length,
+        symbolic_u0, circular_dependency_max_cycle_length,
         circular_dependency_max_cycles, initsys_mtkcompile_kwargs, substitution_limit,
         use_scc, time_dependent_init, algebraic_only, missing_guess_value, allow_incomplete,
         is_initializeprob, is_steadystateprob, return_operating_point, init_compiler_options,
@@ -2795,18 +3047,19 @@ function __process_SciMLProblem(
     end
     add_observed_equations!(op, obs)
 
-    if warn_cyclic_dependency
+    if _toggle_enabled(verbosity, :cyclic_dependency)
         cycles = check_substitution_cycles(
             op, dvs; max_cycle_length = circular_dependency_max_cycle_length,
             max_cycles = circular_dependency_max_cycles
         )
         if !isempty(cycles)
-            buffer = IOBuffer()
-            for cycle in cycles
-                println(buffer, cycle)
+            @SciMLMessage(verbosity, :cyclic_dependency) do
+                buffer = IOBuffer()
+                for cycle in cycles
+                    println(buffer, cycle)
+                end
+                "Cycles in unknowns:\n$(String(take!(buffer)))"
             end
-            msg = String(take!(buffer))
-            @warn "Cycles in unknowns:\n$msg"
         end
     end
 
@@ -2842,18 +3095,19 @@ function __process_SciMLProblem(
 
     check_eqs_u0(eqs, dvs, u0; check_length, kwargs...)
 
-    if warn_cyclic_dependency
+    if _toggle_enabled(verbosity, :cyclic_dependency)
         cycles = check_substitution_cycles(
             op, ps; max_cycle_length = circular_dependency_max_cycle_length,
             max_cycles = circular_dependency_max_cycles
         )
         if !isempty(cycles)
-            buffer = IOBuffer()
-            for cycle in cycles
-                println(buffer, cycle)
+            @SciMLMessage(verbosity, :cyclic_dependency) do
+                buffer = IOBuffer()
+                for cycle in cycles
+                    println(buffer, cycle)
+                end
+                "Cycles in parameters:\n$(String(take!(buffer)))"
             end
-            msg = String(take!(buffer))
-            @warn "Cycles in parameters:\n$msg"
         end
     end
 
@@ -3028,6 +3282,8 @@ function process_kwargs(
         eval_expression = false, eval_module = @__MODULE__,
         _skip_events = false, _skip_tstops = false, tspan = nothing, kwargs...
     )
+    # Read before `filter_kwargs`, which removes an `MTKVerbosity` value.
+    mtk_verbosity = _problem_verbosity(kwargs)
     kwargs = filter_kwargs(kwargs)
     kwargs1 = (;)
 
@@ -3035,7 +3291,8 @@ function process_kwargs(
         if expression == Val{false} && !_skip_events
             cbs = if _has_symbolic_events(sys)
                 @invokelatest process_events(
-                    sys; callback, eval_expression, eval_module, tspan, kwargs...
+                    sys; callback, eval_expression, eval_module, tspan, mtk_verbosity,
+                    kwargs...
                 )
             else
                 callback
@@ -3063,6 +3320,8 @@ function filter_kwargs(kwargs)
     for key in keys(kwargs)
         key in SciMLBase.allowedkeywords || delete!(kwargs, key)
     end
+    # An `MTKVerbosity` stays: `maybe_codegen_scimlproblem` replaces it by the solver
+    # sub-specifier for the problem type (see `_solver_kwargs`).
     return pairs(NamedTuple(kwargs))
 end
 
@@ -3079,13 +3338,20 @@ function (st::SymbolicTstops)(p, tspan)
     end
 end
 
+# Names of the `tspan` arguments of the generated tstops function. Fixed sentinels, not
+# `gensym`s, like the `INITMAP_*` names: `RuntimeGeneratedFunction` types include the
+# argument names, so a `gensym` gives each problem built from the same system a new type,
+# and the solver recompiles.
+const TSTOPS_T0 = :__mtk_tstops_t0
+const TSTOPS_T1 = :__mtk_tstops_t1
+
 function SymbolicTstops(sys::AbstractSystem, opts::GeneratedFunctionOptions)
     expression = expression_val(opts)
     (; eval_expression, eval_module) = opts
     tstops = symbolic_tstops(sys)
     isempty(tstops) && return nothing
-    t0 = gensym(:t0)
-    t1 = gensym(:t1)
+    t0 = TSTOPS_T0
+    t1 = TSTOPS_T1
     tstops = map(tstops) do val
         if is_array_of_symbolics(val) || val isa AbstractArray
             collect(val)
@@ -3154,6 +3420,8 @@ resolve_iip(::Type{Both}, @nospecialize(op)) = !(op isa StaticArray)
 Macro for writing problem/function constructors. Expects a function definition with type
 parameters for `iip` and `specialize`. Generates fallbacks with
 `specialize = SciMLBase.AutoDespecialize` and `iip = Both` (resolved at construction time).
+A different default specialization can be given as the first argument, e.g.
+`@fallback_iip_specialize SciMLBase.FullSpecialize function ...`.
 """
 # Unwrap `@nospecialize(arg)` to get the underlying argument expression.
 # Returns the argument unchanged if not wrapped in @nospecialize.
@@ -3166,6 +3434,14 @@ function _unwrap_nospecialize(arg)
 end
 
 macro fallback_iip_specialize(ex)
+    return fallback_iip_specialize_expr(ex, SciMLBase.AutoDespecialize)
+end
+
+macro fallback_iip_specialize(default_spec, ex)
+    return fallback_iip_specialize_expr(ex, default_spec)
+end
+
+function fallback_iip_specialize_expr(ex, default_spec)
     @assert Meta.isexpr(ex, :function)
     # fnname is ODEProblem{iip, spec}(args...) where {iip, spec}
     # body is function body
@@ -3226,9 +3502,9 @@ macro fallback_iip_specialize(ex)
     fnname_name, curly_args... = fnname_curly.args
     @assert curly_args == where_args
 
-    # callexpr_iip is `ODEProblem{iip, AutoDespecialize}(call_args...)`
+    # callexpr_iip is `ODEProblem{iip, default_spec}(call_args...)`
     callexpr_iip = Expr(
-        :call, Expr(:curly, fnname_name, curly_args[1], SciMLBase.AutoDespecialize), call_args...
+        :call, Expr(:curly, fnname_name, curly_args[1], default_spec), call_args...
     )
     # `ODEProblem{iip}`
     fnname_iip = Expr(:curly, fnname_name, curly_args[1])
@@ -3342,7 +3618,7 @@ Return an expression constructing SciMLProblem `T` with positional arguments `ar
 and keywords `kwargs`.
 """
 function maybe_codegen_scimlproblem(::Type{Val{true}}, T, args::NamedTuple; kwargs...)
-    return build_scimlproblem_expr(T, args; kwargs...)
+    return build_scimlproblem_expr(T, args; _solver_kwargs(T, kwargs)...)
 end
 
 """
@@ -3354,7 +3630,7 @@ function maybe_codegen_scimlproblem(::Type{Val{false}}, ::Type{T}, args::NamedTu
     @nospecialize args kwargs
     # Call `remake` so it runs initialization if it is trivial
     # Use `@invokelatest` to avoid world-age issues with `eval_expression = true`
-    return @invokelatest remake(T(args...; kwargs...))
+    return @invokelatest remake(T(args...; _solver_kwargs(T, kwargs)...))
 end
 
 """

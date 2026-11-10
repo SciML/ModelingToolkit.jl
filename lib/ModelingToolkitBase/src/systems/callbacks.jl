@@ -140,7 +140,10 @@ function AffectSystem(
     isempty(affect) && return nothing
     if isnothing(iv)
         iv = t_nounits
-        @warn "No independent variable specified. Defaulting to t_nounits."
+        @SciMLMessage(
+            "No independent variable specified. Defaulting to t_nounits.",
+            _system_verbosity(parent_sys), :affect_default_independent_variable
+        )
     end
     _unhack_sys = reverse_all_default_reversible_transformations(parent_sys)
     extra_eqs = Equation[alg_equations(_unhack_sys); observed(_unhack_sys)]
@@ -1384,14 +1387,14 @@ Dispatches on the affect type:
 """
 function compile_affect(
         aff::Union{Nothing, Affect}, cb::AbstractCallback, sys::AbstractSystem;
-        default = nothing, kwargs...
+        default = nothing, mtk_verbosity::MTKVerbosity = DEFAULT_MTK_VERBOSE, kwargs...
     )
     return if isnothing(aff)
         default
     elseif aff isa AffectSystem
         compile_equational_affect(aff, sys; kwargs...)
     elseif aff isa ImperativeAffect
-        compile_functional_affect(aff, sys; kwargs...)
+        compile_functional_affect(aff, sys; mtk_verbosity, kwargs...)
     end
 end
 
@@ -1408,6 +1411,12 @@ function wrap_vector_optional_affect(funs, default)
     return VectorOptionalAffect(funs)
 end
 
+# Name of the integrator argument of generated affect functions. A fixed sentinel, not a
+# `gensym`: `RuntimeGeneratedFunction` types include the argument names, so a `gensym` gives
+# each compiled affect a new type, and every problem built from the same system recompiles
+# the solver. Named like `MTKUNKNOWNS_ARG` and `MTKPARAMETERS_ARG`.
+const MTKINTEGRATOR_ARG = :___mtkintegrator___
+
 """
     add_integrator_header(sys, integrator, out) -> (oop_wrap, iip_wrap)
 
@@ -1418,7 +1427,7 @@ resulting affect function is directly callable with an integrator rather than ex
 `(u, p, t)` arguments.
 """
 function add_integrator_header(
-        sys::AbstractSystem, integrator = gensym(:MTKIntegrator), out = :u
+        sys::AbstractSystem, integrator = MTKINTEGRATOR_ARG, out = :u
     )
     return expr -> Func(
             [DestructuredArgs(expr.args, integrator, inds = [:u, :p, :t])], [],
@@ -1551,7 +1560,7 @@ Base.@nospecializeinfer function compile_explicit_affect(
         indexin((@view lhss[is_p]), ps)
     end
     _ps = reorder_parameters(sys, ps)
-    integ = gensym(:MTKIntegrator)
+    integ = MTKINTEGRATOR_ARG
 
     u_up,
         u_up! = build_function_wrapper(
