@@ -1699,8 +1699,7 @@ end
 Whether `eq` equates two records, and so stands for one equation per leaf.
 """
 function is_record_equation(eq::Equation)
-    return (eq.lhs isa SymbolicT && Symbolics.issymstruct(eq.lhs)) ||
-        (eq.rhs isa SymbolicT && Symbolics.issymstruct(eq.rhs))
+    return Symbolics.issymstruct(eq.lhs) || Symbolics.issymstruct(eq.rhs)
 end
 
 """
@@ -1713,8 +1712,8 @@ projected, so it may be a record, a record literal, or a call returning one.
 function flatten_record_equation(eq::Equation)::Vector{Equation}
     lhs = eq.lhs
     rhs = eq.rhs
-    lT = lhs isa SymbolicT ? SU.symtype(lhs) : typeof(lhs)
-    rT = rhs isa SymbolicT ? SU.symtype(rhs) : typeof(rhs)
+    lT = SU.symtype(lhs)
+    rT = SU.symtype(rhs)
     # Differing field lists would pair up by position and silently produce nonsense.
     lT === rT || throw(
         ArgumentError(
