@@ -425,6 +425,10 @@ Return `buffer` in a form that can be stored in the `tunable` or `initials` port
 returns for dual numbers, is copied into an `Array`: code that rebuilds the parameter
 object (such as the initialization parameter map) returns `Array`s, and the result has to
 be assignable to an integrator typed on the original parameter object.
+
+Because of this copy, the parameter object returned by `SciMLStructures.replace` does not
+always alias the buffer passed to it. Update values through the returned parameter object
+(for example with a `setp` setter), not by writing to the buffer afterwards.
 """
 storable_numeric_buffer(buffer) = buffer
 storable_numeric_buffer(buffer::Base.ReinterpretArray) = collect(buffer)
