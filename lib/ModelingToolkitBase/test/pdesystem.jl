@@ -35,6 +35,14 @@ dt = 0:0.1:1
         analytic_function([2], disct, discx) for disct in dt, discx in dx
 )
 
+@named pdesys_with_default = PDESystem(
+    eq, bcs, domains, [t, x], [u], [h => 1], analytic = analytic
+)
+@test all(
+    pdesys_with_default.analytic_func[u(t, x)]([2], disct, discx) ≈
+        analytic_function([2], disct, discx) for disct in dt, discx in dx
+)
+
 # Test sys.x accessor pattern for PDESystem
 using ModelingToolkitBase: renamespace, does_namespacing
 
