@@ -1450,8 +1450,8 @@ function instream_rt(
     for j in 1:outer_n
         @inbounds f = outer_f[j]
         @inbounds s = outer_s[j]
-        num += _positivemax(-f, si) * s
-        den += _positivemax(-f, si)
+        num += _positivemax(f, si) * s
+        den += _positivemax(f, si)
     end
     return num / den
     #=
