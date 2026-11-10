@@ -1,5 +1,5 @@
 using ModelingToolkit, NonlinearSolve, SciMLBase, Test
-using ModelingToolkitBase: t_nounits as t, SystemCompatibilityError
+using ModelingToolkitBase: t_nounits as t
 
 @testset "SCC two-blocks" begin
     @variables y(t) z(t)
@@ -10,20 +10,20 @@ using ModelingToolkitBase: t_nounits as t, SystemCompatibilityError
     op = Dict(a => 9.0, b => 16.0)
     guesses = Dict(y => 2.5, z => 3.5)
 
-    @testset "Multi-block time-dependent system fails check_compatibility" begin
+    @testset "Multi-block time-dependent system: iip=$iip, combine=$combine" for iip in (
+                true, false,
+            ), combine in (true, false)
         err = try
-            SCCNonlinearProblem(timedep, op; combine_sccs = false, guesses)
+            SCCNonlinearProblem{iip}(timedep, op; combine_sccs = combine, guesses)
             nothing
         catch e
             e
         end
-        @test err isa SystemCompatibilityError
+        @test err isa ArgumentError
         @test occursin("mtkcompile(NonlinearSystem(sys))", sprint(showerror, err))
-        @test_throws SystemCompatibilityError SCCNonlinearProblem(
-            timedep, op; combine_sccs = true, guesses
-        )
-        @test SCCNonlinearProblem(
-            timedep, op; combine_sccs = false, guesses, check_compatibility = false
+        @test !occursin("To disable this check", sprint(showerror, err))
+        @test SCCNonlinearProblem{iip}(
+            timedep, op; combine_sccs = combine, guesses, check_compatibility = false
         ) isa SciMLBase.SCCNonlinearProblem
     end
 

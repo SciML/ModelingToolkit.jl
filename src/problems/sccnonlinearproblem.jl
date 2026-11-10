@@ -513,7 +513,14 @@ function SCCNonlinearFunction{iip}(
     return NonlinearFunction{iip, specialize}(f; sys = subsys)
 end
 
-"""$(MTKBase.problem_docstring(SciMLBase.SCCNonlinearProblem, NonlinearFunction, false; init = false))"""
+"""
+$(MTKBase.problem_docstring(SciMLBase.SCCNonlinearProblem, NonlinearFunction, false; init = false))
+
+Systems with multiple SCCs must be time-independent. Convert an algebraic time-dependent
+system with `mtkcompile(NonlinearSystem(sys))` before constructing the problem. On the
+multi-block path, `check_compatibility = true` raises an `ArgumentError` for a time-dependent
+system.
+"""
 function SciMLBase.SCCNonlinearProblem(sys::System, op; kwargs...)
     return SCCNonlinearProblem{true}(sys, op; kwargs...)
 end
@@ -615,7 +622,16 @@ function SciMLBase.SCCNonlinearProblem{iip, specialize}(
         end
     end
 
-    check_compatibility && check_compatible_system(SCCNonlinearProblem, sys)
+    if check_compatibility && is_time_dependent(sys)
+        throw(
+            ArgumentError(
+                """
+                `SCCNonlinearProblem` with multiple SCCs requires a time-independent system. \
+                Convert it with `mtkcompile(NonlinearSystem(sys))` first.
+                """
+            )
+        )
+    end
 
     dvs = unknowns(sys)
     ps = parameters(sys)
@@ -815,22 +831,6 @@ function SciMLBase.SCCNonlinearProblem{iip, specialize}(
         return SCCNonlinearProblem(Tuple(subprobs), Tuple(explicitfuns), p, true; sys)
     else
         return SCCNonlinearProblem(subprobs, SciMLBase.Void{Any}.(explicitfuns), p, true; sys)
-    end
-end
-
-# Only reached for multiple SCCs: the single-SCC fallback to `NonlinearProblem` converts
-# time-dependent systems itself, but the multi-block lowering generates wrong parameter
-# buffers for them.
-function MTKBase.check_compatible_system(::Type{<:SCCNonlinearProblem}, sys::System)
-    return if is_time_dependent(sys)
-        throw(
-            SystemCompatibilityError(
-                """
-                `SCCNonlinearProblem` with multiple SCCs requires a time-independent system. \
-                Convert it with `mtkcompile(NonlinearSystem(sys))` first.
-                """
-            )
-        )
     end
 end
 
