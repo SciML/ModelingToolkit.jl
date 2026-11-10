@@ -275,9 +275,20 @@ function rebuild_with_caches(p::MTKParameters, cache_templates::BufferTemplate..
     return _rebuild_with_caches(p, npersistent, cache_templates)
 end
 
+# Allocate one SCC cache buffer. Numeric buffers are zeroed: `remake` recomputes the
+# linear blocks' `A`/`b` from `p` before any `CacheWriter` has run. Those values are
+# discarded, but reverse-mode AD still multiplies their partials by a zero cotangent,
+# so a NaN or Inf in an uninitialized buffer would give a NaN gradient (`0 * NaN`).
+# Singleton types such as `Irrational{:π}` (a cached constant) have no `zero`, but an
+# `undef` buffer of them already holds their only value.
+_new_cache_buffer(::Type{T}, n::Int) where {T <: Number} =
+    Base.issingletontype(T) ? Vector{T}(undef, n) : zeros(T, n)
+# Other element types are left `undef`, so a premature read throws `UndefRefError`.
+_new_cache_buffer(::Type{T}, n::Int) where {T} = Vector{T}(undef, n)
+
 function _rebuild_with_caches(p::MTKParameters, npersistent::Int, cache_templates)
     buffers = map(cache_templates) do template
-        Vector{template.type}(undef, template.length)
+        _new_cache_buffer(template.type, template.length)
     end
     persistent = ntuple(Base.Fix1(getindex, p.caches), npersistent)
     return @set p.caches = (persistent..., buffers...)
