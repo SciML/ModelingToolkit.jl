@@ -48,3 +48,19 @@ ensemble = EnsembleProblem(
     ensemble, Tsit5(), EnsembleThreads();
     trajectories = TRAJECTORIES,
 )
+
+@testset "Observed functions are cached safely from several threads" begin
+    @variables w(t) = 1.0
+    @mtkcompile obs_sys = System([D(w) ~ -w], t)
+    # A fresh problem per round, so that every round grows a new cache from several threads
+    for _ in 1:20
+        prob = ODEProblem(obs_sys, [], (0.0, 1.0))
+        vals = zeros(200)
+        Threads.@threads for i in 1:200
+            vals[i] = prob[w^2 + i]
+        end
+        @test vals == 1.0 .+ (1:200)
+    end
+    prob = ODEProblem(obs_sys, [], (0.0, 1.0))
+    @test ModelingToolkitBase.EnzymeCore.EnzymeRules.inactive_type(typeof(prob.f.observed))
+end

@@ -570,6 +570,10 @@ EnzymeCore.EnzymeRules.inactive_type(::Type{<:AbstractSystem}) = true
 # metadata: ~100 µs per call against a ~5 ns RHS for a 32-state linear ODE,
 # an 8x slowdown of `GaussAdjoint(EnzymeVJP)` gradients.
 EnzymeCore.EnzymeRules.inactive_type(::Type{<:InitializationMetadata}) = true
+# `ObservedFunctionCache` holds generated functions in an atomic field, guarded by a
+# `ReentrantLock`. None of it carries derivative information, and `make_zero` errors on
+# atomic fields.
+EnzymeCore.EnzymeRules.inactive_type(::Type{<:ObservedFunctionCache}) = true
 
 function __init__()
     SU.hashcons(unwrap(t_nounits), true)
