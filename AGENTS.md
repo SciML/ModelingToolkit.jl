@@ -60,3 +60,10 @@ Earlier testsets can load solver extensions required by later files. Read the ro
 sublibrary test macro and group order, and include the required public solver packages
 in the local environment. A missing initializer module is a setup failure, not a
 numerical regression result.
+
+## DAE initialization
+
+Keep numeric operating-point derivatives fixed. Symbolic derivative expressions that
+depend on initialization unknowns must be evaluated against their solved values.
+Check the full DAE residual when testing partially specified derivatives; constructing
+an integrator successfully does not establish consistent initialization.

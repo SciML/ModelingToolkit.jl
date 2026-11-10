@@ -80,6 +80,29 @@ using OrdinaryDiffEqBDF, Sundials
         @test residual ≈ zeros(2) atol = 1.0e-12
     end
 
+    @testset "Partial symbolic derivatives, $specialize, use_scc = $use_scc" for
+        specialize in (SciMLBase.AutoSpecialize, SciMLBase.FullSpecialize),
+            use_scc in (false, true)
+        sys = complete(
+            System(
+                [zeros(3) ~ D(y) .+ z .* y, 0 ~ z^2 - sum(y)],
+                t, collect([y...; z]), []; name = :symbolic_partial
+            )
+        )
+        prob = DAEProblem{true, specialize}(
+            sys, [y => [1.0, 2.0, 3.0], D(y[1]) => -z * y[1]], (0.0, 0.1);
+            guesses = [z => 1.0], use_scc
+        )
+        for initkwargs in ((;), (; initializealg = SciMLBase.OverrideInit()))
+            integ = init(prob, DFBDF(); initkwargs..., abstol = 1.0e-10, reltol = 1.0e-10)
+            @test integ.u[end] ≈ sqrt(6)
+            @test integ.du[1:3] ≈ -sqrt(6) .* [1.0, 2.0, 3.0]
+            residual = similar(integ.u)
+            prob.f(residual, integ.du, integ.u, integ.p, 0.0)
+            @test maximum(abs, residual) < 1.0e-8
+        end
+    end
+
     @testset "Derivative root, sign = $sign, system guess = $system_guess" for
         sign in (-1.0, 1.0), system_guess in (false, true)
         derivative_guesses = [D(x) => sign]

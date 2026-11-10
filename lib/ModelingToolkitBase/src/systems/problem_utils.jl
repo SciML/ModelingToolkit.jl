@@ -1653,9 +1653,9 @@ end
 Callable `(valp, nlsol) -> nothing` which copies derivative values solved by the
 initialization nonlinear problem into `valp.du`, when `valp` exposes a mutable
 `du` (e.g. a DAE integrator). `getter` resolves `solved_ddvs` from `nlsol` and
-`idxs` holds each variable's position in `du`. Derivative values supplied
-through the operating point are excluded at construction, so only values the
-initialization problem was free to solve are written. A trivial initialization
+`idxs` holds each variable's position in `du`. Numeric derivative values supplied
+through the operating point are excluded at construction. Symbolic derivatives
+are evaluated against the solved initialization state. A trivial initialization
 reads derivatives from the reduced problem's observed equations. Nothing is
 written when the nonlinear solve did not succeed.
 """
@@ -2723,8 +2723,6 @@ function maybe_build_initialization_problem(
             if is_parameter(sys, p)
     ]
 
-    # Derivatives the initialization problem solves and `op` does not fix; their
-    # solved values are written to `valp.du`. `op`-fixed derivatives reach `du` through `du0`.
     solved_ddvs = SymbolicT[]
     solved_ddv_idxs = Int[]
     if implicit_dae && time_dependent_init
@@ -2733,9 +2731,11 @@ function maybe_build_initialization_problem(
             ddv = default_toterm(_D(dv))
             (is_variable(initsys, ddv) || has_observed_with_lhs(initsys, ddv)) ||
                 continue
-            get_possibly_indexed(orig_op, _D(dv), COMMON_NOTHING) === COMMON_NOTHING &&
-                get_possibly_indexed(orig_op, ddv, COMMON_NOTHING) === COMMON_NOTHING ||
-                continue
+            opval = get_possibly_indexed(orig_op, _D(dv), COMMON_NOTHING)
+            if opval === COMMON_NOTHING
+                opval = get_possibly_indexed(orig_op, ddv, COMMON_NOTHING)
+            end
+            opval === COMMON_NOTHING || !SU.isconst(opval) || continue
             push!(solved_ddvs, ddv)
             push!(solved_ddv_idxs, i)
         end
