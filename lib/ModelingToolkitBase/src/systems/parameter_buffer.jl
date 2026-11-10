@@ -366,7 +366,9 @@ end
 function _split_helper(_, buf_v, _, raw, idx)
     res = reshape(raw[idx[]:(idx[] + length(buf_v) - 1)], size(buf_v))
     idx[] += length(buf_v)
-    return res
+    # The canonical vector of a nonnumeric or cache portion is untyped, so the slice takes the
+    # buffer's type, which its values have to match.
+    return isconcretetype(eltype(raw)) ? res : copyto!(similar(buf_v), res)
 end
 
 function _split_helper(_, buf_v::BlockedArray, _, raw, idx)
@@ -506,11 +508,8 @@ function SymbolicIndexingInterface.parameter_values(p::MTKParameters, pind::Para
     return _ducktyped_parameter_values(p, pind)
 end
 
-# `bufs[i][j]`, or `bufs[i][j][k...]`, in the buffer tuple of the `discrete`, `constant`,
-# `nonnumeric` or `caches` portion. Those portions hold one buffer per element type. Indexing the
-# tuple with a runtime `i` gives a buffer of a type inference cannot narrow once the tuple holds
-# four or more types, so the access on it is a dynamic dispatch, which is slow and which
-# `juliac --trim` rejects. Walking the tuple narrows it to one concrete buffer before the access.
+# Indexing a buffer tuple with a runtime `i` is type-unstable once it holds four or more types,
+# which is a dynamic dispatch that `juliac --trim` rejects. Walking the tuple narrows each access.
 @inline function _buffer_getindex(bufs::Tuple{}, i::Int, j, k)
     throw(BoundsError(bufs, i))
 end
@@ -521,11 +520,8 @@ end
     end
     return _buffer_getindex(Base.tail(bufs), i - 1, j, k)
 end
-# Any other collection of buffers, such as the AD tangent of a buffer tuple.
 @inline _buffer_getindex(bufs, i::Int, j, k) = isempty(k) ? bufs[i][j] : bufs[i][j][k...]
 
-# The assignment counterpart of `_buffer_getindex`. `validate_size` compares the size of `val`
-# with that of the element it replaces.
 @inline function _buffer_setindex!(bufs::Tuple{}, val, i::Int, j, k, validate_size::Bool)
     throw(BoundsError(bufs, i))
 end
@@ -588,8 +584,7 @@ function SymbolicIndexingInterface.set_parameter!(
         elseif portion isa SciMLStructures.Constants
             _buffer_setindex!(p.constant, val, i, j, k, validate_size)
         elseif portion === NONNUMERIC_PORTION
-            # Neither a nonnumeric element (a string, a function, a struct) nor a cache need
-            # have a `size`.
+            # Nonnumeric elements and caches have no `size`.
             _buffer_setindex!(p.nonnumeric, val, i, j, k, false)
         elseif portion isa SciMLStructures.Caches
             _buffer_setindex!(p.caches, val, i, j, k, false)

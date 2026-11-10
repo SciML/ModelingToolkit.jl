@@ -313,7 +313,8 @@ const NONPUBLIC_QUALIFIED_ACCESSES = (
     :default_missing_guess_value, :discover_maybe_zeros, :EXPERIMENTAL_WARNING,
     :function_docstring, :generate_DAENLStepData, :generate_homotopy_residual,
     :generate_ODENLStepData,
-    :GENERATE_X_KWARGS, :get_initialization_problem_type, :get_nonlinear_problem_type,
+    :GENERATE_X_KWARGS, :get_initialization_problem_type,
+    :get_linear_expander_for!, :get_nonlinear_problem_type,
     :has_any_homotopy, :indp_to_system, :invalidate_cache!, :LimitedCtx, :lower_homotopy,
     :__mtkcompile,
     :ParameterArrayAssignments, :problem_docstring, :ReorderedDefaultParameters,
@@ -330,7 +331,7 @@ const NONPUBLIC_QUALIFIED_ACCESSES = (
     :StateMachineOperator,
     # StateSelection
     :check_consistency, :complete!, :dummy_derivative_graph!, :find_solvables!,
-    :find_var_sccs, :get_new_mm, :is_only_discrete, :is_present, :isalgvar, :isdervar,
+    :find_var_sccs, :get_mm, :get_new_mm, :is_only_discrete, :is_present, :isalgvar, :isdervar,
     :pantelides!, :rm_eqs_vars!, :structural_singularity_removal!, :trivial_tearing!,
     :var_derivative!,
     # Symbolics

@@ -639,6 +639,14 @@ function find_arrvars_is_atomic(ex::SymbolicT)
     return SU.default_is_atomic(ex) && Symbolics.isarraysymbolic(ex)
 end
 
+# Chunking of very large in-place functions, see the `chunk_size` option of
+# `BuildFunctionWrapperOptions`. Sizes are counted in reachable `IRStructure` statements.
+const DEFAULT_CHUNK_THRESHOLD = 20000
+const DEFAULT_CHUNK_SIZE = 500
+# Automatic chunking is skipped if the helpers' sub-IRs together are larger than this multiple
+# of the whole function's IR, i.e. if they would recompute too many shared subexpressions.
+const DEFAULT_MAX_CHUNK_DUPLICATION = 1.25
+
 # An atomic term can hold a non-constant index (`x[k]`, `Pre(x[k])`, `y(t - τ[k])`),
 # and codegen needs the indexed array, so only elements with constant indices stop the search
 function find_arrvars_recurse(ex::SymbolicT)
@@ -706,6 +714,18 @@ composed `wrap_code`, the resolved `optimize`, and the `output_type`-derived
   argument.
 - `extra_assignments`: Extra `Assignment` statements to prefix to `expr`, after all other
   assignments.
+- `chunk_size`: Off (`0`) by default. Very large generated functions take superlinear time to
+  compile, so when the right-hand side is a vector whose reachable `IRStructure` statements
+  number more than $DEFAULT_CHUNK_THRESHOLD, it is split into helper functions that each build a slice
+  of the output, and the generated in-place function calls them in turn while the out-of-place
+  function `vcat`s their results. `-1` does this automatically, into helpers reaching about
+  $DEFAULT_CHUNK_SIZE statements each, unless the helpers would recompute too many shared
+  subexpressions; `0` (the default) never splits; a positive value splits any function with more
+  reachable statements than `chunk_size` into helpers of about `chunk_size` statements. The
+  statements of each slice are counted by a traversal of the IR from its elements.
+  A chunked in-place function writes each helper's slice directly into `out`, so enabling this
+  requires that `out` does not alias any input (an unchunked function happens to tolerate this
+  only incidentally).
 - `codegen_function_options`: A [`Symbolics.CodegenFunctionOptions`](@ref) holding the
   code-generation options forwarded to `codegen_function`. `build_function_wrapper` reads
   `wrap_code` and `optimize` from it and writes the transformed values back (the composed
@@ -731,6 +751,7 @@ struct BuildFunctionWrapperOptions
     wrap_mtkparameters::Bool
     extra_assignments::Vector{Assignment}
     n_param_buffers::Union{Nothing, Int}
+    chunk_size::Int
     codegen::Symbolics.CodegenFunctionOptions
 end
 
@@ -740,7 +761,7 @@ function BuildFunctionWrapperOptions(;
         histfn = DDE_HISTORY_FUN, histfn_symbolic = histfn,
         create_bindings = false, output_type = nothing, mkarray = nothing,
         wrap_mtkparameters = true, extra_assignments = Assignment[],
-        n_param_buffers = nothing,
+        n_param_buffers = nothing, chunk_size::Integer = 0,
         codegen_function_options::Symbolics.CodegenFunctionOptions = Symbolics.CodegenFunctionOptions()
     )
     # The constructor only accepts valid `build_function_wrapper` options; there is no
@@ -752,7 +773,8 @@ function BuildFunctionWrapperOptions(;
     return BuildFunctionWrapperOptions(
         p_start, p_end, compress_args, non_standard_param_layout, u_arg, wrap_delays,
         histfn, histfn_symbolic, create_bindings, output_type, mkarray,
-        wrap_mtkparameters, extra_assignments, n_param_buffers, codegen_function_options
+        wrap_mtkparameters, extra_assignments, n_param_buffers, chunk_size,
+        codegen_function_options
     )
 end
 
@@ -793,6 +815,118 @@ Base.@nospecializeinfer function build_function_wrapper(
     return build_function_wrapper(sys, expr, collect(Any, args), opts)
 end
 
+# An explicitly requested container is chunked only if it is a plain `Array` (`nothing`, the
+# container of the runtime arguments, is handled in `_build_chunked`): the `vcat` of the slices
+# would lose or duplicate the metadata of labelled and static containers.
+_is_plain_array_type(::Nothing) = true
+_is_plain_array_type(T) = T isa Type && T <: Array
+
+# Contiguous slices of the output vector `expr`, each reaching about `target` statements of
+# `ir`, or `nothing` if the function should not be chunked. Only the statements reachable from
+# the elements of `expr` are counted (a graph traversal, `ir` is typically shared with much
+# unrelated work), and each slice is grown element by element until its own reachable
+# statements, which are exactly what its helper has to compile, reach `target`.
+function _chunk_ranges(ir::IRStructure{VartypeT}, expr, chunk_size::Int)
+    chunk_size == 0 && return nothing
+    expr isa AbstractVector{SymbolicT} || return nothing
+    auto = chunk_size < 0
+    target = auto ? DEFAULT_CHUNK_SIZE : chunk_size
+    idxs = map(Base.Fix1(getindex, ir), expr)
+    nverts = length(ir)
+    visited = falses(nverts)
+    reachable = Int32[]
+    for idx in idxs
+        visited[idx] && continue
+        SU.get_reachability!(reachable, ir, idx; visited)
+        visited[idx] = true
+        push!(reachable, idx)
+    end
+    total = length(reachable)
+    total > (auto ? DEFAULT_CHUNK_THRESHOLD : target) || return nothing
+
+    ranges = UnitRange{Int}[]
+    chunked = 0
+    start = 1
+    empty!(reachable)
+    fill!(visited, false)
+    for (i, idx) in enumerate(idxs)
+        if !visited[idx]
+            SU.get_reachability!(reachable, ir, idx; visited)
+            visited[idx] = true
+            push!(reachable, idx)
+        end
+        if length(reachable) >= target || i == length(idxs)
+            push!(ranges, start:i)
+            chunked += length(reachable)
+            start = i + 1
+            empty!(reachable)
+            fill!(visited, false)
+        end
+    end
+    length(ranges) > 1 || return nothing
+    # Helpers recompute the statements shared between slices.
+    auto && chunked > DEFAULT_MAX_CHUNK_DUPLICATION * total && return nothing
+    return ranges
+end
+
+# Combine the helper functions `helpers` (generated anonymous `:function` expressions with the
+# same signature) into one function with that signature. The in-place version calls each
+# helper in turn and returns `out`, the out-of-place version `vcat`s the results of the helpers.
+function _call_chunks(helpers::Vector{Expr}, iip::Bool)
+    signature = helpers[1].args[1]
+    all(arg -> arg isa Symbol, signature.args) || return nothing
+    body = Expr(:block)
+    results = Expr(:call, :vcat)
+    for helper in helpers
+        call = Expr(:call, helper)
+        append!(call.args, signature.args)
+        push!(iip ? body.args : results.args, call)
+    end
+    push!(body.args, iip ? signature.args[1] : results)
+    return Expr(:function, signature, body)
+end
+
+# Build `expr` as the `chunk_ranges` slices, each by a recursive call of
+# `build_function_wrapper` that makes its own minimal IR, and combine the helpers. Returns
+# `nothing` if the helpers cannot be combined. The out-of-place function is the `vcat` of the
+# slices only if the container type is given explicitly as a plain `Array`; otherwise it is the
+# ordinary whole-function one, since its container is decided by the runtime arguments and
+# `vcat` of the slices would not preserve it (it is only compiled if called).
+function _build_chunked(sys, expr, args, opts::BuildFunctionWrapperOptions, chunk_ranges)
+    vcat_oop = opts.output_type !== nothing || opts.codegen.similarto !== nothing
+    helper_iip_config = (vcat_oop, true)
+    oop_helpers = Expr[]
+    iip_helpers = Expr[]
+    for range in chunk_ranges
+        helper_opts = setproperties(
+            opts, (;
+                chunk_size = 0,
+                codegen = setproperties(
+                    opts.codegen, (; outputidxs = collect(range), iip_config = helper_iip_config)
+                ),
+            )
+        )
+        oop, iip = build_function_wrapper(sys, expr[range], args, helper_opts)
+        vcat_oop && push!(oop_helpers, oop)
+        push!(iip_helpers, iip)
+    end
+    iip = _call_chunks(iip_helpers, true)
+    iip === nothing && return nothing
+    if vcat_oop
+        oop = _call_chunks(oop_helpers, false)
+    else
+        whole_opts = setproperties(
+            opts, (;
+                chunk_size = 0,
+                codegen = setproperties(opts.codegen, (; iip_config = (true, false))),
+            )
+        )
+        oop = build_function_wrapper(sys, expr, args, whole_opts)[1]
+    end
+    oop === nothing && return nothing
+    return oop, iip
+end
+
 """
     build_function_wrapper(sys::AbstractSystem, expr, args, opts::BuildFunctionWrapperOptions)
 
@@ -812,8 +946,9 @@ Base.@nospecializeinfer function build_function_wrapper(
     (;
         p_start, p_end, compress_args, non_standard_param_layout, u_arg, wrap_delays,
         histfn_symbolic, create_bindings, output_type, mkarray, wrap_mtkparameters,
-        extra_assignments, n_param_buffers,
+        extra_assignments, n_param_buffers, chunk_size,
     ) = opts
+    orig_args = args
     # Resolve the `sys`/`args`-dependent defaults (left as `nothing` when constructing the
     # options without a `sys` in scope). `length(args)` here is the original argument count,
     # before `wrap_delays` may insert the history-function argument below.
@@ -874,9 +1009,26 @@ Base.@nospecializeinfer function build_function_wrapper(
         SU.populate_ir!(ir, subexpr)
     end
 
+    # A very large function is split into helpers that each fill a slice of the output, decided
+    # here from the reachable statements, before any of the work below is done on the whole
+    # function. The chunked in-place function requires that `out` does not alias any input.
+    if chunk_size != 0 && opts.codegen.iip_config == (true, true) && !wrap_delays &&
+            !create_bindings && isempty(compress_args) && isempty(extra_assignments) &&
+            !(has_preface(sys) && preface(sys) !== nothing) &&
+            all(==(identity), opts.codegen.wrap_code) && opts.codegen.outputidxs === nothing &&
+            mkarray === nothing && _is_plain_array_type(output_type) &&
+            _is_plain_array_type(opts.codegen.similarto)
+        chunk_ranges = _chunk_ranges(ir, expr, chunk_size)
+        if chunk_ranges !== nothing
+            chunked = _build_chunked(sys, expr, orig_args, opts, chunk_ranges)
+            chunked === nothing || return chunked
+        end
+    end
+
     # Subset the `IRStructure` so that optimization passes run on the minimal set of
     # expressions
     ir = SU.subset_ir(ir, stmts)
+
     # We don't use `replace_node!` here to insert the observed, and instead prefer to
     # substitute as done above. The issue arises due to array variables passed scalarized
     # to the function. Consider a case where `p1` and `p2` are array parameters, `p1 => p2`
