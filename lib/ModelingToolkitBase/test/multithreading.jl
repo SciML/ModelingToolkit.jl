@@ -63,4 +63,11 @@ ensemble = EnsembleProblem(
     end
     prob = ODEProblem(obs_sys, [], (0.0, 1.0))
     @test ModelingToolkitBase.EnzymeCore.EnzymeRules.inactive_type(typeof(prob.f.observed))
+    # Lookups read the published dict without a lock, so an insert must leave it unchanged
+    ofc = prob.f.observed
+    published = @atomic ofc.dict
+    nkeys = length(published)
+    prob[w^3]
+    @test length(published) == nkeys
+    @test length(@atomic ofc.dict) == nkeys + 1
 end
