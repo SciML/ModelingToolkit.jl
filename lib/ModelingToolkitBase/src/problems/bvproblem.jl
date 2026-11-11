@@ -29,15 +29,15 @@ end
     dvs = flat_unknowns(sys)
     ctrls = inputs(sys)
     op = to_varmap(op, dvs)
-    # Optimal-control BVPs (systems carrying a cost) deliberately pin only the
-    # operating-point initial conditions — the remaining degrees of freedom are
-    # what the cost selects — and their algebraic equations (e.g. lifted output
-    # bounds) do not imply a fully determined initial state. Only plain algebraic
-    # BVPs skip the guess merge and pin every state.
-    is_full_ic = has_alg_eqs(sys) && isempty(get_costs(sys))
-    # Systems without algebraic equations should use both fixed values + guesses
-    # for initialization.
-    _op = is_full_ic ? op : merge(Dict(op), Dict(guesses))
+    # Only the states given in `op` are pinned at t0; the other states are free and
+    # their guesses only seed the solve. For DAE BVPs (algebraic equations, no cost)
+    # the algebraic equations are also imposed at t0, which determines the algebraic
+    # states there: collocation solvers that enforce the algebraic equations only at the
+    # right end of each mesh interval need these rows. Optimal-control BVPs (systems
+    # carrying a cost) leave the remaining degrees of freedom to the cost, and their
+    # algebraic equations (e.g. lifted output bounds) are not imposed at t0.
+    algebraic_at_t0 = has_alg_eqs(sys) && isempty(get_costs(sys))
+    _op = merge(Dict(op), Dict(guesses))
 
     if isempty(ctrls)
         fode, u0,
@@ -79,8 +79,7 @@ end
     )
 
     stidxmap = Dict([v => i for (i, v) in enumerate(dvs)])
-    u0_idxs = is_full_ic ? collect(1:length(dvs)) :
-        [stidxmap[k] for (k, v) in op if haskey(stidxmap, k)]
+    u0_idxs = [stidxmap[k] for (k, v) in op if haskey(stidxmap, k)]
     # The boundary-condition residual is generated from the state-length `u0`;
     # the controls are appended to the problem's decision vector afterwards.
     fbc = generate_boundary_conditions(
@@ -88,10 +87,12 @@ end
         GeneratedFunctionOptions(;
             expression = Val{false}, wrap_gfw = Val{true},
             codegen_function_options = Symbolics.CodegenFunctionOptions(; checkbounds)
-        )
+        );
+        algebraic_at_t0
     )
 
-    bcresid_prototype = zeros(eltype(u0), length(u0_idxs) + length(constraints(sys)))
+    nalg = algebraic_at_t0 ? count_equation_rows(alg_equations(sys)) : 0
+    bcresid_prototype = zeros(eltype(u0), length(u0_idxs) + length(constraints(sys)) + nalg)
 
     if !isempty(ctrls)
         c0 = collect(eltype(u0), SymbolicIndexingInterface.getp(sys, ctrls)(p))
@@ -106,12 +107,12 @@ end
         )
     end
 
-    if (length(constraints(sys)) + length(op) > length(dvs))
+    if (length(constraints(sys)) + length(op) + nalg > length(dvs))
         # Peek at `verbose` without consuming it: `process_SciMLProblem` (via `kwargs...`)
         # is the consumer of record, and `filter_kwargs` handles solver forwarding.
         verbosity = _problem_verbosity(kwargs)
         @SciMLMessage(verbosity, :overdetermined_constraints) do
-            "The BVProblem is overdetermined. The total number of conditions (# constraints + # fixed initial values given by op) exceeds the total number of states. The BVP solvers will default to doing a nonlinear least-squares optimization."
+            "The BVProblem is overdetermined. The total number of conditions (# constraints + # fixed initial values given by op + # algebraic equations imposed at the initial time) exceeds the total number of states. The BVP solvers will default to doing a nonlinear least-squares optimization."
         end
     end
 
