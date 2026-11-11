@@ -275,9 +275,16 @@ function rebuild_with_caches(p::MTKParameters, cache_templates::BufferTemplate..
     return _rebuild_with_caches(p, npersistent, cache_templates)
 end
 
+# Zeroed because `remake` reads these before any `CacheWriter` runs, and leftover NaNs
+# leak into reverse-mode gradients. Singletons (e.g. a cached `π`) have no `zero`.
+_new_cache_buffer(::Type{T}, n::Int) where {T <: Number} =
+    Base.issingletontype(T) ? Vector{T}(undef, n) : zeros(T, n)
+# Non-numeric buffers stay `undef`, so an early read throws.
+_new_cache_buffer(::Type{T}, n::Int) where {T} = Vector{T}(undef, n)
+
 function _rebuild_with_caches(p::MTKParameters, npersistent::Int, cache_templates)
     buffers = map(cache_templates) do template
-        Vector{template.type}(undef, template.length)
+        _new_cache_buffer(template.type, template.length)
     end
     persistent = ntuple(Base.Fix1(getindex, p.caches), npersistent)
     return @set p.caches = (persistent..., buffers...)
