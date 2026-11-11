@@ -294,6 +294,36 @@ end
 #     test_solvers(daesolvers, bvp, u0map, constr, get_alg_eqs(pend))
 # end
 
+# DAE BVPs pin only the states given in the operating point and impose the algebraic
+# equations at the initial time, so free initial states (like x2 below) are not pinned
+# to their guesses.
+@testset "DAE BVPs impose the algebraic equations at t0" begin
+    @variables x(t) y(t)
+    @mtkcompile sys = System([D(x) ~ y, 0 ~ y^3 + y - (cos(t)^3 + cos(t))], t)
+    prob = BVProblem(sys, [x => 0.0], (0.0, pi / 2); guesses = [y => 0.5])
+    @test length(prob.f.bcresid_prototype) == 2
+    # The boundary residuals vanish on the exact solution (x, y) = (sin t, cos t).
+    exact_sol = τ -> [isequal(v, x) ? sin(τ) : cos(τ) for v in unknowns(sys)]
+    res = zeros(2)
+    prob.f.bc(res, exact_sol, prob.p, prob.tspan)
+    @test maximum(abs, res) < 1.0e-12
+    sol = solve(prob, MIRK4(); dt = 0.01, adaptive = false)
+    @test SciMLBase.successful_retcode(sol)
+    @test maximum(abs.(sol[x] .- sin.(sol.t))) < 1.0e-4
+    @test maximum(abs.(sol[y] .- cos.(sol.t))) < 1.0e-6
+
+    # A genuine two-point DAE BVP: x2(0) is only guessed, x1 is given at both ends.
+    @variables x1(..) x2(t) z(t)
+    eqs = [D(x1(t)) ~ x2, D(x2) ~ -z, 0 ~ z^3 + z - (x1(t)^3 + x1(t))]
+    @mtkcompile sys2 = System(eqs, t; constraints = [x1(pi / 2) ~ 1.0])
+    prob2 = BVProblem(sys2, [x1(t) => 0.0], (0.0, pi / 2); guesses = [x2 => 0.5, z => 0.0])
+    @test length(prob2.f.bcresid_prototype) == 3
+    sol2 = solve(prob2, MIRK4(); dt = 0.01, adaptive = false)
+    @test SciMLBase.successful_retcode(sol2)
+    @test sol2[x2][1] ≈ 1.0 atol = 1.0e-4
+    @test maximum(abs.(sol2[x1(t)] .- sin.(sol2.t))) < 1.0e-4
+end
+
 @testset "Cost function compilation" begin
     @parameters α = 1.5 β = 1.0 γ = 3.0 δ = 1.0
     @variables x(..) y(..)
