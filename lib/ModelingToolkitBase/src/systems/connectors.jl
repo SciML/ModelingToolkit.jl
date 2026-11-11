@@ -1128,6 +1128,63 @@ end
 """
     $(TYPEDSIGNATURES)
 
+The record literal equivalent to `x`, built from its own fields: `s` becomes
+`St(s.p, s.h)`, recursing through nested records and array-valued fields.
+"""
+function record_as_literal(x::SymbolicT)
+    leaves = record_leaves(x)
+    return record_node_value(x, x, Any[leaf for leaf in leaves])::SymbolicT
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Rewrite every record used *as a value* into a literal over its fields, so that a call like
+`f(s)` becomes `f(St(s.p, s.h))`. Projections are left alone: `s.p` stays `s.p`.
+
+A record is a grouping name, not a quantity the solver integrates - its leaves are. Passing
+the name itself would have it counted as an unknown beside them, leaving the system
+unbalanced. Rebuilding it from the leaves keeps the call intact and names only what is
+actually solved for.
+"""
+function expand_record_arguments(ex)
+    ex isa SymbolicT || return ex
+    # A projection is a name already; rewriting inside it would wrap every leaf.
+    is_symstruct_field(ex) && return ex
+    Symbolics.issymstruct(ex) && return record_as_literal(ex)
+    iscall(ex) || return ex
+    args = arguments(ex)
+    newargs = map(expand_record_arguments, args)
+    all(((a, b),) -> a === b, zip(args, newargs)) && return ex
+    return maketerm(typeof(ex), operation(ex), newargs, SU.metadata(ex))
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Apply [`expand_record_arguments`](@ref) to both sides of every equation.
+"""
+function expand_record_arguments(eqs::Vector{Equation})
+    return Equation[expand_record_arguments(eq.lhs) ~ expand_record_arguments(eq.rhs)
+        for eq in eqs]
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Apply [`expand_record_arguments`](@ref) to every equation of `sys`.
+"""
+function expand_record_arguments(sys::AbstractSystem)
+    eqs = equations(sys)
+    new_eqs = expand_record_arguments(eqs)
+    any(((a, b),) -> !isequal(a, b), zip(eqs, new_eqs)) || return sys
+    @set! sys.eqs = new_eqs
+    return sys
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
 Replace every record equation of `sys` with one equation per leaf, each inheriting the
 provenance of the equation it was split from.
 

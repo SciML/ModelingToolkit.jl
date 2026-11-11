@@ -274,7 +274,8 @@ function __mtkcompile(
     sys = apply_limited_lowering(sys)
     flat_dvs = scalarized_vars(unknowns(sys))
     original_vars = Set{SymbolicT}(flat_dvs)
-    eqs = flatten_equations(equations(sys))
+    # After the split, so no equation still has a record on a side to project from.
+    eqs = expand_record_arguments(flatten_equations(equations(sys)))
     all_dvs = Set{SymbolicT}()
     for eq in eqs
         SU.search_variables!(all_dvs, eq; is_atomic = OperatorIsAtomic{Union{Initial, Pre}}())
