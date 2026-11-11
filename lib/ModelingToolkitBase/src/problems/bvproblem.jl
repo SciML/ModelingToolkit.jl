@@ -37,7 +37,9 @@ end
     # carrying a cost) leave the remaining degrees of freedom to the cost, and their
     # algebraic equations (e.g. lifted output bounds) are not imposed at t0.
     algebraic_at_t0 = has_alg_eqs(sys) && isempty(get_costs(sys))
-    _op = merge(Dict(op), Dict(guesses))
+    # Values in `op` are hard constraints, so they take precedence over guesses for the
+    # same state.
+    _op = merge(Dict(guesses), Dict(op))
 
     if isempty(ctrls)
         fode, u0,
@@ -79,7 +81,15 @@ end
     )
 
     stidxmap = Dict([v => i for (i, v) in enumerate(dvs)])
-    u0_idxs = [stidxmap[k] for (k, v) in op if haskey(stidxmap, k)]
+    # Resolve the keys of `op` to state indices: this also handles `Symbol` keys and
+    # whole-array assignments, which are not keys of `stidxmap`.
+    u0_idxs = Int[]
+    for k in keys(op)
+        idx = SymbolicIndexingInterface.variable_index(sys, k)
+        idx === nothing && continue
+        append!(u0_idxs, idx isa Integer ? (idx,) : vec(collect(idx)))
+    end
+    unique!(u0_idxs)
     # The boundary-condition residual is generated from the state-length `u0`;
     # the controls are appended to the problem's decision vector afterwards.
     fbc = generate_boundary_conditions(
@@ -107,7 +117,7 @@ end
         )
     end
 
-    if (length(constraints(sys)) + length(op) + nalg > length(dvs))
+    if (length(constraints(sys)) + length(u0_idxs) + nalg > length(dvs))
         # Peek at `verbose` without consuming it: `process_SciMLProblem` (via `kwargs...`)
         # is the consumer of record, and `filter_kwargs` handles solver forwarding.
         verbosity = _problem_verbosity(kwargs)

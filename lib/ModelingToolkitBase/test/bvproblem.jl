@@ -307,6 +307,14 @@ end
     res = zeros(2)
     prob.f.bc(res, exact_sol, prob.p, prob.tspan)
     @test maximum(abs, res) < 1.0e-12
+    # Values in `op` win over guesses for the same state, and `Symbol` keys are pinned too.
+    for (op, guesses) in (([x => 0.0], [x => 0.3, y => 0.5]), ([:x => 0.0], [y => 0.5]))
+        prob_op = BVProblem(sys, op, (0.0, pi / 2); guesses)
+        res_op = zeros(length(prob_op.f.bcresid_prototype))
+        prob_op.f.bc(res_op, exact_sol, prob_op.p, prob_op.tspan)
+        @test length(res_op) == 2
+        @test maximum(abs, res_op) < 1.0e-12
+    end
     sol = solve(prob, MIRK4(); dt = 0.01, adaptive = false)
     @test SciMLBase.successful_retcode(sol)
     @test maximum(abs.(sol[x] .- sin.(sol.t))) < 1.0e-4
