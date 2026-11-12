@@ -71,6 +71,11 @@ function loss(x, p)
 end
 ```
 
+The new values are set through the parameter object returned by `replace`, not by writing
+to `buffer`. `replace` may store a copy of the buffer: it does so for the reinterpreted
+array that `get_tmp` returns for dual numbers. Values written to `buffer` after the call
+to `replace` are therefore not guaranteed to reach the parameter object.
+
 Note how the problem, timesteps and true data are stored as model parameters. This helps
 avoid referencing global variables in the function, which would slow it down significantly.
 
