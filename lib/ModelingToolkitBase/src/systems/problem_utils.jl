@@ -1031,11 +1031,21 @@ end
 
 @inline _static_buffer(bufs::Tuple, ::StaticBufferIndex{P, I}) where {P, I} = bufs[I]
 
+# Template entries that may share a `Union` vector. Enzyme fails on a `Union` vector that also
+# holds constant-buffer or observed-function entries (ModelingToolkit.jl#5362).
+const UnionSafeTemplate = Union{
+    ParameterIndex{SciMLStructures.Tunable, UnitRange{Int}},
+    ParameterIndex{SciMLStructures.Initials, UnitRange{Int}},
+    UnitRange{Int}, IndepVarTemplate, FallbackSlice,
+}
+
 Base.@nospecializeinfer function __specialize_templates(
         template::Vector{Any}, elem_types::Set{DataType}, despecialize::Bool = false
     )
     if !despecialize && length(template) <= 4
         return Tuple(template)
+    elseif length(elem_types) > 1 && !all(T -> T <: UnionSafeTemplate, elem_types)
+        return template
     elseif length(elem_types) <= 4
         return Vector{Union{collect(elem_types)...}}(template)
     else
@@ -1174,12 +1184,8 @@ function CopyParamsByTemplate(srcsys::AbstractSystem, syms::AbstractArray{Symbol
         template[i] isa Vector{SymbolicT} && push!(fallback_idxs, i)
     end
     fallback_getter = nothing
-    if length(fallback_idxs) == 1
-        i = fallback_idxs[1]
-        template[i] = cached_template_getu(srcsys, template[i]::Vector{SymbolicT}; kws...)
-        delete!(elem_types, Vector{SymbolicT})
-        push!(elem_types, typeof(template[i]))
-    elseif length(fallback_idxs) > 1
+    # A single batch also goes through `FallbackSlice`, which keeps the getter out of the template
+    if !isempty(fallback_idxs)
         all_fallback = SymbolicT[]
         for i in fallback_idxs
             append!(all_fallback, template[i]::Vector{SymbolicT})
@@ -1220,7 +1226,9 @@ function CopyParamsByTemplate(srcsys::AbstractSystem, syms::AbstractArray; despe
         push!(template, CopyParamsByTemplate(srcsys, sym; despecialize, kws...))
         push!(elem_types, typeof(template[end]))
     end
-    return CopyParamsByTemplate{false}(__specialize_templates(template, elem_types, despecialize), size(syms))
+    # One entry per buffer, like the buffer tuples of `MTKParameters`, so a tuple here does not
+    # make the type depend on the model size
+    return CopyParamsByTemplate{false}(__specialize_templates(template, elem_types), size(syms))
 end
 
 struct MTKParametersReconstructor{T, I, D, C, N}
