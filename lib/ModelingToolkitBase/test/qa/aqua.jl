@@ -64,8 +64,9 @@ const NONPUBLIC_EXPLICIT_IMPORTS = (
 # `Moshi.Data`/`Moshi.Match` macro entry points, the Base internals with no public spelling
 # (`@__doc__`, `@ntuple`, `literal_pow`, `ReinterpretArray`, `ReshapedArray`, and
 # `setindex` — the non-mutating array update an immutable iterate needs, which Base
-# declares no public spelling for), and the AD hooks
-# (`ForwardDiff.Dual`, `EnzymeCore.EnzymeRules`) the generated code dispatches on.
+# declares no public spelling for), the AD hooks
+# (`ForwardDiff.Dual`, `EnzymeCore.EnzymeRules`) the generated code dispatches on, and
+# EnzymeCore's `make_zero!`/`remake_zero!`, which `MTKParameters` overloads.
 const NONPUBLIC_QUALIFIED_ACCESSES = (
     # Symbolics
     :CallAndWrap, :canonical_form, :COMMON_ZERO, :executediff, :fixpoint_sub,
@@ -97,7 +98,7 @@ const NONPUBLIC_QUALIFIED_ACCESSES = (
     # BandedMatrices
     :_BandedMatrix,
     # EnzymeCore
-    :EnzymeRules,
+    :EnzymeRules, :make_zero!, :remake_zero!,
     # EnzymeCore.EnzymeRules
     :inactive_noinl, :inactive_type,
     # ForwardDiff
