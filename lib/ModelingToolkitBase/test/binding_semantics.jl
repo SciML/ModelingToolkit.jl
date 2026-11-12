@@ -133,6 +133,11 @@ end
     # Matching 2×1 shape is accepted
     sys = System(eqs, t, [x], [B, L]; name = :col, bindings = Dict(B => [0.0; 1 / L;;]))
     @test size(bindings(sys)[B]) == (2, 1)
+    # Same element count, different per-dimension sizes
+    @parameters C[1:2, 1:3]
+    @test_throws ["binding for", "size (3, 2)", "size (2, 3)"] System(
+        Equation[], t, [], [C]; name = :mat, bindings = Dict(C => [1 2; 3 4; 5 6])
+    )
 end
 
 @testset "Callable parameter bound to a function via `bindings` (#5259)" begin

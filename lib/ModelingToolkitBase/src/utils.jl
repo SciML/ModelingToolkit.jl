@@ -401,10 +401,11 @@ function check_bindings(atomic_ps::AtomicArraySet{Dict{SymbolicT, Nothing}}, bin
             # while the binding is the function itself, so the sizes are not comparable.
             psh = SU.shape(p)
             vsh = SU.shape(val)
-            if !(psh isa SU.Unknown) && !(vsh isa SU.Unknown) && !(symtype(p) <: FnType)
-                psz = size(p)
-                vsz = size(val)
-                if psz != vsz
+            if psh isa SU.ShapeVecT && vsh isa SU.ShapeVecT && !(symtype(p) <: FnType)
+                if length(psh) != length(vsh) ||
+                        any(i -> length(psh[i]) != length(vsh[i]), eachindex(psh))
+                    psz = Tuple(map(length, psh))
+                    vsz = Tuple(map(length, vsh))
                     throw(
                         ArgumentError(
                             "binding for $p has size $vsz, but $p has size $psz"
