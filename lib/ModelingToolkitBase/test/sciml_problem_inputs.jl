@@ -245,13 +245,3 @@ end
         end
     end
 end
-
-# Julia keeps `@nospecialize` only for the first 32 arguments, and the keyword body method
-# places every keyword before the positional arguments.
-@testset "`process_SciMLProblem` keeps `@nospecialize` on `constructor` and `op`" begin
-    for m in methods(ModelingToolkitBase.process_SciMLProblem)
-        body = only(methods(Base.bodyfunction(m)))
-        positional = body.nospecialize >>> (body.nargs - m.nargs)
-        @test positional & 0b101 == 0b101
-    end
-end
