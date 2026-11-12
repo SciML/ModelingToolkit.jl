@@ -20,6 +20,7 @@ constraints
 ModelingToolkit.has_costs
 ModelingToolkit.get_costs
 cost
+costs
 ModelingToolkit.has_consolidate
 ModelingToolkit.get_consolidate
 ModelingToolkit.has_unknowns

@@ -345,6 +345,7 @@ variables programmatically.
 
 ```@docs
 ModelingToolkitBase.toparam
+ModelingToolkitBase.tovar
 ModelingToolkitBase.tobrownian
 ```
 

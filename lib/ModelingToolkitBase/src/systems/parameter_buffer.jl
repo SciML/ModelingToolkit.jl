@@ -135,6 +135,10 @@ function MTKParameters(
         Vector{temp.type}(undef, temp.length)
             for temp in ic.nonnumeric_buffer_sizes
     )
+    caches_buffer = Tuple(
+        Vector{temp.type}(undef, temp.length)
+            for temp in ic.caches_buffer_sizes
+    )
     function set_value(sym, val)
         done = true
         if haskey(ic.tunable_idx, sym)
@@ -164,9 +168,9 @@ function MTKParameters(
     diffcache_sizes = zeros(Int, length(diffcache_params))
     if !isempty(diffcache_params)
         representative = first(keys(diffcache_params))
-        diffcaches_buffer_idx, _ = ic.nonnumeric_idx[representative]
+        diffcaches_buffer_idx, _ = ic.caches_idx[representative]
         for (param, len) in diffcache_params
-            _, j = ic.nonnumeric_idx[param]
+            _, j = ic.caches_idx[param]
             diffcache_sizes[j] = len
         end
     end
@@ -228,9 +232,9 @@ function MTKParameters(
     if !iszero(diffcaches_buffer_idx)
         cache_elT = eltype(initials_buffer)
         diffcaches_elT = DiffCacheAllocatorAPIWrapper{cache_elT}
-        @set! nonnumeric_buffer[diffcaches_buffer_idx] = Vector{diffcaches_elT}(nonnumeric_buffer[diffcaches_buffer_idx])
+        @set! caches_buffer[diffcaches_buffer_idx] = Vector{diffcaches_elT}(caches_buffer[diffcaches_buffer_idx])
         for (i, len) in enumerate(diffcache_sizes)
-            nonnumeric_buffer[diffcaches_buffer_idx][i] = DiffCacheAllocatorAPIWrapper(DiffCache(zeros(cache_elT, len)))
+            caches_buffer[diffcaches_buffer_idx][i] = DiffCacheAllocatorAPIWrapper(DiffCache(zeros(cache_elT, len)))
         end
     end
     # Don't narrow nonnumeric types
@@ -240,19 +244,50 @@ function MTKParameters(
 
     mtkps = MTKParameters{
         typeof(tunable_buffer), typeof(initials_buffer), typeof(disc_buffer),
-        typeof(const_buffer), typeof(nonnumeric_buffer), typeof(()),
+        typeof(const_buffer), typeof(nonnumeric_buffer), typeof(caches_buffer),
     }(
         tunable_buffer,
-        initials_buffer, disc_buffer, const_buffer, nonnumeric_buffer, ()
+        initials_buffer, disc_buffer, const_buffer, nonnumeric_buffer, caches_buffer
     )
     return mtkps
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Append freshly allocated cache buffers described by `cache_templates` to the `caches`
+portion of `p`. The leading `length(ic.caches_buffer_sizes)` buffers are the persistent
+`DiffCache` buffers registered in the index cache and are kept; anything appended by an
+earlier call is dropped.
+"""
+function rebuild_with_caches(ic::IndexCache, p::MTKParameters, cache_templates::BufferTemplate...)
+    return _rebuild_with_caches(p, length(ic.caches_buffer_sizes), cache_templates)
+end
+
+# Compatibility method for callers that predate the `IndexCache` argument. The
+# persistent `DiffCache` buffers are recognised by their element type.
 function rebuild_with_caches(p::MTKParameters, cache_templates::BufferTemplate...)
-    buffers = map(cache_templates) do template
-        Vector{template.type}(undef, template.length)
+    npersistent = 0
+    for buf in p.caches
+        eltype(buf) <: DiffCacheAllocatorAPIWrapper || break
+        npersistent += 1
     end
-    return @set p.caches = buffers
+    return _rebuild_with_caches(p, npersistent, cache_templates)
+end
+
+# Zeroed because `remake` reads these before any `CacheWriter` runs, and leftover NaNs
+# leak into reverse-mode gradients. Singletons (e.g. a cached `π`) have no `zero`.
+_new_cache_buffer(::Type{T}, n::Int) where {T <: Number} =
+    Base.issingletontype(T) ? Vector{T}(undef, n) : zeros(T, n)
+# Non-numeric buffers stay `undef`, so an early read throws.
+_new_cache_buffer(::Type{T}, n::Int) where {T} = Vector{T}(undef, n)
+
+function _rebuild_with_caches(p::MTKParameters, npersistent::Int, cache_templates)
+    buffers = map(cache_templates) do template
+        _new_cache_buffer(template.type, template.length)
+    end
+    persistent = ntuple(Base.Fix1(getindex, p.caches), npersistent)
+    return @set p.caches = (persistent..., buffers...)
 end
 
 function narrow_buffer_type(buffer::AbstractArray; p_constructor = identity)
@@ -268,6 +303,10 @@ function narrow_buffer_type(
     )
     type = Union{}
     for arr in buffer
+        if !isempty(arr) && isconcretetype(eltype(arr))
+            type = promote_type(type, eltype(arr))
+            continue
+        end
         for x in arr
             type = promote_type(type, typeof(x))
         end
@@ -334,7 +373,9 @@ end
 function _split_helper(_, buf_v, _, raw, idx)
     res = reshape(raw[idx[]:(idx[] + length(buf_v) - 1)], size(buf_v))
     idx[] += length(buf_v)
-    return res
+    # The canonical vector of a nonnumeric or cache portion is untyped, so the slice takes the
+    # buffer's type, which its values have to match.
+    return isconcretetype(eltype(raw)) ? res : copyto!(similar(buf_v), res)
 end
 
 function _split_helper(_, buf_v::BlockedArray, _, raw, idx)
@@ -383,8 +424,24 @@ function SciMLStructures.canonicalize(::SciMLStructures.Tunable, p::MTKParameter
     return arr, repack, true
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Return `buffer` in a form that can be stored in the `tunable` or `initials` portion of
+`MTKParameters`. A `Base.ReinterpretArray`, which is what `PreallocationTools.get_tmp`
+returns for dual numbers, is copied into an `Array`: code that rebuilds the parameter
+object (such as the initialization parameter map) returns `Array`s, and the result has to
+be assignable to an integrator typed on the original parameter object.
+
+Because of this copy, the parameter object returned by `SciMLStructures.replace` does not
+always alias the buffer passed to it. Update values through the returned parameter object
+(for example with a `setp` setter), not by writing to the buffer afterwards.
+"""
+storable_numeric_buffer(buffer) = buffer
+storable_numeric_buffer(buffer::Base.ReinterpretArray) = collect(buffer)
+
 function SciMLStructures.replace(::SciMLStructures.Tunable, p::MTKParameters, newvals)
-    @set! p.tunable = newvals
+    @set! p.tunable = storable_numeric_buffer(newvals)
     return p
 end
 
@@ -404,7 +461,7 @@ function SciMLStructures.canonicalize(::SciMLStructures.Initials, p::MTKParamete
 end
 
 function SciMLStructures.replace(::SciMLStructures.Initials, p::MTKParameters, newvals)
-    @set! p.initials = newvals
+    @set! p.initials = storable_numeric_buffer(newvals)
     return p
 end
 
@@ -473,6 +530,40 @@ end
 function SymbolicIndexingInterface.parameter_values(p::MTKParameters, pind::ParameterIndex)
     return _ducktyped_parameter_values(p, pind)
 end
+
+# Indexing a buffer tuple with a runtime `i` is type-unstable once it holds four or more types,
+# which is a dynamic dispatch that `juliac --trim` rejects. Walking the tuple narrows each access.
+@inline function _buffer_getindex(bufs::Tuple{}, i::Int, j, k)
+    throw(BoundsError(bufs, i))
+end
+@inline function _buffer_getindex(bufs::Tuple, i::Int, j, k)
+    if i === 1
+        buf = first(bufs)
+        return isempty(k) ? buf[j] : buf[j][k...]
+    end
+    return _buffer_getindex(Base.tail(bufs), i - 1, j, k)
+end
+@inline _buffer_getindex(bufs, i::Int, j, k) = isempty(k) ? bufs[i][j] : bufs[i][j][k...]
+
+@inline function _buffer_setindex!(bufs::Tuple{}, val, i::Int, j, k, validate_size::Bool)
+    throw(BoundsError(bufs, i))
+end
+@inline function _buffer_setindex!(bufs::Tuple, val, i::Int, j, k, validate_size::Bool)
+    if i === 1
+        buf = first(bufs)
+        if isempty(k)
+            if validate_size && size(val) !== size(buf[j])
+                throw(InvalidParameterSizeException(size(buf[j]), size(val)))
+            end
+            buf[j] = val
+        else
+            buf[j][k...] = val
+        end
+        return nothing
+    end
+    return _buffer_setindex!(Base.tail(bufs), val, i - 1, j, k, validate_size)
+end
+
 function _ducktyped_parameter_values(p, pind::ParameterIndex)
     @unpack portion, idx = pind
     if portion isa SciMLStructures.Tunable
@@ -483,11 +574,13 @@ function _ducktyped_parameter_values(p, pind::ParameterIndex)
     end
     i, j, k... = idx
     if portion isa SciMLStructures.Discrete
-        return isempty(k) ? p.discrete[i][j] : p.discrete[i][j][k...]
+        return _buffer_getindex(p.discrete, i, j, k)
     elseif portion isa SciMLStructures.Constants
-        return isempty(k) ? p.constant[i][j] : p.constant[i][j][k...]
+        return _buffer_getindex(p.constant, i, j, k)
     elseif portion === NONNUMERIC_PORTION
-        return isempty(k) ? p.nonnumeric[i][j] : p.nonnumeric[i][j][k...]
+        return _buffer_getindex(p.nonnumeric, i, j, k)
+    elseif portion isa SciMLStructures.Caches
+        return _buffer_getindex(p.caches, i, j, k)
     else
         error("Unhandled portion $portion")
     end
@@ -510,33 +603,14 @@ function SymbolicIndexingInterface.set_parameter!(
     else
         i, j, k... = idx
         if portion isa SciMLStructures.Discrete
-            if isempty(k)
-                if validate_size && size(val) !== size(p.discrete[i][j])
-                    throw(
-                        InvalidParameterSizeException(
-                            size(p.discrete[i][j]), size(val)
-                        )
-                    )
-                end
-                p.discrete[i][j] = val
-            else
-                p.discrete[i][j][k...] = val
-            end
+            _buffer_setindex!(p.discrete, val, i, j, k, validate_size)
         elseif portion isa SciMLStructures.Constants
-            if isempty(k)
-                if validate_size && size(val) !== size(p.constant[i][j])
-                    throw(InvalidParameterSizeException(size(p.constant[i][j]), size(val)))
-                end
-                p.constant[i][j] = val
-            else
-                p.constant[i][j][k...] = val
-            end
+            _buffer_setindex!(p.constant, val, i, j, k, validate_size)
         elseif portion === NONNUMERIC_PORTION
-            if isempty(k)
-                p.nonnumeric[i][j] = val
-            else
-                p.nonnumeric[i][j][k...] = val
-            end
+            # Nonnumeric elements and caches have no `size`.
+            _buffer_setindex!(p.nonnumeric, val, i, j, k, false)
+        elseif portion isa SciMLStructures.Caches
+            _buffer_setindex!(p.caches, val, i, j, k, false)
         else
             error("Unhandled portion $portion")
         end
@@ -607,8 +681,8 @@ function validate_parameter_type(ic::IndexCache, stype, sz, sym, index, val)
     if stype <: FnType
         stype = fntype_to_function_type(stype)
     end
-    # Nonnumeric parameters have to match the type
-    if portion === NONNUMERIC_PORTION
+    # Nonnumeric and cache parameters have to match the type
+    if portion === NONNUMERIC_PORTION || portion isa SciMLStructures.Caches
         val isa stype && return nothing
         throw(
             ParameterTypeException(
@@ -697,7 +771,8 @@ function __remake_buffer(indp, oldbuf::MTKParameters, idxs, vals; validate = tru
     # If the parameter buffer is an `MTKParameters` object, `indp` must eventually drill
     # down to an `AbstractSystem` using `symbolic_container`. We leverage this to get
     # the index cache.
-    ic = get_index_cache(indp_to_system(indp))
+    sys = indp_to_system(indp)
+    ic = get_index_cache(sys)
     for (idx, val) in zip(idxs, vals)
         sym = nothing
         if val === missing
@@ -707,7 +782,10 @@ function __remake_buffer(indp, oldbuf::MTKParameters, idxs, vals; validate = tru
             sym = idx
             idx = parameter_index(ic, sym)
             if idx === nothing
-                @warn "Symbolic variable $sym is not a (non-dependent) parameter in the system"
+                @SciMLMessage(
+                    "Symbolic variable $sym is not a (non-dependent) parameter in the system",
+                    _system_verbosity(sys), :parameter_not_in_system
+                )
                 continue
             end
             idx in handled_idxs && continue
@@ -724,7 +802,10 @@ function __remake_buffer(indp, oldbuf::MTKParameters, idxs, vals; validate = tru
                 for (i, vali) in zip(eachindex(sym), eachindex(val))
                     idx = parameter_index(ic, sym[i])
                     if idx === nothing
-                        @warn "Symbolic variable $sym is not a (non-dependent) parameter in the system"
+                        @SciMLMessage(
+                            "Symbolic variable $sym is not a (non-dependent) parameter in the system",
+                            _system_verbosity(sys), :parameter_not_in_system
+                        )
                         continue
                     end
                     # Intentionally don't check handled_idxs here because array variables always take priority
@@ -967,7 +1048,7 @@ end
                     Expr(
                         :tuple,
                         (
-                            :($similar_type($(fieldtype(C, i)), $(nonnumericT[i]))(nonnumerics[$i]))
+                            :($similar_type($(fieldtype(N, i)), $(nonnumericT[i]))(nonnumerics[$i]))
                                 for i in 1:length(nonnumericT)
                         )...
                     )

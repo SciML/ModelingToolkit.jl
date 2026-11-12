@@ -17,7 +17,11 @@ const EVAL_EXPR_MOD_KWARGS = """
 const INITIALIZEPROB_KWARGS = """
 - `guesses`: The guesses for variables in the system, used as initial values for the
   initialization problem.
-- `warn_initialize_determined`: Warn if the initialization system is under/over-determined.
+- `warn_initialize_determined`: (deprecated) Warn if the initialization system is
+  under/over-determined. Use `verbose` and the `singular_initialization`/
+  `overdetermined_initialization`/`underdetermined_initialization` toggles of
+  [`MTKVerbosity`](@ref) instead; when explicitly passed, this boolean overrides those
+  toggles.
 - `initialization_eqs`: Extra equations to use in the initialization problem.
 - `fully_determined`: Override whether the initialization system is fully determined.
 - `use_scc`: Whether to use `SCCNonlinearProblem` for initialization if the system is fully
@@ -38,12 +42,22 @@ $INITIALIZEPROB_KWARGS
   to construct the final `u0` value.
 - `p_constructor`: A function to apply to each array buffer created when constructing the
   parameter object.
-- `warn_cyclic_dependency`: Whether to emit a warning listing out cycles in initial
-  conditions provided for unknowns and parameters.
+- `verbose`: Controls diagnostic output during problem construction. Accepts an
+  [`MTKVerbosity`](@ref) specifier (used by ModelingToolkit; only its solver
+  sub-specifier for the problem type is placed in `prob.kwargs`), a `SciMLLogging` preset
+  or `Bool` (used by ModelingToolkit *and* forwarded to the solver via `prob.kwargs`, as
+  before), or a solver verbosity specifier (forwarded untouched). For
+  `InitializationProblem`, the forwarded value is the solver verbosity of the returned
+  problem; for other problems, the `initialization_verbosity` of an `MTKVerbosity` is the
+  solver verbosity of the initialization problem.
+- `warn_cyclic_dependency`: (deprecated) Whether to emit a warning listing out cycles in
+  initial conditions provided for unknowns and parameters. Use `verbose` and the
+  `cyclic_dependency` toggle of [`MTKVerbosity`](@ref) instead; when explicitly passed,
+  this boolean overrides that toggle.
 - `circular_dependency_max_cycle_length`: Maximum length of cycle to check for. Only
-  applicable if `warn_cyclic_dependency == true`.
+  applicable if cyclic-dependency reporting is enabled.
 - `circular_dependency_max_cycles`: Maximum number of cycles to check for. Only applicable
-  if `warn_cyclic_dependency == true`.
+  if cyclic-dependency reporting is enabled.
 - `substitution_limit`: The number times to substitute initial conditions into each other
   to attempt to arrive at a numeric value.
 - `missing_guess_value`: An instance of [`MissingGuessValue`](@ref) which indicates what
@@ -75,7 +89,8 @@ const INTERNAL_INITIALIZEPROB_KWARGS = """
 - `time_dependent_init`: Whether to build a time-dependent initialization for the problem. A
   time-dependent initialization solves for a consistent `u0`, whereas a time-independent one
   only runs parameter initialization.
-- `algebraic_only`: Whether to build the initialization problem using only algebraic equations.
+- `algebraic_only`: Whether to build the initialization problem without the initialization
+  equations of the system. Equations passed via `initialization_eqs` are used regardless.
 - `allow_incomplete`: Whether to allow incomplete initialization problems.
 """
 
@@ -288,9 +303,44 @@ const CONSJ_KWARGS = """
   constraints.
 """
 
+const WEIGHTS_KWARGS = """
+- `weights`: An optional vector of weights for scalarizing a system with multiple costs.
+  If provided, the generated objective is `sum(weights .* get_costs(sys))` plus the
+  recursively consolidated costs of all subsystems, replacing the system's `consolidate`
+  function for this lowering. `weights` must have one entry per top-level cost of `sys`.
+  Entries may be real numbers or symbolic parameters of `sys`; symbolic weights must be
+  declared as `@parameters` of the system so that they are part of the parameter object
+  and can be updated via `remake` between solves.
+"""
+
 const CONSSPARSE_KWARGS = """
 - `cons_sparse`: Identical to the `sparse` keyword, but specifically for jacobian/hessian
   functions of the constraints.
+"""
+
+const ADTYPE_KWARGS = """
+- `adtype`: The choice of AD backend to use for derivatives of the objective and
+  constraints, given as an `ADTypes.AbstractADType` such as `AutoForwardDiff()` or
+  `AutoEnzyme()`. This is stored as the `adtype` field of the resulting function, which
+  `Optimization.jl` dispatches on when instantiating it for a solver. Defaults to
+  `SciMLBase.NoAD()`, which defers the choice of backend to the solver. `adtype` can also
+  be passed as the second positional argument of `OptimizationFunction`, matching the
+  `SciMLBase.OptimizationFunction` constructor. It is independent of `grad`, `hess`,
+  `cons_j` and `cons_h`, which control symbolic generation of derivative functions.
+"""
+
+const MULTIOBJECTIVE_KWARGS = """
+- `multiobjective`: Whether to build a `SciMLBase.MultiObjectiveOptimizationFunction`
+  instead of an `OptimizationFunction`. The generated objective is vector-valued and
+  returns [`costs`](@ref) elementwise - each of the system's own costs followed by the
+  consolidated cost of each subsystem - rather than scalarizing them through the
+  system's `consolidate` function. `weights` cannot be combined with
+  `multiobjective = true`.
+"""
+
+const ADTYPE_PROBLEM_KWARGS = """
+- `adtype`: Forwarded to the `OptimizationFunction` constructor; sets the `adtype` field
+  of the resulting function.
 """
 
 const INPUTFN_KWARGS = """
@@ -322,6 +372,7 @@ const OPTIONAL_FN_KWARGS_DICT = Dict(
     :cons_h => CONSH_KWARGS,
     :cons_j => CONSJ_KWARGS,
     :cons_sparse => CONSSPARSE_KWARGS,
+    :adtype => ADTYPE_KWARGS,
     :inputfn => INPUTFN_KWARGS,
     :controljac => CONTROLJAC_KWARGS,
     :paramjac => PARAMJAC_KWARGS

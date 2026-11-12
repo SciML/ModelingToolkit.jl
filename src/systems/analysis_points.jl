@@ -2,22 +2,48 @@
     $(TYPEDSIGNATURES)
 
 Given a list of analysis points, break the connection for each. The output of each broken
-analysis point is turned into a parameter of the system. Returns the modified system and a
-vector of the variables that were turned into parameters (the "loop-opening parameters"),
-whose operating-point values must be supplied by the user when linearizing.
+analysis point is turned into a solvable parameter of the system (a parameter with a
+binding of `missing`), whose value is determined by initialization. Returns the modified
+system, a vector of the variables that were turned into parameters (the "loop-opening
+parameters"), and a vector of the variables that drove them before the connection was
+broken (the inputs of the analysis points), in the same order.
+
+The linearization functions use the drivers to hold each opened signal at the value it has
+at the operating point of the loop-closed system, unless the operating point or an initial
+condition of the opened variable specifies its value.
 """
 function handle_loop_openings(sys::AbstractSystem, aps)
     loop_opening_params = SymbolicT[]
+    loop_opening_drivers = SymbolicT[]
     for ap in canonicalize_ap(sys, aps)
+        sys, (driver,) = apply_transformation(GetInput(ap), sys)
         sys, (d_vs,) = apply_transformation(Break(ap, true), sys)
         append!(loop_opening_params, d_vs)
+        append!(loop_opening_drivers, fill(driver, length(d_vs)))
     end
-    return sys, loop_opening_params
+    isempty(loop_opening_params) && return sys, loop_opening_params, loop_opening_drivers
+    binds = copy(parent(get_bindings(sys)))
+    for p in loop_opening_params
+        binds[p] = COMMON_MISSING
+    end
+    @set! sys.bindings = ROSymmapT(binds)
+    return sys, loop_opening_params, loop_opening_drivers
 end
 
 const DOC_LOOP_OPENINGS = """
-- `loop_openings`: A list of analysis points whose connections should be removed and
-  the outputs set to the input as a part of the linear analysis.
+- `loop_openings`: A list of analysis points whose connections should be removed as a
+  part of the linear analysis. Each entry is an analysis point of the unsimplified,
+  uncompleted system, obtained as `sys.ap_name`. The disconnected signals keep the value
+  of their drivers at the operating point of the loop-closed system, unless the operating
+  point or an initial condition specifies their value, see the section "Operating Point
+  of Signals Disconnected by Loop Openings" of the linear-analysis tutorial.
+"""
+
+const DOC_APS = """
+- `aps`: An analysis point of the unsimplified, uncompleted system `sys`, obtained as
+  `sys.ap_name`, or a vector of such points. A point belonging to a subsystem is reached
+  through the hierarchy, `sys.inner.ap_name`. Passing the `Symbol` name of a point is the
+  old style and will be deprecated.
 """
 
 const DOC_SYS_MODIFIER = """
@@ -34,6 +60,10 @@ returns the added variables `(du, u)`, to each of the analysis points in `aps` a
 calls `linearization_function` with all the `du`s as inputs and `u`s as outputs. Returns
 the linearization function and modified, simplified system.
 
+# Arguments
+
+$DOC_APS
+
 # Keyword arguments
 
 $DOC_LOOP_OPENINGS
@@ -46,7 +76,7 @@ function get_linear_analysis_function(
     )
     dus = SymbolicT[]
     us = SymbolicT[]
-    sys, loop_opening_params = handle_loop_openings(sys, loop_openings)
+    sys, loop_opening_params, loop_opening_drivers = handle_loop_openings(sys, loop_openings)
     aps = canonicalize_ap(sys, aps)
     for ap in aps
         sys, (du, u) = apply_transformation(transform(ap), sys)
@@ -62,14 +92,28 @@ function get_linear_analysis_function(
         else
             append!(us, u)
         end
+        if transform === LoopTransferTransform
+            # The input that replaces the broken connection is held at the value of the
+            # signal that drove it, like the signals opened by `loop_openings`
+            for d in (du isa SymbolicT ? (du,) : du)
+                push!(loop_opening_params, d)
+                push!(loop_opening_drivers, u::SymbolicT)
+            end
+        end
     end
-    return linearization_function(system_modifier(sys), dus, us; loop_opening_params, kwargs...)
+    return linearization_function(
+        system_modifier(sys), dus, us; loop_opening_params, loop_opening_drivers, kwargs...
+    )
 end
 """
     $(TYPEDSIGNATURES)
 
 Return the sensitivity function for the analysis point(s) `aps`, and the modified system
 simplified with the appropriate inputs and outputs.
+
+# Arguments
+
+$DOC_APS
 
 # Keyword Arguments
 
@@ -88,6 +132,10 @@ end
 Return the complementary sensitivity function for the analysis point(s) `aps`, and the
 modified system simplified with the appropriate inputs and outputs.
 
+# Arguments
+
+$DOC_APS
+
 # Keyword Arguments
 
 $DOC_LOOP_OPENINGS
@@ -104,6 +152,10 @@ end
 
 Return the loop-transfer function for the analysis point(s) `aps`, and the modified
 system simplified with the appropriate inputs and outputs.
+
+# Arguments
+
+$DOC_APS
 
 # Keyword Arguments
 
@@ -126,14 +178,20 @@ perturbation to the output of `ap`.
 
 # Arguments
 
-- `sys`: system containing the analysis point.
-- `ap`: an [`AnalysisPoint`](@ref) or its symbolic name.
+- `sys`: The unsimplified, uncompleted system containing the analysis point. Both
+  `mtkcompile` and `complete` remove the analysis points, so neither may have been
+  applied to `sys`.
+- `ap`: An [`AnalysisPoint`](@ref), obtained by property access on `sys`, as in
+  `get_sensitivity(sys, sys.plant_input)`. A point belonging to a subsystem is reached
+  through the hierarchy, `sys.inner.plant_input`. Passing the `Symbol` name of the point,
+  `get_sensitivity(sys, :plant_input)`, is the old style and will be deprecated.
 
 # Keyword Arguments
 
 - `loop_openings`: connections to open before linearization.
 - `system_modifier`: transformation applied before linearization.
-- `op`: operating-point values passed to [`linearize`](@ref).
+- `op`: operating-point values passed to [`linearize`](@ref), a dictionary or a
+  [`LinearizationOpPoint`](@ref).
 - `allow_input_derivatives`: allow derivatives of input variables in the linearization.
 - `t`: time at which to evaluate the linearization.
 - `kwargs...`: forwarded to [`get_sensitivity_function`](@ref).
@@ -160,8 +218,8 @@ Compute the complementary-sensitivity transfer matrices at analysis point `ap` a
 at the output of `ap`, linearizes the system, and computes the transfer function from the
 perturbation to the input of `ap`.
 
-Keyword arguments match [`get_sensitivity`](@ref), with `kwargs...` forwarded to
-[`get_comp_sensitivity_function`](@ref).
+Arguments and keyword arguments match [`get_sensitivity`](@ref), with `kwargs...`
+forwarded to [`get_comp_sensitivity_function`](@ref).
 
 See also [`get_sensitivity`](@ref) and [`get_looptransfer`](@ref).
 """
@@ -183,8 +241,8 @@ end
 Compute the loop-transfer matrices at analysis point `ap` and return
 `(matrices, simplified_system, extras)`. The transfer is from `ap.out` to `ap.in`.
 
-Keyword arguments match [`get_sensitivity`](@ref), with `kwargs...` forwarded to
-[`get_looptransfer_function`](@ref).
+Arguments and keyword arguments match [`get_sensitivity`](@ref), with `kwargs...`
+forwarded to [`get_looptransfer_function`](@ref).
 
 !!! info "Negative feedback"
 
@@ -210,12 +268,18 @@ end
 
 Apply analysis-point transformations to prepare a system for linearization.
 
+`inputs`, `outputs` and `loop_openings` are analysis points of the unsimplified,
+uncompleted system `sys`, obtained as `sys.ap_name`, or vectors of such points. Passing
+the `Symbol` names of the points is the old style and will be deprecated.
+
 Returns
 - `sys`: The transformed system.
 - `input_vars`: A vector of input variables corresponding to the input analysis points.
 - `output_vars`: A vector of output variables corresponding to the output analysis points.
-- `loop_opening_params`: A vector of the variables that were turned into parameters by the
-  `loop_openings` (their operating-point values must be supplied when linearizing).
+- `loop_opening_params`: A vector of the signals disconnected by the `loop_openings`,
+  including the input variables of input analysis points that are also loop openings.
+- `loop_opening_drivers`: A vector of the variables that drove the signals in
+  `loop_opening_params` before the connections were broken, in the same order.
 """
 function linearization_ap_transform(
         sys,
@@ -225,12 +289,26 @@ function linearization_ap_transform(
     loop_openings = Set(map(nameof, canonicalize_ap(sys, loop_openings)))
     inputs = canonicalize_ap(sys, inputs)
     outputs = canonicalize_ap(sys, outputs)
+    input_names = Set{Symbol}(nameof(input) for input in inputs)
+    for output in outputs
+        output isa AnalysisPoint && nameof(output) in input_names || continue
+        throw(
+            ArgumentError(
+                lazy"The analysis point $(nameof(output)) is used both as an input and as an output of the linearization. The transfer function from a perturbation at an analysis point to the signal at the same analysis point depends on whether the perturbation is added before or after the signal is measured: it is the sensitivity function in one case and the complementary sensitivity function in the other. Use `get_sensitivity` or `get_comp_sensitivity` instead."
+            )
+        )
+    end
     input_vars = SymbolicT[]
+    opened_inputs = SymbolicT[]
+    opened_input_drivers = SymbolicT[]
     for input in inputs
         if nameof(input) in loop_openings
             delete!(loop_openings, nameof(input))
+            sys, (driver,) = apply_transformation(GetInput(input), sys)
             sys, (input_vs,) = apply_transformation(Break(input), sys)
             append!(input_vars, input_vs)
+            append!(opened_inputs, input_vs)
+            append!(opened_input_drivers, fill(driver, length(input_vs)))
         else
             sys, (input_var,) = apply_transformation(PerturbOutput(input), sys)
             push!(input_vars, input_var)
@@ -247,8 +325,12 @@ function linearization_ap_transform(
         end
         push!(output_vars, output_var)
     end
-    sys, loop_opening_params = handle_loop_openings(sys, map(AnalysisPoint, collect(loop_openings)))
-    return sys, input_vars, output_vars, loop_opening_params
+    sys, loop_opening_params, loop_opening_drivers = handle_loop_openings(
+        sys, map(AnalysisPoint, collect(loop_openings))
+    )
+    append!(loop_opening_params, opened_inputs)
+    append!(loop_opening_drivers, opened_input_drivers)
+    return sys, input_vars, output_vars, loop_opening_params, loop_opening_drivers
 end
 
 function linearization_function(
@@ -256,12 +338,13 @@ function linearization_function(
         inputs::Union{Symbol, Vector{Symbol}, AnalysisPoint, Vector{AnalysisPoint}},
         outputs; loop_openings = [], system_modifier = identity, kwargs...
     )
-    sys, input_vars, output_vars,
-        loop_opening_params = linearization_ap_transform(
+    sys, input_vars, output_vars, loop_opening_params,
+        loop_opening_drivers = linearization_ap_transform(
         sys, inputs, outputs, loop_openings
     )
     return linearization_function(
-        system_modifier(sys), input_vars, output_vars; loop_opening_params, kwargs...
+        system_modifier(sys), input_vars, output_vars;
+        loop_opening_params, loop_opening_drivers, kwargs...
     )
 end
 
@@ -273,6 +356,12 @@ analysis points `input_aps` and the output analysis points `output_aps`. The ret
 `sys` contains only the subsystems between the boundary analysis points at every level
 of the hierarchy; all upstream and downstream components, and all equations involving
 them, are removed.
+
+The boundary points are obtained as `sys.ap_name`, or `sys.inner.ap_name` for a point
+belonging to a subsystem, and each argument accepts a single point or a vector of points.
+Passing the `Symbol` names of the points is the old style and will be deprecated. `sys`
+must not have been passed through `mtkcompile` or `complete`, both of which remove the
+analysis points.
 
 Boundary analysis points may reside at any level of the hierarchy and in different
 branches of the subsystem tree.

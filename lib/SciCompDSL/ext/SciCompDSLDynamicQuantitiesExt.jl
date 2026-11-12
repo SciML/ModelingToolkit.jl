@@ -1,14 +1,11 @@
 module SciCompDSLDynamicQuantitiesExt
 
 import DynamicQuantities
-const DQ = DynamicQuantities
 
-using ModelingToolkitBase, Symbolics
 using ModelingToolkitBase: VariableUnit, setdefault
+using Symbolics: Num
 using SciCompDSL
 using SciCompDSL: convert_units, NoValue, NO_VALUE
-
-import ModelingToolkitBase as MTK
 
 function SciCompDSL.convert_units(varunits::DynamicQuantities.Quantity, value)
     return DynamicQuantities.ustrip(

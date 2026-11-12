@@ -18,7 +18,7 @@ using Reexport: Reexport, @reexport
     using ImplicitDiscreteSolve: IDSolve
     import JumpProcesses
     using JumpProcesses: ConstantRateJump, JumpProblem, JumpSet, MassActionJump,
-        VariableRateJump, get_num_majumps, needs_depgraph, needs_vartojumps_map,
+        VariableRateJump, needs_depgraph, needs_vartojumps_map,
         reset_aggregated_jumps!
     # ONLY here for the invalidations
     import REPL
@@ -27,12 +27,14 @@ using Reexport: Reexport, @reexport
     import BandedMatrices: BandedMatrices, BandedMatrix, bandwidths
 end
 
+import ADTypes
 import SciMLBase
 using SciMLBase: BVPFunction, BVProblem, CallbackSet, ContinuousCallback, DAEFunction,
     DAEProblem, DDEFunction, DDEProblem, DiscreteCallback, DiscreteFunction,
     DiscreteProblem, HomotopyNonlinearFunction, ImplicitDiscreteFunction,
     ImplicitDiscreteProblem, IntervalNonlinearFunction, IntervalNonlinearProblem,
-    LinearProblem, NonlinearFunction, NonlinearLeastSquaresProblem, NonlinearProblem,
+    LinearProblem, MultiObjectiveOptimizationFunction, NonlinearFunction,
+    NonlinearLeastSquaresProblem, NonlinearProblem,
     ODEFunction, ODEInputFunction, ODEProblem, ODESolution, OptimizationFunction,
     OptimizationProblem, ReturnCode, SCCNonlinearProblem, SDDEFunction, SDDEProblem,
     SDEFunction, SDEProblem, SteadyStateProblem, VectorContinuousCallback, check_error,
@@ -101,6 +103,11 @@ import AbstractTrees
 using AbstractTrees: TreeIterator, print_tree
 using SciMLBase: StandardODEProblem, StandardNonlinearProblem, TimeDomain,
     Clock, SolverStepClock, AbstractNonlinearProblem
+using SciMLLogging: SciMLLogging, @verbosity_specifier, @SciMLMessage,
+    AbstractVerbositySpecifier, AbstractVerbosityPreset, MessageLevel,
+    Silent, InfoLevel, WarnLevel,
+    None, Minimal, Standard, Detailed, All,
+    verbosity_to_bool
 import Moshi
 import RecursiveArrayTools
 using RecursiveArrayTools: ArrayPartition, DiffEqArray
@@ -108,6 +115,7 @@ import Graphs: SimpleDiGraph, add_edge!
 import CommonSolve
 using CommonSolve: init, solve
 import EnumX
+import ReadOnlyArrays: ReadOnlyVector
 import ReadOnlyDicts: ReadOnlyDict
 
 import RuntimeGeneratedFunctions
@@ -150,9 +158,10 @@ import Random: AbstractRNG
 import DomainSets
 # `DomainSets` re-exports IntervalSets' `endpoints`; reach it through its owner.
 import IntervalSets
+import NonlinearSolveBase
 # For `LinearInitializationProblem`
 import SCCNonlinearSolve
-using TaskLocalValues: TaskLocalValue
+import Serialization
 
 export @derivatives
 
@@ -272,6 +281,7 @@ include("independent_variables.jl")
 include("constants.jl")
 include("derivative_dict.jl")
 include("atomic_array_dict.jl")
+include("per_task_value.jl")
 include("parameter_bindings_graph.jl")
 
 const SymmapT = AtomicArrayDict{SymbolicT, Dict{SymbolicT, SymbolicT}}
@@ -287,6 +297,7 @@ const COMMON_FALSE = SU.Const{VartypeT}(false)
 const COMMON_INF = SU.Const{VartypeT}(Inf)
 
 include("utils.jl")
+include("verbosity.jl")
 
 include("systems/index_cache.jl")
 include("systems/parameter_buffer.jl")
@@ -310,6 +321,9 @@ include("systems/problem_utils.jl")
 # Operator + lowering layer; must load before the problem constructors that
 # consume it (problems/nonlinearproblem.jl selector + problems/homotopyproblem.jl).
 include("systems/homotopy_operator.jl")
+# The `limited` operator: symbolic SPICE-style iterate limiting (PCNR), lowered during
+# `mtkcompile` (`apply_limited_lowering`) and consumed by `problems/nonlinearproblem.jl`.
+include("systems/limited_operator.jl")
 
 include("problems/compatibility.jl")
 include("problems/odeproblem.jl")
@@ -400,7 +414,7 @@ export NonlinearProblem
 export AbstractNonlinearProblem
 export IntervalNonlinearFunction
 export IntervalNonlinearProblem
-export OptimizationProblem, constraints
+export OptimizationProblem, constraints, constraints_to_penalties
 export SteadyStateProblem
 export JumpProblem, SymbolicMassActionJump
 export flatten
@@ -422,12 +436,15 @@ export Differential, expand_derivatives, @derivatives
 export Equation
 export Term
 export SymScope, LocalScope, ParentScope, GlobalScope
-export independent_variable, equations, observed, full_equations, jumps, cost,
+export independent_variable, equations, observed, full_equations, jumps, cost, costs,
     brownians
 export initialization_equations, guesses, bindings, initial_conditions, hierarchy
 export set_defaults
 export state_priorities, irreducibles, maybe_zeros
 export mtkcompile, expand_connections, structural_simplify
+export MTKVerbosity
+# The toggle levels and presets of `MTKVerbosity` (e.g. `SciMLLogging.Silent`)
+export SciMLLogging
 export solve
 export Pre
 
@@ -439,6 +456,9 @@ export calculate_tgrad, generate_tgrad
 export generate_cost, calculate_cost_gradient, generate_cost_gradient
 export generate_trajectory
 export calculate_cost_hessian, generate_cost_hessian
+export generate_multiobjective_cost, calculate_multiobjective_jacobian,
+    generate_multiobjective_jacobian, calculate_multiobjective_hessian,
+    generate_multiobjective_hessian
 export calculate_massmatrix, generate_diffusion_function
 export generate_control_function, build_explicit_observed_function
 export stochastic_integral_transform
@@ -457,6 +477,7 @@ export alg_equations, diff_equations, has_alg_equations, has_diff_equations
 export get_alg_eqs, get_diff_eqs, has_alg_eqs, has_diff_eqs
 
 export homotopy
+export limited, limitnew, limitold
 
 export @variables, @parameters, @independent_variables, @constants, @brownians, @brownian,
     @poissonians, @discretes
@@ -474,7 +495,7 @@ export MTKParameters, reorder_dimension_by_tunables!, reorder_dimension_by_tunab
 
 export HomotopyContinuationProblem
 
-export AnalysisPoint, open_loop
+export AnalysisPoint, open_loop, ap_var
 
 include("systems/optimal_control_interface.jl")
 
@@ -510,9 +531,11 @@ const set_scalar_metadata = setmetadata
 @public convert_bindings_for_time_independent_system, get_w
 @public Both
 @public SymbolicADDisallowed, check_symbolic_ad_allowed
-@public tobrownian, toparam
+@public canonical_constraints, constraint_residual
+@public tobrownian, toparam, tovar
 @public ProblemTypeCtx
 @public HomotopyCtx, homotopy_enabled, strip_homotopy
+@public MTKVerbosityCtx
 
 for prop in [SYS_PROPS; [:continuous_events, :discrete_events]]
     getter = Symbol(:get_, prop)
@@ -568,5 +591,6 @@ function __init__()
     return nothing
 end
 
+include("despecialize.jl")
 include("precompile.jl")
 end # module

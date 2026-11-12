@@ -50,6 +50,7 @@ end
             @safetestset "Input Output Test" include("input_output_handling.jl")
             @safetestset "System Building Tests" include("system_building.jl")
             @safetestset "Simple `mtkcompile`" include("simple_mtkcompile.jl")
+            @safetestset "SciMLLogging verbosity" include("verbosity.jl")
             @safetestset "`@mtkcomplete`" include("mtkcomplete.jl")
             @safetestset "ODESystem Test" include("odesystem.jl")
             @safetestset "System `tspan`" include("system_tspan.jl")
@@ -58,6 +59,7 @@ end
             @safetestset "Split Parameters Test" include("split_parameters.jl")
             @safetestset "StaticArrays Test" include("static_arrays.jl")
             @safetestset "Components Test" include("components.jl")
+            @safetestset "Struct Variables Test" include("struct_variables.jl")
             @safetestset "Error Handling" include("error_handling.jl")
             @safetestset "Basic transformations" include("basic_transformations.jl")
             @safetestset "Change of variables" include("changeofvariables.jl")
@@ -68,6 +70,8 @@ end
             @safetestset "Function Registration Test" include("function_registration.jl")
             @safetestset "Precompiled Modules Test" include("precompile_test.jl")
             @safetestset "DAE Jacobians Test" include("dae_jacobian.jl")
+            @safetestset "Array equations reach `DAEProblem`" include("array_equation_dae.jl")
+            @safetestset "Array unknowns resolve from varmaps" include("array_varmap_resolve.jl")
             @safetestset "Jacobian Sparsity" include("jacobiansparsity.jl")
             @safetestset "Modelingtoolkitize Test" include("modelingtoolkitize.jl")
             @safetestset "Constants Test" include("constants.jl")
@@ -82,10 +86,13 @@ end
         @safetestset "Guess Propagation" include("guess_propagation.jl")
         @safetestset "InitializationSystem Test" include("initializationsystem.jl")
         @safetestset "Initial Values Test" include("initial_values.jl")
+        @safetestset "Nonnumeric parameter reconstruction" include("nonnumeric_reconstruction.jl")
     end
 
     if GROUP == "All" || GROUP == "InterfaceII"
         @safetestset "Code Generation Test" include("code_generation.jl")
+        @safetestset "Function Chunking Test" include("function_chunking.jl")
+        @safetestset "Array Equation ODEProblem Test" include("array_equation_ode.jl")
         @safetestset "IndexCache Test" include("index_cache.jl")
         @safetestset "Variable Utils Test" include("variable_utils.jl")
         @safetestset "Variable Metadata Test" include("test_variable_metadata.jl")
@@ -95,6 +102,8 @@ end
         @safetestset "SDESystem Test" include("sdesystem.jl")
         @safetestset "DDESystem Test" include("dde.jl")
         @safetestset "NonlinearSystem Test" include("nonlinearsystem.jl")
+        @safetestset "Limited operator (PCNR iterate limiting)" include("limited_operator.jl")
+        @safetestset "Array-equation Nonlinear" include("array_equation_nl.jl")
         @safetestset "Homotopy lowering" include("homotopy_lowering.jl")
         @safetestset "Homotopy problem construction & sweep" include("homotopy_problem.jl")
         @safetestset "Homotopy OMC parity" include("homotopy_omc_parity.jl")
@@ -125,6 +134,7 @@ end
         println("C compilation test requires gcc available in the path!")
         @safetestset "C Compilation Test" include("ccompile.jl")
         @safetestset "Multithreading test" include("multithreading.jl")
+        @safetestset "PerTaskValue test" include("per_task_value.jl")
         @testset "Distributed Test" include("distributed.jl")
         @testset "Serialization" include("serialization.jl")
     end
@@ -139,12 +149,14 @@ end
         @safetestset "LabelledArrays Test" include("extensions/labelledarrays.jl")
         @safetestset "BifurcationKit Extension Test" include("extensions/bifurcationkit.jl")
         @safetestset "Despecialized MTKParameters AD Test" include("extensions/despecialized_parameters_ad.jl")
-        # @safetestset "Auto Differentiation Test" include("extensions/ad.jl")
+        @safetestset "Initialization maps AD" include("extensions/initialization_maps_ad.jl")
+        @safetestset "Auto Differentiation Test" include("extensions/ad.jl")
     end
 
     if GROUP == "All" || GROUP == "Optimization"
         activate_optimization_env()
         @safetestset "OptimizationSystem Test" include("optimization/optimizationsystem.jl")
+        @safetestset "MultiObjective Optimization" include("optimization/multiobjective.jl")
         @safetestset "InfiniteOpt Extension Test" include("optimization/test_infiniteopt.jl")
         @safetestset "Dynamic Optimization Collocation Solvers" include("optimization/dynamic_optimization.jl")
     end

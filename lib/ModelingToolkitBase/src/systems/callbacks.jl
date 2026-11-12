@@ -140,7 +140,10 @@ function AffectSystem(
     isempty(affect) && return nothing
     if isnothing(iv)
         iv = t_nounits
-        @warn "No independent variable specified. Defaulting to t_nounits."
+        @SciMLMessage(
+            "No independent variable specified. Defaulting to t_nounits.",
+            _system_verbosity(parent_sys), :affect_default_independent_variable
+        )
     end
     _unhack_sys = reverse_all_default_reversible_transformations(parent_sys)
     extra_eqs = Equation[alg_equations(_unhack_sys); observed(_unhack_sys)]
@@ -921,6 +924,9 @@ residuals floor at the same roundoff level the ODE solver already lives with; ho
 affect solve to a tighter tolerance than the integration itself makes a solvable callback
 report as unsolvable.
 
+Not every integrator has tolerances at all: `JumpProcesses`' `SSAIntegrator` stores `opts` as
+`(callback = ...,)`, so the field is simply absent and the nonlinear solver's default is used.
+
 Two values need translating before the nonlinear solver can be given them:
 
   - `false` is what `OrdinaryDiffEqCore` stores for a tolerance that was not supplied under a
@@ -937,7 +943,9 @@ Two values need translating before the nonlinear solver can be given them:
     integration.
 """
 function affect_tolerance(integ, name::Symbol)
-    tol = getproperty(integ.opts, name)
+    opts = integ.opts
+    hasproperty(opts, name) || return nothing
+    tol = getproperty(opts, name)
     tol isa Bool && return nothing
     tol isa AbstractArray && return isempty(tol) ? nothing : minimum(tol)
     return tol
@@ -957,6 +965,20 @@ function (ia::ImplicitAffect)(integ)
     ia.u_setter!(integ, ia.u_getter(affsol))
     ia.p_setter!(integ, ia.p_getter(affsol))
     return ia.reset_jumps && reset_aggregated_jumps!(integ)
+end
+
+"""
+    EMPTY_AFFECT(integ, args...)
+
+Sentinel affect that does nothing. Used as the default `affect` / `affect_neg` when a
+callback specifies no affect, rather than passing `nothing` to SciMLBase (so continuous
+rootfinding still stops at the event). Clears `derivative_discontinuity` so DiffEqBase
+skips the post-affect re-initialization and trailing duplicate save; the root-time
+re-evaluation from `change_t_via_interpolation!` still runs.
+"""
+function EMPTY_AFFECT(integ, args...)
+    SciMLBase.derivative_discontinuity!(integ, false)
+    return nothing
 end
 
 @static if pkgversion(SciMLBase) < v"3"
@@ -990,7 +1012,7 @@ else
     Callable struct for a `VectorContinuousCallback`. Routes an
     integrator call to the appropriate per-equation affect based on the equation index `idx`.
     Created inside [`generate_callback`](@ref) for vectors of `SymbolicContinuousCallback`s.
-    Skips `nothing` affects.
+    Skips `nothing` / [`EMPTY_AFFECT`](@ref) affects.
 
     # Fields
     - `eq2affect`: maps condition equation index → affect index
@@ -1004,17 +1026,25 @@ else
     end
 
     function (va::VectorAffect)(integ, evts)
+        applied = false
         for (i, evt) in enumerate(evts)
             if evt == 1
                 f = va.affects[va.eq2affect[i]]
-                f === nothing && continue
+                (f === nothing || f === EMPTY_AFFECT) && continue
                 f(integ)
+                applied = true
             elseif evt == -1
                 f = va.affect_negs[va.eq2affect[i]]
-                f === nothing && continue
+                (f === nothing || f === EMPTY_AFFECT) && continue
                 f(integ)
+                applied = true
             end
         end
+        # DiffEqBase assumes a non-`nothing` VectorContinuousCallback affect modifies
+        # the integrator. Clear the flag when every triggered edge had no real affect so
+        # the post-affect re-init / trailing save are skipped (root-time re-eval remains).
+        applied || SciMLBase.derivative_discontinuity!(integ, false)
+        return
     end
 end
 
@@ -1158,14 +1188,6 @@ function generate_discrete_callbacks(
 end
 
 """
-    EMPTY_AFFECT(args...)
-
-Sentinel affect that does nothing. Used as the default `affect` and `affect_neg` when a
-callback specifies no affect, rather than passing `nothing` to SciMLBase.
-"""
-EMPTY_AFFECT(args...) = nothing
-
-"""
     generate_callback(cbs::Vector{SymbolicContinuousCallback}, sys; kwargs...)
 
 Generate a `VectorContinuousCallback` (or a single `ContinuousCallback` if there is only
@@ -1261,7 +1283,7 @@ function compile_vector_callback_affects(cbs, sys, ic; kwargs...)
         push!(finals, compile_affect(cb.finalize, cb, sys; default = nothing, kwargs...))
         if ic !== nothing
             save_idxs = get(ic.callback_to_clocks, cb, Int[])
-            for _ in conditions(cb)
+            for _ in flatten_equations(equations(cb))
                 push!(saved_clock_partitions, save_idxs)
             end
         end
@@ -1365,14 +1387,14 @@ Dispatches on the affect type:
 """
 function compile_affect(
         aff::Union{Nothing, Affect}, cb::AbstractCallback, sys::AbstractSystem;
-        default = nothing, kwargs...
+        default = nothing, mtk_verbosity::MTKVerbosity = DEFAULT_MTK_VERBOSE, kwargs...
     )
     return if isnothing(aff)
         default
     elseif aff isa AffectSystem
         compile_equational_affect(aff, sys; kwargs...)
     elseif aff isa ImperativeAffect
-        compile_functional_affect(aff, sys; kwargs...)
+        compile_functional_affect(aff, sys; mtk_verbosity, kwargs...)
     end
 end
 
@@ -1389,6 +1411,12 @@ function wrap_vector_optional_affect(funs, default)
     return VectorOptionalAffect(funs)
 end
 
+# Name of the integrator argument of generated affect functions. A fixed sentinel, not a
+# `gensym`: `RuntimeGeneratedFunction` types include the argument names, so a `gensym` gives
+# each compiled affect a new type, and every problem built from the same system recompiles
+# the solver. Named like `MTKUNKNOWNS_ARG` and `MTKPARAMETERS_ARG`.
+const MTKINTEGRATOR_ARG = :___mtkintegrator___
+
 """
     add_integrator_header(sys, integrator, out) -> (oop_wrap, iip_wrap)
 
@@ -1399,7 +1427,7 @@ resulting affect function is directly callable with an integrator rather than ex
 `(u, p, t)` arguments.
 """
 function add_integrator_header(
-        sys::AbstractSystem, integrator = gensym(:MTKIntegrator), out = :u
+        sys::AbstractSystem, integrator = MTKINTEGRATOR_ARG, out = :u
     )
     return expr -> Func(
             [DestructuredArgs(expr.args, integrator, inds = [:u, :p, :t])], [],
@@ -1532,7 +1560,7 @@ Base.@nospecializeinfer function compile_explicit_affect(
         indexin((@view lhss[is_p]), ps)
     end
     _ps = reorder_parameters(sys, ps)
-    integ = gensym(:MTKIntegrator)
+    integ = MTKINTEGRATOR_ARG
 
     u_up,
         u_up! = build_function_wrapper(
@@ -1661,7 +1689,7 @@ function process_events(sys; callback = nothing, tspan = nothing, kwargs...)
     contin_cbs = generate_continuous_callbacks(sys; kwargs...)
     discrete_cbs = generate_discrete_callbacks(sys; tspan, kwargs...)
     cb = merge_cb(contin_cbs, callback)
-    return (discrete_cbs === nothing) ? cb : CallbackSet(contin_cbs, discrete_cbs...)
+    return (discrete_cbs === nothing) ? cb : CallbackSet(cb, discrete_cbs...)
 end
 
 Base.@nospecializeinfer function _has_symbolic_events(sys)

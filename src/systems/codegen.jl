@@ -5,6 +5,9 @@ function MTKBase.torn_system_jacobian_sparsity(sys::System)
     @unpack graph, var_to_diff = structure
 
     neqs = nsrcs(graph)
+    # The graph describes the system as tearing produced it. Transformations applied
+    # afterwards, such as `additional_passes`, change equations without updating it.
+    neqs == length(full_equations(sys)) == length(unknowns(sys)) || return nothing
     nsts = ndsts(graph)
     states_idxs = findall(!Base.Fix1(StateSelection.isdervar, structure), 1:nsts)
     var2idx = StructuralTransformations.uneven_invmap(nsts, states_idxs)

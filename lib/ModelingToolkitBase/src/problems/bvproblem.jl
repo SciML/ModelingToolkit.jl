@@ -26,7 +26,7 @@ end
     isnothing(callback) || error("BVP solvers do not support callbacks.")
 
     _iip = resolve_iip(iip, op)
-    dvs = unknowns(sys)
+    dvs = flat_unknowns(sys)
     ctrls = inputs(sys)
     op = to_varmap(op, dvs)
     # Optimal-control BVPs (systems carrying a cost) deliberately pin only the
@@ -107,7 +107,12 @@ end
     end
 
     if (length(constraints(sys)) + length(op) > length(dvs))
-        @warn "The BVProblem is overdetermined. The total number of conditions (# constraints + # fixed initial values given by op) exceeds the total number of states. The BVP solvers will default to doing a nonlinear least-squares optimization."
+        # Peek at `verbose` without consuming it: `process_SciMLProblem` (via `kwargs...`)
+        # is the consumer of record, and `filter_kwargs` handles solver forwarding.
+        verbosity = _problem_verbosity(kwargs)
+        @SciMLMessage(verbosity, :overdetermined_constraints) do
+            "The BVProblem is overdetermined. The total number of conditions (# constraints + # fixed initial values given by op) exceeds the total number of states. The BVP solvers will default to doing a nonlinear least-squares optimization."
+        end
     end
 
     kwargs = process_kwargs(sys; expression, tspan, kwargs...)

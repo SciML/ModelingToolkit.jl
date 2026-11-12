@@ -1,4 +1,5 @@
 using ModelingToolkit, ADTypes, Test
+import SciMLLogging
 using NonlinearSolve
 using Symbolics: value
 using CommonSolve: solve
@@ -305,7 +306,10 @@ closed_loop = System(
     ]
 )
 
-@test_nowarn linearize(closed_loop, :r, :y; warn_empty_op = false)
+@test_nowarn linearize(
+    closed_loop, :r, :y;
+    verbose = MTKVerbosity(empty_operating_point = SciMLLogging.Silent)
+)
 
 # https://discourse.julialang.org/t/mtk-change-in-linearize/115760/3
 @component function Tank_noi(; name, ρ = 1, A = 5, K = 5, h_ς = 3)
@@ -396,7 +400,7 @@ end
     @named tank_noi = Tank_noi()
     @unpack md_i, h, m = tank_noi
     m_ss = 2.4000000003229878
-    @test_warn ["empty operating point", "warn_empty_op"] linearize(
+    @test_warn ["empty operating point", "empty_operating_point"] linearize(
         tank_noi, [md_i], [h]; p = [md_i => 1.0, m => m_ss]
     )
 end
@@ -446,4 +450,83 @@ end
     @test m1.B ≈ m2.B
     @test m1.C ≈ m2.C
     @test m1.D ≈ m2.D
+
+    # The same analysis point as input and output is ambiguous between the sensitivity
+    # function and the complementary sensitivity function.
+    @test_throws "get_sensitivity` or `get_comp_sensitivity" linearize(
+        sys, :u, :u; op = Dict(csys.P.x => 0.0, csys.C.x => 0.0)
+    )
+    @test_throws ArgumentError linearization_function(sys, [:u, :y], [:u])
+
+    # Loop openings also apply when the inputs and outputs are variables.
+    op = Dict(csys.P.x => 0.0, csys.C.x => 0.0)
+    m_closed, _ = linearize(sys, [], [csys.P.y]; op)
+    m_open, _ = linearize(sys, [], [csys.P.y]; loop_openings = [:u], op)
+    m_open_ap, _ = linearize(sys, :u, :y; loop_openings = [:u], op)
+    @test m_closed.A ≈ [-1.0 1.0; -2.0 -1.0]
+    # With the connection to `P.u` removed, the state of `C` does not affect `P`.
+    @test m_open.A ≈ [-1.0 0.0; -2.0 -1.0]
+    @test m_open.A ≈ m_open_ap.A
+end
+
+@testset "Linearization without inputs" begin
+    @variables x(t) y(t)
+    @named sys0 = System([D(x) ~ -x^2, y ~ 2x], t)
+    for autodiff in (AutoForwardDiff(), AutoFiniteDiff())
+        lsys, _ = linearize(sys0, [], [y]; op = Dict(x => 1.0), autodiff)
+        @test lsys.A ≈ [-2.0;;]
+        @test size(lsys.B) == (1, 0)
+        @test lsys.C == [2.0;;]
+        @test size(lsys.D) == (1, 0)
+    end
+    # A model without unknowns and inputs
+    @named sys1 = System([y ~ 2.0 + 0 * t], t)
+    lsys, _ = linearize(sys1, [], [y])
+    @test size(lsys.A) == (0, 0)
+    @test size(lsys.B) == (0, 0)
+    @test size(lsys.C) == (1, 0)
+    @test size(lsys.D) == (1, 0)
+end
+
+@testset "Input Jacobians use initialized inputs" begin
+    @variables x(t) = 1.0 u(t) [input = true] y(t) [output = true]
+    @named sys = System([D(x) ~ -x + u^2, y ~ x], t)
+    op = Dict(y => 4.0, D(x) => 0.0, u => missing, x => nothing)
+    mats, _, extras = linearize(
+        sys, [u], [y]; op, guesses = Dict(u => 1.0, x => 1.0),
+        initialization_abstol = 1.0e-12, initialization_reltol = 1.0e-12
+    )
+    @test mats.A ≈ [-1.0;;]
+    @test mats.B ≈ [4.0;;] atol = 1.0e-10
+    @test extras.x ≈ [4.0]
+end
+
+@testset "Input Jacobians without unknowns use supplied inputs" begin
+    @variables u(t) [input = true] y(t) [output = true]
+    @named sys = System([y ~ u^2], t)
+    linfun, _ = linearization_function(sys, [u], [y]; op = Dict(u => 3.0))
+    @test only(linfun(nothing, [u => 5.0], 0.0).h_u) ≈ 10.0
+end
+
+@testset "Operating point with values for some elements of an array variable" begin
+    import OrdinaryDiffEqDefault
+    @variables x(t)[1:2] u(t) [input = true] y(t) [output = true]
+    @named sys = System([D(x[1]) ~ -x[1] + u^2, x[2] ~ 2x[1], y ~ x[2]^2], t)
+    # Only `x[1]` is an unknown of the compiled system; `x[2]` is observed.
+    mats, _, extras = linearize(sys, [u], [y]; op = Dict(x[1] => 3.0, u => 2.0))
+    @test mats.A ≈ [-1.0;;]
+    @test mats.B ≈ [4.0;;]
+    @test mats.C ≈ [24.0;;]
+    @test extras.x ≈ [3.0]
+
+    ssys = mtkcompile(sys; inputs = [u], outputs = [y])
+    prob = ODEProblem(ssys, [x[1] => 1.0, u => 2.0], (0.0, 1.0))
+    sol = solve(prob)
+    x1 = sol(1.0; idxs = x[1])
+    mats, _, extras = linearize(sys, [u], [y]; op = LinearizationOpPoint(sol, 1.0))
+    @test mats.C ≈ [8x1;;] rtol = 1.0e-4
+    @test extras.x ≈ [x1] rtol = 1.0e-4
+    ress, _, extrass = linearize(sys, [u], [y]; op = LinearizationOpPoint(sol, [0.5, 1.0]))
+    @test ress[1].C ≈ [8sol(0.5; idxs = x[1]);;] rtol = 1.0e-4
+    @test ress[2].C ≈ [8x1;;] rtol = 1.0e-4
 end

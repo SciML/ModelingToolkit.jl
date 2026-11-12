@@ -124,10 +124,9 @@ function (xn::Num)(k::ShiftIndex)
     if length(vars) != 1
         error(lazy"Cannot shift a multivariate expression $x. Either create a new unknown and shift this, or shift the individual variables in the expression.")
     end
-    var = only(vars)
-    if operation(var) === getindex
-        var = arguments(var)[1]
-    end
+    # The independent variable lives on the root, so peel any projection off `var`:
+    # `u[1]` and `rec.x` are both shifted at their parent's `t`.
+    var = split_field_access(only(vars))[1]
     if !iscall(var)
         throw(ArgumentError(lazy"Cannot shift time-independent variable $var"))
     end
@@ -157,7 +156,7 @@ function (xn::Symbolics.Arr)(k::ShiftIndex)
     if length(vars) != 1
         error(lazy"Cannot shift a multivariate expression $x. Either create a new unknown and shift this, or shift the individual variables in the expression.")
     end
-    var = only(vars)
+    var = split_field_access(only(vars))[1]
     if !iscall(var)
         throw(ArgumentError(lazy"Cannot shift time-independent variable $var"))
     end
@@ -190,10 +189,11 @@ $(TYPEDEF)
 at the inferred clock for that equation.
 """
 struct SampleTime <: Operator
+    k::ShiftIndex
     init::Union{Nothing, Real}
 end
 
-SampleTime(; init::Union{Nothing, Real} = nothing) = SampleTime(init)()
+SampleTime(k::ShiftIndex = ShiftIndex(); init::Union{Nothing, Real} = nothing) = SampleTime(k, init)()
 (D::SampleTime)() = STerm(D, SArgsT(()); type = Real, shape = SU.ShapeVecT())
 SymbolicUtils.promote_symtype(::SampleTime) = Real
 SymbolicUtils.promote_shape(::SampleTime) = SU.ShapeVecT()
@@ -317,5 +317,11 @@ function SciMLBase.Clocks.EventClock(cb::SymbolicContinuousCallback)
     return SciMLBase.Clocks.EventClock(cb.zero_crossing_id)
 end
 
+# An operator term such as `Sample(x)`, `Hold(x)` or a clock change defined by another
+# package denotes the value at the current tick and is a symbol of its own, so shifts are
+# not distributed into operators. `Shift` and `Differential` are the exceptions.
+distribute_shift_into_operator(::Operator) = false
+distribute_shift_into_operator(::Shift) = true
+distribute_shift_into_operator(::Differential) = true
 distribute_shift_into_operator(::Sample) = false
 distribute_shift_into_operator(::Hold) = false

@@ -52,7 +52,7 @@ function detime_dvs(op)
     return if !iscall(op)
         op
     elseif issym(operation(op))
-        SSym(nameof(operation(op)); type = Real, shape = SU.shape(op))
+        SSym(nameof(operation(op)); type = symtype(op), shape = SU.shape(op))
     else
         maketerm(
             typeof(op), operation(op), detime_dvs.(arguments(op)),
@@ -67,7 +67,7 @@ end
 Reverse `detime_dvs` for the given `dvs` using independent variable `iv`.
 """
 function retime_dvs(op, dvs, iv)
-    issym(op) && return SSym(nameof(op); type = FnType{Tuple{symtype(iv)}, Real}, shape = SU.ShapeVecT())(iv)
+    issym(op) && return SSym(nameof(op); type = FnType{Tuple{symtype(iv)}, symtype(op)}, shape = SU.ShapeVecT())(iv)
     return iscall(op) ?
         maketerm(
             typeof(op), operation(op), retime_dvs.(arguments(op), (dvs,), (iv,)),
@@ -151,15 +151,19 @@ Value that can be provided to the `check` keyword of `System` to enable checking
 """
 const CheckUnits = 1 << 2
 
-function check_independent_variables(ivs)
+function check_independent_variables(ivs, verbosity = DEFAULT_MTK_VERBOSE)
     for iv in ivs
-        isparameter(iv) || @invokelatest warn_indepvar(iv)
+        isparameter(iv) || @invokelatest warn_indepvar(iv, verbosity)
     end
     return
 end
 
-@noinline function warn_indepvar(iv::SymbolicT)
-    return @warn "Independent variable $iv should be defined with @independent_variables $iv."
+@noinline function warn_indepvar(iv::SymbolicT, verbosity)
+    @SciMLMessage(
+        "Independent variable $iv should be defined with @independent_variables $iv.",
+        verbosity, :independent_variable_not_parameter
+    )
+    return nothing
 end
 
 function check_parameters(ps, iv)
@@ -192,11 +196,50 @@ function check_variables(dvs, iv)
     return
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Whether `eq` is an array equation: its left-hand side is array-valued, so it stands for
+one scalar equation per element.
+"""
+is_array_equation(eq::Equation) = SU.is_array_shape(SU.shape(eq.lhs))
+
+"""
+    $(TYPEDSIGNATURES)
+
+Expand the array equations in `eqs` into one scalar equation per element, so that the
+result has one equation per row of the generated code and of the mass matrix. Returns
+`eqs` itself when it has no array equations.
+"""
+function scalarize_array_equations(eqs::Vector{Equation})
+    any(is_array_equation, eqs) || return eqs
+    new_eqs = Equation[]
+    sizehint!(new_eqs, count_equation_rows(eqs))
+    for eq in eqs
+        if is_array_equation(eq)
+            append!(new_eqs, vec(Symbolics.scalarize(eq)))
+        else
+            push!(new_eqs, eq)
+        end
+    end
+    return new_eqs
+end
+
 function check_lhs(eq::Equation, ::Type{Differential}, dvs::Set)
     v = unwrap(eq.lhs)
     _iszero(v) && return
-    op = operation(v)
-    op isa Differential && isone(op.order) && only(arguments(v)) in dvs && return
+    if iscall(v)
+        op = operation(v)
+        if op isa Differential && isone(op.order)
+            x = only(arguments(v))
+            if SU.is_array_shape(SU.shape(x))
+                # `D(u[2:4])` names the slice; each of its elements must be an unknown.
+                all(idx -> x[idx] in dvs, SU.stable_eachindex(x)) && return
+            elseif x in dvs
+                return
+            end
+        end
+    end
     error(lazy"$v is not a valid LHS. Please run mtkcompile before simulation.")
 end
 function check_lhs(eqs::Vector{Equation}, ::Type{Differential}, dvs::Set)
@@ -397,7 +440,9 @@ function find_all_parameter_equations(sys::AbstractSystem)
             recurse = check_no_parameter_equations_recurse
         )
         isempty(varsbuf) && (!SU.isconst(eq.lhs) || !SU.isconst(eq.rhs)) && continue
-        intersect!(varsbuf, allowed_vars)
+        # `allowed_vars` is keyed on whole arrays/records, so a projection has to be
+        # matched through its parent rather than by exact identity.
+        filter!(Base.Fix1(contains_possibly_indexed_element, allowed_vars), varsbuf)
         push!(isempty(varsbuf) ? pareqs : rest_eqs, eq)
     end
 
@@ -596,7 +641,9 @@ Populate `vars` with mappings from symbolic variable names to variables.
 function collect_var_to_name!(vars::Dict{Symbol, SymbolicT}, xs::Vector{SymbolicT})
     for x in xs
         SU.isconst(x) && continue
-        x = split_indexed_var(x)[1]
+        # Projections are named through their parent, so collapse to it: `x[1]` and `x[2]`
+        # are both `x`, and `q.x` and `q.y` are both `q`.
+        x = split_field_access(x)[1]
         hasname(x) || continue
         nm = getname(x)
         if !isequal(get(vars, nm, x), x)
@@ -663,9 +710,22 @@ function check_operator_variables(eqs, ::Type{op}) where {op}
         is_tmp_fine ||
             error(lazy"The LHS cannot contain nondifferentiated variables. Please run `mtkcompile` or use the DAE form.\nGot $eq")
         for v in tmp
-            v in ops &&
-                error(lazy"The LHS operator must be unique. Please run `mtkcompile` or use the DAE form. $v appears in LHS more than once.")
-            push!(ops, v)
+            # `D(u[2:4])` stands for the derivatives of its elements, which must not be
+            # differentiated again by another equation, as a slice or as a scalar.
+            if isdifferential(v) && SU.is_array_shape(SU.shape(only(arguments(v))))
+                dop = operation(v)::Differential
+                x = only(arguments(v))
+                for idx in SU.stable_eachindex(x)
+                    el = dop(x[idx])
+                    el in ops &&
+                        error(lazy"The LHS operator must be unique. Please run `mtkcompile` or use the DAE form. $el appears in LHS more than once.")
+                    push!(ops, el)
+                end
+            else
+                v in ops &&
+                    error(lazy"The LHS operator must be unique. Please run `mtkcompile` or use the DAE form. $v appears in LHS more than once.")
+                push!(ops, v)
+            end
         end
         empty!(tmp)
         empty!(visited)
@@ -685,6 +745,34 @@ isoperator(::Type{op}) where {op <: SU.Operator} = Base.Fix2(isoperator, op)
 
 isdifferential(expr) = isoperator(expr, Differential)
 isdiffeq(eq) = isdifferential(eq.lhs) || isoperator(eq.lhs, Shift)
+
+function array_derivative_is_atomic(ex::SymbolicT)
+    return isdifferential(ex) && SU.is_array_shape(SU.shape(ex))
+end
+
+function array_derivative_expansion(term::SymbolicT)
+    op = operation(term)
+    arg = only(arguments(term))
+    sh = SU.shape(arg)::SU.ShapeVecT
+    # Preserve rank for broadcasts against surrounding slices.
+    arrargs = Symbolics.SArgsT()
+    sizehint!(arrargs, prod(length, sh; init = 1) + 1)
+    push!(arrargs, SU.Const{VartypeT}(size(arg)))
+    for idx in SU.stable_eachindex(arg)
+        push!(arrargs, op(arg[idx]))
+    end
+    return Symbolics.STerm(
+        SU.array_literal, arrargs; type = symtype(arg), shape = sh
+    )
+end
+
+function array_derivative_expansion_map(terms)
+    subs = Dict{SymbolicT, SymbolicT}()
+    for term in terms
+        subs[term] = array_derivative_expansion(term)
+    end
+    return subs
+end
 
 isvariable(x::Num)::Bool = isvariable(value(x))
 function isvariable(x)
@@ -854,8 +942,44 @@ end
 
 struct OperatorIsAtomic{O} end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Whether `ex` names a leaf of a symbolic struct, i.e. a field access or an indexed element
+of one. The array counterpart is the `getindex` case of `SymbolicUtils.default_is_atomic`.
+"""
+function is_symstruct_field(ex::SymbolicT)
+    return Moshi.Match.@match ex begin
+        BSImpl.Term(; f, args) && if f isa Symbolics.SymbolicGetproperty end =>
+            is_symstruct_base(args[1]::SymbolicT)
+        BSImpl.Term(; f, args) && if f === getindex end => is_symstruct_field(args[1])
+        _ => false
+    end
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Whether a field of `ex` names a variable rather than something computed. A call
+returning a record does not: `f(x).y` is an expression to traverse, not a name.
+"""
+function is_symstruct_base(ex::SymbolicT)
+    return Moshi.Match.@match ex begin
+        BSImpl.Sym() => true
+        BSImpl.Term(; f, args) && if f isa Symbolics.SymbolicGetproperty end =>
+            is_symstruct_base(args[1]::SymbolicT)
+        BSImpl.Term(; f, args) && if f === getindex end => is_symstruct_base(args[1]::SymbolicT)
+        # A variable applied to the independent variable, as in `p(t)`.
+        BSImpl.Term(; f) && if f isa SymbolicT end => true
+        BSImpl.Term(; f, args) && if f isa SU.Operator && length(args) == 1 end =>
+            is_symstruct_base(args[1]::SymbolicT)
+        _ => false
+    end
+end
+
 function (::OperatorIsAtomic{O})(ex::SymbolicT) where {O}
-    return SU.default_is_atomic(ex) && Moshi.Match.@match ex begin
+    return (SU.default_is_atomic(ex) || is_symstruct_field(ex)) &&
+        Moshi.Match.@match ex begin
         BSImpl.Term(; f) && if f isa Operator end => f isa O
         _ => true
     end
@@ -915,7 +1039,7 @@ function collect_vars!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{S
             BSImpl.Term(; f, args) && if f isa op end => begin
                 validate_operator(f, args, iv; context = expr)
                 isempty(args) && continue
-                push!(vars, args[1])
+                union!(vars, args)
             end
             BSImpl.Term(; f, args) && if iv isa SymbolicT && f isa SymbolicT && !isequal(args[1], iv) end => begin
                 # We know this isn't a called function symbolic, since our `is_atomic` filter
@@ -1237,6 +1361,7 @@ point number or array of such numbers.
 """
 function is_floatingpoint_symtype(T)
     return T === Real || T === Number || T === Complex || T <: AbstractFloat ||
+        T isa DataType && T <: Complex && is_floatingpoint_symtype(T.parameters[1]) ||
         T <: AbstractArray && is_floatingpoint_symtype(eltype(T))
 end
 
@@ -1553,6 +1678,9 @@ Given an equation that may be an array equation, return a `Vector{Equation}` rep
 its scalarized form.
 """
 function flatten_equation(eq::Equation)::Vector{Equation}
+    if is_record_equation(eq)
+        return flatten_record_equation(eq)
+    end
     if !SU.is_array_shape(SU.shape(eq.lhs))
         return [eq]
     end
@@ -1561,6 +1689,46 @@ function flatten_equation(eq::Equation)::Vector{Equation}
     result = Equation[]
     for (l, r) in zip(lhs, rhs)
         push!(result, l ~ r)
+    end
+    return result
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Whether `eq` equates two records, and so stands for one equation per leaf.
+"""
+function is_record_equation(eq::Equation)
+    return Symbolics.issymstruct(eq.lhs) || Symbolics.issymstruct(eq.rhs)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Split an equation between two records into one per leaf: `a ~ b` becomes `a.x ~ b.x`,
+`a.y ~ b.y`, recursing through nested records and array-valued fields. The right side is
+projected, so it may be a record, a record literal, or a call returning one.
+"""
+function flatten_record_equation(eq::Equation)::Vector{Equation}
+    lhs = eq.lhs
+    rhs = eq.rhs
+    lT = SU.symtype(lhs)
+    rT = SU.symtype(rhs)
+    # Differing field lists would pair up by position and silently produce nonsense.
+    lT === rT || throw(
+        ArgumentError(
+            LazyString(
+                "Cannot split `", eq, "` into one equation per field: the left side holds `",
+                lT, "` and the right side `", rT, "`. Both sides of an equation between ",
+                "records must be the same record type."
+            )
+        )
+    )
+    leaves = record_leaves(lhs)
+    result = Equation[]
+    sizehint!(result, length(leaves))
+    for leaf in leaves
+        push!(result, leaf ~ record_leaf_entry(leaf, lhs, rhs))
     end
     return result
 end
@@ -1611,6 +1779,10 @@ end
 function underscore_to_D(v, iv, inv_map)
     return if haskey(inv_map, v)
         only(get(inv_map, v, [v]))
+    elseif iscall(v) && operation(v) isa Symbolics.SymbolicGetproperty
+        # The name lives on the record, so rewrite the base and re-apply the field access.
+        f = operation(v)
+        unwrap(f(underscore_to_D(only(arguments(v)), iv, inv_map)))
     else
         v = ModelingToolkitBase.detime_dvs(v)
         s = split(string(getname(v)), 'ˍ')
@@ -1621,7 +1793,7 @@ function underscore_to_D(v, iv, inv_map)
         end
         repeats = length(suffix) ÷ length(string(iv))
         D = Differential(iv)
-        v = SSym(Symbol(n); type = FnType{Tuple, Real, Nothing}, shape = SymbolicUtils.ShapeVecT())(iv)
+        v = SSym(Symbol(n); type = FnType{Tuple, symtype(v), Nothing}, shape = SymbolicUtils.ShapeVecT())(iv)
         wrap_with_D(v, D, repeats)
     end
 end
@@ -1639,10 +1811,27 @@ const DEFAULT_STABLE_INDEX = SU.StableIndex(Int[])
 """
     $TYPEDSIGNATURES
 
+Determine whether `x` could be an indexed array symbolic, i.e. whether it could
+match the non-fallback arms of `_split_indexed_var`. Inputs for which this returns
+`false` trivially produce `x, false` from `split_indexed_var`, so it is used as
+the `key_filter` of its cache: caching such inputs would only retain the key in
+task-local storage without saving any work.
+"""
+function _matches_indexed_var_pattern(x::SymbolicT)
+    return Moshi.Match.@match x begin
+        BSImpl.Term(; f, args) => f === getindex || (f isa Operator && length(args) == 1)
+        BSImpl.ArrayOp(; term) => term isa SymbolicT
+        _ => false
+    end
+end
+
+"""
+    $TYPEDSIGNATURES
+
 Given a symbolic variable `x`, check whether it is an indexed array symbolic. If it is,
 return the array and `true`. Otherwise, return `x, false`.
 """
-SU.@cache limit = 500_000 function split_indexed_var(x::SymbolicT)::Tuple{SymbolicT, Bool}
+SU.@cache limit = 500_000 key_filter = _matches_indexed_var_pattern function split_indexed_var(x::SymbolicT)::Tuple{SymbolicT, Bool}
     return _split_indexed_var(x)
 end
 
@@ -1680,6 +1869,271 @@ function _get_stable_index(x::SymbolicT)
         _ => throw(ArgumentError(lazy"Invalid variable $x for `get_stable_index`."))
     end
 end
+
+"""
+    $TYPEDSIGNATURES
+
+Return `true` if `x` is an indexed array symbolic whose indices are all constant
+integers (suitable for [`get_stable_index`](@ref)). Symbolic or non-integer
+indices return `false`.
+"""
+function has_const_int_indices(x::SymbolicT)
+    return Moshi.Match.@match x begin
+        BSImpl.Term(; f, args) && if f === getindex end => begin
+            for i in 2:length(args)
+                idx = unwrap_const(args[i])
+                idx isa Integer || return false
+            end
+            return true
+        end
+        BSImpl.Term(; f, args) && if f isa Operator && length(args) == 1 end => begin
+            return has_const_int_indices(args[1]::SymbolicT)
+        end
+        _ => return false
+    end
+end
+
+"""
+    $TYPEDSIGNATURES
+
+One step of an access path into a composite symbolic: a field name, or the index of an
+element. See [`get_struct_access`](@ref).
+"""
+const StructAccessStepT = Union{Symbol, SU.StableIndex{Int}}
+
+"""
+    $TYPEDSIGNATURES
+
+Given a symbolic variable `x`, check whether it projects a leaf out of a struct symbolic,
+through any interleaving of field accesses and indices (`foo.x.y[i]`, `foo.x[i].y`). If it
+does, return the struct being projected from and `true`. Otherwise, return `x, false`.
+
+This is the struct counterpart of `split_indexed_var`, and like it, commutes with
+operators. Unlike `split_indexed_var` it peels the whole chain, so a plain array element
+`a[i]` also resolves to `a`.
+
+Deliberately not `SymbolicUtils.@cache`d, unlike `split_indexed_var`, since keys here
+are fully projected leaves, which are typically visited once, hence the hit rate is poor.
+"""
+function split_field_access(x::SymbolicT)::Tuple{SymbolicT, Bool}
+    return Moshi.Match.@match x begin
+        BSImpl.Term(; f, args) && if f isa Symbolics.SymbolicGetproperty || f === getindex end => begin
+            root, _ = split_field_access(args[1])
+            return root, true
+        end
+        BSImpl.Term(; f, args) && if f isa Operator && length(args) == 1 end => begin
+            root, isacc = split_field_access(args[1])
+            isacc || return x, false
+            return f(root)::SymbolicT, isacc
+        end
+        _ => return x, false
+    end
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Given a symbolic variable `x`, assume `split_field_access(x)[2]` is `true`. Return the
+access path from the struct to `x`, outermost last, e.g. `[:x, :y, StableIndex([1])]` for
+`foo.x.y[1]` and `[:x, StableIndex([1]), :y]` for `foo.x[1].y`.
+"""
+function get_struct_access(x::SymbolicT)::Vector{StructAccessStepT}
+    path = StructAccessStepT[]
+    _get_struct_access!(path, x)
+    return path
+end
+
+function _get_struct_access!(path::Vector{StructAccessStepT}, x::SymbolicT)
+    Moshi.Match.@match x begin
+        BSImpl.Term(; f, args) && if f isa Symbolics.SymbolicGetproperty end => begin
+            _get_struct_access!(path, args[1])
+            push!(path, Symbolics.field_name(f)::Symbol)
+        end
+        BSImpl.Term(; f, args) && if f === getindex end => begin
+            _get_struct_access!(path, args[1])
+            push!(path, SU.StableIndex{Int}(x))
+        end
+        BSImpl.Term(; f, args) && if f isa Operator && length(args) == 1 end => begin
+            _get_struct_access!(path, args[1])
+        end
+        _ => nothing
+    end
+    return path
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Value of the projection `leaf` of `node`, given that `node` has the value `value`.
+`value` may be a `Const` wrapping a concrete record, in which case the result is a `Const`
+wrapping the corresponding field, or a symbolic expression, in which case the projection is
+applied symbolically.
+"""
+function record_leaf_entry(leaf::SymbolicT, node::SymbolicT, value::SymbolicT)::SymbolicT
+    isequal(leaf, node) && return value
+    return Moshi.Match.@match leaf begin
+        BSImpl.Term(; f, args) && if f isa Symbolics.SymbolicGetproperty end => begin
+            base = record_leaf_entry(args[1]::SymbolicT, node, value)
+            if SU.isconst(base)
+                BSImpl.Const{VartypeT}(
+                    getproperty(unwrap_const(base), Symbolics.field_name(f)::Symbol)
+                )
+            else
+                f(base)::SymbolicT
+            end
+        end
+        BSImpl.Term(; f, args) && if f === getindex end => begin
+            base = record_leaf_entry(args[1]::SymbolicT, node, value)
+            idxs = unwrap_const.(@view args[2:end])
+            if SU.isconst(base)
+                BSImpl.Const{VartypeT}(unwrap_const(base)[idxs...])
+            else
+                base[idxs...]::SymbolicT
+            end
+        end
+        _ => error(lazy"Cannot resolve $leaf as a projection of $node.")
+    end
+end
+
+"""
+    $TYPEDSIGNATURES
+
+The leaves of the struct symbolic `root`, in canonical linear order. This is the order
+used to lay out a record's value in [`AtomicArrayDict`](@ref).
+
+The result is cached and shared between callers, so it is returned read-only: mutating it
+would corrupt the cache for everyone who asks for the same root afterwards. Copy it if you
+need something to modify.
+"""
+SU.@cache limit = 500_000 function record_leaves(
+        root::SymbolicT
+    )::ReadOnlyVector{SymbolicT, Vector{SymbolicT}}
+    return ReadOnlyVector(_record_leaves(root))
+end
+
+function _record_leaves(root::SymbolicT)
+    T = SU.symtype(root)
+    # An array of records is not itself a record, so `SymStruct` cannot iterate it.
+    # Expand over the indices and concatenate the leaves of each element.
+    if T <: AbstractArray && Symbolics.is_symstruct_type(eltype(T))
+        SU.shape(root) isa SU.ShapeVecT || throw(
+            ArgumentError(
+                LazyString(
+                    "Cannot enumerate the leaves of `", root, "`, an array of records whose ",
+                    "shape is not known. Declare the variable with a concrete shape."
+                )
+            )
+        )
+        leaves = SymbolicT[]
+        for i in SU.stable_eachindex(root)
+            append!(leaves, record_leaves(root[i]))
+        end
+        return leaves
+    end
+    return collect(Symbolics.SymStruct{T}(root))::Vector{SymbolicT}
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Map from each leaf of the struct symbolic `root` to its index in [`record_leaves`](@ref).
+"""
+SU.@cache limit = 500_000 function record_leaf_indexmap(root::SymbolicT)::Dict{SymbolicT, Int}
+    leaves = record_leaves(root)
+    idxmap = Dict{SymbolicT, Int}()
+    sizehint!(idxmap, length(leaves))
+    for (i, leaf) in enumerate(leaves)
+        idxmap[leaf] = i
+    end
+    return idxmap
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Check whether `x` is `node`, or projects out of it by a chain of field accesses and
+indices.
+"""
+function is_record_descendant(x::SymbolicT, node::SymbolicT)
+    while true
+        isequal(x, node) && return true
+        Moshi.Match.@match x begin
+            BSImpl.Term(; f, args) && if f isa Symbolics.SymbolicGetproperty || f === getindex end => begin
+                x = args[1]::SymbolicT
+            end
+            _ => return false
+        end
+    end
+    return
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Indices into [`record_leaves`](@ref) of `root` covered by `node`, which must be `root` or
+a projection of it. A leaf covers one index, an intermediate node covers all the leaves
+below it.
+"""
+function record_node_indices(root::SymbolicT, node::SymbolicT)::Vector{Int}
+    leaves = record_leaves(root)
+    isequal(root, node) && return collect(eachindex(leaves))
+    i = get(record_leaf_indexmap(root), node, 0)
+    i == 0 || return [i]
+    return findall(Base.Fix2(is_record_descendant, node), leaves)
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Assemble the value of `node` from `buffer`, the values of the leaves of `root` in
+[`record_leaves`](@ref) order. The inverse of [`record_leaf_entry`](@ref).
+"""
+function record_node_value(root::SymbolicT, node::SymbolicT, buffer::AbstractVector)
+    i = get(record_leaf_indexmap(root), node, 0)
+    i == 0 || return buffer[i]
+    if SU.is_array_shape(SU.shape(node))
+        # `stable_eachindex` walks in linear order, which is the order the leaves are laid
+        # out in, so the values come back flat and have to be reshaped.
+        vals = map(SU.stable_eachindex(node)) do idx
+            record_node_value(root, node[idx]::SymbolicT, buffer)
+        end
+        return reshape(vec(vals), size(node))
+    end
+    T = SU.symtype(node)::SU.TypeT
+    Symbolics.issymstruct(node) || error(
+        lazy"Cannot assemble a value for $node of type $T from the leaves of $root."
+    )
+    fieldvals = map(fieldnames(T)) do fname
+        field = Symbolics.SymbolicGetproperty{T, fname}()(node)::SymbolicT
+        record_node_value(root, field, buffer)
+    end
+    # A record with a symbolic field has no value of type `T` - its fields are usually
+    # concretely typed - so build the symbolic literal instead. Calling `T` would also
+    # reach a literal for narrow structs, via the constructor methods `@symstruct`
+    # registers, but not for wide ones, where none are generated.
+    if any(_contains_symbolic, fieldvals)
+        # The term rather than the wrapper, since this assembles a value for internal
+        # buffers. Unchecked, too: the fields come from a buffer that may still hold the
+        # sentinels marking ones not yet filled, which say nothing about their types.
+        return Symbolics.record_literal_term(T, fieldvals; check = false)
+    end
+    return T(fieldvals...)
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Whether `x` is symbolic, or is an array with a symbolic entry. Used to decide whether a
+record can be assembled as a concrete value or has to stay a symbolic literal.
+"""
+# `nothing`/`missing` count too: they mark a field that has not been filled in, which no
+# value of the struct type can represent, so the record has to stay a literal. So does
+# `CommonSentinel`, which `build_operating_point` substitutes for an explicit `nothing`
+# before assembling records, and which means the same thing here.
+function _contains_symbolic(x)
+    return x isa SymbolicT || x === nothing || x === missing || x isa CommonSentinel
+end
+_contains_symbolic(x::AbstractArray) = any(_contains_symbolic, x)
 
 """
     $TYPEDSIGNATURES
@@ -1730,6 +2184,26 @@ function left_merge!(a::AtomicArrayDict{SymbolicT}, b::AtomicArrayDict{SymbolicT
         end
 
         v_a = a[k]
+        if Symbolics.issymstruct(k)
+            # Same rule as for arrays below, field by field: what `a` says wins, except
+            # where it says nothing, which is where `b` is asked.
+            nodes = record_lowering_nodes(k)
+            buffer = SymbolicT[]
+            sizehint!(buffer, length(nodes))
+            filled = false
+            for node in nodes
+                left = record_leaf_entry(node, k, v_a)
+                if left === COMMON_NOTHING
+                    push!(buffer, record_leaf_entry(node, k, v))
+                    filled = true
+                else
+                    push!(buffer, left)
+                end
+            end
+            filled || continue
+            a[k] = record_value_from_nodes(k, nodes, buffer)
+            continue
+        end
         sh = SU.shape(k)
         SU.is_array_shape(sh) || continue
         any(Base.Fix2(===, COMMON_NOTHING) ∘ Base.Fix1(getindex, v_a), SU.stable_eachindex(v_a)) || continue
