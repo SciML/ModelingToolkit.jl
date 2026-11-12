@@ -97,7 +97,8 @@ end
     end
 
     kwargs = process_kwargs(
-        sys; expression, callback, eval_expression, eval_module, op, tspan, kwargs...
+        sys; expression, callback, eval_expression, eval_module, op, tspan, checkbounds,
+        kwargs...
     )
     args = (; f, u0, h, tspan, p)
 

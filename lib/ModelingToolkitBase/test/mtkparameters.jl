@@ -457,6 +457,45 @@ end
     end
 end
 
+@testset "Issue#4530: `replace` with a `DiffCache` buffer" begin
+    @variables x(t) y(t)
+    @parameters a = 1.0 b = 2.0
+    @named sys = System([D(x) ~ -a * x + y, 0 ~ y^2 - b * x], t)
+    sys = mtkcompile(sys)
+    # `FullSpecialize` keeps the parameter object passed to `solve` as it is
+    prob = ODEProblem{true, SciMLBase.FullSpecialize}(
+        sys, [x => 1.0], (0.0, 1.0); guesses = [y => 1.0]
+    )
+    cache = ModelingToolkitBase.DiffCache(copy(prob.p.tunable))
+    setter = setp(sys, a)
+    function loss(vals)
+        buffer = ModelingToolkitBase.get_tmp(cache, vals)
+        copyto!(buffer, prob.p.tunable)
+        ps = SciMLStructures.replace(Tunable(), prob.p, buffer)
+        setter(ps, vals[1])
+        sol = solve(
+            remake(prob; p = ps), Rodas5P(); saveat = 0.1, abstol = 1.0e-10, reltol = 1.0e-10
+        )
+        return sum(abs2, sol[x])
+    end
+
+    dual_buffer = ModelingToolkitBase.get_tmp(cache, [ForwardDiff.Dual(1.5, 1.0)])
+    @test dual_buffer isa Base.ReinterpretArray
+    for portion in (Tunable(), SciMLStructures.Initials())
+        len = length(canonicalize(portion, prob.p)[1])
+        buffer = reinterpret(eltype(dual_buffer), ones(2len))
+        @test buffer isa Base.ReinterpretArray
+        ps = SciMLStructures.replace(portion, prob.p, buffer)
+        newbuffer = canonicalize(portion, ps)[1]
+        @test newbuffer isa Vector{eltype(dual_buffer)}
+        @test newbuffer == buffer
+    end
+
+    grad = ForwardDiff.gradient(loss, [1.5])
+    step = 1.0e-5
+    @test grad[1] ≈ (loss([1.5 + step]) - loss([1.5 - step])) / 2step rtol = 1.0e-4
+end
+
 if @isdefined(ModelingToolkit)
     @testset "Issue#3925: Autodiff after `subset_tunables`" begin
         function circuit_model()
