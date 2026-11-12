@@ -586,6 +586,19 @@ end
     @test sol[y] ≈ 2 / 3 atol = 1.0e-10
 end
 
+@testset "NonlinearSystem conversion: unknown-shape array unknown" begin
+    @independent_variables t
+    D = Differential(t)
+    @variables q(t) z(t)::Vector{Real}
+    sys = System([D(q) ~ 1 - q, z[1] ~ q, z[2] ~ 2q], t, [q, z], []; name = :mixed)
+    nlsys = NonlinearSystem(sys)
+    @test !is_time_dependent(nlsys)
+    @test length(equations(nlsys)) == 3
+    for eq in equations(nlsys)
+        @test isempty(ModelingToolkitBase.collect_applied_operators(eq, Differential))
+    end
+end
+
 @testset "NonlinearSystem conversion: connectors" begin
     @independent_variables t
     D = Differential(t)

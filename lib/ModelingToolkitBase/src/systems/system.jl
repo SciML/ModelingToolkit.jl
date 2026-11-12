@@ -1413,7 +1413,8 @@ function NonlinearSystem(sys::System; bind_iv::Bool = true)
     symbolic_zero = SU.zero_of_vartype(VartypeT)
     for x in unknowns(sys)
         subrules[D(x)] = symbolic_zero
-        if SU.is_array_shape(SU.shape(x))
+        sh = SU.shape(x)
+        if SU.is_array_shape(sh) && sh isa SU.ShapeVecT
             for i in SU.stable_eachindex(x)
                 subrules[D(x[i])] = symbolic_zero
             end
