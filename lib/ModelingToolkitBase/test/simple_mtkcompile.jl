@@ -19,3 +19,11 @@ using ModelingToolkitBase: t_nounits as t, D_nounits as D
         @test isequal(only(observed(sys)), X3 ~ Γ[1] - X1 - X2)
     end
 end
+
+@testset "`preserve_array_equations` requires array-equation groups" begin
+    # This compiler has no array-equation groups, so the option is an error here.
+    @variables x(t)[1:2]
+    @named sys = System([D(x[1]) ~ -x[1], D(x[2]) ~ -x[2]], t)
+    @test_throws ArgumentError mtkcompile(sys; preserve_array_equations = true)
+    @test length(equations(mtkcompile(sys))) == 2
+end

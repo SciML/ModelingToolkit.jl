@@ -71,6 +71,16 @@ function canonicalize_io(iovars, type::String)
 end
 
 """
+    $(TYPEDSIGNATURES)
+
+Whether the structural-simplification backend for `sys` can keep array differential
+equations intact, as `mtkcompile(; preserve_array_equations = true)` requires. The
+ModelingToolkitBase compiler cannot; ModelingToolkit.jl reports the capability of its
+ModelingToolkitTearing backend.
+"""
+preserve_array_equations_supported(sys::AbstractSystem) = false
+
+"""
 $(SIGNATURES)
 
 Compile the given system into a form that ModelingToolkitBase can generate code for. Also
@@ -114,7 +124,8 @@ once — calling `mtkcompile` on an already-compiled system throws
   are kept as single array equations in the compiled system instead of one equation per
   element. The unknowns remain the scalar elements of `x`. Array equations that index
   reduction or tearing must scalarize are still scalarized. This opt-in path requires a
-  ModelingToolkitTearing release with array-equation groups.
+  ModelingToolkitTearing release with array-equation groups; `mtkcompile` throws an
+  `ArgumentError` when the loaded backend does not provide them.
 - `verbose = nothing`: Controls diagnostic output during compilation. Accepts an
   [`MTKVerbosity`](@ref) specifier, a `SciMLLogging` preset (`None()`, `Minimal()`,
   `Standard()`, `Detailed()`, `All()`), or a `Bool` (`true` is equivalent to
@@ -154,8 +165,22 @@ function mtkcompile(
         inputs = SymbolicT[], outputs = SymbolicT[],
         disturbance_inputs = SymbolicT[],
         split = true, homotopy = true, verbose = nothing,
+        preserve_array_equations = false,
         print_underconstrained_variables = nothing, kwargs...
     )
+    if preserve_array_equations && !preserve_array_equations_supported(sys)
+        throw(
+            ArgumentError(
+                """
+                `preserve_array_equations = true` requires a ModelingToolkitTearing \
+                release with array-equation groups. The loaded backend does not provide \
+                them, so array equations cannot be preserved. Use a \
+                ModelingToolkitTearing release that provides array-equation groups, or \
+                call `mtkcompile` without `preserve_array_equations`.
+                """
+            )
+        )
+    end
     verbose = verbose === nothing ? _system_verbosity(sys) : _process_verbose_param(verbose)
     verbose = _deprecated_override_toggle(
         verbose, print_underconstrained_variables, :print_underconstrained_variables,
@@ -175,10 +200,12 @@ function mtkcompile(
     inputs = canonicalize_io(unwrap_vars(inputs), "input")
     outputs = canonicalize_io(unwrap_vars(outputs), "output")
     disturbance_inputs = canonicalize_io(unwrap_vars(disturbance_inputs), "disturbance input")
+    # Only forward the keyword when set, so the default compilation path is unchanged.
+    preserve_kw = preserve_array_equations ? (; preserve_array_equations = true) : (;)
     newsys = _mtkcompile(
         sys;
         inputs, outputs, disturbance_inputs, additional_passes, verbose,
-        kwargs...
+        preserve_kw..., kwargs...
     )
     # Diagnostics that have no `verbose` keyword (passes, `remake`, ...) read this value
     # with `_system_verbosity`.

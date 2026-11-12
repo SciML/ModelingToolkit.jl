@@ -1,3 +1,8 @@
+function MTKBase.preserve_array_equations_supported(sys::System)
+    return isdefined(MTKTearing, :row_to_equation_indices) &&
+        isdefined(MTKTearing, :dirty_array_group!)
+end
+
 function MTKBase.__mtkcompile(
         sys::System;
         inputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
@@ -58,7 +63,8 @@ function MTKBase.__mtkcompile(
             (coeff, residual, islinear) = Symbolics.linear_expansion(eq, brown)
             islinear || error("$brown isn't linear in $eq")
             new_eqs[i] = COMMON_ZERO ~ residual
-            # The drift equation no longer matches the array equation (which has the noise).
+            # Noise extraction rewrites this row to the drift part, and the array
+            # equation carries the noise term, so the row's array group is dirty.
             if isdefined(MTKTearing, :dirty_array_group!)
                 MTKTearing.dirty_array_group!(state, i)
             end

@@ -641,6 +641,8 @@ end
 
 is_array_literal_term(ex::SymbolicT) = iscall(ex) && operation(ex) === SU.array_literal
 
+is_with_allocator_term(ex::SymbolicT) = iscall(ex) && operation(ex) === Code.with_allocator
+
 """
     $(TYPEDSIGNATURES)
 
@@ -667,7 +669,9 @@ After `mtkcompile` an array unknown whose elements are partly unknowns and partl
 equation `u ~ array_literal((n,), u[1], ..., u[n])`. Substituting it into an array equation
 such as `D(u[2:(n - 1)]) ~ lap(u)` leaves `array_literal`s with `n` scalar arguments, and
 hence generated code of size `O(n)`. Replacing each maximal run of consecutive buffer
-elements with a `view` makes the generated code independent of `n`.
+elements with a `view` makes the generated code independent of `n`. A literal under
+`SymbolicUtils.Code.with_allocator` is left intact, because the allocator applies to the
+literal's allocation and a `vcat` result would not use it.
 """
 function compress_array_literals(@nospecialize(expr), args::Vector{Any}, argument_name)
     elem_to_buf = Dict{SymbolicT, Tuple{SymbolicT, Int}}()
@@ -687,8 +691,22 @@ function compress_array_literals(@nospecialize(expr), args::Vector{Any}, argumen
     literals = Set{SymbolicT}()
     SU.search_variables!(literals, expr; is_atomic = is_array_literal_term, recurse = iscall)
     isempty(literals) && return expr
+    # A literal that is the allocating operand of `with_allocator` stays a literal: the
+    # allocator only applies to allocating expressions, so rewriting it to a `vcat` would
+    # discard the allocator and change the type and values of the result.
+    allocator_terms = Set{SymbolicT}()
+    SU.search_variables!(
+        allocator_terms, expr; is_atomic = is_with_allocator_term, recurse = iscall
+    )
+    protected = Set{SymbolicT}()
+    for term in allocator_terms
+        term_args = arguments(term)
+        length(term_args) >= 2 || continue
+        is_array_literal_term(term_args[2]) && push!(protected, term_args[2])
+    end
     subs = Dict{SymbolicT, SymbolicT}()
     for lit in literals
+        lit in protected && continue
         compressed = compress_array_literal(lit, elem_to_buf)
         compressed === nothing && continue
         subs[lit] = compressed
