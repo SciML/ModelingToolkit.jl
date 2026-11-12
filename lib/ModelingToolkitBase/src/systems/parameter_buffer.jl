@@ -275,9 +275,16 @@ function rebuild_with_caches(p::MTKParameters, cache_templates::BufferTemplate..
     return _rebuild_with_caches(p, npersistent, cache_templates)
 end
 
+# Zeroed because `remake` reads these before any `CacheWriter` runs, and leftover NaNs
+# leak into reverse-mode gradients. Singletons (e.g. a cached `π`) have no `zero`.
+_new_cache_buffer(::Type{T}, n::Int) where {T <: Number} =
+    Base.issingletontype(T) ? Vector{T}(undef, n) : zeros(T, n)
+# Non-numeric buffers stay `undef`, so an early read throws.
+_new_cache_buffer(::Type{T}, n::Int) where {T} = Vector{T}(undef, n)
+
 function _rebuild_with_caches(p::MTKParameters, npersistent::Int, cache_templates)
     buffers = map(cache_templates) do template
-        Vector{template.type}(undef, template.length)
+        _new_cache_buffer(template.type, template.length)
     end
     persistent = ntuple(Base.Fix1(getindex, p.caches), npersistent)
     return @set p.caches = (persistent..., buffers...)
@@ -417,8 +424,24 @@ function SciMLStructures.canonicalize(::SciMLStructures.Tunable, p::MTKParameter
     return arr, repack, true
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Return `buffer` in a form that can be stored in the `tunable` or `initials` portion of
+`MTKParameters`. A `Base.ReinterpretArray`, which is what `PreallocationTools.get_tmp`
+returns for dual numbers, is copied into an `Array`: code that rebuilds the parameter
+object (such as the initialization parameter map) returns `Array`s, and the result has to
+be assignable to an integrator typed on the original parameter object.
+
+Because of this copy, the parameter object returned by `SciMLStructures.replace` does not
+always alias the buffer passed to it. Update values through the returned parameter object
+(for example with a `setp` setter), not by writing to the buffer afterwards.
+"""
+storable_numeric_buffer(buffer) = buffer
+storable_numeric_buffer(buffer::Base.ReinterpretArray) = collect(buffer)
+
 function SciMLStructures.replace(::SciMLStructures.Tunable, p::MTKParameters, newvals)
-    @set! p.tunable = newvals
+    @set! p.tunable = storable_numeric_buffer(newvals)
     return p
 end
 
@@ -438,7 +461,7 @@ function SciMLStructures.canonicalize(::SciMLStructures.Initials, p::MTKParamete
 end
 
 function SciMLStructures.replace(::SciMLStructures.Initials, p::MTKParameters, newvals)
-    @set! p.initials = newvals
+    @set! p.initials = storable_numeric_buffer(newvals)
     return p
 end
 
