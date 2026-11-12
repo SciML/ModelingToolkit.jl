@@ -429,6 +429,41 @@ end
     @test size(ModelingToolkitBase.calculate_control_jacobian(ss)) == (1, 1)
 end
 
+@testset "ODEInputFunction jac/tgrad/controljac (#5382)" begin
+    @variables x(t) = 1.0 u(t) [input = true]
+    @parameters a = 2.0
+    # `t * u` makes both tgrad and controljac depend on the input and on time
+    sys = mtkcompile(System([D(x) ~ -a * x + t * u], t; name = :sys); inputs = [u])
+    p = ModelingToolkitBase.get_p(sys, Dict(u => 0.0))
+    xv, uv, tv = [1.5], [5.0], 0.7
+
+    # Hand-computed: f = -a*x + t*u, df/dx = -a, df/du = t, df/dt = u (u held fixed)
+    for iip in (false, true)
+        f = ModelingToolkitBase.SciMLBase.ODEInputFunction{iip}(
+            sys; jac = true, tgrad = true, controljac = true
+        )
+        if iip
+            J = zeros(1, 1); f.jac(J, xv, uv, p, tv)
+            @test J ≈ [-2.0;;]
+            dT = zeros(1); f.tgrad(dT, xv, uv, p, tv)
+            @test dT ≈ [5.0]
+            Ju = zeros(1, 1); f.controljac(Ju, xv, uv, p, tv)
+            @test Ju ≈ [0.7;;]
+        else
+            @test f.jac(xv, uv, p, tv) ≈ [-2.0;;]
+            @test f.tgrad(xv, uv, p, tv) ≈ [5.0]
+            @test f.controljac(xv, uv, p, tv) ≈ [0.7;;]
+        end
+    end
+
+    # sparse
+    fs = ModelingToolkitBase.SciMLBase.ODEInputFunction(
+        sys; jac = true, controljac = true, sparse = true, u0 = [1.0]
+    )
+    @test fs.jac(xv, uv, p, tv) ≈ [-2.0;;]
+    @test fs.controljac(xv, uv, p, tv) ≈ [0.7;;]
+end
+
 using ModelingToolkitStandardLibrary.Blocks
 
 if @isdefined(ModelingToolkit)
