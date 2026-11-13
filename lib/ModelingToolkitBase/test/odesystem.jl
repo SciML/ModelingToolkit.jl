@@ -1873,4 +1873,10 @@ tgrad_buffer_value(b::TgradBuffer, s) = b.v[1] * s
     sys = mtkcompile(sys)
     prob = ODEProblem(sys, [], (0.0, 1.0); tgrad = true)
     @test prob.f.tgrad(prob.u0, prob.p, 0.25) ≈ [3.0]
+
+    @discretes ds(t)[1:2] = [2.0, 3.0]
+    @named sys = System([D(x) ~ ds[1] * t + ds[2] * t^2], t, [x], [ds...])
+    sys = mtkcompile(sys; split = false)
+    prob = ODEProblem(sys, [], (0.0, 1.0); tgrad = true)
+    @test prob.f.tgrad(prob.u0, prob.p, 0.4) ≈ [4.4]
 end
