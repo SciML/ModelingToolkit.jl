@@ -2352,7 +2352,11 @@ end
     @test isempty(sol.ps[c])
     @test isempty(sol[c])
     # the error type depends on the SciMLBase and SymbolicIndexingInterface versions
-    missing_value = Union{BoundsError, ArgumentError, ErrorException}
+    # (older SymbolicIndexingInterface, e.g. 0.3.48, throws `MixedParameterTimeseriesIndexError` for `sol[z]`)
+    missing_value = Union{
+        BoundsError, ArgumentError, ErrorException,
+        ModelingToolkitBase.SymbolicIndexingInterface.MixedParameterTimeseriesIndexError,
+    }
     @test_throws missing_value sol(0.6; idxs = c)
     @test_throws missing_value sol(0.6; idxs = z)
     @test_throws missing_value sol[z]
