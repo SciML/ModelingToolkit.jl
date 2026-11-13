@@ -963,8 +963,14 @@ end
         @named sys = System(eqs, nothing, vec(collect(u)), [])
         return sys, u, h
     end
+    # The reduced coefficients are at most 8.9e3 for n = 5 and 2.2e8 for n = 7, which fit in
+    # `Int32`, and 2.8e16 for n = 9, which only fits in `Int64`.
     for (n, c) in ((5, 16), (7, 1), (9, 1))
         sys, u, h = laplace_system(n, c)
+        if n == 9 && Sys.WORD_SIZE == 32
+            @test_throws OverflowError mtkcompile(sys)
+            continue
+        end
         simp = mtkcompile(sys)
         @test isempty(unknowns(simp))
         prob = NonlinearProblem(simp, Dict(vec(collect(u)) .=> 0.0))
