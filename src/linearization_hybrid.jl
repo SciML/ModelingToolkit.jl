@@ -385,18 +385,23 @@ function _normalize_op_key(k::SymbolicT)
     return k
 end
 
-# Add an entry for every element of the array variables among `keys`, whose values are
-# arrays, so that the elements, which the partitions refer to individually, are found by
-# lookup. Entries given for individual elements take precedence.
-function _expand_array_values!(dict::Dict{SymbolicT, Any}, keys::Vector{SymbolicT})
-    for k in keys
+# Add an explicit entry for every element of the explicitly given array variables whose
+# values are arrays, since the partitions refer to the elements individually. These entries
+# replace values taken from a solution; entries given explicitly for individual elements
+# take precedence.
+function _expand_array_values!(dict::Dict{SymbolicT, Any}, explicit::Vector{SymbolicT})
+    given = Set{SymbolicT}(explicit)
+    for k in copy(explicit)
         v = dict[k]
         v isa AbstractArray || continue
         SU.is_array_shape(SU.shape(k)) || continue
         elems = _scalarized_vars([k])
         length(elems) == length(v) || continue
         for (e, ve) in zip(elems, vec(v))
-            haskey(dict, e) || (dict[e] = ve)
+            e in given && continue
+            dict[e] = ve
+            push!(given, e)
+            push!(explicit, e)
         end
     end
     return dict

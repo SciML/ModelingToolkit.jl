@@ -353,6 +353,17 @@ end
             sysd, [ua], [xa]; op = Dict(xa => [2.0, 3.0], xa[2] => 5.0, ua => zeros(2))
         ).partitions[1]
         @test sort(p.x0) ≈ [2.0, 5.0]
+
+        # An explicit array value replaces the values of the elements taken from a solution.
+        @variables (xs(t))[1:2] (us(t))[1:2]
+        @named sim = System([D(xs) ~ -xs], t)
+        prob = ODEProblem(mtkcompile(sim), [xs => [1.0, 1.5]], (0.0, 1.0))
+        sol = solve(prob)
+        @named lin = System([D(xs) ~ -xs .^ 3 .+ us], t)
+        op = LinearizationOpPoint(sol, 0.0; op = Dict(xs => [2.0, 3.0], us => zeros(2)))
+        p = linearize_hybrid(lin, [us], [xs]; op).partitions[1]
+        @test sort(p.x0) ≈ [2.0, 3.0]
+        @test sort(eigvals(p.A)) ≈ [-27.0, -12.0]
     end
 
     @testset "Shifted variables and guesses of discrete partitions" begin
@@ -364,6 +375,15 @@ end
         @test tr(p.A) ≈ 4.0
         @test det(p.A) ≈ -18.0
         @test sort(p.x0) ≈ [2.0, 3.0]
+
+        @variables (xa(t))[1:2] (ua(t))[1:2]
+        @named sysa = System([xa(k) ~ xa(k - 1) .^ 2 .+ 3xa(k - 2) .^ 2 .+ ua(k)], t)
+        op = Dict(xa(k - 1) => [2.0, 3.0], xa(k - 2) => [5.0, 7.0], ua => zeros(2))
+        p = @test_nowarn(linearize_hybrid(sysa, [ua], [xa]; op)).partitions[1]
+        # Two independent recursions with the characteristic polynomials z² - 2xa(k-1) z - 6xa(k-2).
+        @test tr(p.A) ≈ 10.0
+        @test det(p.A) ≈ (-30.0) * (-42.0)
+        @test sort(p.x0) ≈ [2.0, 3.0, 5.0, 7.0]
 
         @variables xg(t) ug(t)
         @named sysg = System([xg(k) ~ xg(k - 1)^2 + ug(k)], t; guesses = [xg => 2.0])
