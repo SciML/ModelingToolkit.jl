@@ -91,3 +91,34 @@ end
     prob = ODEProblem(sys, op, (0.0, 1.0))
     @test getter(prob) ≈ [1.0, 11.0, 2.0, 12.0, 3.0, 21.0, 22.0]
 end
+
+@testset "Template vectors hold no Union that Enzyme cannot compile" begin
+    # Enzyme cannot compile a loop over such a vector (ModelingToolkit.jl#5362).
+    @parameters c = 2.0 n::Int = 2 flag::Bool = true
+    @variables x(t) = 1.0 y(t) z(t)
+    sys = mtkcompile(
+        System(
+            [D(x) ~ -c * n * ifelse(flag, 1.0, 2.0) * x, D(y) ~ -y, D(z) ~ -z], t;
+            name = :template_union, initial_conditions = [y => 2c, z => n]
+        )
+    )
+    mixed = Union{
+        ModelingToolkitBase.ObservedWrapper, ModelingToolkitBase.StaticBufferIndex,
+        ModelingToolkitBase.CopyParamsByTemplate,
+    }
+    for spec in (SciMLBase.AutoDespecialize, SciMLBase.AutoSpecialize)
+        prob = ODEProblem{true, spec}(sys, [], (0.0, 1.0))
+        idata = prob.f.initialization_data
+        templates = (
+            idata.initializeprobmap.map.observed.template,
+            idata.metadata.oop_reconstruct_u0_p.pgetter.consts_fn.inner.template,
+        )
+        for template in templates
+            T = eltype(template)
+            @test !(template isa AbstractVector && T isa Union && any(S -> S <: mixed, Base.uniontypes(T)))
+        end
+        @test prob[sys.x] == 1.0
+        @test prob[sys.y] == 4.0
+        @test prob[sys.z] == 2.0
+    end
+end
