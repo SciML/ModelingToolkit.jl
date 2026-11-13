@@ -1409,7 +1409,17 @@ function NonlinearSystem(sys::System; bind_iv::Bool = true)
     eqs = copy(get_eqs(sys))
     obs = get_observed(sys)
     D = Differential(get_iv(sys))
-    subrules = Dict{SymbolicT, SymbolicT}([D(x) => 0.0 for x in unknowns(sys)])
+    subrules = Dict{SymbolicT, SymbolicT}()
+    symbolic_zero = SU.zero_of_vartype(VartypeT)
+    for x in unknowns(sys)
+        subrules[D(x)] = symbolic_zero
+        sh = SU.shape(x)
+        if SU.is_array_shape(sh) && sh isa SU.ShapeVecT
+            for i in SU.stable_eachindex(x)
+                subrules[D(x[i])] = symbolic_zero
+            end
+        end
+    end
     for var in brownians(sys)
         subrules[var] = 0.0
     end
