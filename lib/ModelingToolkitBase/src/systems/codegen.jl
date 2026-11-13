@@ -890,6 +890,29 @@ function get_constraint_unknown_subs!(subs::Dict, cons::Vector, stidxmap::Dict, 
 end
 
 """
+    algebraic_residuals_at(sys::System, t0, stidxmap)
+
+Residuals of the algebraic equations of `sys` at time `t0`, in terms of the BVP solution.
+Observed variables are substituted first; then each unknown is replaced by its entry of
+`BVP_SOLUTION(t0)` (unknowns are leaves, so substituting the independent variable alone
+would not reach the `t` inside `x(t)`), and the remaining independent variable by `t0`.
+"""
+function algebraic_residuals_at(sys::System, t0, stidxmap)
+    iv = get_iv(sys)
+    obs = Dict{SymbolicT, SymbolicT}(eq.lhs => eq.rhs for eq in observed(sys))
+    at_t0 = Dict{Any, Any}(v => BVP_SOLUTION(t0)[i] for (v, i) in stidxmap)
+    at_t0[iv] = t0
+    residuals = SymbolicT[]
+    for eq in alg_equations(sys)
+        equation_row_count(eq) == 1 ||
+            error("Array algebraic equations are not supported in DAE BVProblems yet: $eq")
+        residual = fixpoint_sub(eq.rhs - eq.lhs, obs)
+        push!(residuals, substitute(residual, at_t0))
+    end
+    return residuals
+end
+
+"""
     $(TYPEDSIGNATURES)
 
 Generate the boundary condition function for a [`System`](@ref) given the state vector `u0`,
@@ -897,12 +920,18 @@ the indexes of `u0` to consider as hard constraints `u0_idxs` and the initial ti
 
 # Keyword Arguments
 
+- `algebraic_at_t0`: also impose the algebraic equations of `sys` at `t0`, after the
+  constraints. Collocation solvers that enforce the algebraic equations only at the
+  right end of each mesh interval need these rows to determine the algebraic states
+  at `t0`.
+
 $GENERATE_X_KWARGS
 
 All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 """
 function generate_boundary_conditions(
-        sys::System, u0, u0_idxs, t0, opts::GeneratedFunctionOptions
+        sys::System, u0, u0_idxs, t0, opts::GeneratedFunctionOptions;
+        algebraic_at_t0::Bool = false
     )
     (; eval_expression, eval_module) = opts
     expression = expression_val(opts)
@@ -918,6 +947,7 @@ function generate_boundary_conditions(
     # sol = get_bv_solution_symbol(ns)
 
     cons = [con.lhs - con.rhs for con in constraints(sys)]
+    algebraic_at_t0 && append!(cons, algebraic_residuals_at(sys, t0, stidxmap))
     conssubs = Dict{SymbolicT, SymbolicT}()
     get_constraint_unknown_subs!(conssubs, cons, stidxmap, iv, BVP_SOLUTION)
     substituter = SU.Substituter{false}(conssubs)
