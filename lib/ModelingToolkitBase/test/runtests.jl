@@ -59,6 +59,7 @@ end
             @safetestset "Split Parameters Test" include("split_parameters.jl")
             @safetestset "StaticArrays Test" include("static_arrays.jl")
             @safetestset "Components Test" include("components.jl")
+            @safetestset "Struct Variables Test" include("struct_variables.jl")
             @safetestset "Error Handling" include("error_handling.jl")
             @safetestset "Basic transformations" include("basic_transformations.jl")
             @safetestset "Change of variables" include("changeofvariables.jl")
@@ -91,6 +92,7 @@ end
 
     if GROUP == "All" || GROUP == "InterfaceII"
         @safetestset "Code Generation Test" include("code_generation.jl")
+        @safetestset "Function Chunking Test" include("function_chunking.jl")
         @safetestset "Array Equation ODEProblem Test" include("array_equation_ode.jl")
         @safetestset "IndexCache Test" include("index_cache.jl")
         @safetestset "Variable Utils Test" include("variable_utils.jl")
@@ -133,6 +135,7 @@ end
         println("C compilation test requires gcc available in the path!")
         @safetestset "C Compilation Test" include("ccompile.jl")
         @safetestset "Multithreading test" include("multithreading.jl")
+        @safetestset "PerTaskValue test" include("per_task_value.jl")
         @testset "Distributed Test" include("distributed.jl")
         @testset "Serialization" include("serialization.jl")
     end

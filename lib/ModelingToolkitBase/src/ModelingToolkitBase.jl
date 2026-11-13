@@ -115,6 +115,7 @@ import Graphs: SimpleDiGraph, add_edge!
 import CommonSolve
 using CommonSolve: init, solve
 import EnumX
+import ReadOnlyArrays: ReadOnlyVector
 import ReadOnlyDicts: ReadOnlyDict
 
 import RuntimeGeneratedFunctions
@@ -160,7 +161,7 @@ import IntervalSets
 import NonlinearSolveBase
 # For `LinearInitializationProblem`
 import SCCNonlinearSolve
-using TaskLocalValues: TaskLocalValue
+import Serialization
 
 export @derivatives
 
@@ -280,6 +281,7 @@ include("independent_variables.jl")
 include("constants.jl")
 include("derivative_dict.jl")
 include("atomic_array_dict.jl")
+include("per_task_value.jl")
 include("parameter_bindings_graph.jl")
 
 const SymmapT = AtomicArrayDict{SymbolicT, Dict{SymbolicT, SymbolicT}}

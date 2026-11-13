@@ -2115,6 +2115,60 @@ function operating_point_preprocess(sys::AbstractSystem, op; name = "operating_p
     return op
 end
 
+"""
+    $(TYPEDEF)
+
+Error thrown when an element of an array parameter is given the value `missing` in the
+operating point. Array parameters are atomic: only the whole array can be marked as
+solvable during initialization.
+"""
+struct ElementwiseMissingArrayParameterError <: Exception
+    """
+    The array parameters with at least one element given as `missing`.
+    """
+    arrays::Vector{SymbolicT}
+    """
+    The elements given as `missing`.
+    """
+    elements::Vector{SymbolicT}
+end
+
+function Base.showerror(io::IO, err::ElementwiseMissingArrayParameterError)
+    println(
+        io, """
+        Individual elements of the array parameter(s) $(join(err.arrays, ", ")) were given \
+        the value `missing` in the operating point: $(join(err.elements, ", ")). Array \
+        parameters are atomic, so an array parameter can only be solved for during \
+        initialization as a whole. Specify the entire array instead, for example \
+        `$(first(err.arrays)) => missing`, and provide a guess for the entire array, for \
+        example `guesses = [$(first(err.arrays)) => [...]]`.
+        """
+    )
+    return
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Throw an [`ElementwiseMissingArrayParameterError`](@ref) if `op` maps an element of an
+array parameter of `sys` to `missing`.
+"""
+function check_elementwise_missing_array_parameters(sys::AbstractSystem, op::AbstractDict{SymbolicT, SymbolicT})
+    arrays = SymbolicT[]
+    elements = SymbolicT[]
+    for (k, v) in op
+        v === COMMON_MISSING || continue
+        arr, isarr = split_indexed_var(k)
+        isarr || continue
+        is_parameter(sys, arr) || continue
+        any(isequal(arr), arrays) || push!(arrays, arr)
+        push!(elements, k)
+    end
+    sort!(elements; by = string)
+    isempty(arrays) || throw(ElementwiseMissingArrayParameterError(arrays, elements))
+    return
+end
+
 function build_operating_point(sys::AbstractSystem, op; fast_path = false)
     if !fast_path
         op = operating_point_preprocess(sys, op)
@@ -2123,7 +2177,9 @@ function build_operating_point(sys::AbstractSystem, op; fast_path = false)
     # and doesn't override them. This is because explicit `nothing` values in `op`
     # should be considered as overrides for initial conditions in `ics`.
     map!(x -> @something(x, CommonSentinel()), values(op))
-    op = as_atomic_dict_with_defaults(Dict{SymbolicT, SymbolicT}(op), COMMON_NOTHING)
+    op = Dict{SymbolicT, SymbolicT}(op)
+    check_elementwise_missing_array_parameters(sys, op)
+    op = as_atomic_dict_with_defaults(op, COMMON_NOTHING)
     ics = add_toterms(initial_conditions(sys); replace = is_discrete_system(sys))
     left_merge!(op, ics)
     map!(values(op)) do v
@@ -2865,6 +2921,17 @@ function SciMLBase.detect_cycles(sys::AbstractSystem, varmap::Dict{Any, Any}, va
     return !isempty(cycles)
 end
 
+# The `Symbolics.CodegenFunctionOptions` passed to a problem that also apply to the code of
+# its events. The others describe the signature, output or memory of one function.
+const EVENT_CODEGEN_OPTIONS = Tuple(
+    setdiff(
+        fieldnames(Symbolics.CodegenFunctionOptions),
+        (:wrap_code, :iip_config, :outputidxs, :similarto, :skipzeros, :fuse_unalias)
+    )
+)
+
+event_codegen_kwargs(kwargs) = filter(kv -> first(kv) in EVENT_CODEGEN_OPTIONS, kwargs)
+
 function process_kwargs(
         sys::System; expression = Val{false}, callback = nothing,
         eval_expression = false, eval_module = @__MODULE__,
@@ -2872,6 +2939,8 @@ function process_kwargs(
     )
     # Read before `filter_kwargs`, which removes an `MTKVerbosity` value.
     mtk_verbosity = _problem_verbosity(kwargs)
+    # Read before `filter_kwargs`, which keeps only solver keywords.
+    codegen_kwargs = event_codegen_kwargs(kwargs)
     kwargs = filter_kwargs(kwargs)
     kwargs1 = (;)
 
@@ -2880,7 +2949,7 @@ function process_kwargs(
             cbs = if _has_symbolic_events(sys)
                 @invokelatest process_events(
                     sys; callback, eval_expression, eval_module, tspan, mtk_verbosity,
-                    kwargs...
+                    kwargs..., codegen_kwargs...
                 )
             else
                 callback

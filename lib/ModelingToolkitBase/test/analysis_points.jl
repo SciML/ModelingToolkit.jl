@@ -484,6 +484,63 @@ if @isdefined(ModelingToolkit)
             k = 2.0
             x0 = [1.0, 2.0]
             @test mats.C * mats.B ≈ diagm(-k .* 2 .* (-k .* x0))
+            # An element of an array variable cannot be turned into a parameter on its own
+            @test_throws r"element .* of an array variable" get_sensitivity(
+                arrsys, arrsys.u2; loop_openings = [arrsys.u1]
+            )
+        end
+
+        @testset "Loop openings at analysis points on array-valued connections" begin
+            # The unknowns of the connected systems store the elements of the array
+            # variables individually, while the analysis point refers to the whole array.
+            # The plant is nonlinear in its input, so the entries of `B` reveal the values
+            # at which all elements of the opened signal are held.
+            @component function ArrayPlant(; name)
+                @variables begin
+                    x(t)[1:2] = [0.0, 0.0]
+                    u(t)[1:2], [input = true]
+                    y(t)[1:2], [output = true]
+                end
+                eqs = [
+                    D(x[1]) ~ -x[1] + u[1]^2, D(x[2]) ~ -2x[2] + 3u[2]^2,
+                    y[1] ~ x[1], y[2] ~ x[2],
+                ]
+                System(eqs, t; name)
+            end
+            @component function ArrayGain(; name)
+                @parameters k[1:2] = [1.0, 5.0]
+                @variables u(t)[1:2] [input = true] y(t)[1:2] [output = true]
+                System([y[1] ~ -k[1] * u[1], y[2] ~ -k[2] * u[2]], t; name)
+            end
+            @named plant = ArrayPlant()
+            @named ctrl = ArrayGain()
+            arrsys = System(
+                [connect(plant.y, :y, ctrl.u), connect(ctrl.y, :u, plant.u)], t;
+                systems = [plant, ctrl], name = :arrsys
+            )
+            k = [1.0, 5.0]
+            x0 = [1.0, 2.0]
+            u0 = -k .* x0
+            mats, ssys = linearize(
+                arrsys, arrsys.u, arrsys.y; loop_openings = [arrsys.y],
+                op = Dict(plant.x => x0)
+            )
+            @test mats.C * mats.B ≈ diagm([2, 6] .* u0)
+            @test mats.C * mats.A / mats.C ≈ diagm([-1.0, -2.0])
+            mats, _ = get_sensitivity(arrsys, arrsys.u; loop_openings = [arrsys.y])
+            @test mats.D ≈ I(2)
+            @test norm(mats.C * mats.B) < 1.0e-12
+
+            # Connections between connector systems with array-valued `u`
+            @named P = Blocks.StateSpace([-1.0 0; 0 -2], [1.0 0; 0 3], I(2), zeros(2, 2))
+            @named K = Blocks.MatrixGain(; K = -[1.0 0; 0 1])
+            sssys = System(
+                [connect(P.output, :y, K.input), connect(K.output, :u, P.input)], t;
+                systems = [P, K], name = :sssys
+            )
+            mats, _ = linearize(sssys, sssys.u, sssys.y; loop_openings = [sssys.y])
+            G = CS.ss(mats...)
+            @test tf(G) ≈ tf(CS.ss([-1.0 0; 0 -2], [1.0 0; 0 3], I(2), 0))
         end
     end
 

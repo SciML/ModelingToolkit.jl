@@ -313,10 +313,13 @@ function generate_rhs(
             (; wrap_code = (wrap_oop_similar_for_residual ∘ oop_wrap, iip_wrap))
         )
     end
+    # Very large right-hand sides are chunked automatically. This is sound because in-place
+    # SciML functions are called with an `out` (`du`) that is distinct from `u` and `p`, as the
+    # SciMLBase in-place function documentation states for `f(du, u, p, t)`.
     res = build_function_wrapper(
         sys, rhss, collect(Any, args), BuildFunctionWrapperOptions(;
             p_start, extra_assignments, u_arg, n_param_buffers, p_end_kw...,
-            codegen_function_options = codegen_opts
+            chunk_size = -1, codegen_function_options = codegen_opts
         )
     )
     nargs = length(args) - length(p) + 1
@@ -1899,7 +1902,7 @@ struct CheckInvalidAndTrackNamespaced
 end
 
 function (pred::CheckInvalidAndTrackNamespaced)(x::SymbolicT)
-    isatomic1 = SU.default_is_atomic(x)
+    isatomic1 = SU.default_is_atomic(x) || is_symstruct_field(x)
     isatomic1 || return false
 
     newx = get(pred.ns_map, x, nothing)
@@ -1918,6 +1921,8 @@ function (pred::CheckInvalidAndTrackNamespaced)(x::SymbolicT)
         end
     end
     arrx in pred.simplevars && return true
+    # `simplevars` keys struct variables on the whole record, so also try the record.
+    split_field_access(arrx)[1] in pred.simplevars && return true
     if x in pred.dervars
         push!(pred.present_dervars, x)
         return true
