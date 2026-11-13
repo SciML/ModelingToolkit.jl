@@ -1500,7 +1500,8 @@ function ReconstructInitializeprob(
         end
     end
     srcindices = findall(
-        v -> is_variable(srcsys, v) || has_observed_with_lhs(srcsys, v) || v in srcdervars,
+        v -> is_variable(srcsys, v) || is_parameter(srcsys, v) ||
+            has_observed_with_lhs(srcsys, v) || v in srcdervars,
         dstvars
     )
     srcvars = dstvars[srcindices]
@@ -2768,7 +2769,8 @@ function maybe_build_initialization_problem(
                 inner_pmap,
                 SolvedDerivativeWriter(
                     concrete_getu(
-                        initsys, solved_ddvs; eval_expression, eval_module, kwargs...
+                        initsys, solved_ddvs; eval_expression, eval_module,
+                        despecialize = map_specialize === SciMLBase.AutoDespecialize, kwargs...
                     ),
                     solved_ddv_idxs
                 )

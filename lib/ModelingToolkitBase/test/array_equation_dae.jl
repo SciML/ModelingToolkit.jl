@@ -164,8 +164,7 @@ end
     integ = init(prob, DFBDF())
     @test integ.du ≈ [expected_du; 0.0]
 
-    # omitted derivative values with no initialization problem still error, matching
-    # the pre-change contract
+    # Omitted derivatives require an initialization problem.
     @test_throws ModelingToolkitBase.MissingVariablesError DAEProblem(
         sys, op, (0.0, 0.1); guesses = [z => 0.0], build_initializeprob = false
     )
