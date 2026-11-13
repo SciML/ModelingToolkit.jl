@@ -128,6 +128,8 @@ end
         @test_throws DimensionMismatch setp(csys, Kop)(ps, bad)
         @test_throws DimensionMismatch (ps[parameter_index(csys, Kop)] = bad)
         @test_throws DimensionMismatch remake_buffer(csys, ps, [parameter_index(csys, Kop)], [bad])
+        # a non-concrete `vals` eltype takes the non-generated `remake_buffer` route
+        @test_throws DimensionMismatch remake_buffer(csys, ps, [parameter_index(csys, Kop)], Any[bad])
     end
     setp(csys, Kop)(ps, good)
     @test getp(csys, Kop)(ps) === good
@@ -153,6 +155,9 @@ end
     )
     @test_throws DimensionMismatch remake(prob; p = [K => spzeros(5, 6)])
     @test getp(prob, K)(remake(prob; p = [K => sprand(4, 6, 0.3)])) isa T
+    @test_throws DimensionMismatch remake_buffer(
+        csys, prob.p, [parameter_index(csys, K)], Any[spzeros(5, 6)]
+    )
 end
 
 @testset "parameters without a declared shape are not size-checked" begin

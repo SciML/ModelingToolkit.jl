@@ -684,6 +684,17 @@ function validate_opaque_shape(p, stype, val)
     return nothing
 end
 
+# An index carries no declared shape, only whether the parameter has one, so a new value is
+# compared with the existing one. Values without a `size` are accepted.
+function validate_indexed_shape(oldbuf::MTKParameters, idx::ParameterIndex, val)
+    idx.validate_size && (idx.portion === NONNUMERIC_PORTION || idx.portion isa SciMLStructures.Constants) ||
+        return nothing
+    old = parameter_values(oldbuf, idx)
+    applicable(size, val) && applicable(size, old) && size(val) != size(old) &&
+        throw(InvalidParameterSizeException(size(old), size(val)))
+    return nothing
+end
+
 function validate_parameter_type(ic::IndexCache, idx::ParameterIndex, val)
     stype = get_buffer_template(ic, idx).type
     if (
@@ -779,6 +790,7 @@ function __remake_buffer(indp, oldbuf::MTKParameters, idxs, vals; validate = tru
         if validate
             if sym === nothing
                 validate_parameter_type(ic, idx, val)
+                validate_indexed_shape(oldbuf, idx, val)
             else
                 validate_parameter_type(ic, sym, idx, val)
             end
