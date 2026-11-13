@@ -673,7 +673,7 @@ function System(
         for eq in observed
             push!(buffer, eq.lhs)
             if !(iv isa SymbolicT && _is_unknown_delay_or_evalat(eq.rhs, iv)) &&
-                    !iscalledparameter(eq.rhs)
+                    !iscalledparameter(split_field_access(eq.rhs)[1])
                 push!(buffer, eq.rhs)
             end
         end
