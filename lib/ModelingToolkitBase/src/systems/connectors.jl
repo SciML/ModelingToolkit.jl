@@ -1128,6 +1128,41 @@ end
 """
     $(TYPEDSIGNATURES)
 
+Replace every record equation of `sys` with one equation per leaf, each inheriting the
+provenance of the equation it was split from.
+
+This runs before structural analysis because equations are canonicalized into the residual
+`rhs - lhs`, and a record cannot be subtracted. Arrays can, so they stay whole until
+`scalarize_tearing_state_eqs!`.
+"""
+function expand_record_equations(
+        sys::AbstractSystem, source_info::EquationSourceInformation
+    )
+    eqs = equations(sys)
+    any(is_record_equation, eqs) || return sys, source_info
+    new_eqs = Equation[]
+    new_source = Vector{Symbol}[]
+    new_is_connection = BitVector()
+    for (i, eq) in enumerate(eqs)
+        expanded = flatten_equation(eq)
+        append!(new_eqs, expanded)
+        src = source_info.eqs_source[i]
+        isconn = source_info.is_connection_equation[i]
+        for _ in eachindex(expanded)
+            push!(new_source, src)
+            push!(new_is_connection, isconn)
+        end
+    end
+    @set! sys.eqs = new_eqs
+    return sys, EquationSourceInformation(
+            new_source, new_is_connection, source_info.init_eqs_source
+        )
+end
+
+
+"""
+    $(TYPEDSIGNATURES)
+
 Given a hierarchical system with [`connect`](@ref) equations, expand the connection
 equations and return the new system. `tol` is the tolerance for handling the singularities
 in stream connection equations that happen when a flow variable approaches zero.

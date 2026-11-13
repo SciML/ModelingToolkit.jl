@@ -2921,6 +2921,17 @@ function SciMLBase.detect_cycles(sys::AbstractSystem, varmap::Dict{Any, Any}, va
     return !isempty(cycles)
 end
 
+# The `Symbolics.CodegenFunctionOptions` passed to a problem that also apply to the code of
+# its events. The others describe the signature, output or memory of one function.
+const EVENT_CODEGEN_OPTIONS = Tuple(
+    setdiff(
+        fieldnames(Symbolics.CodegenFunctionOptions),
+        (:wrap_code, :iip_config, :outputidxs, :similarto, :skipzeros, :fuse_unalias)
+    )
+)
+
+event_codegen_kwargs(kwargs) = filter(kv -> first(kv) in EVENT_CODEGEN_OPTIONS, kwargs)
+
 function process_kwargs(
         sys::System; expression = Val{false}, callback = nothing,
         eval_expression = false, eval_module = @__MODULE__,
@@ -2928,6 +2939,8 @@ function process_kwargs(
     )
     # Read before `filter_kwargs`, which removes an `MTKVerbosity` value.
     mtk_verbosity = _problem_verbosity(kwargs)
+    # Read before `filter_kwargs`, which keeps only solver keywords.
+    codegen_kwargs = event_codegen_kwargs(kwargs)
     kwargs = filter_kwargs(kwargs)
     kwargs1 = (;)
 
@@ -2936,7 +2949,7 @@ function process_kwargs(
             cbs = if _has_symbolic_events(sys)
                 @invokelatest process_events(
                     sys; callback, eval_expression, eval_module, tspan, mtk_verbosity,
-                    kwargs...
+                    kwargs..., codegen_kwargs...
                 )
             else
                 callback
