@@ -609,8 +609,9 @@ function SymbolicIndexingInterface.set_parameter!(
         elseif portion isa SciMLStructures.Constants
             _buffer_setindex!(p.constant, val, i, j, k, validate_size)
         elseif portion === NONNUMERIC_PORTION
-            # Nonnumeric elements and caches have no `size`.
-            _buffer_setindex!(p.nonnumeric, val, i, j, k, false)
+            # Nonnumeric elements and caches have no `size`; `validate_size` is only set for
+            # `shaped_parameter`s, which accept values without a `size`.
+            _buffer_setindex!(p.nonnumeric, val, i, j, k, validate_size && applicable(size, val))
         elseif portion isa SciMLStructures.Caches
             _buffer_setindex!(p.caches, val, i, j, k, false)
         else
@@ -667,12 +668,17 @@ function validate_parameter_type(ic::IndexCache, p, idx::ParameterIndex, val)
     return nothing
 end
 
+function has_declared_opaque_shape(p)
+    symtype(p) <: Number && return false
+    declared = SU.shape(p)
+    return !(declared isa SU.Unknown || isempty(declared))
+end
+
 # Parameters declared with `shaped_parameter` carry a shape that the type does not check.
 # Values that do not define `size` are accepted.
 function validate_opaque_shape(p, stype, val)
-    stype <: Number && return nothing
+    has_declared_opaque_shape(p) || return nothing
     declared = SU.shape(p)
-    (declared isa SU.Unknown || isempty(declared)) && return nothing
     applicable(size, val) || return nothing
     size(val) == Tuple(map(length, declared)) || throw(InvalidParameterSizeException(p, val))
     return nothing

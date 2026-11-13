@@ -4,7 +4,7 @@ using Symbolics
 using SymbolicUtils
 using SciMLBase
 using SparseArrays, LinearAlgebra
-using SymbolicIndexingInterface: getp
+using SymbolicIndexingInterface: getp, setp, parameter_index, remake_buffer
 using OrdinaryDiffEqBDF: DFBDF
 using DiffEqBase: BrownFullBasicInit
 
@@ -34,6 +34,10 @@ D = Differential(t)
     @test (w ~ K * u) isa Equation
     @test_throws ArgumentError shaped_parameter(:K, SparseMatrixCSC, 4, 6)
     @test_throws ArgumentError shaped_parameter(:K, BlockOp)
+    @test_throws ArgumentError shaped_parameter(:K, BlockOp, 0, 3)
+    @test_throws ArgumentError shaped_parameter(:K, BlockOp, 3, -1)
+    @test_throws ArgumentError shaped_parameter(:K, BlockOp, 3, 1:0)
+    @test size(shaped_parameter(:K, BlockOp, 2:5, 3)) == (4, 3)
 end
 
 @testset "rectangular registered operator" begin
@@ -118,6 +122,17 @@ end
     @test_throws DimensionMismatch remake(prob; p = [Kop => badcols])
     prob2 = remake(prob; p = [Kop => BlockOp(sprand(4, 6, 0.2))])
     @test getp(prob2, Kop)(prob2) isa BlockOp
+
+    ps = prob.p
+    for bad in (badrows, badcols)
+        @test_throws DimensionMismatch setp(csys, Kop)(ps, bad)
+        @test_throws DimensionMismatch (ps[parameter_index(csys, Kop)] = bad)
+        @test_throws DimensionMismatch remake_buffer(csys, ps, [parameter_index(csys, Kop)], [bad])
+    end
+    setp(csys, Kop)(ps, good)
+    @test getp(csys, Kop)(ps) === good
+    setp(csys, Nop)(ps, NoSizeOp(2.0))
+    @test getp(csys, Nop)(ps) == NoSizeOp(2.0)
 end
 
 @testset "declared shape is validated for sparse matrix parameters" begin

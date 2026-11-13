@@ -132,7 +132,8 @@ Kop = shaped_parameter(:Kop, FEMOp, 4, 6)   # maps R^6 -> R^4
 end
 ```
 
-`T` must be a concrete type. The parameter is not tunable unless `tunable = true`.
+`T` must be a concrete type and every dimension must be positive (a nonempty range is
+allowed). The parameter is not tunable unless `tunable = true`.
 """
 function shaped_parameter(
         name::Symbol, T::Type, dims::Union{Int, AbstractUnitRange{Int}}...;
@@ -140,6 +141,8 @@ function shaped_parameter(
     )
     isconcretetype(T) || throw(ArgumentError("`shaped_parameter` requires a concrete type, got `$T`."))
     isempty(dims) && throw(ArgumentError("`shaped_parameter` requires at least one dimension."))
+    all(d -> d isa Int ? d > 0 : !isempty(d), dims) ||
+        throw(ArgumentError("`shaped_parameter` dimensions must be positive, got $dims."))
     shape = SymbolicUtils.ShapeVecT(map(d -> d isa Int ? (1:d) : UnitRange{Int}(d), dims))
     sym = SymbolicUtils.Sym{SymReal}(name; type = T, shape)
     sym = setmetadata(sym, VariableTunable, tunable)
