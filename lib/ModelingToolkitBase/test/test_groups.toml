@@ -20,6 +20,8 @@ versions = ["lts", "1", "pre"]
 
 [Extended]
 versions = ["lts", "1", "pre"]
+# `multithreading.jl` needs more than one thread to exercise concurrent access.
+num_threads = 2
 
 [RegressionI]
 versions = ["lts", "1", "pre"]

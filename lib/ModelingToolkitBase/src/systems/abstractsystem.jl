@@ -2455,14 +2455,25 @@ end
 ###
 ### System utils
 ###
-struct ObservedFunctionCache{S, O}
-    sys::S
-    dict::Dict{Any, Any}
-    steady_state::Bool
-    eval_expression::Bool
-    eval_module::Module
-    checkbounds::Bool
-    optimize::O
+mutable struct ObservedFunctionCache{S, O}
+    const sys::S
+    # Never mutated once published, so lookups need no lock. Inserts replace it under `lock`.
+    @atomic dict::Dict{Any, Any}
+    const steady_state::Bool
+    const eval_expression::Bool
+    const eval_module::Module
+    const checkbounds::Bool
+    const optimize::O
+    const lock::ReentrantLock
+end
+
+function ObservedFunctionCache(
+        sys::S, dict, steady_state, eval_expression, eval_module, checkbounds, optimize::O
+    ) where {S, O}
+    return ObservedFunctionCache{S, O}(
+        sys, dict, steady_state, eval_expression, eval_module, checkbounds, optimize,
+        ReentrantLock()
+    )
 end
 
 # Constructors (taking a `GeneratedFunctionOptions` directly, and a backward-compatible
@@ -2472,7 +2483,7 @@ end
 # This is hit because ensemble problems do a deepcopy
 function Base.deepcopy_internal(ofc::ObservedFunctionCache, stackdict::IdDict)
     sys = deepcopy(ofc.sys)
-    dict = deepcopy(ofc.dict)
+    dict = deepcopy(@atomic ofc.dict)
     steady_state = ofc.steady_state
     eval_expression = ofc.eval_expression
     eval_module = ofc.eval_module
@@ -2485,13 +2496,34 @@ function Base.deepcopy_internal(ofc::ObservedFunctionCache, stackdict::IdDict)
     return newofc
 end
 
+# Separate from the call method so that the `try`/`finally` of `@lock` is only reached on a
+# cache miss: Mooncake cannot build a rule for a method that contains one.
+function insert_observed_function!(ofc::ObservedFunctionCache, key, newobs)
+    return @lock ofc.lock begin
+        dict = @atomic :monotonic ofc.dict
+        obs = get(dict, key, nothing)
+        if obs === nothing
+            newdict = copy(dict)
+            newdict[key] = newobs
+            @atomic :release ofc.dict = newdict
+            obs = newobs
+        end
+        obs
+    end
+end
+
 function (ofc::ObservedFunctionCache)(obsvar, args...)
-    obs = get!(ofc.dict, value(obsvar)) do
-        SymbolicIndexingInterface.observed(
+    key = value(obsvar)
+    obs = get(@atomic(:acquire, ofc.dict), key, nothing)
+    if obs === nothing
+        # Built outside the lock, so that threads asking for different expressions do not
+        # wait on each other's code generation. The first insert wins.
+        newobs = SymbolicIndexingInterface.observed(
             ofc.sys, obsvar; eval_expression = ofc.eval_expression,
             eval_module = ofc.eval_module, checkbounds = ofc.checkbounds,
             optimize = ofc.optimize
         )
+        obs = insert_observed_function!(ofc, key, newobs)
     end
     if ofc.steady_state
         obs = let fn = obs
