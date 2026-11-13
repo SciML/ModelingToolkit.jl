@@ -26,6 +26,10 @@ const GENERATED_ADT_MODULES = (
     ModelingToolkitBase.StructuralHint,
 )
 
+# The `SciMLLogging.@verbosity_specifier` expansion refers to these names unqualified, so
+# ModelingToolkitBase must import them. ExplicitImports does not expand macros and sees no use.
+const MACRO_ONLY_EXPLICIT_IMPORTS = (:AbstractVerbositySpecifier, :Detailed, :All)
+
 # Externally-owned names ModelingToolkitBase imports for which the owning package offers
 # no public spelling.
 #
@@ -58,9 +62,9 @@ const NONPUBLIC_EXPLICIT_IMPORTS = (
 # public spelling. Beyond the Symbolics/SymbolicUtils internals covered above, these are:
 # the SciMLBase callback/keyword defaults every problem constructor has to reproduce, the
 # `Moshi.Data`/`Moshi.Match` macro entry points, the Base internals with no public spelling
-# (`@__doc__`, `@ntuple`, `literal_pow`, `ReshapedArray`, and `setindex` — the
-# non-mutating array update an immutable iterate needs, which Base declares no public
-# spelling for), and the AD hooks
+# (`@__doc__`, `@ntuple`, `literal_pow`, `ReinterpretArray`, `ReshapedArray`, and
+# `setindex` — the non-mutating array update an immutable iterate needs, which Base
+# declares no public spelling for), and the AD hooks
 # (`ForwardDiff.Dual`, `EnzymeCore.EnzymeRules`) the generated code dispatches on.
 const NONPUBLIC_QUALIFIED_ACCESSES = (
     # Symbolics
@@ -111,7 +115,7 @@ const NONPUBLIC_QUALIFIED_ACCESSES = (
     # Base
     Symbol("@__doc__"), :Callable, :Cartesian, :deepcopy_internal, :Experimental,
     :HasEltype, :JLOptions, :literal_pow, Symbol("@nospecializeinfer"), Symbol("@ntuple"),
-    :ReshapedArray, :setindex,
+    :ReinterpretArray, :ReshapedArray, :setindex,
     # Base.Cartesian
     :poplinenum,
     # Base.Experimental
@@ -171,6 +175,8 @@ const REEXPORTED_API = (
     :SDEProblem, :SolverStepClock, :SteadyStateProblem, :TimeDomain,
     # CommonSolve
     :solve,
+    # SciMLLogging: the module, for the levels and presets of `MTKVerbosity`
+    :SciMLLogging,
     # JumpProcesses
     :JumpProblem,
     # BipartiteGraphs
@@ -191,7 +197,10 @@ run_qa(
     ),
     ei_kwargs = (;
         no_implicit_imports = (; allow_unanalyzable = GENERATED_ADT_MODULES),
-        no_stale_explicit_imports = (; allow_unanalyzable = GENERATED_ADT_MODULES),
+        no_stale_explicit_imports = (;
+            allow_unanalyzable = GENERATED_ADT_MODULES,
+            ignore = MACRO_ONLY_EXPLICIT_IMPORTS,
+        ),
         all_explicit_imports_are_public = (; ignore = NONPUBLIC_EXPLICIT_IMPORTS),
         all_qualified_accesses_are_public = (; ignore = NONPUBLIC_QUALIFIED_ACCESSES),
     ),

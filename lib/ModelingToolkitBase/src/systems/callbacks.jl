@@ -140,7 +140,10 @@ function AffectSystem(
     isempty(affect) && return nothing
     if isnothing(iv)
         iv = t_nounits
-        @warn "No independent variable specified. Defaulting to t_nounits."
+        @SciMLMessage(
+            "No independent variable specified. Defaulting to t_nounits.",
+            _system_verbosity(parent_sys), :affect_default_independent_variable
+        )
     end
     _unhack_sys = reverse_all_default_reversible_transformations(parent_sys)
     extra_eqs = Equation[alg_equations(_unhack_sys); observed(_unhack_sys)]
@@ -1384,14 +1387,14 @@ Dispatches on the affect type:
 """
 function compile_affect(
         aff::Union{Nothing, Affect}, cb::AbstractCallback, sys::AbstractSystem;
-        default = nothing, kwargs...
+        default = nothing, mtk_verbosity::MTKVerbosity = DEFAULT_MTK_VERBOSE, kwargs...
     )
     return if isnothing(aff)
         default
     elseif aff isa AffectSystem
         compile_equational_affect(aff, sys; kwargs...)
     elseif aff isa ImperativeAffect
-        compile_functional_affect(aff, sys; kwargs...)
+        compile_functional_affect(aff, sys; mtk_verbosity, kwargs...)
     end
 end
 

@@ -375,7 +375,8 @@ end
 Variant for compilation pipelines that track per-equation
 [`EquationSourceInformation`](@ref): returns `(sys, source_info)` with the source
 information padded for the consistency equations [`lower_limited`](@ref) appends
-(unknown-source entries, not connection equations).
+(unknown-source entries, not connection equations). Initialization equations are not
+modified, so their source information is passed through unchanged.
 """
 function apply_limited_lowering(sys::AbstractSystem, source_info)
     n_before = length(equations(sys))
@@ -385,7 +386,8 @@ function apply_limited_lowering(sys::AbstractSystem, source_info)
         if n_added > 0
             source_info = EquationSourceInformation(
                 vcat(source_info.eqs_source, [Symbol[] for _ in 1:n_added]),
-                vcat(source_info.is_connection_equation, falses(n_added))
+                vcat(source_info.is_connection_equation, falses(n_added)),
+                source_info.init_eqs_source
             )
         end
     end

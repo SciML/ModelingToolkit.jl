@@ -1,4 +1,5 @@
 using ModelingToolkitBase, OrdinaryDiffEq, StochasticDiffEq, JumpProcesses, Test
+import SciMLLogging
 using OrdinaryDiffEqRosenbrock
 using SciMLStructures: canonicalize, Discrete
 using ModelingToolkitBase: SymbolicContinuousCallback,
@@ -1096,7 +1097,7 @@ end
     ss = mtkcompile(sys)
     @test_logs (
         :warn,
-        "The symbols Any[:furnace_on] are declared as both observed and modified; this is a code smell because it becomes easy to confuse them and assign/not assign a value.",
+        r"The symbols Any\[:furnace_on\] are declared as both observed and modified; this is a code smell because it becomes easy to confuse them and assign/not assign a value.",
     ) prob = ODEProblem(
         ss, [temp => 0.0, furnace_on => true], (0.0, 100.0)
     )
@@ -1545,7 +1546,10 @@ if @isdefined(ModelingToolkit)
             discrete_parameters = [g], iv = t
         )
         @mtkcompile sys = System(eqs, t, [x, y, w], [g]; continuous_events = c_evt)
-        prob = ODEProblem(sys, [], (0.0, 1.0); warn_initialize_determined = false)
+        prob = ODEProblem(
+            sys, [], (0.0, 1.0);
+            verbose = MTKVerbosity(initialization = SciMLLogging.Silent)
+        )
 
         sol = solve(prob, FBDF())
         @test SciMLBase.successful_retcode(sol)
@@ -2253,4 +2257,48 @@ end
         prob2 = ODEProblem(sys, op, (0.0, 5.0))
         @test typeof(prob1) == typeof(prob2)
     end
+end
+
+@testset "Code-generation options of the problem reach the event code" begin
+    @variables x(t) = 1.0
+    @discretes c(t) = 0.0
+    # `sqrt` of a negative number is `NaN` with the default `nanmath = true`, and a
+    # `DomainError` with `nanmath = false`
+    affect = [c ~ sqrt(Pre(x) - 5)]
+    imperative = ModelingToolkitBase.ImperativeAffect(
+        modified = (; c), observed = (; root = sqrt(x - 5))
+    ) do m, o, ctx, integ
+        (; c = o.root)
+    end
+    tick = SymbolicDiscreteCallback(0.5, affect; discrete_parameters = [c])
+    cross = SymbolicContinuousCallback([x ~ 0.5], affect; discrete_parameters = [c])
+    tock = SymbolicDiscreteCallback(0.5, imperative; discrete_parameters = [c])
+    for events in (
+            (; discrete_events = [tick]), (; continuous_events = [cross]),
+            (; discrete_events = [tock]),
+        )
+        @mtkcompile sys = System([D(x) ~ -x], t, [x], [c]; events...)
+        sol = solve(ODEProblem(sys, [], (0.0, 1.0)), Tsit5())
+        @test isnan(sol.ps[c][end])
+        @test_throws DomainError solve(ODEProblem(sys, [], (0.0, 1.0); nanmath = false), Tsit5())
+    end
+    # `JumpProblem` compiles the events itself
+    @variables n(t) = 10.0
+    @parameters k = 0.1
+    @mtkcompile sys = System(
+        [D(x) ~ -x], t, [x, n], [k, c];
+        jumps = [SymbolicMassActionJump(k, [n => 1], [n => -1])], discrete_events = [tick]
+    )
+    sol = solve(JumpProblem(sys, [], (0.0, 1.0)), Tsit5())
+    @test isnan(sol.ps[c][end])
+    @test_throws DomainError solve(JumpProblem(sys, [], (0.0, 1.0); nanmath = false), Tsit5())
+    # `iip_config` and `skipzeros` describe the problem's function, not the event code
+    below = SymbolicDiscreteCallback(x < 0.5, [c ~ Pre(c) + 1]; discrete_parameters = [c])
+    @mtkcompile sys = System([D(x) ~ -x], t, [x], [c]; discrete_events = [below])
+    sol = solve(ODEProblem{true}(sys, [], (0.0, 1.0); iip_config = (false, true)), Tsit5())
+    @test SciMLBase.successful_retcode(sol)
+    reset = SymbolicDiscreteCallback(0.5, [c ~ 0]; discrete_parameters = [c])
+    @mtkcompile sys = System([D(x) ~ -x], t, [x], [c]; discrete_events = [reset])
+    sol = solve(ODEProblem(sys, [x => 1.0, c => 5.0], (0.0, 1.0); skipzeros = true), Tsit5())
+    @test sol.ps[c][end] == 0
 end

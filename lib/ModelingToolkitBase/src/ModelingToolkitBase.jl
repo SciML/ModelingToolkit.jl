@@ -103,6 +103,11 @@ import AbstractTrees
 using AbstractTrees: TreeIterator, print_tree
 using SciMLBase: StandardODEProblem, StandardNonlinearProblem, TimeDomain,
     Clock, SolverStepClock, AbstractNonlinearProblem
+using SciMLLogging: SciMLLogging, @verbosity_specifier, @SciMLMessage,
+    AbstractVerbositySpecifier, AbstractVerbosityPreset, MessageLevel,
+    Silent, InfoLevel, WarnLevel,
+    None, Minimal, Standard, Detailed, All,
+    verbosity_to_bool
 import Moshi
 import RecursiveArrayTools
 using RecursiveArrayTools: ArrayPartition, DiffEqArray
@@ -110,6 +115,7 @@ import Graphs: SimpleDiGraph, add_edge!
 import CommonSolve
 using CommonSolve: init, solve
 import EnumX
+import ReadOnlyArrays: ReadOnlyVector
 import ReadOnlyDicts: ReadOnlyDict
 
 import RuntimeGeneratedFunctions
@@ -155,7 +161,7 @@ import IntervalSets
 import NonlinearSolveBase
 # For `LinearInitializationProblem`
 import SCCNonlinearSolve
-using TaskLocalValues: TaskLocalValue
+import Serialization
 
 export @derivatives
 
@@ -275,6 +281,7 @@ include("independent_variables.jl")
 include("constants.jl")
 include("derivative_dict.jl")
 include("atomic_array_dict.jl")
+include("per_task_value.jl")
 include("parameter_bindings_graph.jl")
 
 const SymmapT = AtomicArrayDict{SymbolicT, Dict{SymbolicT, SymbolicT}}
@@ -290,6 +297,7 @@ const COMMON_FALSE = SU.Const{VartypeT}(false)
 const COMMON_INF = SU.Const{VartypeT}(Inf)
 
 include("utils.jl")
+include("verbosity.jl")
 
 include("systems/index_cache.jl")
 include("systems/parameter_buffer.jl")
@@ -434,6 +442,9 @@ export initialization_equations, guesses, bindings, initial_conditions, hierarch
 export set_defaults
 export state_priorities, irreducibles, maybe_zeros
 export mtkcompile, expand_connections, structural_simplify
+export MTKVerbosity
+# The toggle levels and presets of `MTKVerbosity` (e.g. `SciMLLogging.Silent`)
+export SciMLLogging
 export solve
 export Pre
 
@@ -524,6 +535,7 @@ const set_scalar_metadata = setmetadata
 @public tobrownian, toparam, tovar
 @public ProblemTypeCtx
 @public HomotopyCtx, homotopy_enabled, strip_homotopy
+@public MTKVerbosityCtx
 
 for prop in [SYS_PROPS; [:continuous_events, :discrete_events]]
     getter = Symbol(:get_, prop)
