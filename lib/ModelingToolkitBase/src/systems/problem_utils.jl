@@ -1281,7 +1281,10 @@ function (recon::MTKParametersReconstructor)(src, dst_ps::MTKParameters)
         @set! caches[diffcache_buffer_idx] = DiffCacheAllocatorAPIWrapper{ForwardDiff.valtype(eltype(initialvals))}.(caches[diffcache_buffer_idx])
     end
     discretes = map(recon.discretes_fn(src), dst_ps.discrete) do src_discrete, dst_discrete
-        if eltype(src_discrete) <: eltype(dst_discrete)
+        src_eltype = eltype(src_discrete)
+        dst_eltype = eltype(dst_discrete)
+        # Widen ordinary numeric values, but keep types such as ForwardDiff.Dual.
+        if src_eltype <: dst_eltype || promote_type(src_eltype, dst_eltype) === dst_eltype
             return convert(typeof(dst_discrete), src_discrete)
         end
         return src_discrete

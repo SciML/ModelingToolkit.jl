@@ -1,6 +1,6 @@
 using ForwardDiff
 using ModelingToolkitBase
-using ModelingToolkitBase: t_nounits as t, D_nounits as D
+using ModelingToolkitBase: SymbolicDiscreteCallback, t_nounits as t, D_nounits as D
 using OrdinaryDiffEqTsit5
 using SciMLBase
 using SciMLSensitivity
