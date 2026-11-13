@@ -2302,3 +2302,17 @@ end
     sol = solve(ODEProblem(sys, [x => 1.0, c => 5.0], (0.0, 1.0); skipzeros = true), Tsit5())
     @test sol.ps[c][end] == 0
 end
+
+@testset "`reinitializealg` takes part in the hash of an event" begin
+    @variables x(t)
+    for cb in (
+            SymbolicContinuousCallback([x ~ 0], [x ~ Pre(x) + 1]; reinitializealg = SciMLBase.NoInit()),
+            SymbolicDiscreteCallback(1.0, [x ~ Pre(x) + 1]; reinitializealg = SciMLBase.NoInit()),
+        )
+        # affects and zero-crossing ids compare by identity, so only change `reinitializealg`
+        other = @set cb.reinitializealg = SciMLBase.CheckInit()
+        @test cb != other
+        @test hash(cb) != hash(other)
+        @test hash(cb) == hash(@set cb.reinitializealg = SciMLBase.NoInit())
+    end
+end
