@@ -332,6 +332,45 @@ end
         @test p.x0 ≈ [sol(0.7; idxs = xs)]
         @test p.A ≈ [-3 * sol(0.7; idxs = xs)^2;;]
     end
+
+    @testset "Array values" begin
+        @variables x(t) (u(t))[1:2] y(t)
+        @named sys = System([D(x) ~ -x + u[1]^2 + u[2]^2, y ~ x], t)
+        p = linearize_hybrid(sys, [u], [y]; op = Dict(x => 1.0, u => [2.0, 3.0])).partitions[1]
+        @test p.B ≈ [4.0 6.0]
+
+        k = ShiftIndex(Clock(dt))
+        @variables (xa(t))[1:2] (ua(t))[1:2]
+        @named sysd = System(
+            [xa(k) ~ xa(k - 1) .^ 2 .+ ua(k)], t; initialization_eqs = [xa(k - 1) ~ [1.0, 1.0]]
+        )
+        # An explicit operating-point value takes precedence over the initialization equations.
+        p = linearize_hybrid(sysd, [ua], [xa]; op = Dict(xa => [2.0, 3.0], ua => zeros(2))).partitions[1]
+        @test sort(p.x0) ≈ [2.0, 3.0]
+        @test sort(eigvals(p.A)) ≈ [4.0, 6.0]
+        # Values for individual elements take precedence over the value of the array.
+        p = linearize_hybrid(
+            sysd, [ua], [xa]; op = Dict(xa => [2.0, 3.0], xa[2] => 5.0, ua => zeros(2))
+        ).partitions[1]
+        @test sort(p.x0) ≈ [2.0, 5.0]
+    end
+
+    @testset "Shifted variables and guesses of discrete partitions" begin
+        k = ShiftIndex(Clock(dt))
+        @variables xd(t) ud(t)
+        @named sys = System([xd(k) ~ xd(k - 1)^2 + 3xd(k - 2)^2 + ud(k)], t)
+        p = linearize_hybrid(sys, [ud], [xd]; op = Dict(xd(k - 1) => 2.0, xd(k - 2) => 3.0, ud => 0.0)).partitions[1]
+        # The characteristic polynomial is z² - 2xd(k-1) z - 6xd(k-2).
+        @test tr(p.A) ≈ 4.0
+        @test det(p.A) ≈ -18.0
+        @test sort(p.x0) ≈ [2.0, 3.0]
+
+        @variables xg(t) ug(t)
+        @named sysg = System([xg(k) ~ xg(k - 1)^2 + ug(k)], t; guesses = [xg => 2.0])
+        p = @test_nowarn(linearize_hybrid(sysg, [ug], [xg]; op = Dict(ug => 0.0))).partitions[1]
+        @test p.x0 ≈ [2.0]
+        @test p.A ≈ [4.0;;]
+    end
 end
 
 nodual(x::Float64) = 2x

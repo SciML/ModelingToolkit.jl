@@ -332,9 +332,11 @@ end
 function HybridOperatingPoint(op::AbstractDict, t)
     dict = Dict{SymbolicT, Any}()
     for (k, v) in op
-        dict[unwrap(k)] = v
+        dict[_normalize_op_key(unwrap(k))] = v
     end
-    return HybridOperatingPoint(dict, collect(SymbolicT, keys(dict)), nothing, Float64(t))
+    explicit = collect(SymbolicT, keys(dict))
+    _expand_array_values!(dict, explicit)
+    return HybridOperatingPoint(dict, explicit, nothing, Float64(t))
 end
 
 function HybridOperatingPoint(op::LinearizationOpPoint, t)
@@ -362,11 +364,42 @@ function HybridOperatingPoint(op::LinearizationOpPoint, t)
     end
     explicit = SymbolicT[]
     for (k, v) in op.op
-        k = unwrap(k)
+        k = _normalize_op_key(unwrap(k))
         dict[k] = v
         push!(explicit, k)
     end
+    _expand_array_values!(dict, explicit)
     return HybridOperatingPoint(dict, explicit, sol, t)
+end
+
+# A shifted variable `x(k - n)` in an operating point refers to the history variable `xₜ₋ₙ`
+# of the compiled discrete partition.
+function _normalize_op_key(k::SymbolicT)
+    iscall(k) || return k
+    operation(k) isa Shift && return MTKBase.default_toterm(k)
+    arr, isarr = split_indexed_var(k)
+    if isarr && iscall(arr) && operation(arr) isa Shift
+        idxs = Int[Int(SU.unwrap_const(i)) for i in arguments(k)[2:end]]
+        return unwrap(wrap(MTKBase.default_toterm(arr))[idxs...])
+    end
+    return k
+end
+
+# Add an entry for every element of the array variables among `keys`, whose values are
+# arrays, so that the elements, which the partitions refer to individually, are found by
+# lookup. Entries given for individual elements take precedence.
+function _expand_array_values!(dict::Dict{SymbolicT, Any}, keys::Vector{SymbolicT})
+    for k in keys
+        v = dict[k]
+        v isa AbstractArray || continue
+        SU.is_array_shape(SU.shape(k)) || continue
+        elems = _scalarized_vars([k])
+        length(elems) == length(v) || continue
+        for (e, ve) in zip(elems, vec(v))
+            haskey(dict, e) || (dict[e] = ve)
+        end
+    end
+    return dict
 end
 
 # The value of `var` in `sol` at time `t`, or `nothing` when it is not available (a discrete
@@ -816,9 +849,10 @@ function _partition_operating_point(
         result[param] = val
     end
     if discrete
+        gs = guesses(ssys)
         for v in unknowns(ssys)
             haskey(result, v) && continue
-            val = _history_value(op, ics, init_values, v)
+            val = _history_value(op, ics, init_values, gs, v)
             if val === nothing
                 push!(missing_vars, v)
                 val = 0.0
@@ -834,10 +868,26 @@ end
 
 The operating-point value of the history variable `v` of a discrete partition, that is, the
 value of the variable `v` is the history of, taken from `op`, from the initial values `ics`
-or from the values `init_values` given by initialization equations. For an element of an
-array variable, the value of the whole array is consulted as well. Returns `nothing` if no
-value is available.
+or from the values `init_values` given by initialization equations, and otherwise from the
+guesses `gs`. For an element of an array variable, the value of the whole array is consulted
+as well. Returns `nothing` if no value is available.
 """
+function _history_value(op::HybridOperatingPoint, ics, init_values, gs, v::SymbolicT)
+    val = _history_value(op, ics, init_values, v)
+    val === nothing || return val
+    root = _array_root(v)
+    base_root = MTKBase.getunshifted(root)
+    base_root === nothing && (base_root = root)
+    root === v && return get(gs, base_root, nothing)
+    idxs = Int[Int(SU.unwrap_const(i)) for i in arguments(v)[2:end]]
+    val = get(gs, unwrap(wrap(base_root)[idxs...]), nothing)
+    val === nothing || return val
+    arr = get(gs, base_root, nothing)
+    arr isa AbstractArray && return arr[idxs...]
+    arr isa SymbolicT && SU.is_array_shape(SU.shape(arr)) && return unwrap(wrap(arr)[idxs...])
+    return nothing
+end
+
 function _history_value(op::HybridOperatingPoint, ics, init_values, v::SymbolicT)
     root = _array_root(v)
     base_root = MTKBase.getunshifted(root)
