@@ -304,8 +304,7 @@ function SciMLBase.ODEInputFunction{iip, specialize}(
     (; u0, p, jac, tgrad, sparse, sparsity, analytic, simplify, initialization_data) = opts
     checkbounds = opts.codegen.codegen.checkbounds
 
-    f, _,
-        _ = generate_control_function(
+    f, _, _, io_sys = generate_control_function(
         sys, inputs, disturbance_inputs; eval_module
     )
     f = f[1]
@@ -317,20 +316,31 @@ function SciMLBase.ODEInputFunction{iip, specialize}(
     # already reflects that.
     codegen_opts = opts.codegen
 
-    if tgrad
-        _tgrad = generate_tgrad(sys, codegen_opts; simplify)
-    else
-        _tgrad = nothing
+    # `jac`, `tgrad` and `controljac` must take the same `(x, u, p, t)` arguments as `f`,
+    # so they are built from `io_sys` with the inputs as their own argument and compiled.
+    function build_deriv(exprs; wrap_code = (identity, identity))
+        return generate_input_derivative_function(
+            io_sys, exprs, inputs, disturbance_inputs, codegen_opts.codegen;
+            eval_expression, eval_module, wrap_code
+        )
     end
 
+    _tgrad = tgrad ? build_deriv(calculate_input_tgrad(io_sys, inputs; simplify)) : nothing
+
     if jac
-        _jac = generate_jacobian(sys, codegen_opts; simplify, sparse)
+        wrap_code = sparse && checkbounds ? assert_jac_length_header(io_sys) :
+            (identity, identity)
+        _jac = build_deriv(calculate_jacobian(io_sys; simplify, sparse); wrap_code)
     else
         _jac = nothing
     end
 
     if controljac
-        _cjac = generate_control_jacobian(sys, codegen_opts; simplify, sparse)
+        rhs = [eq.rhs for eq in full_equations(io_sys)]
+        u_in = vec(unwrap_vars(inputs))
+        cjac = sparse ? sparsejacobian(rhs, u_in; simplify) :
+            jacobian(rhs, u_in; simplify)
+        _cjac = build_deriv(cjac)
     else
         _cjac = nothing
     end
@@ -365,6 +375,67 @@ function SciMLBase.ODEInputFunction{iip, specialize}(
         analytic = analytic,
         initialization_data
     )
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Calculate `∂f/∂t` of the equations of `sys` with the `inputs` held fixed, as
+`ODEInputFunction` treats them as an argument rather than functions of time.
+"""
+function calculate_input_tgrad(sys::System, inputs; simplify = false)
+    check_symbolic_ad_allowed(sys)
+    inputs = vec(unwrap_vars(inputs))
+    # `detime_dvs` turns every `v(t)` into a plain `v`, so the inputs are constants
+    # under `Differential(iv)`. Both unknowns and inputs are restored afterwards so they
+    # match the arguments of the generated function.
+    rhs = [detime_dvs(eq.rhs) for eq in full_equations(sys)]
+    iv = get_iv(sys)
+    tgrad = [expand_derivatives(Differential(iv)(r), simplify) for r in rhs]
+    held = [flat_unknowns(sys); inputs]
+    reverse_rule = Dict(map((x, xt) -> x => xt, detime_dvs.(held), held))
+    return Num.(substitute.(tgrad, Ref(reverse_rule)))
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Build a function of `exprs` with the same arguments as the `f` returned by
+[`generate_control_function`](@ref): `(x, u, p..., t)` out-of-place and
+`(out, x, u, p..., t)` in-place, where `u` holds `inputs`. Unknown
+`disturbance_inputs` are set to zero, as they are in `f`.
+"""
+function generate_input_derivative_function(
+        sys::System, exprs, inputs, disturbance_inputs,
+        codegen::Symbolics.CodegenFunctionOptions;
+        eval_expression = false, eval_module = @__MODULE__,
+        wrap_code = (identity, identity)
+    )
+    inputs = vec(unwrap_vars(inputs))
+    dists = disturbance_inputs === nothing ? SymbolicT[] :
+        vec(unwrap_vars(disturbance_inputs))
+    excluded = Set{SymbolicT}([inputs; dists])
+    for v in [inputs; dists]
+        arr, isarr = split_indexed_var(v)
+        isarr && push!(excluded, arr)
+    end
+    ps = setdiff(parameters(sys; initial_parameters = true), excluded)
+    p = reorder_parameters(sys, ps)
+    if !isempty(dists)
+        subs = Dict{SymbolicT, Any}(d => 0 for d in dists)
+        exprs = map(x -> substitute(x, subs), exprs)
+    end
+    args = (unknowns(sys), map(value, inputs), p..., get_iv(sys))
+    res = build_function_wrapper(
+        sys, exprs, collect(Any, args), BuildFunctionWrapperOptions(;
+            u_arg = 1, p_start = 3, p_end = length(p) + 2,
+            codegen_function_options = setproperties(codegen, (; wrap_code))
+        )
+    )
+    res = eval_or_rgf.(res; eval_expression, eval_module)
+    return GeneratedFunctionWrapper{
+        (3, length(args) - length(p) + 1, is_split(sys)),
+    }(res...)
 end
 
 # returns the JuMP timespan, the number of steps, and whether it is a free time problem.
