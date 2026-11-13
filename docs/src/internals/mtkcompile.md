@@ -396,6 +396,12 @@ equation, which would make the generated code `O(n)`. `build_function_wrapper` r
 those literals into `vcat`s of `view`s into the argument buffers
 (`compress_array_literals`), so the generated function is independent of `n`.
 
+Whether the loaded backend provides array-equation groups is reported by:
+
+```@docs
+ModelingToolkitBase.preserve_array_equations_supported
+```
+
 ## Clock Inference
 
 Clock inference begins with the `ClockInference` struct. This takes `state` and

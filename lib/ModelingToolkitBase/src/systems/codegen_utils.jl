@@ -694,15 +694,31 @@ function compress_array_literals(@nospecialize(expr), args::Vector{Any}, argumen
     # A literal that is the allocating operand of `with_allocator` stays a literal: the
     # allocator only applies to allocating expressions, so rewriting it to a `vcat` would
     # discard the allocator and change the type and values of the result.
+    protected = Set{SymbolicT}()
     allocator_terms = Set{SymbolicT}()
     SU.search_variables!(
         allocator_terms, expr; is_atomic = is_with_allocator_term, recurse = iscall
     )
-    protected = Set{SymbolicT}()
-    for term in allocator_terms
+    # The search treats an allocator term as atomic, so allocators nested inside one are
+    # found by searching its arguments in turn.
+    pending = collect(allocator_terms)
+    nested = Set{SymbolicT}()
+    while !isempty(pending)
+        term = pop!(pending)
         term_args = arguments(term)
-        length(term_args) >= 2 || continue
-        is_array_literal_term(term_args[2]) && push!(protected, term_args[2])
+        length(term_args) >= 2 && is_array_literal_term(term_args[2]) &&
+            push!(protected, term_args[2])
+        for arg in term_args
+            empty!(nested)
+            SU.search_variables!(
+                nested, arg; is_atomic = is_with_allocator_term, recurse = iscall
+            )
+            for inner in nested
+                inner in allocator_terms && continue
+                push!(allocator_terms, inner)
+                push!(pending, inner)
+            end
+        end
     end
     subs = Dict{SymbolicT, SymbolicT}()
     for lit in literals
