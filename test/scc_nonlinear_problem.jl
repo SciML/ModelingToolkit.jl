@@ -768,5 +768,41 @@ end
     @test sol[u4] ≈ sin(sol[u3]) + sol[u1] atol = 1.0e-8
 end
 
+@testset "SCC cache buffers are zero-initialized, not `undef`" begin
+    # `remake` reads the SCC cache buffers (to recompute the linear blocks' `A`/`b`)
+    # before the `CacheWriter`s fill them. Leftover NaN/Inf in an `undef` buffer made
+    # reverse-mode gradients through `remake` intermittently NaN.
+    p = MTKParameters((), (), (), (), (), ())
+    p = ModelingToolkitBase.rebuild_with_caches(
+        p, ModelingToolkitBase.BufferTemplate(Float64, 3),
+        ModelingToolkitBase.BufferTemplate(Int, 2),
+        ModelingToolkitBase.BufferTemplate(Complex{Int}, 2),
+        ModelingToolkitBase.BufferTemplate(Vector{Float64}, 2),
+        ModelingToolkitBase.BufferTemplate(Irrational{:π}, 2)
+    )
+    @test p.caches[1] == zeros(3)
+    @test p.caches[2] == zeros(Int, 2)
+    @test p.caches[3] == zeros(Complex{Int}, 2)
+    # non-numeric buffers stay `undef`, so a premature read throws
+    @test p.caches[4] isa Vector{Vector{Float64}}
+    @test !any(Base.Fix1(isassigned, p.caches[4]), eachindex(p.caches[4]))
+    # singleton types (a cached `π`) have no `zero`; `undef` already holds their only value
+    @test p.caches[5] == [π, π]
+
+    # nonlinear block followed by two linear blocks whose `A`/`b` read the cache
+    @variables a b c
+    @parameters k
+    @mtkcompile sys = System([0 ~ a^3 + a - k, 0 ~ a * b - k, 0 ~ b * c - a * k], [a, b, c], [k])
+    prob = SCCNonlinearProblem(sys, [a => 1.0, b => 1.0, c => 1.0, k => 2.0])
+    npersistent = length(ModelingToolkit.get_index_cache(sys).caches_buffer_sizes)
+    scc_caches = prob.p.caches[(npersistent + 1):end]
+    @test !isempty(scc_caches)
+    @test all(buf -> all(iszero, buf), scc_caches)
+    sol = solve(remake(prob; p = [k => 3.0]), NewtonRaphson())
+    @test SciMLBase.successful_retcode(sol)
+    @test sol[a]^3 + sol[a] ≈ 3.0 atol = 1.0e-8
+    @test sol[b] * sol[c] ≈ 3.0 * sol[a] atol = 1.0e-8
+end
+
 include("scc_zero_state_regression.jl")
 include("scc_array_cache_regression.jl")
