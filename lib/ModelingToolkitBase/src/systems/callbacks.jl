@@ -1781,7 +1781,7 @@ Base.@nospecializeinfer function compile_explicit_affect(
     end
 
     update_eqs = substitute(
-        obseqs, Dict([p => unPre(p) for p in parameters(affsys)])
+        obseqs, Dict([p => parent_symbol_for_affect_param(p) for p in parameters(affsys)])
     )
     rhss = map(x -> x.rhs, update_eqs)
     lhss = map(x -> x.lhs, update_eqs)

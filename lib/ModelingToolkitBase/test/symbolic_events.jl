@@ -2176,7 +2176,7 @@ end
 
 @testset "Two algebraics sharing a differential stay free when only one is assigned" begin
     # Assigning one algebraic must not pin the differential when two algebraic eqs
-    # share a single free algebraic absorber (master solves; x moves).
+    # share a single free algebraic absorber.
     @variables x(t) = 1.0 λ(t) [guess = 0.0] μ(t) [guess = 0.0]
     eqs = [D(x) ~ -x, 0 ~ λ + μ - x, 0 ~ λ - μ - 2x]
     ev = SymbolicDiscreteCallback([0.5], [λ ~ 3.0])
@@ -2256,6 +2256,28 @@ end
     @test sol[u[2]][i[end]] ≈ sol[u[2]][i[1]] rtol = 1.0e-10
     t_after = sol.t[findfirst(>(0.5), sol.t)]
     @test sol(t_after; idxs = λ) ≈ -sol(t_after; idxs = u[2]) / 2 rtol = 1.0e-8
+end
+
+@testset "Array pins in nonlinear DAE affects" begin
+    @variables u(t)[1:2] λ(t) [guess = 0.5]
+    @discretes on(t) = 1.0
+    cb = SymbolicDiscreteCallback([0.5], [on ~ 0.0]; discrete_parameters = [on])
+    @mtkcompile sys = System(
+        [D(u) ~ [-u[1], -λ], 0 ~ on * λ^2 + λ - u[2]],
+        t, [u..., λ], [on]; discrete_events = [cb]
+    )
+    aff = affects(only(discrete_events(sys)))
+    # ModelingToolkit discovers zero-valued parameters before compiling affects.
+    @test isempty(equations(system(aff))) == @isdefined(ModelingToolkit)
+    prob = ODEProblem(sys, [u => [1.0, 1.0]], (0.0, 1.0))
+    sol = solve(prob, Rodas5P(); abstol = 1.0e-10, reltol = 1.0e-10)
+    @test SciMLBase.successful_retcode(sol)
+    i = findall(==(0.5), sol.t)
+    @test length(i) == 2
+    for j in 1:2
+        @test sol[u[j]][i[end]] ≈ sol[u[j]][i[1]] rtol = 1.0e-10
+    end
+    @test sol[λ][i[end]] ≈ sol[u[2]][i[end]] rtol = 1.0e-10
 end
 
 @testset "Symbolic array index in affect (issue #5078)" begin
