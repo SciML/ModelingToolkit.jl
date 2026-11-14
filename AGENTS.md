@@ -60,3 +60,9 @@ Earlier testsets can load solver extensions required by later files. Read the ro
 sublibrary test macro and group order, and include the required public solver packages
 in the local environment. A missing initializer module is a setup failure, not a
 numerical regression result.
+
+Direct QA runs use
+`GROUP=QA julia --startup-file=no --check-bounds=yes --depwarn=yes --project=test/qa test/runtests.jl`.
+Keep the default compiled-module setting, and use matching Julia flags when warming
+the QA project's caches. Aqua's persistent-task check adds Julia subprocesses;
+include them in process limits.
