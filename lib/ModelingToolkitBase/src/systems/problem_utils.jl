@@ -1280,12 +1280,18 @@ function (recon::MTKParametersReconstructor)(src, dst_ps::MTKParameters)
     if !iszero(diffcache_buffer_idx)
         @set! caches[diffcache_buffer_idx] = DiffCacheAllocatorAPIWrapper{ForwardDiff.valtype(eltype(initialvals))}.(caches[diffcache_buffer_idx])
     end
-    # This `convert` exists because a `Real` discrete might get its value from an
-    # integer function of integer parameters/discretes. This ends up creating a
-    # `BlockedArray{Int, ...}` instead of a `BlockedArray{Float64, ...}`.
+    discretes = map(recon.discretes_fn(src), dst_ps.discrete) do src_discrete, dst_discrete
+        src_eltype = eltype(src_discrete)
+        dst_eltype = eltype(dst_discrete)
+        # Widen ordinary numeric values, but keep types such as ForwardDiff.Dual.
+        if src_eltype <: dst_eltype || promote_type(src_eltype, dst_eltype) === dst_eltype
+            return convert(typeof(dst_discrete), src_discrete)
+        end
+        return src_discrete
+    end
     return MTKParameters(
         tunablevals, initialvals,
-        convert(typeof(dst_ps.discrete), recon.discretes_fn(src)),
+        discretes,
         recon.consts_fn(src), nonnumerics, caches
     )
 end
