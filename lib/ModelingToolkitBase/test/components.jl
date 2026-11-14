@@ -464,6 +464,8 @@ end
             @named sys = System([connection(comp1, comp2)], t; systems = [comp1, comp2])
             eq = only(equations(expand_connections(sys)))
             @test isequal(eq, comp1.input.u ~ comp2.output.u)
+            @test isinput(eq.lhs)
+            @test isoutput(eq.rhs)
         end
     end
 
