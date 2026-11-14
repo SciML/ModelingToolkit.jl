@@ -380,12 +380,17 @@ Calculate the gradient of the equations of `sys` with respect to the independent
 """
 function calculate_tgrad(sys::System; simplify = false)
     check_symbolic_ad_allowed(sys)
-    # We need to remove explicit time dependence on the unknown because when we
-    # have `u(t) * t` we want to have the tgrad to be `u(t)` instead of `u'(t) *
-    # t + u(t)`.
+    # We need to remove explicit time dependence on the unknowns and time-dependent
+    # parameters because when we have `u(t) * t` we want to have the tgrad to be
+    # `u(t)` instead of `u'(t) * t + u(t)`.
     rhs = [detime_dvs(eq.rhs) for eq in full_equations(sys)]
     iv = get_iv(sys)
-    xs = flat_unknowns(sys)
+    # With `split = false`, array parameters can be listed as elements `p(t)[i]`.
+    ps = unique!(map(p -> first(split_indexed_var(p)), parameters(sys)))
+    filter!(ps) do p
+        iscall(p) && issym(operation(p)) && isequal(arguments(p), [iv])
+    end
+    xs = [flat_unknowns(sys); ps]
     rule = Dict(map((x, xt) -> xt => x, detime_dvs.(xs), xs))
     rhs = substitute.(rhs, Ref(rule))
     tgrad = [expand_derivatives(Differential(iv)(r), simplify) for r in rhs]

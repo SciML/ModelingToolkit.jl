@@ -1826,3 +1826,57 @@ end
         @test aprob.f(aprob.du0, aprob.u0, aprob.p, 0.0) ≈ zeros(4) atol = 1.0e-12
     end
 end
+
+struct TgradBuffer
+    v::Vector{Float64}
+end
+tgrad_buffer_value(b::TgradBuffer, s) = b.v[1] * s
+@register_symbolic tgrad_buffer_value(b::TgradBuffer, s)
+@register_derivative tgrad_buffer_value(b, s) 1 0
+@register_derivative tgrad_buffer_value(b, s) 2 tgrad_buffer_value(b, 1.0)
+
+@testset "`calculate_tgrad` with time-dependent parameters" begin
+    function fd_tgrad(prob, s)
+        h = 1.0e-6
+        return (prob.f(prob.u0, prob.p, s + h) - prob.f(prob.u0, prob.p, s - h)) / 2h
+    end
+
+    @variables x(t) = 1.0
+    @discretes d(t) = -1.0
+    cb = SymbolicDiscreteCallback([0.5], [d ~ -10.0]; discrete_parameters = [d])
+    @named sys = System([D(x) ~ d * t], t, [x], [d]; discrete_events = [cb])
+    sys = mtkcompile(sys)
+    @test isequal(calculate_tgrad(sys), [d])
+    prob = ODEProblem(sys, [], (0.0, 1.0); tgrad = true)
+    @test prob.f.tgrad(prob.u0, prob.p, 0.25) ≈ [-1.0]
+    newp = remake_buffer(sys, prob.p, [d], [-10.0])
+    @test prob.f.tgrad(prob.u0, newp, 0.75) ≈ [-10.0]
+    sol = solve(prob, Rodas5P(); abstol = 1.0e-10, reltol = 1.0e-10)
+    @test SciMLBase.successful_retcode(sol)
+    @test sol[x][end] ≈ -2.875
+
+    @discretes da(t)[1:2] = [-1.0, 2.0] pi(t) = 2.0
+    @named sys = System([D(x) ~ da[1] * t + da[2] * t^2 + pi * t], t, [x], [da, pi])
+    sys = mtkcompile(sys)
+    prob = ODEProblem(sys, [], (0.0, 1.0); tgrad = true)
+    @test prob.f.tgrad(prob.u0, prob.p, 0.4) ≈ [2.6]
+    @test prob.f.tgrad(prob.u0, prob.p, 0.4) ≈ fd_tgrad(prob, 0.4)
+
+    @variables u(t) [input = true]
+    @named sys = System([D(x) ~ u * t - x], t, [x, u], [])
+    sys = mtkcompile(sys; inputs = [u])
+    prob = ODEProblem(sys, [u => 2.0], (0.0, 1.0); tgrad = true)
+    @test prob.f.tgrad(prob.u0, prob.p, 0.25) ≈ [2.0]
+
+    @discretes buf(t)::TgradBuffer = TgradBuffer([3.0])
+    @named sys = System([D(x) ~ tgrad_buffer_value(buf, t)], t, [x], [buf])
+    sys = mtkcompile(sys)
+    prob = ODEProblem(sys, [], (0.0, 1.0); tgrad = true)
+    @test prob.f.tgrad(prob.u0, prob.p, 0.25) ≈ [3.0]
+
+    @discretes ds(t)[1:2] = [2.0, 3.0]
+    @named sys = System([D(x) ~ ds[1] * t + ds[2] * t^2], t, [x], [ds...])
+    sys = mtkcompile(sys; split = false)
+    prob = ODEProblem(sys, [], (0.0, 1.0); tgrad = true)
+    @test prob.f.tgrad(prob.u0, prob.p, 0.4) ≈ [4.4]
+end
