@@ -19,6 +19,7 @@ end
 # Test input handling
 @variables x(t) u(t) [input = true] v(t)[1:2] [input = true]
 @test isinput(u)
+@test !isoutput(u)
 
 @named sys = System([D(x) ~ -x + u], t) # both u and x are unbound
 @named sys1 = System([D(x) ~ -x + v[1] + v[2]], t) # both v and x are unbound
@@ -90,6 +91,7 @@ fsys4 = flatten(sys4)
 # Test output handling
 @variables x(t) y(t) [output = true]
 @test isoutput(y)
+@test !isinput(y)
 @named sys = System([D(x) ~ -x, y ~ x], t) # both y and x are unbound
 syss = mtkcompile(sys, outputs = [y]) # This makes y an observed variable
 
