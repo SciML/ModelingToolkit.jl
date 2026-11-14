@@ -2596,6 +2596,26 @@ end
     @test ForwardDiff.gradient(loss, [1.5])[1] ≈ fd rtol = 1.0e-4
 end
 
+@testset "Numeric remake preserves initialized parameter roots" begin
+    @variables x(t)
+    @parameters a = missing
+    @named sys = System(
+        [D(x) ~ a * x], t; initialization_eqs = [a^2 ~ 1, x ~ 1], guesses = [a => 0.5]
+    )
+    sys = complete(sys)
+    for spec in (SciMLBase.AutoDespecialize, SciMLBase.FullSpecialize)
+        prob = ODEProblem{true, spec}(sys, [], (0.0, 0.1); use_scc = false)
+        p = SciMLStructures.replace(Tunable(), prob.p, [-1.0])
+        remade = remake(prob; p)
+        initprob = remade.f.initialization_data.initializeprob
+        @test initprob[a] == -1.0
+        sol = solve(remade, Tsit5(); abstol = 1.0e-10, reltol = 1.0e-10)
+        @test SciMLBase.successful_retcode(sol)
+        @test sol.ps[a] ≈ -1.0
+        @test sol[x][end] ≈ exp(-0.1)
+    end
+end
+
 @testset "Concretized initialization callbacks keep the generated arity" begin
     # `remake` of the stored initialization problem re-derives `isinplace` for every
     # callback from `SciMLBase.numargs`. The wrappers must report the generated function's
