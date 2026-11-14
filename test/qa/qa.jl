@@ -311,6 +311,7 @@ const NONPUBLIC_QUALIFIED_ACCESSES = (
     :AnalysisVariable, :apply_limited_lowering, :attach_stage_limiters,
     :check_compatible_system, :compute_array_variable_buffer_idxs,
     :default_missing_guess_value, :discover_maybe_zeros, :EXPERIMENTAL_WARNING,
+    :expand_record_equations,
     :function_docstring, :generate_DAENLStepData, :generate_homotopy_residual,
     :generate_ODENLStepData,
     :GENERATE_X_KWARGS, :get_initialization_problem_type,
