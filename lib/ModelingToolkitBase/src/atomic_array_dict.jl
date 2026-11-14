@@ -727,7 +727,12 @@ function Base.get(def::Base.Callable, dd::AADSubWrapper, k::SymbolicT)
             Base.Fix2(===, dd.default) ∘ Base.Fix1(getindex, res),
             SU.stable_eachindex(res)
         )
-        return def()
+        idxs = collect(SU.stable_eachindex(res))
+        out = Vector{Any}(undef, length(idxs))
+        for (j, i) in enumerate(idxs)
+            out[j] = res[i] === dd.default ? k[i] : res[i]
+        end
+        return BSImpl.Const{VartypeT}(out)
     end
     return res
 end
