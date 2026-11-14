@@ -23,7 +23,7 @@ using Reexport: Reexport, @reexport
     # ONLY here for the invalidations
     import REPL
     using OffsetArrays: Origin
-    import BlockArrays: BlockedArray, Block, blocksize, blocksizes
+    import BlockArrays: BlockedArray, BlockedOneTo, Block, blocksize, blocksizes
     import BandedMatrices: BandedMatrices, BandedMatrix, bandwidths
 end
 
@@ -570,6 +570,105 @@ EnzymeCore.EnzymeRules.inactive_type(::Type{<:AbstractSystem}) = true
 # metadata: ~100 µs per call against a ~5 ns RHS for a 32-state linear ODE,
 # an 8x slowdown of `GaussAdjoint(EnzymeVJP)` gradients.
 EnzymeCore.EnzymeRules.inactive_type(::Type{<:InitializationMetadata}) = true
+
+# In-place zeroing of an `MTKParameters` shadow (EnzymeCore's `make_zero!` and
+# `remake_zero!`). Reverse-mode adjoints keep one `Enzyme.make_zero(p)` shadow and
+# re-zero it before every vector-Jacobian product (SciMLSensitivity's `EnzymeVJP` does so
+# once per adjoint RHS evaluation). Enzyme's generic methods walk it with an `IdSet` of
+# visited objects: a new set on every call, with the immutable `MTKParameters` and its
+# buffer tuples boxed into it. For a small model that bookkeeping costs far more than the
+# zeroing.
+#
+# The one-argument methods skip that walk only for the buffer layout `MTKParameters(sys,
+# op)` builds for a model whose parameters are all real or complex floats of one IEEE
+# type per buffer (see `narrow_buffer_type`):
+# - `tunable`, `initials`: a `Vector` of floats, or the empty `SVector{0, Float64}`;
+# - `discrete`: empty, or `BlockedVector`s over a `Vector` of floats;
+# - `constant`: empty, or `Vector`s of floats;
+# - `nonnumeric`, `caches`: empty;
+# with at most 16 discrete and constant buffers, and no `inactive_type` rule for the
+# `MTKParameters` type, its buffer tuples or its `BlockedVector`s. These are the rules
+# that can change what Enzyme's activity analysis decides for this layout: it classifies
+# arrays by their element type and consults no rules for ghost types, such as empty
+# tuples and the empty `SVector`. (It also consults those of a `BlockedVector`'s axes,
+# which hold only integers.) Rules are queried only once the layout is accepted.
+#
+# The generic walk zeroes each of these float arrays with `fill!`, so filling them here
+# gives the same shadow; an array that is reachable twice is filled twice, which leaves
+# the same zeros. Everything else (integer, boolean, array-valued, nonnumeric and cache
+# buffers, and any other type) and every call with a caller's `seen` set uses the generic
+# walk.
+#
+# This assumes that no package adds methods of Enzyme's zeroing or activity hooks
+# (`make_zero!`, `remake_zero!`, `inactive_type`, `is_mutable_array`) for the `Base`,
+# StaticArrays or BlockArrays types above, including the axes types (type piracy):
+# Enzyme's own methods for them are what the fast path reproduces. Nonnumeric data is not
+# accepted because whether the generic walk visits it depends on Enzyme's activity
+# analysis, which EnzymeCore does not expose (a declared `inactive_type` is consulted only
+# after floats, complex numbers and types registered as mutable arrays).
+const ENZYME_FLOAT_TYPES = (Float16, Float32, Float64, ComplexF16, ComplexF32, ComplexF64)
+const ENZYME_BLOCKED_AXES = Tuple{BlockedOneTo{Int64, Vector{Int64}}}
+enzyme_float_vector(A) = any(F -> A === Vector{F}, ENZYME_FLOAT_TYPES)
+function enzyme_blocked_float_vector(B)
+    return any(F -> B === BlockedArray{F, 1, Vector{F}, ENZYME_BLOCKED_AXES}, ENZYME_FLOAT_TYPES)
+end
+enzyme_all(f) = true
+enzyme_all(f, T, Ts...) = f(T) && enzyme_all(f, Ts...)
+enzyme_buffer_count(T) = T isa DataType && T <: Tuple && isconcretetype(T) ? fieldcount(T) : -1
+# no `inactive_type` rule, consulted as Enzyme's activity analysis does: not for ghost types
+enzyme_no_rule(T) = sizeof(T) == 0 || !EnzymeCore.EnzymeRules.inactive_type(T)
+
+# a pure function of the type, evaluated at compile time (inference alone does not fold
+# it on Julia 1.10); a later `inactive_type` rule invalidates it
+Base.@assume_effects :foldable function enzyme_fast_zero(
+        ::Type{P}
+    ) where {P <: MTKParameters}
+    D = fieldtype(P, :discrete)
+    C = fieldtype(P, :constant)
+    # count the buffers before looking at them: the zeroing below iterates them as one
+    # unrolled tuple, and `MTKParameters(sys, op)` builds one buffer per parameter type
+    nd = enzyme_buffer_count(D)
+    nc = enzyme_buffer_count(C)
+    (nd >= 0 && nc >= 0 && nd + nc <= 16) || return false
+    T = fieldtype(P, :tunable)
+    I = fieldtype(P, :initials)
+    # the layout first, then the rules, so that only rules of an accepted layout are queried
+    return fieldtype(P, :nonnumeric) === Tuple{} && fieldtype(P, :caches) === Tuple{} &&
+        (enzyme_float_vector(T) || T === SVector{0, Float64}) &&
+        (enzyme_float_vector(I) || I === SVector{0, Float64}) &&
+        enzyme_all(enzyme_blocked_float_vector, fieldtypes(D)...) &&
+        enzyme_all(enzyme_float_vector, fieldtypes(C)...) &&
+        enzyme_all(enzyme_no_rule, P, D, C, fieldtypes(D)...)
+end
+
+enzyme_fill!(::SVector{0, Float64}) = nothing
+enzyme_fill!(buf::BlockedArray) = enzyme_fill!(buf.blocks)
+enzyme_fill!(buf::Vector) = (fill!(buf, zero(eltype(buf))); nothing)
+function enzyme_fill_numeric!(p::MTKParameters)
+    enzyme_fill!(p.tunable)
+    enzyme_fill!(p.initials)
+    map(enzyme_fill!, p.discrete)
+    map(enzyme_fill!, p.constant)
+    return nothing
+end
+
+function EnzymeCore.remake_zero!(p::P) where {P <: MTKParameters}
+    if enzyme_fast_zero(P)
+        enzyme_fill_numeric!(p)
+    else
+        EnzymeCore.remake_zero!(p, Base.IdSet())
+    end
+    return nothing
+end
+
+function EnzymeCore.make_zero!(p::P) where {P <: MTKParameters}
+    if enzyme_fast_zero(P)
+        enzyme_fill_numeric!(p)
+    else
+        EnzymeCore.make_zero!(p, Base.IdSet())
+    end
+    return nothing
+end
 
 function __init__()
     SU.hashcons(unwrap(t_nounits), true)
