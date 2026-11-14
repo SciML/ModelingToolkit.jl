@@ -74,6 +74,25 @@ All other keyword arguments are forwarded to `linearization_function`.
 function get_linear_analysis_function(
         sys::AbstractSystem, transform, aps; system_modifier = identity, loop_openings = [], kwargs...
     )
+    sys, dus, us, loop_opening_params, loop_opening_drivers = linear_analysis_transform(
+        sys, transform, aps; system_modifier, loop_openings
+    )
+    return linearization_function(
+        sys, dus, us; loop_opening_params, loop_opening_drivers, kwargs...
+    )
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Apply the analysis-point transformation `transform` at the analysis point(s) `aps` of `sys`
+after opening the loops in `loop_openings`. Return the transformed system after applying
+`system_modifier`, the input and output variables introduced by the transformation, the
+parameters created by the loop openings and the variables that drove the opened signals.
+"""
+function linear_analysis_transform(
+        sys::AbstractSystem, transform, aps; system_modifier = identity, loop_openings = []
+    )
     dus = SymbolicT[]
     us = SymbolicT[]
     sys, loop_opening_params, loop_opening_drivers = handle_loop_openings(sys, loop_openings)
@@ -101,9 +120,7 @@ function get_linear_analysis_function(
             end
         end
     end
-    return linearization_function(
-        system_modifier(sys), dus, us; loop_opening_params, loop_opening_drivers, kwargs...
-    )
+    return system_modifier(sys), dus, us, loop_opening_params, loop_opening_drivers
 end
 """
     $(TYPEDSIGNATURES)
@@ -168,6 +185,31 @@ function get_looptransfer_function(sys::AbstractSystem, aps; kwargs...)
     return get_linear_analysis_function(sys, LoopTransferTransform, aps; kwargs...)
 end
 
+# The common implementation of `get_sensitivity`, `get_comp_sensitivity` and
+# `get_looptransfer`. `analysis_function` builds the linearization function of the
+# analysis, `transform` is the corresponding analysis-point transformation used for
+# `hybrid = true`.
+function _linear_analysis(
+        analysis_function, transform, sys, ap, args...; loop_openings = [],
+        system_modifier = identity, allow_input_derivatives = true,
+        op = Dict{SymbolicT, SymbolicT}(), t = 0.0, hybrid = false, kwargs...
+    )
+    if hybrid
+        sys, dus, us, loop_opening_params, loop_opening_drivers = linear_analysis_transform(
+            sys, transform, ap, args...; system_modifier, loop_openings
+        )
+        return linearize_hybrid(
+            sys, dus, us; loop_opening_params, loop_opening_drivers, op,
+            allow_input_derivatives, t, kwargs...
+        )
+    end
+    lin_fun, ssys = analysis_function(
+        sys, ap, args...; loop_openings, system_modifier, op, kwargs...
+    )
+    mats, extras = ModelingToolkit.linearize(ssys, lin_fun; op, allow_input_derivatives, t)
+    return mats, ssys, extras
+end
+
 """
     get_sensitivity(sys, ap; loop_openings = [], system_modifier = identity, op = Dict(), kwargs...)
 
@@ -194,20 +236,16 @@ perturbation to the output of `ap`.
   [`LinearizationOpPoint`](@ref).
 - `allow_input_derivatives`: allow derivatives of input variables in the linearization.
 - `t`: time at which to evaluate the linearization.
+- `hybrid`: linearize every clock partition of a system with clocked (discrete-time)
+  equations separately with [`linearize_hybrid`](@ref), and return its
+  [`HybridLinearization`](@ref) instead of `(matrices, simplified_system, extras)`.
+  The remaining keyword arguments are then forwarded to `linearize_hybrid`.
 - `kwargs...`: forwarded to [`get_sensitivity_function`](@ref).
 
 See also [`get_comp_sensitivity`](@ref) and [`get_looptransfer`](@ref).
 """
-function get_sensitivity(
-        sys, ap, args...; loop_openings = [], system_modifier = identity,
-        allow_input_derivatives = true, op = Dict{SymbolicT, SymbolicT}(), t = 0.0,
-        kwargs...
-    )
-    lin_fun, ssys = get_sensitivity_function(
-        sys, ap, args...; loop_openings, system_modifier, op, kwargs...
-    )
-    mats, extras = ModelingToolkit.linearize(ssys, lin_fun; op, allow_input_derivatives, t)
-    return mats, ssys, extras
+function get_sensitivity(sys, ap, args...; kwargs...)
+    return _linear_analysis(get_sensitivity_function, SensitivityTransform, sys, ap, args...; kwargs...)
 end
 
 """
@@ -223,16 +261,8 @@ forwarded to [`get_comp_sensitivity_function`](@ref).
 
 See also [`get_sensitivity`](@ref) and [`get_looptransfer`](@ref).
 """
-function get_comp_sensitivity(
-        sys, ap, args...; loop_openings = [], system_modifier = identity,
-        allow_input_derivatives = true, op = Dict{SymbolicT, SymbolicT}(), t = 0.0,
-        kwargs...
-    )
-    lin_fun, ssys = get_comp_sensitivity_function(
-        sys, ap, args...; loop_openings, system_modifier, op, kwargs...
-    )
-    mats, extras = ModelingToolkit.linearize(ssys, lin_fun; op, allow_input_derivatives, t)
-    return mats, ssys, extras
+function get_comp_sensitivity(sys, ap, args...; kwargs...)
+    return _linear_analysis(get_comp_sensitivity_function, ComplementarySensitivityTransform, sys, ap, args...; kwargs...)
 end
 
 """
@@ -251,16 +281,8 @@ forwarded to [`get_looptransfer_function`](@ref).
 
 See also [`get_sensitivity`](@ref), [`get_comp_sensitivity`](@ref), and [`open_loop`](@ref).
 """
-function get_looptransfer(
-        sys, ap, args...; loop_openings = [], system_modifier = identity,
-        allow_input_derivatives = true, op = Dict{SymbolicT, SymbolicT}(), t = 0.0,
-        kwargs...
-    )
-    lin_fun, ssys = get_looptransfer_function(
-        sys, ap, args...; loop_openings, system_modifier, op, kwargs...
-    )
-    mats, extras = ModelingToolkit.linearize(ssys, lin_fun; op, allow_input_derivatives, t)
-    return mats, ssys, extras
+function get_looptransfer(sys, ap, args...; kwargs...)
+    return _linear_analysis(get_looptransfer_function, LoopTransferTransform, sys, ap, args...; kwargs...)
 end
 
 """
@@ -343,6 +365,28 @@ function linearization_function(
         sys, inputs, outputs, loop_openings
     )
     return linearization_function(
+        system_modifier(sys), input_vars, output_vars;
+        loop_opening_params, loop_opening_drivers, kwargs...
+    )
+end
+
+"""
+    linearize_hybrid(sys, input_aps, output_aps; loop_openings = [], system_modifier = identity, kwargs...)
+
+Linearize the hybrid system `sys` between analysis points, see [`linearize_hybrid`](@ref)
+and [`linearization_ap_transform`](@ref). `loop_openings` and `system_modifier` are
+documented in [`get_sensitivity`](@ref).
+"""
+function linearize_hybrid(
+        sys::AbstractSystem,
+        inputs::Union{Symbol, Vector{Symbol}, AnalysisPoint, Vector{AnalysisPoint}},
+        outputs; loop_openings = [], system_modifier = identity, kwargs...
+    )
+    sys, input_vars, output_vars, loop_opening_params,
+        loop_opening_drivers = linearization_ap_transform(
+        sys, inputs, outputs, loop_openings
+    )
+    return linearize_hybrid(
         system_modifier(sys), input_vars, output_vars;
         loop_opening_params, loop_opening_drivers, kwargs...
     )
