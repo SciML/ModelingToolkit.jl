@@ -1383,6 +1383,10 @@ function renamespace(sys, x::SymbolicT)
             end
             error()
         end
+        BSImpl.ArrayOp(; output_idx, expr, term, ranges, reduce, type, shape, metadata) => begin
+            newterm = term isa SymbolicT ? renamespace(sys, term) : term
+            return BSImpl.ArrayOp{VartypeT}(output_idx, renamespace(sys, expr), reduce, newterm, ranges; type, shape, metadata)
+        end
     end
 end
 
