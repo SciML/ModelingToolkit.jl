@@ -1731,21 +1731,24 @@ end
 
 @testset "`ODESystem` is a type" begin
     @variables x(t)
-    @named sys = ODESystem(D(x) ~ x, t)
-    @test sys isa ODESystem
-    @test sys isa System
-    arr = ODESystem[]
-    @test_nowarn push!(arr, sys)
-    @test_nowarn TestWrapper(sys)
+    @test_deprecated begin
+        @named sys = ODESystem(D(x) ~ x, t)
+        @test sys isa ODESystem
+        @test sys isa System
+        arr = ODESystem[]
+        @test_nowarn push!(arr, sys)
+        @test_nowarn TestWrapper(sys)
+    end
 end
 
-# ensure `@mtkbuild` works when `@mtkcompile` is not imported
 module MtkbuildTestModule
     import ModelingToolkitBase: @variables, System, t_nounits as t, D_nounits as D, @mtkbuild
-    import Test: @test
+    import Test: @test, @test_deprecated
     @variables x(t)
-    @mtkbuild sys = System(D(x) ~ t, t)
-    @test sys isa System
+    @test_deprecated begin
+        @mtkbuild sys = System(D(x) ~ t, t)
+        @test sys isa System
+    end
 end
 
 @testset "Empty system can be simplified" begin

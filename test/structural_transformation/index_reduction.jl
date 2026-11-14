@@ -24,8 +24,9 @@ pendulum = System(eqs, t, [x, y, w, z, T], [L, g], name = :pendulum)
 state = TearingState(pendulum)
 @unpack graph, var_to_diff = state.structure
 @test StructuralTransformations.maximal_matching(
-    graph, eq -> true,
-    v -> var_to_diff[v] === nothing
+    graph;
+    srcfilter = eq -> true,
+    dstfilter = v -> var_to_diff[v] === nothing
 ) == map(state.fullvars) do v
     if operation(v) isa Differential
         return findfirst(eq -> isequal(eq.lhs, v), equations(state))
