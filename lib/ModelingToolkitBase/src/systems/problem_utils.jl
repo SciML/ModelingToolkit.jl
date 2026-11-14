@@ -2632,7 +2632,16 @@ $PROBLEM_INTERNAL_KWARGS
 All other keyword arguments are passed as-is to `constructor`.
 """
 Base.@nospecializeinfer function process_SciMLProblem(
-        @nospecialize(constructor), sys::AbstractSystem, @nospecialize(op);
+        @nospecialize(constructor), sys::AbstractSystem, @nospecialize(op); kwargs...
+    )
+    opts, kwargs = _scimlproblem_options(sys; kwargs...)
+    process_SciMLProblem(constructor, sys, op, opts; kwargs...)
+end
+
+# Kept apart from `process_SciMLProblem` because Julia drops `@nospecialize` on arguments
+# past the 32nd, and the keyword body method puts these keywords before `constructor` and `op`.
+function _scimlproblem_options(
+        sys::AbstractSystem;
         u0_eltype = nothing, u0_constructor = identity, p_constructor = identity,
         symbolic_u0 = false,
         build_initializeprob = supports_initialization(sys),
@@ -2663,7 +2672,7 @@ Base.@nospecializeinfer function process_SciMLProblem(
         is_initializeprob, is_steadystateprob, return_operating_point, init_compiler_options,
     )
 
-    process_SciMLProblem(constructor, sys, op, opts; kwargs...)
+    return opts, kwargs
 end
 
 """
