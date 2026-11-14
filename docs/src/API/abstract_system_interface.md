@@ -119,6 +119,7 @@ it. Guard the call with the corresponding `has_x` query.
 | [`constraints`](@ref)                                                                                                      | `constraints`          |
 | [`cost`](@ref)                                                                                                             | `costs`, `consolidate` |
 | [`brownians`](@ref)                                                                                                        | `brownians`            |
+| [`poissonians`](@ref)                                                                                                      | `poissonians`          |
 | [`jumps`](@ref)                                                                                                            | `jumps`                |
 
 The variable and parameter queries of the SymbolicIndexingInterface are answered from
@@ -143,8 +144,8 @@ same accessor on each system in [`ModelingToolkit.get_systems`](@ref), applied r
 and namespaced at each level. [`equations`](@ref), [`unknowns`](@ref),
 [`parameters`](@ref), [`observed`](@ref), [`observables`](@ref),
 [`initial_conditions`](@ref), [`guesses`](@ref), [`initialization_equations`](@ref),
-[`constraints`](@ref), [`cost`](@ref), [`brownians`](@ref), [`jumps`](@ref),
-[`continuous_events`](@ref), [`discrete_events`](@ref), and
+[`constraints`](@ref), [`cost`](@ref), [`brownians`](@ref), [`poissonians`](@ref),
+[`jumps`](@ref), [`continuous_events`](@ref), [`discrete_events`](@ref), and
 [`ModelingToolkit.assertions`](@ref) all behave this way, as do
 [`alg_equations`](@ref), [`diff_equations`](@ref), [`has_alg_equations`](@ref) and
 [`has_diff_equations`](@ref), which classify the result of [`equations`](@ref):
