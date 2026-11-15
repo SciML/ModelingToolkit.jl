@@ -2685,8 +2685,9 @@ Base.@nospecializeinfer function process_SciMLProblem(
         @nospecialize(constructor), sys::AbstractSystem, @nospecialize(op),
         opts::SciMLProblemOptions; kwargs...
     )
-    u0Type = pType = typeof(op)
+    u0Type = pType = typeof(op)        
     op = operating_point_preprocess(sys, op)
+    check_no_user_initials(op, opts.is_initializeprob)
     floatT = calculate_float_type(op, u0Type)
     u0_eltype = something(opts.u0_eltype, floatT)
     u0_constructor = get_u0_constructor(opts.u0_constructor, u0Type, floatT, opts.symbolic_u0)
@@ -3313,4 +3314,27 @@ function get_p(sys::AbstractSystem, varmap; split = is_split(sys), kwargs...)
     else
         varmap_to_vars(op, parameters(sys; initial_parameters = true); kwargs...)
     end
+end
+
+"""
+    check_no_user_initials(op, is_initializeprob)
+
+`Initial` values are for MTK's internal use. Throw if a user passes one in `op`.
+Internal initialization problems set `is_initializeprob = true` and are exempt.
+"""
+function check_no_user_initials(op, is_initializeprob::Bool)
+    (is_initializeprob || op === nothing) && return
+    for k in keys(op)
+        Moshi.Match.@match k begin
+            BSImpl.Term(; f, args) && if f isa Initial end => throw(
+                ArgumentError(
+                    "`$(k)` cannot be passed to a problem constructor. `Initial` values " *
+                    "are for internal use by ModelingToolkit. Set initial conditions " *
+                    "with `u0`, `guesses`, or `initialization_eqs` instead."
+                )
+            )
+            _ => nothing
+        end
+    end
+    return
 end

@@ -550,9 +550,9 @@ The value `k` projects out of whichever ancestor of it `dd` holds, or `default` 
 none. Records are stored atomically, so a field is found under the record it belongs to.
 """
 function record_ancestor_value(dd::AtomicArrayDict, k::SymbolicT, default)
-    anc = nearest_present_ancestor(dd, k)
-    anc === nothing && return default
-    return record_leaf_entry(k, anc, dd[anc])
+    ancestor = nearest_present_ancestor(dd, k)
+    ancestor === nothing && return default
+    return record_leaf_entry(k, ancestor, dd[ancestor])
 end
 
 
@@ -727,12 +727,7 @@ function Base.get(def::Base.Callable, dd::AADSubWrapper, k::SymbolicT)
             Base.Fix2(===, dd.default) ∘ Base.Fix1(getindex, res),
             SU.stable_eachindex(res)
         )
-        idxs = collect(SU.stable_eachindex(res))
-        out = Vector{Any}(undef, length(idxs))
-        for (j, i) in enumerate(idxs)
-            out[j] = res[i] === dd.default ? k[i] : res[i]
-        end
-        return BSImpl.Const{VartypeT}(out)
+        return def()
     end
     return res
 end
