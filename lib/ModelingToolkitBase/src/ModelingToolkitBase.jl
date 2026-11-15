@@ -536,6 +536,7 @@ const set_scalar_metadata = setmetadata
 @public ProblemTypeCtx
 @public HomotopyCtx, homotopy_enabled, strip_homotopy
 @public MTKVerbosityCtx
+@public expand_record_equations
 
 for prop in [SYS_PROPS; [:continuous_events, :discrete_events]]
     getter = Symbol(:get_, prop)
