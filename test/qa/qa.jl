@@ -98,6 +98,7 @@ const REEXPORTED_API = (
     :discrete_events, :discrete_events_toplevel, :DiscreteSystem, :domain_connect,
     :DynamicOptSolution, :eqeq_dependencies, :eqtype_supports_collect_vars, :Equality,
     :equation_dependencies, :equations, :equations_toplevel, :EvalAt, :expand_connections,
+    :expand_record_equations,
     :extend, :flatten, :Flow, :fractional_to_ordinary, :full_equations,
     :generate_control_function, :generate_control_jacobian, :generate_cost,
     :generate_cost_gradient,
