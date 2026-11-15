@@ -1998,6 +1998,36 @@ if !@isdefined(ModelingToolkit)
             @test sol.discretes[1].t ≈ 0.05:0.1:1.0
             @test sol[d] ≈ 1:10
         end
+        @testset "Nonzero initial time" begin
+            # The ticks are relative to the initial time of the simulation.
+            for (phase, ticks) in ((0.0, 0.05:0.1:0.96), (0.05, 0.1:0.1:1.0), (0.1, 0.15:0.1:1.0))
+                devt = SymbolicDiscreteCallback(
+                    SciMLBase.Clock(0.1; phase), [d ~ Pre(d) + 1]; discrete_parameters = [d],
+                )
+                @mtkcompile sys = System([D(x) ~ t], t, [x, d], []; discrete_events = [devt])
+                prob = ODEProblem(sys, [x => 0.0, d => 0.0], (0.05, 1.05))
+                sol = solve(prob, Tsit5())
+                @test sol.discretes[1].t ≈ ticks
+                @test sol[d] ≈ 1:length(ticks)
+                @test SciMLBase.canonicalize_indexed_clock(SciMLBase.Clock(0.1; phase)[1:length(ticks)], sol) ==
+                    sol.discretes[1].t
+            end
+        end
+        @testset "Coincident ticks of rational clocks" begin
+            @discretes d2(t)
+            devt1 = SymbolicDiscreteCallback(
+                SciMLBase.Clock(1 // 200), [d ~ Pre(d) + 1]; discrete_parameters = [d],
+            )
+            devt2 = SymbolicDiscreteCallback(
+                SciMLBase.Clock(1 // 30; phase = 1 // 60), [d2 ~ Pre(d2) + 1]; discrete_parameters = [d2],
+            )
+            @mtkcompile sys = System([D(x) ~ t], t, [x, d, d2], []; discrete_events = [devt1, devt2])
+            prob = ODEProblem(sys, [x => 0.0, d => 0.0, d2 => 0.0], (0.0, 2.0))
+            sol = solve(prob, Tsit5())
+            @test 1.35 in sol.discretes[1].t
+            @test 1.35 in sol.discretes[2].t
+            @test all(Δ -> iszero(Δ) || Δ > 1.0e-6, diff(sol.t))
+        end
     end
 
     vlk(v, i) = v[clamp(round(Int, i), 1, length(v))]
