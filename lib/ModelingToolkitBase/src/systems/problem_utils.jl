@@ -2685,7 +2685,7 @@ Base.@nospecializeinfer function process_SciMLProblem(
         @nospecialize(constructor), sys::AbstractSystem, @nospecialize(op),
         opts::SciMLProblemOptions; kwargs...
     )
-    u0Type = pType = typeof(op)        
+    u0Type = pType = typeof(op)
     op = operating_point_preprocess(sys, op)
     check_no_user_initials(op, opts.is_initializeprob)
     floatT = calculate_float_type(op, u0Type)
@@ -3329,8 +3329,8 @@ function check_no_user_initials(op, is_initializeprob::Bool)
             BSImpl.Term(; f, args) && if f isa Initial end => throw(
                 ArgumentError(
                     "`$(k)` cannot be passed to a problem constructor. `Initial` values " *
-                    "are for internal use by ModelingToolkit. Set initial conditions " *
-                    "with `u0`, `guesses`, or `initialization_eqs` instead."
+                        "are for internal use by ModelingToolkit. Set initial conditions " *
+                        "with `u0`, `guesses`, or `initialization_eqs` instead."
                 )
             )
             _ => nothing

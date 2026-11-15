@@ -563,7 +563,9 @@ end
     @variables x(t)[1:2]
     D = Differential(t)
     sys = complete(System([D(x) ~ -x], t, [x], []; name = :partial_initial))
-    @test_throws ArgumentError DAEProblem(sys,
+    @test_throws ArgumentError DAEProblem(
+        sys,
         [x => [1.0, 2.0], D(x) => [-1.0, -2.0], Initial(x[1]) => 7.0],
-        (0.0, 1.0); build_initializeprob = false)
+        (0.0, 1.0); build_initializeprob = false
+    )
 end
