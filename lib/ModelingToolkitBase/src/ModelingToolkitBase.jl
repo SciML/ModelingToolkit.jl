@@ -437,7 +437,7 @@ export Equation
 export Term
 export SymScope, LocalScope, ParentScope, GlobalScope
 export independent_variable, equations, observed, full_equations, jumps, cost, costs,
-    brownians
+    brownians, poissonians
 export initialization_equations, guesses, bindings, initial_conditions, hierarchy
 export set_defaults
 export state_priorities, irreducibles, maybe_zeros
