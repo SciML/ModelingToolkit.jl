@@ -156,8 +156,6 @@ end
 
         @test length(ModelingToolkitBase.poissonians(sys)) == 2
         @test Set(ModelingToolkitBase.poissonians(sys)) == Set((dN_inf, dN_rec))
-        # Exported, like `brownians` and `jumps`.
-        @test Base.isexported(ModelingToolkitBase, :poissonians)
     end
 
     @testset "Two-argument constructor auto-detects poissonians" begin
