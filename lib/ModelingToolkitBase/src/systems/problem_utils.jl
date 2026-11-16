@@ -352,6 +352,34 @@ function Base.showerror(io::IO, e::MissingVariablesError)
 end
 
 """
+    $(TYPEDEF)
+
+Error thrown when a variable with an integer type, such as `Bool` or `Int`, has no value or
+guess. A fallback guess from `missing_guess_value` is a floating point number, and a
+variable of integer type cannot be solved for numerically, so a value must be provided.
+"""
+struct MissingIntegerValueError <: Exception
+    vars::Vector{SymbolicT}
+end
+
+function Base.showerror(io::IO, e::MissingIntegerValueError)
+    println(
+        io,
+        """
+        The following variables of integer type (such as `Bool` or `Int`) have no value \
+        or guess, and cannot be solved for numerically. Provide a value for them in the \
+        operating point or as an initial condition of the system:
+        """
+    )
+    return println(io, join(e.vars, ", "))
+end
+
+function is_integer_typed(var::SymbolicT)
+    T = symtype(var)
+    return T <: Integer || (T <: AbstractArray && eltype(T) <: Integer)
+end
+
+"""
     MissingGuessValue
 
 A Moshi.jl enum to allow choosing what happens with missing guess values when building a
@@ -449,6 +477,9 @@ function varmap_to_vars(
             val = get_possibly_indexed(varmap, var, COMMON_NOTHING)
             SU.isconst(val) || push!(missing_vars, var)
         end
+        # a fallback guess for these would be a non-integer floating point number
+        missing_integer_vars = SymbolicT[unwrap(var) for var in missing_vars if is_integer_typed(unwrap(var))]
+        isempty(missing_integer_vars) || throw(MissingIntegerValueError(missing_integer_vars))
         Moshi.Match.@match missing_values begin
             MissingGuessValue.Constant(val) => begin
                 cval = BSImpl.Const{VartypeT}(val)

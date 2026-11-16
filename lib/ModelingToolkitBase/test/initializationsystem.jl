@@ -2726,3 +2726,30 @@ end
         )
     end
 end
+
+@testset "Variables of integer type without a value raise an informative error" begin
+    @variables x(t)
+    @parameters b::Bool n::Int
+    @mtkcompile sys = System([D(x) ~ ifelse(b, n, -n)], t)
+    # a fallback guess would be a non-integer floating point number
+    for missing_guess_value in (
+            MissingGuessValue.HashedRandom(), MissingGuessValue.Constant(0.5),
+            MissingGuessValue.Error(),
+        )
+        @test_throws ModelingToolkitBase.MissingIntegerValueError ODEProblem(
+            sys, [x => 0.0, b => missing, n => 1], (0.0, 1.0); missing_guess_value
+        )
+    end
+    @test_throws "cannot be solved for numerically" ODEProblem(
+        sys, [x => 0.0, b => missing, n => 1], (0.0, 1.0)
+    )
+    @test_throws ModelingToolkitBase.MissingIntegerValueError ODEProblem(
+        sys, [x => 0.0, b => true, n => missing], (0.0, 1.0)
+    )
+
+    # a guess resolves it
+    prob = ODEProblem(
+        sys, [x => 0.0, b => missing, n => 1], (0.0, 1.0); guesses = [b => true]
+    )
+    @test prob.ps[b] === true
+end
