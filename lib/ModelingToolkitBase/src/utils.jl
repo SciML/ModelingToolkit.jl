@@ -1783,6 +1783,9 @@ function underscore_to_D(v, iv, inv_map)
         # The name lives on the record, so rewrite the base and re-apply the field access.
         f = operation(v)
         unwrap(f(underscore_to_D(only(arguments(v)), iv, inv_map)))
+    elseif !hasname(v)
+        # Operator terms such as `Hold(x)` have no name and are not dummy derivatives
+        v
     else
         v = ModelingToolkitBase.detime_dvs(v)
         s = split(string(getname(v)), 'ˍ')
