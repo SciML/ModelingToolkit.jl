@@ -2112,7 +2112,57 @@ function operating_point_preprocess(sys::AbstractSystem, op; name = "operating_p
     end
     op = recursive_unwrap(anydict(op))
     symbols_to_symbolics!(sys, op)
+    convert_to_declared_types!(op; name)
     return op
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Convert each real value in `op` to the declared type of its key, when that type is a
+concrete `Integer` type such as `Bool` or `Int` (or an array of one). A literal such as
+`[x => 0.0, b => false]` promotes `false` to `0.0`, and that value must be converted back
+for a `Bool` variable `b` before it reaches an expression such as `b | c`. Throws an
+`ArgumentError` naming the variable when a value cannot be represented exactly in the
+declared type. Other values, such as complex numbers, are left as is.
+"""
+function convert_to_declared_types!(op::AbstractDict; name = "operating_point")
+    for (k, v) in op
+        k isa SymbolicT || continue
+        newv = convert_to_declared_type(k, v, name)
+        newv === v || (op[k] = newv)
+    end
+    return op
+end
+
+function convert_to_declared_type(k::SymbolicT, v, name)
+    v isa SymbolicT && return v
+    T = symtype(k)
+    if v isa Real
+        (T <: Integer && isconcretetype(T) && !(v isa T)) || return v
+        return convert_or_throw(T, v, k, name)
+    elseif v isa AbstractArray{<:Real} && T <: AbstractArray
+        E = eltype(T)
+        (E <: Integer && isconcretetype(E) && !(eltype(v) <: E)) || return v
+        return map(x -> convert_or_throw(E, x, k, name), v)
+    end
+    return v
+end
+
+function convert_or_throw(T, x, k, name)
+    try
+        return convert(T, x)
+    catch e
+        e isa InexactError || rethrow()
+        throw(
+            ArgumentError(
+                """
+                The value `$x` given for `$k` in the $name cannot be converted to its \
+                declared type `$T`.
+                """
+            )
+        )
+    end
 end
 
 """
