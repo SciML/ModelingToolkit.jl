@@ -60,11 +60,11 @@ function check_symbolic_ad_allowed(sys::AbstractSystem)
 end
 
 __new_irstructure() = IRStructure{VartypeT}()
-__new_irstructure_tlv() = TaskLocalValue{IRStructure{VartypeT}}(__new_irstructure)
+__new_irstructure_tlv() = PerTaskValue{IRStructure{VartypeT}}(__new_irstructure)
 const IRStructureTLVT = typeof(__new_irstructure_tlv())
 
 __new_mutable_cache() = MutableCacheT()
-__new_mutable_cache_tlv() = TaskLocalValue{MutableCacheT}(__new_mutable_cache)
+__new_mutable_cache_tlv() = PerTaskValue{MutableCacheT}(__new_mutable_cache)
 const MutableCacheTLVT = typeof(__new_mutable_cache_tlv())
 
 """
@@ -339,9 +339,9 @@ struct System <: IntermediateDeprecationSystem
     maybe_zeros::AtomicSetT
     """
     $INTERNAL_FIELD_WARNING
-    The `IRStructure` used for efficient symbolic manipulation, stored in a `TaskLocalValue`.
+    The `IRStructure` used for efficient symbolic manipulation, stored in a `PerTaskValue`.
     """
-    irstructure_tlv::TaskLocalValue{IRStructure{VartypeT}}
+    irstructure_tlv::IRStructureTLVT
     """
     $INTERNAL_FIELD_WARNING
     Whether the system has been simplified by `mtkcompile`.
@@ -475,7 +475,13 @@ defsdict(x::Vector{Any}) = isempty(x) ? SymmapT() : defsdict(Dict(x))
 function defsdict(x::Union{AbstractDict, AbstractArray{<:Pair}})
     result = SymmapT()
     for (k, v) in x
-        result[unwrap(k)] = SU.Const{VartypeT}(v)
+        k = unwrap(k)
+        # This is where a user's own map enters the system, so it gets the strict check:
+        # a projection of a composite is not a key, whether that composite is an array or
+        # a record. A `SymmapT` passes through the method above instead, which is how
+        # initialization hands back maps keyed on the leaves `Initial` is defined for.
+        validate_given_atomic_array_key(k)
+        result[k] = SU.Const{VartypeT}(v)
     end
     return result
 end
@@ -1403,7 +1409,17 @@ function NonlinearSystem(sys::System; bind_iv::Bool = true)
     eqs = copy(get_eqs(sys))
     obs = get_observed(sys)
     D = Differential(get_iv(sys))
-    subrules = Dict{SymbolicT, SymbolicT}([D(x) => 0.0 for x in unknowns(sys)])
+    subrules = Dict{SymbolicT, SymbolicT}()
+    symbolic_zero = SU.zero_of_vartype(VartypeT)
+    for x in unknowns(sys)
+        subrules[D(x)] = symbolic_zero
+        sh = SU.shape(x)
+        if SU.is_array_shape(sh) && sh isa SU.ShapeVecT
+            for i in SU.stable_eachindex(x)
+                subrules[D(x[i])] = symbolic_zero
+            end
+        end
+    end
     for var in brownians(sys)
         subrules[var] = 0.0
     end
@@ -2096,4 +2112,29 @@ function set_necessary_initial_conditions(sys::System, ics)
     end
     get_necessary_initial_conditions(sys) === ics && return sys
     return setmetadata(sys, NecessaryInitialConditions, ics)::System
+end
+
+# The per-task caches of a `System` (`irstructure_tlv` and the `MutableCacheKey`
+# metadata) hold values specific to whichever `Task` accessed them. A copied or
+# deserialized `System` gets fresh `PerTaskValue`s rather than transferring task-local
+# state, so those values never reach `deepcopy` or `Serialization`.
+function _fresh_per_task_caches(sys::System)
+    return setproperties(
+        sys; metadata = refreshed_metadata(get_metadata(sys); preserve_cache = false),
+        irstructure_tlv = __new_irstructure_tlv()
+    )
+end
+
+function Base.deepcopy_internal(sys::System, iddict::IdDict)
+    haskey(iddict, sys) && return iddict[sys]::System
+    return iddict[sys] = invoke(
+        Base.deepcopy_internal, Tuple{Any, IdDict}, _fresh_per_task_caches(sys), iddict
+    )::System
+end
+
+function Serialization.serialize(s::Serialization.AbstractSerializer, sys::System)
+    return invoke(
+        Serialization.serialize, Tuple{Serialization.AbstractSerializer, Any},
+        s, _fresh_per_task_caches(sys)
+    )
 end
