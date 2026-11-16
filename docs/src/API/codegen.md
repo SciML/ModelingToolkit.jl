@@ -35,6 +35,42 @@ ModelingToolkitBase.CompilerOptions
 ModelingToolkitBase.generate_custom_function
 ```
 
+## Independent trailing arguments
+
+[`ModelingToolkitBase.generate_custom_function`](@ref) accepts scalar or array symbolic
+inputs in `extra_args`. These inputs are independent of the system's parameters and
+follow the standard arguments, in tuple order. For a time-dependent system the resulting
+functions take `(u, p, t, extra_args...)` and `(out, u, p, t, extra_args...)`; a
+time-independent system omits `t`. The parameter argument retains the system's split
+or unsplit representation.
+
+```@example custom_function_extra_args
+using ModelingToolkitBase
+
+@independent_variables t
+@variables x(t) dt a[1:2] b[1:2]
+@parameters k = 2.0
+sys = complete(System(Equation[], t, [x], [k]; name = :sys))
+f, f! = generate_custom_function(
+    sys, [x + dt * (k * a[1] + b[2]), x + a[2]];
+    extra_args = (dt, a, b), expression = Val(false)
+)
+p = MTKParameters(sys, [x => 3.0])
+u = [3.0]
+a_values = [5.0, 7.0]
+b_values = [11.0, 13.0]
+result = f(u, p, 1.0, 0.5, a_values, b_values)
+out = zeros(2)
+f!(out, u, p, 1.0, 0.5, a_values, b_values)
+@assert result == out == [14.5, 10.0]
+result
+```
+
+With `expression = Val(true)`, the same argument order applies to the generated
+expressions. The default `extra_args = ()` adds no arguments. Cache arguments supplied
+through `cachesyms` retain their existing representation and position, including their
+placement in the parameter argument for split systems. They are separate from `extra_args`.
+
 For functions such as jacobian calculation which require symbolic computation, there
 are `calculate_*` equivalents to obtain the symbolic result without building a function.
 
