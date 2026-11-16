@@ -572,3 +572,16 @@ if !@isdefined(ModelingToolkit)
         @test out in Set(unknowns(reduced_alg)) || out in Set(observables(reduced_alg))
     end
 end
+
+@testset "Non-floating point inputs are not solvable" begin
+    @variables x(t) y(t) u(t)::Bool [input = true] n(t)::Int [input = true]
+    @named sys = System([y ~ ifelse(u | (x > 10), 1.0, -1.0) + n, D(x) ~ y], t)
+    ssys = mtkcompile(sys; inputs = [u, n])
+    @test !haskey(ModelingToolkitBase.bindings(ssys), u)
+    @test !haskey(ModelingToolkitBase.bindings(ssys), n)
+    prob = ODEProblem(ssys, [x => 0.0, u => true, n => 2], (0.0, 1.0))
+    @test prob.ps[u] === true
+    @test prob.ps[n] === 2
+    @test prob[y] == 3.0
+    @test_throws "Missing values for variables" ODEProblem(ssys, [x => 0.0], (0.0, 1.0))
+end
