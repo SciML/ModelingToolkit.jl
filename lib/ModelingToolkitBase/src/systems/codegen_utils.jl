@@ -538,6 +538,137 @@ end
 """
     $(TYPEDSIGNATURES)
 
+Map each record occurring scalarized in `args` to the buffer position of each of its
+leaves, in [`record_leaves`](@ref) order. A leaf missing from `args` is left `(0, 0)`,
+which skips the record below.
+
+The record counterpart of [`compute_array_variable_buffer_idxs`](@ref).
+"""
+function compute_record_variable_buffer_idxs(@nospecialize(args); ignore_arg_idxs = nothing)
+    var_to_leafidxs = Dict{SymbolicT, Vector{Tuple{Int, Int}}}()
+    for (i, arg) in enumerate(args)
+        # Every record leaf is a scalar, so it can only live in a vector of symbolics.
+        arg isa AbstractVector{SymbolicT} || continue
+        ignore_arg_idxs === nothing || i in ignore_arg_idxs && continue
+
+        for (j, var) in enumerate(arg)
+            var = unwrap(var)
+            root, isrec = record_key_root(var)
+            isrec || continue
+            k = get(record_leaf_indexmap(root), var, 0)
+            # A record-valued field contributes nothing; its leaves are in the buffer
+            # separately.
+            k == 0 && continue
+            idxbuffer = get(var_to_leafidxs, root, nothing)
+            if idxbuffer === nothing
+                idxbuffer = Tuple{Int, Int}[(0, 0) for _ in eachindex(record_leaves(root))]
+                var_to_leafidxs[root] = idxbuffer
+            end
+            idxbuffer[k] = (i, j)
+        end
+    end
+
+    return var_to_leafidxs
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+The expression reconstructing `node`, a projection of the record `root` or `root` itself,
+from `leafexprs`: one expression per leaf of `root`, in [`record_leaves`](@ref) order.
+
+Mirrors [`record_node_value`](@ref) but assembles source, so each field keeps its declared
+type in the generated function.
+"""
+function record_construction_expr(root::SymbolicT, node::SymbolicT, leafexprs::Vector{Expr})
+    i = get(record_leaf_indexmap(root), node, 0)
+    i == 0 || return leafexprs[i]
+
+    if SU.is_array_shape(SU.shape(node))
+        # `stable_eachindex` walks in linear order, which is the order the leaves are laid
+        # out in, so the elements come back flat and have to be reshaped.
+        vect = Expr(:vect)
+        for idx in SU.stable_eachindex(node)
+            push!(vect.args, record_construction_expr(root, node[idx]::SymbolicT, leafexprs))
+        end
+        sizeexpr = Expr(:tuple)
+        append!(sizeexpr.args, size(node))
+        return Expr(:call, reshape, vect, sizeexpr)
+    end
+
+    T = SU.symtype(node)::SU.TypeT
+    Symbolics.issymstruct(node) || error(
+        lazy"Cannot assemble an expression for $node of type $T from the leaves of $root."
+    )
+    call = Expr(:call, T)
+    for fname in fieldnames(T::DataType)
+        field = Symbolics.SymbolicGetproperty{T, fname}()(node)::SymbolicT
+        push!(call.args, record_construction_expr(root, field, leafexprs))
+    end
+    return call
+end
+
+function record_variable_buffer_idxs_to_assignments(
+        var_to_leafidxs::Dict{SymbolicT, Vector{Tuple{Int, Int}}};
+        argument_name = generated_argument_name, buffer_offset = 0,
+        filter_vars = nothing,
+    )
+    assignments = Assignment[]
+    for (root, idxs) in var_to_leafidxs
+        filter_vars === nothing || root in filter_vars || continue
+        # every leaf of the record has to be present in `args` to rebuild it
+        any(iszero ∘ first, idxs) && continue
+
+        leafexprs = Expr[Expr(:ref, argument_name(i + buffer_offset), j) for (i, j) in idxs]
+        push!(assignments, Assignment(root, record_construction_expr(root, root, leafexprs)))
+    end
+
+    return assignments
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Given the arguments to `build_function_wrapper`, return a list of assignments which
+reconstruct the records referenced whole in the generated code from the leaves they are
+present as in `args`.
+
+# Keyword Arguments
+
+- `argument_name` a function of the form `(::Int) -> Symbol` which takes the index of
+  an argument to the generated function and returns the name of the argument in the
+  generated function.
+"""
+function record_variable_assignments(
+        @nospecialize(args...); filter_vars = nothing,
+        argument_name = generated_argument_name, buffer_offset = 0, ignore_arg_idxs = nothing
+    )
+    var_to_leafidxs = compute_record_variable_buffer_idxs(args; ignore_arg_idxs)
+    return record_variable_buffer_idxs_to_assignments(
+        var_to_leafidxs; argument_name, buffer_offset, filter_vars
+    )
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Whether `ex` is a record referenced whole, and so has to be rebuilt from its leaves before
+the generated code can use it.
+"""
+function find_recordvars_is_atomic(ex::SymbolicT)
+    return SU.default_is_atomic(ex) && Symbolics.issymstruct(ex)
+end
+
+# A projection `s.p` is read straight from the buffer. Descending into it would rebuild
+# `s` for a reference that never needs it.
+function find_recordvars_recurse(ex::SymbolicT)
+    is_symstruct_field(ex) && return false
+    return !SU.default_is_atomic(ex) || !has_const_int_indices(ex)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
 Check if the variable `var` is a delayed variable, where `iv` is the independent
 variable.
 """
@@ -1089,6 +1220,23 @@ Base.@nospecializeinfer function build_function_wrapper(
         other_assigns = array_variable_assignments(args...; ignore_vars = keys(param_var_to_arridxs), filter_vars = required_arrvars, argument_name = u_argument_name, ignore_arg_idxs = p_start:p_end)
         append!(assignments, other_assigns)
     end
+
+    # Assignments reconstructing records referenced whole. Over every buffer at once:
+    # leaves are scalars wherever they live, and `u_argument_name` names any buffer.
+    required_recordvars = Set{SymbolicT}()
+    record_search_buffer = SU.IRStructureSearchBuffer(ir, required_recordvars)
+    SU.search_variables!(
+        record_search_buffer, expr; is_atomic = find_recordvars_is_atomic,
+        recurse = find_recordvars_recurse
+    )
+    if !isempty(required_recordvars)
+        append!(
+            assignments, record_variable_assignments(
+                args...; filter_vars = required_recordvars, argument_name = u_argument_name
+            )
+        )
+    end
+
     append!(assignments, extra_assignments)
 
     for (i, arg) in enumerate(args)

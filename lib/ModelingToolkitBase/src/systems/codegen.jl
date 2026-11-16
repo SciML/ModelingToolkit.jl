@@ -1923,6 +1923,12 @@ function (pred::CheckInvalidAndTrackNamespaced)(x::SymbolicT)
     arrx in pred.simplevars && return true
     # `simplevars` keys struct variables on the whole record, so also try the record.
     split_field_access(arrx)[1] in pred.simplevars && return true
+    # A record is present when all of its leaves are, as an array is when its elements
+    # are. Codegen rebuilds it from them.
+    if Symbolics.issymstruct(arrx) &&
+            all(leaf -> leaf in pred.simplevars, record_leaves(arrx))
+        return true
+    end
     if x in pred.dervars
         push!(pred.present_dervars, x)
         return true
