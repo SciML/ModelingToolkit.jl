@@ -2009,7 +2009,24 @@ if !@isdefined(ModelingToolkit)
                 sol = solve(prob, Tsit5())
                 @test sol.discretes[1].t ≈ ticks
                 @test sol[d] ≈ 1:length(ticks)
+                @test SciMLBase.canonicalize_indexed_clock(SciMLBase.Clock(0.1; phase)[1:length(ticks)], sol) ==
+                    sol.discretes[1].t
             end
+        end
+        @testset "Coincident ticks of rational clocks" begin
+            @discretes d2(t)
+            devt1 = SymbolicDiscreteCallback(
+                SciMLBase.Clock(1 // 200), [d ~ Pre(d) + 1]; discrete_parameters = [d],
+            )
+            devt2 = SymbolicDiscreteCallback(
+                SciMLBase.Clock(1 // 30; phase = 1 // 60), [d2 ~ Pre(d2) + 1]; discrete_parameters = [d2],
+            )
+            @mtkcompile sys = System([D(x) ~ t], t, [x, d, d2], []; discrete_events = [devt1, devt2])
+            prob = ODEProblem(sys, [x => 0.0, d => 0.0, d2 => 0.0], (0.0, 2.0))
+            sol = solve(prob, Tsit5())
+            @test 1.35 in sol.discretes[1].t
+            @test 1.35 in sol.discretes[2].t
+            @test all(Δ -> iszero(Δ) || Δ > 1.0e-6, diff(sol.t))
         end
     end
 
