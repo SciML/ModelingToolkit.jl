@@ -170,6 +170,11 @@ The `simplified_sys` has undergone [`ModelingToolkitBase.mtkcompile`](@ref) and 
   - `autodiff`: An `ADType` supported by DifferentiationInterface.jl to use for calculating the necessary jacobians. Defaults to using `AutoForwardDiff()`
   - `op`: The operating point, a dictionary or a [`LinearizationOpPoint`](@ref). A `LinearizationOpPoint` determines the operating point and `t` from its solution at its first time point, and implies `ignore_system_initial_conditions = true`, as in [`linearize`](@ref). This allows passing a `LinearizationOpPoint` to the functions that build on `linearization_function`, such as [`get_sensitivity`](@ref).
   - `ignore_system_initial_conditions`: Whether to ignore `initial_conditions(sys)` and only use `op`.
+  - `loop_openings`: Analysis points whose connections are removed before linearization, also
+    when `inputs` and `outputs` are variables. A signal disconnected by a loop opening is held
+    at the value of the signal that drove it unless `op` provides a value for it.
+  - `system_modifier`: A function applied to the system after the loop openings and before
+    structural simplification.
   - `verbose`: An [`MTKVerbosity`](@ref), a `SciMLLogging` preset, or a `Bool` controlling
     diagnostic output (the `empty_operating_point` toggle and the initialization toggles).
     The deprecated boolean keywords `warn_empty_op` and `warn_initialize_determined`
@@ -200,6 +205,8 @@ function linearization_function(
         ignore_system_initial_conditions = false,
         loop_opening_params = SymbolicT[],
         loop_opening_drivers = SymbolicT[],
+        loop_openings = [],
+        system_modifier = identity,
         kwargs...
     )
     verbosity = verbose === nothing ? MTKVerbosity() : MTKVerbosity(verbose)
@@ -226,6 +233,12 @@ function linearization_function(
     end
     inputs isa AbstractVector || (inputs = [inputs])
     outputs isa AbstractVector || (outputs = [outputs])
+    if !isempty(loop_openings)
+        sys, opened, drivers = handle_loop_openings(sys, loop_openings)
+        loop_opening_params = SymbolicT[loop_opening_params; opened]
+        loop_opening_drivers = SymbolicT[loop_opening_drivers; drivers]
+    end
+    sys = system_modifier(sys)
     ssys = mtkcompile(sys; inputs, outputs, simplify, verbose = verbosity, kwargs...)
     if ignore_system_initial_conditions
         ics = copy(initial_conditions(ssys))
@@ -1275,12 +1288,8 @@ function linearize(
     for (k, v) in op
         isequal(v, COMMON_NOTHING) && continue
         v === COMMON_MISSING && continue
-        v = _resolve_op_value(prob, v)
-        if is_parameter(prob, Initial(k))
-            setu(prob, Initial(k))(prob, v)
-        else
-            setu(prob, k)(prob, v)
-        end
+        target = is_parameter(prob, Initial(k)) ? Initial(k) : k
+        setu(prob, target)(prob, _complete_array_value(prob, target, _resolve_op_value(prob, v)))
     end
     p = anydict(p)
     for (k, v) in p
@@ -1303,6 +1312,15 @@ function _resolve_op_value(prob, v)
     else
         return v
     end
+end
+
+# An operating point that gives values for some elements of an array variable only is
+# collected into an array with `nothing` at the remaining elements. These elements keep the
+# value that `prob` currently holds for `target`.
+function _complete_array_value(prob, target, v)
+    v isa AbstractArray && any(isnothing, v) || return v
+    current = getu(prob, target)(prob)
+    return map((vi, ci) -> vi === nothing ? ci : vi, v, current)
 end
 
 # The opened signals in `held_params` are held at the value of their driver by an
@@ -1344,18 +1362,17 @@ function __linearize_multiple_op_barrier(ssys, lin_fun; ops, ts, allow_input_der
     # The op keys are identical across time points, so checking the first one suffices.
     _check_held_signals(lin_fun.loop_opening_params, op1)
     op_keys = collect(keys(op1))
-    setters = map(op_keys) do k
-        is_parameter(prob, Initial(k)) ? setu(prob, Initial(k)) : setu(prob, k)
-    end
+    targets = map(k -> is_parameter(prob, Initial(k)) ? Initial(k) : k, op_keys)
+    setters = map(target -> setu(prob, target), targets)
 
     for (op, t) in zip(ops, ts)
         op = as_atomic_dict_with_defaults(Dict{SymbolicT, SymbolicT}(op), COMMON_NOTHING)
         evaluate_varmap!(op, keys(op))
-        for (setter, k) in zip(setters, op_keys)
+        for (setter, target, k) in zip(setters, targets, op_keys)
             v = get(op, k, COMMON_NOTHING)
             isequal(v, COMMON_NOTHING) && continue
             v === COMMON_MISSING && continue
-            setter(prob, _resolve_op_value(prob, v))
+            setter(prob, _complete_array_value(prob, target, _resolve_op_value(prob, v)))
         end
         prob.t = t
         res, xpt = solve(prob; allow_input_derivatives)::Tuple{eltype(results), eltype(xpts)}

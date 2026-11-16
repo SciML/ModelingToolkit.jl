@@ -131,6 +131,7 @@ ModelingToolkit.collect_vars!
 ModelingToolkit.eqtype_supports_collect_vars
 ModelingToolkit.modified_unknowns!
 ModelingToolkitBase.convert_bindings_for_time_independent_system
+ModelingToolkitBase.expand_record_equations
 ```
 
 ## Namespace manipulation

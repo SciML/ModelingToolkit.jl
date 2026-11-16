@@ -39,7 +39,7 @@ import CommonSolve
 using SparseArrays: sparse
 
 import DocStringExtensions
-using DocStringExtensions: TYPEDSIGNATURES
+using DocStringExtensions: TYPEDSIGNATURES, TYPEDEF
 
 import ModelingToolkitBase as MTKBase
 import StateSelection
