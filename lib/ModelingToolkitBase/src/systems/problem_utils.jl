@@ -2174,12 +2174,17 @@ function convert_to_declared_type(k::SymbolicT, v, name)
     elseif v isa AbstractArray{<:Real} && T <: AbstractArray
         E = eltype(T)
         (E <: Integer && isconcretetype(E) && !(eltype(v) <: E)) || return v
-        return map(x -> convert_or_throw(E, x, k, name), v)
+        return convert_or_throw(E, v, k, name)
     end
     return v
 end
 
-function convert_or_throw(T, x, k, name)
+# the element type is a dispatch parameter, so the loop over `xs` is compiled for it once
+function convert_or_throw(::Type{T}, xs::AbstractArray, k, name) where {T}
+    return map(x -> convert_or_throw(T, x, k, name), xs)
+end
+
+function convert_or_throw(::Type{T}, x, k, name) where {T}
     try
         return convert(T, x)
     catch e
