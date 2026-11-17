@@ -580,6 +580,41 @@ end
     @test eltype(sol[X]) === Int64
 end
 
+@testset "`remake` keeps an integer `u0`" begin
+    @parameters p d Y0
+    @variables X(t) Y(t) = Y0
+    j1 = ConstantRateJump(p, [X ~ Pre(X) + 1])
+    j2 = ConstantRateJump(d * X, [X ~ Pre(X) - 1])
+    j3 = ConstantRateJump(d * Y, [Y ~ Pre(Y) - 1])
+    @mtkcompile js = JumpSystem([j1, j2, j3], t, [X, Y], [p, d, Y0])
+    ps = [p => 2.0, d => 0.5, Y0 => 10.0]
+    jprob = JumpProblem(js, [X => 15; ps], (0.0, 10.0); aggregator = Direct(), u0_eltype = Int)
+    @test jprob.prob.u0 isa Vector{Int}
+
+    # `Y` is filled in from its default, the float parameter `Y0`.
+    for u0 in ([X => 5], Dict(X => 5), (X => 5,), [:X => 5])
+        jprob2 = remake(jprob; u0)
+        @test jprob2.prob.u0 isa Vector{Int}
+        @test jprob2[X] == 5
+        @test jprob2[Y] == 10
+    end
+    jprob2 = remake(jprob; u0 = [X => 5], p = [Y0 => 4.0])
+    @test jprob2.prob.u0 isa Vector{Int}
+    @test jprob2[Y] == 4
+    sol = solve(remake(jprob; u0 = [X => 5]), SSAStepper())
+    @test sol.u[end] isa Vector{Int}
+
+    # A float value or a numeric `u0` gives a float `u0`, as does a float problem.
+    @test eltype(remake(jprob; u0 = [X => 5.5]).prob.u0) == Float64
+    @test eltype(remake(jprob; u0 = [X => 5.0]).prob.u0) == Float64
+    @test eltype(remake(jprob; u0 = [5.0, 10.0]).prob.u0) == Float64
+    fprob = JumpProblem(js, [X => 15; ps], (0.0, 10.0); aggregator = Direct())
+    @test eltype(remake(fprob; u0 = [X => 5]).prob.u0) == Float64
+
+    # A filled-in value that isn't a whole number can't be stored in an integer `u0`.
+    @test_throws InexactError remake(jprob; u0 = [X => 5], p = [Y0 => 10.5])
+end
+
 @testset "Issue#3571: `remake(::JumpProblem)`" begin
     @variables X(t)
     @parameters a b
