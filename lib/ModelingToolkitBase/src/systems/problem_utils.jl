@@ -352,31 +352,29 @@ function Base.showerror(io::IO, e::MissingVariablesError)
 end
 
 """
-    $(TYPEDEF)
+    $(TYPEDSIGNATURES)
 
-Error thrown when a variable with an integer type, such as `Bool` or `Int`, has no value or
-guess. A fallback guess from `missing_guess_value` is a floating point number, and a
-variable of integer type cannot be solved for numerically, so a value must be provided.
+The type of a value filled in for `var` by `missing_guess_value`: the declared type of `var`
+(or its element type, for an array) when that is an integer type such as `Bool` or `Int`,
+and `Float64` otherwise. An abstract integer type yields `Int`.
 """
-struct MissingIntegerValueError <: Exception
-    vars::Vector{SymbolicT}
-end
-
-function Base.showerror(io::IO, e::MissingIntegerValueError)
-    println(
-        io,
-        """
-        The following variables of integer type (such as `Bool` or `Int`) have no value \
-        or guess, and cannot be solved for numerically. Provide a value for them in the \
-        operating point or as an initial condition of the system:
-        """
-    )
-    return println(io, join(e.vars, ", "))
-end
-
-function is_integer_typed(var::SymbolicT)
+function guess_eltype(var::SymbolicT)
     T = symtype(var)
-    return T <: Integer || (T <: AbstractArray && eltype(T) <: Integer)
+    T <: AbstractArray && (T = eltype(T))
+    T <: Integer || return Float64
+    return isconcretetype(T) ? T : Int
+end
+
+# A random-like value of type `T` from the hash `h`. `h % T` reduces the hash into `T` the
+# way `rand(rng, T)` samples from it.
+hashed_value(::Type{Float64}, h::UInt) = h / 0x1p64
+hashed_value(::Type{T}, h::UInt) where {T <: Integer} = h % T
+
+# The value of `MissingGuessValue.Constant(val)` for `var`, converted to its declared type
+# when that is an integer type
+function missing_constant(var::SymbolicT, val)
+    T = guess_eltype(var)
+    return T === Float64 ? val : convert_or_throw(T, val, var, "`missing_guess_value`")
 end
 
 """
@@ -393,6 +391,10 @@ numerical problem from a `System`.
 - `MissingGuessValue.HashedRandom`: Missing guesses are set to a
   deterministically determined random-like value based on the hash of the variable name
 - `MissingGuessValue.Error()`: Missing guess values cause an error.
+
+For a variable declared with an integer type, such as `Bool` or `Int`, `Constant` converts
+`val` to that type and throws an error if it cannot, while `Random` and `HashedRandom`
+produce a value of that type.
 
 # Returns
 
@@ -477,31 +479,28 @@ function varmap_to_vars(
             val = get_possibly_indexed(varmap, var, COMMON_NOTHING)
             SU.isconst(val) || push!(missing_vars, var)
         end
-        # a fallback guess for these would be a non-integer floating point number
-        missing_integer_vars = SymbolicT[unwrap(var) for var in missing_vars if is_integer_typed(unwrap(var))]
-        isempty(missing_integer_vars) || throw(MissingIntegerValueError(missing_integer_vars))
         Moshi.Match.@match missing_values begin
             MissingGuessValue.Constant(val) => begin
-                cval = BSImpl.Const{VartypeT}(val)
                 for var in missing_vars
+                    cval = BSImpl.Const{VartypeT}(missing_constant(var, val))
                     write_possibly_indexed_array!(varmap, var, cval, COMMON_NOTHING)
                 end
             end
             MissingGuessValue.Random(rng) => begin
                 for var in missing_vars
                     if Symbolics.isarraysymbolic(var)
-                        varmap[var] = rand(rng, size(var))
+                        varmap[var] = rand(rng, guess_eltype(var), size(var))
                     else
-                        write_possibly_indexed_array!(varmap, var, Symbolics.SConst(rand(rng)), COMMON_NOTHING)
+                        write_possibly_indexed_array!(varmap, var, Symbolics.SConst(rand(rng, guess_eltype(var))), COMMON_NOTHING)
                     end
                 end
             end
             MissingGuessValue.HashedRandom() => begin
                 for var in missing_vars
                     if Symbolics.isarraysymbolic(var)
-                        varmap[var] = [hash(var, hash(i)) for i in SU.stable_eachindex(var)] ./ 0x1p64
+                        varmap[var] = [hashed_value(guess_eltype(var), hash(var, hash(i))) for i in SU.stable_eachindex(var)]
                     else
-                        write_possibly_indexed_array!(varmap, var, Symbolics.SConst(hash(var) / 0x1p64), COMMON_NOTHING)
+                        write_possibly_indexed_array!(varmap, var, Symbolics.SConst(hashed_value(guess_eltype(var), hash(var))), COMMON_NOTHING)
                     end
                 end
             end
