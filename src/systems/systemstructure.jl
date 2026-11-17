@@ -84,6 +84,9 @@ function inputs_to_parameters!(state::TearingState, inputsyms::OrderedSet{Symbol
 
     binds = copy(parent(bindings(sys)))
     for var in inputsyms
+        # Only floating point parameters can be solved for during initialization. The
+        # value of a non-floating point input (e.g. `Bool` or `Int`) must be provided.
+        MTKBase.is_variable_floatingpoint(var) || continue
         binds[split_indexed_var(var)[1]] = COMMON_MISSING
     end
     @set! sys.unknowns = setdiff(unknowns(sys), inputsyms)
