@@ -586,6 +586,26 @@ end
     @test sol[y] ≈ 2 / 3 atol = 1.0e-10
 end
 
+@testset "NonlinearSystem conversion: whole-array derivatives are zeroed" begin
+    @independent_variables t
+    D = Differential(t)
+    @variables x(t)[1:2] A(t)[1:2, 1:2]
+    for (var, target) in ((x, [1.0, 2.0]), (A, [1.0 2.0; 3.0 4.0]))
+        sys = complete(System([D(var) ~ target .- var], t, [var], []; name = :array))
+        nlsys = NonlinearSystem(sys)
+        @test length(equations(nlsys)) == 1
+        eq = only(equations(nlsys))
+        @test isequal(eq.lhs, SU.Const{VartypeT}(zeros(size(target))))
+        @test isempty(ModelingToolkitBase.collect_applied_operators(eq, Differential))
+        compiled = mtkcompile(nlsys)
+        @test !is_time_dependent(compiled)
+        prob = NonlinearProblem(compiled, [var => ones(size(target))])
+        sol = solve(prob)
+        @test SciMLBase.successful_retcode(sol)
+        @test sol[var] ≈ target
+    end
+end
+
 @testset "NonlinearSystem conversion: unknown-shape array unknown" begin
     @independent_variables t
     D = Differential(t)
@@ -597,6 +617,12 @@ end
     for eq in equations(nlsys)
         @test isempty(ModelingToolkitBase.collect_applied_operators(eq, Differential))
     end
+
+    sys = System([D(z) ~ z], t, [z], []; name = :unknown_shape)
+    eq = only(equations(NonlinearSystem(sys)))
+    @test isequal(SU.shape(eq.lhs), SU.shape(unwrap(z)))
+    @test SU.symtype(eq.lhs) == SU.symtype(unwrap(z))
+    @test isempty(ModelingToolkitBase.collect_applied_operators(eq, Differential))
 end
 
 @testset "NonlinearSystem conversion: connectors" begin
