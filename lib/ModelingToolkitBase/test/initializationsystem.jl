@@ -2730,7 +2730,9 @@ end
 @testset "Variables of integer type without a value raise an informative error" begin
     @variables x(t)
     @parameters b::Bool n::Int
-    @mtkcompile sys = System([D(x) ~ ifelse(b, n, -n)], t)
+    # `b` and `n` only appear in conditions, so the initialization system cannot solve for
+    # them through an equation and they remain unknowns that need a value or guess
+    @mtkcompile sys = System([D(x) ~ ifelse(b, -x, x) + ifelse(n > 0, 1, 0)], t)
     # a fallback guess would be a non-integer floating point number
     for missing_guess_value in (
             MissingGuessValue.HashedRandom(), MissingGuessValue.Constant(0.5),
