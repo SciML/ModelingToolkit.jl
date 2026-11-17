@@ -2165,7 +2165,7 @@ function convert_to_declared_types!(op::AbstractDict; name = "operating_point")
     return op
 end
 
-function convert_to_declared_type(k::SymbolicT, v, name)
+function convert_to_declared_type(k::SymbolicT, @nospecialize(v), name)
     v isa SymbolicT && return v
     T = symtype(k)
     if v isa Real
@@ -2180,11 +2180,11 @@ function convert_to_declared_type(k::SymbolicT, v, name)
 end
 
 # the element type is a dispatch parameter, so the loop over `xs` is compiled for it once
-function convert_or_throw(::Type{T}, xs::AbstractArray, k, name) where {T}
+function convert_or_throw(::Type{T}, xs::AbstractArray, k::SymbolicT, name) where {T}
     return map(x -> convert_or_throw(T, x, k, name), xs)
 end
 
-function convert_or_throw(::Type{T}, x, k, name) where {T}
+function convert_or_throw(::Type{T}, x, k::SymbolicT, name) where {T}
     try
         return convert(T, x)
     catch e
