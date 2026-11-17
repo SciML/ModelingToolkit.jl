@@ -31,7 +31,7 @@ using Test
     expected = Bool[1 0; 0 1]
     @test SCT.jacobian_sparsity(v -> residual(v, p), u, detector) == expected
     @test SCT.jacobian_sparsity((out, v) -> residual!(out, v, p), output, u, detector) ==
-          expected
+        expected
     @test SCT.hessian_sparsity(v -> sum(residual(v, p)), u, detector) == expected
 end
 
