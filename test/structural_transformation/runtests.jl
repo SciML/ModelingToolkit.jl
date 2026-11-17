@@ -9,3 +9,6 @@ end
 @safetestset "Tearing" begin
     include("tearing.jl")
 end
+@safetestset "Stationary linear tearing" begin
+    include("stationary_linear_tearing.jl")
+end
