@@ -804,5 +804,6 @@ end
     @test sol[b] * sol[c] ≈ 3.0 * sol[a] atol = 1.0e-8
 end
 
+include("scc_two_blocks_regression.jl")
 include("scc_zero_state_regression.jl")
 include("scc_array_cache_regression.jl")
