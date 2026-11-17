@@ -732,6 +732,32 @@ function validate_parameter_type(ic::IndexCache, stype, sz, sym, index, val)
     end
 end
 
+# The declared type of the parameter `sym` (or, without `sym`, of its buffer) at `index`.
+function declared_parameter_type(ic::IndexCache, sym, index::ParameterIndex)
+    sym === nothing && return get_buffer_template(ic, index).type
+    sym = unwrap(sym)
+    if sym isa Symbol
+        sym = get(ic.symbol_to_variable, sym, nothing)
+        sym === nothing && return get_buffer_template(ic, index).type
+    end
+    return symtype(sym)
+end
+
+# Numeric parameters accept any `Real`, so that ForwardDiff can pass dual numbers, but a
+# container can also promote the values it holds: `[b => false, k => 2.0, n => 2]` is a
+# `Vector{Pair{Num, Float64}}`. Convert a plain float for a parameter declared as an integer
+# or `Bool` (or an integer array) back to the declared type, as the `MTKParameters`
+# constructor does (`symconvert`); a value that isn't a whole number throws an `InexactError`.
+function convert_float_to_declared_integer(::Type{T}, val) where {T}
+    if T <: Integer && val isa AbstractFloat
+        return convert(T, val)
+    elseif T <: AbstractArray && eltype(T) <: Integer && val isa AbstractArray &&
+            eltype(val) <: AbstractFloat
+        return convert.(eltype(T), val)
+    end
+    return val
+end
+
 function indp_to_system(indp)
     while hasmethod(symbolic_container, Tuple{typeof(indp)})
         indp = symbolic_container(indp)
@@ -762,6 +788,7 @@ function __remake_buffer(indp, oldbuf::MTKParameters, idxs, vals; validate = tru
                 validate_parameter_type(ic, sym, idx, val)
             end
         end
+        val = convert_float_to_declared_integer(declared_parameter_type(ic, sym, idx), val)
         # `ParameterIndex(idx)` turns off size validation since it relies on there
         # being an existing value
         return set_parameter!(newbuf, val, ParameterIndex(idx))

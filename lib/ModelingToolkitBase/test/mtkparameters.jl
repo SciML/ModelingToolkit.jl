@@ -339,15 +339,17 @@ end
     ) # size has to match, not just length
     @test_nowarn setp(sys, f)(ps, Foo(:a)) # can change non-concrete type
 
-    # Same flexibility is afforded to `b::Int` to allow for ForwardDiff
-    for sym in [a, b]
+    # Same flexibility is afforded to `b::Int` to allow for ForwardDiff, but a plain float
+    # for `b::Int` is converted to an `Int`, as in the `MTKParameters` constructor (#5403)
+    for (sym, T) in [(a, Float32), (b, Int)]
         @test_nowarn remake_buffer(sys, ps, (sym,), (1,))
         newps = @test_nowarn remake_buffer(sys, ps, (sym,), (1.0f0,)) # Can change type if it's numeric
-        @test getp(sys, sym)(newps) isa Float32
+        @test getp(sys, sym)(newps) isa T
         newps = @test_nowarn remake_buffer(sys, ps, sym, ForwardDiff.Dual(1.0))
         @test getp(sys, sym)(newps) isa ForwardDiff.Dual
         @test_throws TypeError remake_buffer(sys, ps, (sym,), (:a,)) # still has to be numeric
     end
+    @test_throws InexactError remake_buffer(sys, ps, (b,), (1.5,))
 
     newps = @test_nowarn remake_buffer(sys, ps, (c,), (view(1.0:4.0, 2:4),)) # can change type of array
     @test getp(sys, c)(newps) == 2.0:4.0
@@ -358,9 +360,30 @@ end
     newps = @test_nowarn remake_buffer(sys, ps, (d,), (ForwardDiff.Dual.(ones(2, 2)),)) # can change eltype
     @test_throws TypeError remake_buffer(sys, ps, (d,), ([:a :b; :c :d],)) # eltype still has to be numeric
     @test getp(sys, d)(newps) isa Matrix{<:ForwardDiff.Dual}
+    newps = remake_buffer(sys, ps, (d,), (2ones(2, 2),)) # floats for `d::Int` are converted
+    @test getp(sys, d)(newps) == 2ones(Int, 2, 2)
+    @test getp(sys, d)(newps) isa Matrix{Int}
 
     @test_throws TypeError remake_buffer(sys, ps, (e,), (Foo(2.0),)) # need exact same type for nonnumeric
     @test_nowarn remake_buffer(sys, ps, (f,), (Foo(:a),))
+end
+
+@testset "Issue#5403: `remake` keeps `Bool` and `Int` parameter types" begin
+    @parameters b::Bool = true k = 1.0 n::Int = 1
+    @variables x(t) = 0.0
+    @mtkcompile sys = System([D(x) ~ ifelse(b, k, -k) * n], t)
+    prob = ODEProblem(sys, [], (0.0, 1.0))
+
+    # The vector is a `Vector{Pair{Num, Float64}}`, so `false` and `2` arrive as floats.
+    prob2 = remake(prob; p = [b => false, k => 2.0, n => 2])
+    @test prob2.ps[b] === false
+    @test prob2.ps[n] === 2
+    @test prob2.ps[k] == 2.0
+    sol = solve(prob2, Tsit5())
+    @test SciMLBase.successful_retcode(sol)
+    @test sol[x][end] ≈ -4.0
+    @test remake(prob; p = [k => 2.0, n => 3]).ps[n] === 3
+    @test_throws InexactError remake(prob; p = [k => 2.0, n => 2.5])
 end
 
 @testset "Error on missing parameter defaults" begin
