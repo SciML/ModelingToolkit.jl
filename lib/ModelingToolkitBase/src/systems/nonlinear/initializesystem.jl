@@ -51,7 +51,7 @@ function register_dd_var!(
         guesses::AtomicArrayDict{SymbolicT}, d::SymbolicT, dd_guess_sym::SymbolicT
     )
     ttk = default_toterm(d)
-    if !has_possibly_indexed_key(guesses, d) && !has_possibly_indexed_key(guesses, ttk)
+    if !has_possibly_indexed_value(guesses, d) && !has_possibly_indexed_value(guesses, ttk)
         write_possibly_indexed_array!(guesses, ttk, dd_guess_sym, COMMON_NOTHING)
     end
     push_as_atomic_array!(init_vars_set, ttk)
@@ -138,6 +138,13 @@ function generate_initializesystem_timevarying(
     else
         build_operating_point(sys, op)
     end
+
+    # Initialization works in leaves; storage keeps records whole. Translate here, once,
+    # rather than at each place below that asks for `Initial` of a key. Both maps are
+    # normalized by now, which is what this needs - `op` can arrive as a vector of pairs.
+    expand_record_keys!(op)
+    expand_record_keys!(guesses)
+
     subber = get_ir_info(_sys).obs_subber
     obsvars = as_atomic_array_set(observables(_sys))
     initsys_sort_system_bindings!(subber, init_vars_set, init_ps, obsvars, eqs_ics, binds, op, guesses)
@@ -152,7 +159,7 @@ function generate_initializesystem_timevarying(
     if has_schedule(_sys) && (schedule = get_schedule(_sys); schedule isa Schedule)
         for (k, v) in schedule.dummy_sub
             ttk = default_toterm(k)
-            if !has_possibly_indexed_key(guesses, k) && !has_possibly_indexed_key(guesses, ttk)
+            if !has_possibly_indexed_value(guesses, k) && !has_possibly_indexed_value(guesses, ttk)
                 write_possibly_indexed_array!(guesses, ttk, dd_guess_sym, COMMON_NOTHING)
             end
             # For DDEs, the derivatives can have delayed terms
@@ -223,7 +230,7 @@ function generate_initializesystem_timevarying(
         # doing so would require all observed equations to be symbolically differentiable.
         get!(derivative_rules, D(eq.lhs), D(eq.rhs))
         # Add as guesses
-        if !has_possibly_indexed_key(guesses, eq.lhs)
+        if !has_possibly_indexed_value(guesses, eq.lhs)
             write_possibly_indexed_array!(guesses, eq.lhs, eq.rhs, COMMON_NOTHING)
         end
     end
@@ -367,6 +374,12 @@ function generate_initializesystem_timeindependent(
     else
         build_operating_point(sys, op)
     end
+
+    # Initialization works in leaves; storage keeps records whole. Translate here, once,
+    # rather than at each place below that asks for `Initial` of a key. Both maps are
+    # normalized by now, which is what this needs - `op` can arrive as a vector of pairs.
+    expand_record_keys!(op)
+    expand_record_keys!(guesses)
 
     valid_initial_parameters = AtomicArraySet{OrderedDict{SymbolicT, Nothing}}()
     # Iterate over a copy: the loop inserts `Initial` keys into `op`. An insertion can rehash
@@ -558,7 +571,12 @@ function timevaring_initsys_process_op!(
             # will be passed to the `NonlinearProblem` constructor, and guesses will not take
             # priority over it. So instead of adding `Initial(x) => v` as a guess, add `x => v`.
             op[ik] = k
-            left_merge!(guesses, AtomicArrayDict(k => v))
+            rroot, isrec = record_key_root(k)
+            if isrec && !isequal(rroot, k)
+                merge_record_field!(guesses, k, v)
+            else
+                left_merge!(guesses, AtomicArrayDict(k => v))
+            end
             if !SU.is_array_shape(shk)
                 push!(eqs_ics, subk ~ ik)
                 continue

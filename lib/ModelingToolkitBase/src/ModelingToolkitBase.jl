@@ -115,6 +115,7 @@ import Graphs: SimpleDiGraph, add_edge!
 import CommonSolve
 using CommonSolve: init, solve
 import EnumX
+import ReadOnlyArrays: ReadOnlyVector
 import ReadOnlyDicts: ReadOnlyDict
 
 import RuntimeGeneratedFunctions
@@ -160,7 +161,7 @@ import IntervalSets
 import NonlinearSolveBase
 # For `LinearInitializationProblem`
 import SCCNonlinearSolve
-using TaskLocalValues: TaskLocalValue
+import Serialization
 
 export @derivatives
 
@@ -280,6 +281,7 @@ include("independent_variables.jl")
 include("constants.jl")
 include("derivative_dict.jl")
 include("atomic_array_dict.jl")
+include("per_task_value.jl")
 include("parameter_bindings_graph.jl")
 
 const SymmapT = AtomicArrayDict{SymbolicT, Dict{SymbolicT, SymbolicT}}
@@ -435,7 +437,7 @@ export Equation
 export Term
 export SymScope, LocalScope, ParentScope, GlobalScope
 export independent_variable, equations, observed, full_equations, jumps, cost, costs,
-    brownians
+    brownians, poissonians
 export initialization_equations, guesses, bindings, initial_conditions, hierarchy
 export set_defaults
 export state_priorities, irreducibles, maybe_zeros
@@ -534,6 +536,7 @@ const set_scalar_metadata = setmetadata
 @public ProblemTypeCtx
 @public HomotopyCtx, homotopy_enabled, strip_homotopy
 @public MTKVerbosityCtx
+@public expand_record_equations
 
 for prop in [SYS_PROPS; [:continuous_events, :discrete_events]]
     getter = Symbol(:get_, prop)

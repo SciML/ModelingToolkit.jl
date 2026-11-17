@@ -45,7 +45,10 @@ function ChainRulesCore.rrule(::Type{MTKParameters}, tunables, args...)
         end
         dargs = ntuple(length(args)) do i
             field = MTP_NONTUNABLE_FIELDS[i]
-            hasproperty(dt, field) ? _mtp_tangent(getproperty(dt, field)) : NoTangent()
+            # `caches` holds `add_diffcache` scratch space, which is written before it is
+            # read, so nothing flows back to the buffers it was built from.
+            field !== :caches && hasproperty(dt, field) ?
+                _mtp_tangent(getproperty(dt, field)) : NoTangent()
         end
         return (NoTangent(), dtunables, dargs...)
     end

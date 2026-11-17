@@ -2701,3 +2701,28 @@ end
     @test length(pins) == n
     @test issetequal(pins, ModelingToolkitBase.unwrap.(ps))
 end
+
+@testset "Elements of an array parameter given as `missing` raise an informative error" begin
+    @variables x(t)
+    @parameters u[1:2]
+    @mtkcompile sys = System(
+        [D(x) ~ -x + u[1] + u[2]], t, [x], [u];
+        initialization_eqs = [u[1] ~ 1.0, u[2] ~ 2.0]
+    )
+    prob = ODEProblem(
+        sys, [x => 1.0, u => missing], (0.0, 1.0); guesses = [u => [0.0, 0.0]]
+    )
+    @test prob.ps[u] ≈ [1.0, 2.0]
+
+    for op in (
+            [x => 1.0, u[1] => missing, u[2] => missing],
+            [x => 1.0, u[1] => 1.0, u[2] => missing],
+        )
+        @test_throws ModelingToolkitBase.ElementwiseMissingArrayParameterError ODEProblem(
+            sys, op, (0.0, 1.0); guesses = [u => [0.0, 0.0]]
+        )
+        @test_throws "`u => missing`" ODEProblem(
+            sys, op, (0.0, 1.0); guesses = [u => [0.0, 0.0]]
+        )
+    end
+end

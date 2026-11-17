@@ -204,3 +204,20 @@ end
 
     @test fd ≈ zg[1] atol = 1.0e-6
 end
+
+@testset "`add_diffcache` buffers get no cotangent through an `MTKParameters` rebuild" begin
+    @variables x(t)
+    @parameters a
+    @named sys = System([D(x) ~ -a * x], t)
+    sys, _ = ModelingToolkitBase.add_diffcache(sys, 3)
+    prob = ODEProblem(mtkcompile(sys), [x => 1.0, a => 2.0], (0.0, 1.0))
+    p = parameter_values(prob)
+    _, pullback = ChainRulesCore.rrule(
+        MTKParameters, p.tunable, p.initials, p.discrete, p.constant, p.nonnumeric, p.caches
+    )
+    dt = Tangent{typeof(p)}(; tunable = ones(length(p.tunable)), initials = ones(length(p.initials)), caches = p.caches)
+    grads = pullback(dt)
+    @test grads[2] == ones(length(p.tunable))
+    @test grads[3] == ones(length(p.initials))
+    @test grads[end] isa NoTangent
+end
