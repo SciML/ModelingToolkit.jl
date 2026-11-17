@@ -53,7 +53,9 @@ end
             remade = remake(prob; u0 = copy(sol.u[1]))
             remadesol = solve(remade, alg)
             @test SciMLBase.successful_retcode(remadesol)
-            @test remadesol.u[end] ≈ sol.u[end]
+            # `remade` re-runs initialization from `sol.u[1]`, which is only converged to
+            # the init tolerance (abstol = 1e-6), so compare at that tolerance, not √eps.
+            @test remadesol.u[end] ≈ sol.u[end] rtol = 1.0e-6
         end
         autospec = makeprob(ns[1], SciMLBase.AutoSpecialize)
         @test !(
