@@ -1277,14 +1277,8 @@ function compile_vector_callback_affects(cbs, sys, ic; kwargs...)
     finals = []
     saved_clock_partitions = Vector{Int}[]
     for cb in cbs
-        affect = compile_affect(
-            cb.affect, cb, sys; default = EMPTY_AFFECT, role = :affect, kwargs...
-        )
+        affect, affect_neg = compile_affect_pair(cb, sys; kwargs...)
         push!(affects, affect)
-        affect_neg = (cb.affect_neg === cb.affect) ? affect :
-            compile_affect(
-                cb.affect_neg, cb, sys; default = EMPTY_AFFECT, role = :affect_neg, kwargs...
-            )
         push!(affect_negs, affect_neg)
         push!(
             inits,
@@ -1333,17 +1327,14 @@ function generate_callback(
     ps = parameters(sys; initial_parameters = true)
 
     trigger = is_timed ? conditions(cb) : compile_condition(cb, sys, dvs, ps; kwargs...)
-    affect = compile_affect(
-        cb.affect, cb, sys; default = EMPTY_AFFECT, affect_transform, role = :affect, kwargs...
-    )
-    affect_neg = if is_discrete(cb)
-        nothing
+    if is_discrete(cb)
+        affect = compile_affect(
+            cb.affect, cb, sys; default = EMPTY_AFFECT, affect_transform, role = :affect,
+            kwargs...
+        )
+        affect_neg = nothing
     else
-        (cb.affect === cb.affect_neg) ? affect :
-            compile_affect(
-                cb.affect_neg, cb, sys; default = EMPTY_AFFECT, affect_transform,
-                role = :affect_neg, kwargs...
-            )
+        affect, affect_neg = compile_affect_pair(cb, sys; affect_transform, kwargs...)
     end
     init = compile_affect(
         cb.initialize, cb, sys; default = SciMLBase.INITIALIZE_DEFAULT, affect_transform,
@@ -1413,8 +1404,36 @@ function compile_affect(
         default = nothing, affect_transform = nothing, role::Symbol = :affect, kwargs...
     )
     compiled = _compile_affect(aff, cb, sys; default, kwargs...)
-    affect_transform === nothing && return compiled
+    return transform_affect(compiled, cb, sys, affect_transform, role)
+end
+
+"""
+    transform_affect(compiled, cb, sys, affect_transform, role)
+
+Apply the problem's `affect_transform` to the compiled affect `compiled` of event `cb`
+in the slot `role`. Returns `compiled` unchanged when there is no transform.
+"""
+transform_affect(compiled, cb, sys, ::Nothing, role::Symbol) = compiled
+function transform_affect(compiled, cb, sys, affect_transform, role::Symbol)
     return affect_transform(compiled, cb, sys; role)
+end
+
+"""
+    compile_affect_pair(cb, sys; affect_transform = nothing, kwargs...)
+
+Compile the rising-edge (`cb.affect`) and falling-edge (`cb.affect_neg`) affects of the
+continuous event `cb`, returning `(affect, affect_neg)`. When both are the same object
+(the default, `affect_neg = affect`), the affect is compiled once, but `affect_transform`
+still runs once per slot, with `role = :affect` and `role = :affect_neg`.
+"""
+function compile_affect_pair(cb, sys; affect_transform = nothing, kwargs...)
+    compiled = _compile_affect(cb.affect, cb, sys; default = EMPTY_AFFECT, kwargs...)
+    compiled_neg = cb.affect_neg === cb.affect ? compiled :
+        _compile_affect(cb.affect_neg, cb, sys; default = EMPTY_AFFECT, kwargs...)
+    return (
+        transform_affect(compiled, cb, sys, affect_transform, :affect),
+        transform_affect(compiled_neg, cb, sys, affect_transform, :affect_neg),
+    )
 end
 
 function _compile_affect(
