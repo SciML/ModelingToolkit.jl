@@ -2426,3 +2426,43 @@ SymbolicIndexingInterface.current_time(s::AffectStandIn) = s.t
     @test naffects[] == 2
     @test solve(vprob, Tsit5()).u == vref.u
 end
+
+@testset "`affect_transform` runs per slot when `affect_neg` is `affect`" begin
+    # x = cos(t) on (0, 8): x ~ 0.5 is crossed falling at π/3 and 7π/3 and rising at 5π/3;
+    # x ~ -0.5 falling at 2π/3 and rising at 4π/3
+    @variables x(t) = 1.0 v(t) = 0.0
+    @discretes c(t) = 0.0
+    eqs = [D(x) ~ v, D(v) ~ -x]
+    # the default `affect_neg = affect` keeps one object in both slots for an
+    # `ImperativeAffect` (an equational affect is built twice), and with no affect both are
+    # `nothing`
+    bump = ModelingToolkitBase.ImperativeAffect(modified = (; c)) do m, o, ctx, integ
+        (; c = m.c + 1)
+    end
+    # events share a `VectorContinuousCallback` only with the same `reinitializealg`, and an
+    # `ImperativeAffect` defaults to `CheckInit`
+    counted = SymbolicContinuousCallback(
+        [x ~ 0.5], bump; discrete_parameters = [c], reinitializealg = SciMLBase.NoInit()
+    )
+    empty = SymbolicContinuousCallback([x ~ -0.5], nothing)
+    @test counted.affect_neg === counted.affect
+    @test empty.affect_neg === empty.affect
+
+    calls = Dict{Symbol, Int}()
+    function tag(aff, ev, sys; role)
+        role in (:affect, :affect_neg) || return aff
+        return integ -> (calls[role] = get(calls, role, 0) + 1; aff(integ))
+    end
+    for (events, nrise, nfall) in (([counted], 1, 2), ([empty], 1, 1), ([counted, empty], 2, 3))
+        @mtkcompile sys = System(eqs, t, [x, v], [c]; continuous_events = events)
+        ref = solve(ODEProblem(sys, [], (0.0, 8.0)), Tsit5(); abstol = 1.0e-10, reltol = 1.0e-10)
+        prob = ODEProblem(sys, [], (0.0, 8.0); affect_transform = tag)
+        CB = length(events) == 1 ? SciMLBase.ContinuousCallback : SciMLBase.VectorContinuousCallback
+        @test prob.kwargs[:callback] isa CB
+        empty!(calls)
+        sol = solve(prob, Tsit5(); abstol = 1.0e-10, reltol = 1.0e-10)
+        @test calls == Dict(:affect => nrise, :affect_neg => nfall)
+        @test sol.u == ref.u
+        @test sol.ps[c][end] == ref.ps[c][end] == (counted in events ? 3 : 0)
+    end
+end
