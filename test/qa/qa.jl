@@ -96,10 +96,11 @@ const REEXPORTED_API = (
     :continuous_events_toplevel, :convert_bindings_for_time_independent_system,
     :convert_system_indepvar, :cost, :costs, :D, :D_nounits, :debug_system, :diff_equations,
     :discrete_events, :discrete_events_toplevel, :DiscreteSystem, :domain_connect,
-    :DynamicOptSolution, :eqeq_dependencies, :eqtype_supports_collect_vars, :Equality,
+    :DynamicOptSolution, :EMPTY_AFFECT, :eqeq_dependencies, :eqtype_supports_collect_vars, :Equality,
     :equation_dependencies, :equations, :equations_toplevel, :EvalAt, :expand_connections,
     :expand_record_equations,
     :extend, :flatten, :Flow, :fractional_to_ordinary, :full_equations,
+    :FunctionalAffect, :functional_affect_parts,
     :generate_control_function, :generate_control_jacobian, :generate_cost,
     :generate_cost_gradient,
     :generate_cost_hessian, :generate_custom_function, :generate_diffusion_function,
@@ -163,7 +164,7 @@ const REEXPORTED_API = (
     :unbound_outputs, :unknowns, :unknowns_toplevel, :variable_dependencies, :VariableBounds,
     :VariableConnectType, :VariableDescription, :VariableInput, :VariableIrreducible,
     :VariableMisc, :VariableOutput, :VariableStatePriority, :VariableType, :VariableUnit,
-    :varmap_to_vars, :varvar_dependencies,
+    :varmap_to_vars, :varvar_dependencies, :without_parameter_hooks,
     # Symbolics: the symbolic algebra layer users write models in. Reached through
     # `@reexport using Symbolics` in ModelingToolkitBase.
     Symbol("@derivative_rule"), Symbol("@derivatives"), Symbol("@register_array_symbolic"),

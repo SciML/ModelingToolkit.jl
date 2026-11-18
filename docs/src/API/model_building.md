@@ -218,6 +218,51 @@ section of the documentation. User-defined functions can be used via `Imperative
 ModelingToolkit.ImperativeAffect
 ```
 
+### Running affects outside the integrator
+
+Some packages run the affects of a system's events somewhere other than the integrator they
+were compiled for, e.g. inside a GPU kernel that steps many trajectories, while keeping
+ModelingToolkit's event timing. The `affect_transform` keyword of the problem constructors
+is a function `(affect, event, sys; role) -> affect` that is applied to every compiled
+affect before it is put in its callback. `role` is one of `:affect`, `:affect_neg`,
+`:initialize` and `:finalize`, and the transform runs once per role even when an event uses
+the same affect for both edges. `save_discretes = false` builds the callbacks without
+saving the discrete parameters they update.
+
+A compiled `ImperativeAffect` is a `FunctionalAffect`. `without_parameter_hooks` removes the
+integrator-only hooks from its setters, after which it reads and writes only through
+`state_values`, `parameter_values` and `current_time` of whatever it is called with:
+
+```julia
+using ModelingToolkit, OrdinaryDiffEq
+using ModelingToolkit: t_nounits as t, D_nounits as D
+
+@variables x(t) = 1.0
+@discretes h(t) = 0.0
+tick = ModelingToolkit.ImperativeAffect(modified = (; h), observed = (; x)) do m, o, c, integ
+    (; h = m.h + 0.1 * o.x)
+end
+@mtkcompile sys = System(
+    [D(x) ~ -x + h], t;
+    discrete_events = [ModelingToolkit.SymbolicDiscreteCallback(0.1, tick; discrete_parameters = [h])]
+)
+
+function strip_hooks(affect, event, sys; role)
+    return affect isa ModelingToolkit.FunctionalAffect ?
+        ModelingToolkit.without_parameter_hooks(affect) : affect
+end
+prob = ODEProblem(sys, [], (0.0, 1.0); affect_transform = strip_hooks, save_discretes = false)
+affect = only(prob.kwargs[:callback].discrete_callbacks).affect!.affect!
+isbits(affect) # true
+```
+
+```@docs
+ModelingToolkit.FunctionalAffect
+ModelingToolkit.without_parameter_hooks
+ModelingToolkit.functional_affect_parts
+ModelingToolkit.EMPTY_AFFECT
+```
+
 ## Jump processes
 
 Systems can contain jumps, which are handled by
