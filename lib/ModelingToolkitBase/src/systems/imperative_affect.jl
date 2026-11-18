@@ -275,11 +275,16 @@ end
 The compiled `ImperativeAffect` `fa` with the hooks that the setters of its modified
 parameters carry stripped off. After a write, those hooks call
 `SymbolicIndexingInterface.finalize_parameters_hook!`, which on an integrator marks a
-derivative discontinuity; a callback already marks one before it runs its affect, so inside
-a callback they change nothing. Without them, MTK's part of the affect needs only
-`state_values`, `parameter_values` and `current_time` of the value provider it is called
-with, so it can run on a stand-in for the integrator (e.g. inside a GPU kernel), usually
-together with `save_discretes = false` on the problem.
+derivative discontinuity. While the integrator steps, a callback already marks one before it
+runs its affect, so there the hooks change nothing. An affect that runs while the callback
+is initialized (a preset time or a periodic event at the initial time) is different: the
+integrator saves a second time at the initial time only when the discontinuity is marked,
+so without the hooks a parameter-only affect there is not followed by that save.
+
+Without the hooks, MTK's part of the affect needs only `state_values`, `parameter_values`
+and `current_time` of the value provider it is called with, so it can run on a stand-in for
+the integrator (e.g. inside a GPU kernel), usually together with `save_discretes = false` on
+the problem.
 
 Two parts of the affect still see the value provider itself:
 - the user's function receives it as its last argument (`integ`), so a stand-in must
@@ -295,6 +300,13 @@ function without_parameter_hooks(fa::FunctionalAffect)
 end
 
 unwrap_parameter_hook(setter::SymbolicIndexingInterface.ParameterHookWrapper) = setter.setter
+# a grouped modification (`modified = (; xs = [a, b])`) has one setter per element; a tuple
+# rather than the vector SII builds, so that the stripped affect can be `isbits`
+function unwrap_parameter_hook(setter::SymbolicIndexingInterface.MultipleSetters)
+    return SymbolicIndexingInterface.MultipleSetters(
+        Tuple(map(unwrap_parameter_hook, setter.setters))
+    )
+end
 unwrap_parameter_hook(setter) = setter
 
 unval(::Val{x}) where {x} = x
