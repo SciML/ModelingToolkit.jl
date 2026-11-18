@@ -2357,7 +2357,8 @@ SymbolicIndexingInterface.current_time(s::AffectStandIn) = s.time
     @test sol.u == ref.u
     @test sol.ps[g] == ref.ps[g]
     @test sol.ps[h] == ref.ps[h]
-    @test Set(first.(seen)) == Set([:affect, :affect_neg, :initialize, :finalize])
+    # only the slots the events define: neither has `initialize` or `finalize`
+    @test Set(first.(seen)) == Set([:affect, :affect_neg])
     @test (:affect, SymbolicDiscreteCallback) in seen
     @test (:affect_neg, SymbolicContinuousCallback) in seen
 
@@ -2454,7 +2455,8 @@ end
         role in (:affect, :affect_neg) || return aff
         return integ -> (calls[role] = get(calls, role, 0) + 1; aff(integ))
     end
-    for (events, nrise, nfall) in (([counted], 1, 2), ([empty], 1, 1), ([counted, empty], 2, 3))
+    # the event without an affect is not transformed: its slots keep `EMPTY_AFFECT`
+    for (events, nrise, nfall) in (([counted], 1, 2), ([empty], 0, 0), ([counted, empty], 1, 2))
         @mtkcompile sys = System(eqs, t, [x, v], [c]; continuous_events = events)
         ref = solve(ODEProblem(sys, [], (0.0, 8.0)), Tsit5(); abstol = 1.0e-10, reltol = 1.0e-10)
         prob = ODEProblem(sys, [], (0.0, 8.0); affect_transform = tag)
@@ -2462,9 +2464,31 @@ end
         @test prob.kwargs[:callback] isa CB
         empty!(calls)
         sol = solve(prob, Tsit5(); abstol = 1.0e-10, reltol = 1.0e-10)
-        @test calls == Dict(:affect => nrise, :affect_neg => nfall)
+        @test calls == filter(!iszero ∘ last, Dict(:affect => nrise, :affect_neg => nfall))
         @test sol.u == ref.u
         @test sol.ps[c][end] == ref.ps[c][end] == (counted in events ? 3 : 0)
+    end
+    cb = ODEProblem(
+        mtkcompile(System(eqs, t, [x, v], [c]; continuous_events = [empty], name = :esys)),
+        [], (0.0, 8.0); affect_transform = tag
+    ).kwargs[:callback]
+    @test cb.affect! === cb.affect_neg! === ModelingToolkitBase.EMPTY_AFFECT
+
+    # a real and an empty event at the same root share a `VectorContinuousCallback`, which
+    # skips the empty one; a transparent transform of every slot it is given changes nothing
+    # (neither event has `initialize`/`finalize`, whose vector placeholder is `nothing`)
+    twin = SymbolicContinuousCallback([x ~ 0.5], nothing; reinitializealg = SciMLBase.NoInit())
+    @mtkcompile tsys = System(eqs, t, [x, v], [c]; continuous_events = [counted, twin])
+    passthrough(aff, ev, sys; role) = (args...) -> aff(args...)
+    edges_only(aff, ev, sys; role) = role in (:affect, :affect_neg) ? passthrough(aff, ev, sys; role) : aff
+    tref = solve(ODEProblem(tsys, [], (0.0, 8.0)), Tsit5(); abstol = 1.0e-10, reltol = 1.0e-10)
+    @test length(tref.ps[c]) == 4
+    for transform in (edges_only, passthrough)
+        tprob = ODEProblem(tsys, [], (0.0, 8.0); affect_transform = transform)
+        @test tprob.kwargs[:callback] isa SciMLBase.VectorContinuousCallback
+        tsol = solve(tprob, Tsit5(); abstol = 1.0e-10, reltol = 1.0e-10)
+        @test tsol.u == tref.u
+        @test tsol.ps[c] == tref.ps[c]
     end
 end
 
@@ -2503,7 +2527,7 @@ end
         roles = Symbol[]
         record(aff, ev, sys; role) = (push!(roles, role); aff)
         jprob = JumpProblem(jsys, [], (0.0, 1.0); affect_transform = record, save_discretes = false)
-        @test sort(roles) == [:affect, :finalize, :initialize]
+        @test roles == [:affect]
         cb = only(jprob.kwargs[:callback].discrete_callbacks)
         @test isempty(cb.saved_clock_partitions)
         @test !cb.initialize_save_discretes
