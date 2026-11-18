@@ -1404,17 +1404,20 @@ function compile_affect(
         default = nothing, affect_transform = nothing, role::Symbol = :affect, kwargs...
     )
     compiled = _compile_affect(aff, cb, sys; default, kwargs...)
-    return transform_affect(compiled, cb, sys, affect_transform, role)
+    return transform_affect(compiled, aff, cb, sys, affect_transform, role)
 end
 
 """
-    transform_affect(compiled, cb, sys, affect_transform, role)
+    transform_affect(compiled, aff, cb, sys, affect_transform, role)
 
-Apply the problem's `affect_transform` to the compiled affect `compiled` of event `cb`
-in the slot `role`. Returns `compiled` unchanged when there is no transform.
+Apply the problem's `affect_transform` to `compiled`, the compiled form of the symbolic
+affect `aff` of event `cb` in the slot `role`. Returns `compiled` unchanged when there is no
+transform, or when the event has no affect in this slot (`aff === nothing`): such a slot
+keeps the placeholder the callback uses for it (e.g. [`EMPTY_AFFECT`](@ref)), which
+callbacks recognize by identity.
 """
-transform_affect(compiled, cb, sys, ::Nothing, role::Symbol) = compiled
-function transform_affect(compiled, cb, sys, affect_transform, role::Symbol)
+function transform_affect(compiled, aff, cb, sys, affect_transform, role::Symbol)
+    (affect_transform === nothing || aff === nothing) && return compiled
     return affect_transform(compiled, cb, sys; role)
 end
 
@@ -1431,8 +1434,8 @@ function compile_affect_pair(cb, sys; affect_transform = nothing, kwargs...)
     compiled_neg = cb.affect_neg === cb.affect ? compiled :
         _compile_affect(cb.affect_neg, cb, sys; default = EMPTY_AFFECT, kwargs...)
     return (
-        transform_affect(compiled, cb, sys, affect_transform, :affect),
-        transform_affect(compiled_neg, cb, sys, affect_transform, :affect_neg),
+        transform_affect(compiled, cb.affect, cb, sys, affect_transform, :affect),
+        transform_affect(compiled_neg, cb.affect_neg, cb, sys, affect_transform, :affect_neg),
     )
 end
 

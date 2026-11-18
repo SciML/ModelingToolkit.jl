@@ -79,13 +79,14 @@ const TIME_DEPENDENT_PROBLEM_KWARGS = """
 - `affect_transform`: A function `(affect, event, sys; role) -> affect` applied to every
   compiled affect of the system's symbolic events before it is put in its callback, for
   packages that run affects somewhere other than the integrator they were compiled for
-  (e.g. a GPU kernel). `affect` is the compiled callable, or the placeholder the callback
-  uses when the event has none (`EMPTY_AFFECT`, `SciMLBase.INITIALIZE_DEFAULT`, ...), which
-  should be returned as is or replaced by a callable with the same signature. `event` is the
-  `SymbolicContinuousCallback` or `SymbolicDiscreteCallback` and `role` is one of
-  `:affect`, `:affect_neg`, `:initialize` and `:finalize`. The callbacks themselves (event
-  timing, root finding, reinitialization) are built as usual. See also
-  `without_parameter_hooks` and `functional_affect_parts`.
+  (e.g. a GPU kernel). `affect` is the compiled callable, called with the integrator, and
+  `role` is the slot it fills: one of `:affect`, `:affect_neg`, `:initialize` and
+  `:finalize`. `event` is the `SymbolicContinuousCallback` or `SymbolicDiscreteCallback`.
+  The transform runs once per slot, also when an event uses one affect for both edges, and
+  only for slots the event defines: a slot without an affect keeps the placeholder the
+  callback uses for it (`EMPTY_AFFECT`, `SciMLBase.INITIALIZE_DEFAULT` or `nothing`). The
+  callbacks themselves (event timing, root finding, reinitialization) are built as usual.
+  See also `without_parameter_hooks` and `functional_affect_parts`.
 - `save_discretes`: Whether events save the values of the discrete parameters they update,
   as the timeseries of `sol.ps[...]`. `false` disables it, e.g. when the parameter object is
   not one the host-side saving can read. Their timeseries are then empty, and reading a

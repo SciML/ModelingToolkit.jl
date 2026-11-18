@@ -226,8 +226,10 @@ ModelingToolkit's event timing. The `affect_transform` keyword of the problem co
 is a function `(affect, event, sys; role) -> affect` that is applied to every compiled
 affect before it is put in its callback. `role` is one of `:affect`, `:affect_neg`,
 `:initialize` and `:finalize`, and the transform runs once per role even when an event uses
-the same affect for both edges. `save_discretes = false` builds the callbacks without
-saving the discrete parameters they update.
+the same affect for both edges. It runs only for the slots an event defines; a slot without
+an affect keeps the placeholder its callback uses (e.g. `EMPTY_AFFECT`), which callbacks
+recognize by identity. `save_discretes = false` builds the callbacks without saving the
+discrete parameters they update.
 
 A compiled `ImperativeAffect` is a `FunctionalAffect`. `without_parameter_hooks` removes the
 integrator-only hooks from its setters, after which it reads and writes only through
