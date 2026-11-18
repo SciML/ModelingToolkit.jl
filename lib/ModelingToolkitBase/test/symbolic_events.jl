@@ -2467,3 +2467,87 @@ end
         @test sol.ps[c][end] == ref.ps[c][end] == (counted in events ? 3 : 0)
     end
 end
+
+@testset "`affect_transform`: grouped setters, `JumpProblem`, initialize and finalize" begin
+    @variables x(t) = 1.0 v(t) = 0.0 n(t) = 10.0
+    @parameters k = 0.1
+    @discretes g(t) = 0.0 h(t) = 0.0 c(t) = 0.0
+
+    # a grouped modification has one setter per element, each with its own hook
+    both = ModelingToolkitBase.ImperativeAffect(modified = (; gh = [g, h]), observed = (; x)) do m, o, ctx, integ
+        (; gh = [m.gh[1] + o.x, m.gh[2] + 1])
+    end
+    @mtkcompile gsys = System(
+        [D(x) ~ -x + 0.01 * (g + h)], t, [x], [g, h];
+        discrete_events = [SymbolicDiscreteCallback(0.1, both; discrete_parameters = [g, h])]
+    )
+    gprob = ODEProblem(gsys, [], (0.0, 1.0))
+    hooked = only(gprob.kwargs[:callback].discrete_callbacks).affect!.affect!
+    stripped = ModelingToolkitBase.without_parameter_hooks(hooked)
+    @test !occursin("ParameterHookWrapper", string(typeof(stripped)))
+    @test !occursin(
+        "ParameterHookWrapper",
+        string(typeof(ModelingToolkitBase.functional_affect_parts(hooked).setters))
+    )
+    @test isbits(stripped)
+    p = deepcopy(gprob.p)
+    stripped(AffectStandIn([2.0], p, 0.5))
+    @test getp(gsys, g)(p) ≈ 2.0
+    @test getp(gsys, h)(p) ≈ 1.0
+
+    # `JumpProblem` compiles its events itself, with and without equations
+    tick = SymbolicDiscreteCallback(0.25, [c ~ Pre(c) + 1]; discrete_parameters = [c])
+    jump = SymbolicMassActionJump(k, [n => 1], [n => -1])
+    for (eqs, unks, alg) in (([D(x) ~ -x], [x, n], Tsit5()), (Equation[], [n], SSAStepper()))
+        @mtkcompile jsys = System(eqs, t, unks, [k, c]; jumps = [jump], discrete_events = [tick])
+        roles = Symbol[]
+        record(aff, ev, sys; role) = (push!(roles, role); aff)
+        jprob = JumpProblem(jsys, [], (0.0, 1.0); affect_transform = record, save_discretes = false)
+        @test sort(roles) == [:affect, :finalize, :initialize]
+        cb = only(jprob.kwargs[:callback].discrete_callbacks)
+        @test isempty(cb.saved_clock_partitions)
+        @test !cb.initialize_save_discretes
+        @test isempty(solve(jprob, alg).ps[c])
+        jref = JumpProblem(jsys, [], (0.0, 1.0))
+        @test !isempty(only(jref.kwargs[:callback].discrete_callbacks).saved_clock_partitions)
+        @test length(solve(jref, alg).ps[c]) > 1
+    end
+
+    # a transformed `initialize` and `finalize` is the one the callback runs, for every kind
+    # of callback (x = cos(t) crosses ±0.5 on (0, 2))
+    noop = ModelingToolkitBase.ImperativeAffect(modified = (; c)) do m, o, ctx, integ
+        (; c = m.c)
+    end
+    edges = (; initialize = noop, finalize = noop, discrete_parameters = [c])
+    nonedges = (; edges..., reinitializealg = SciMLBase.NoInit())
+    cases = (
+        [SymbolicContinuousCallback([x ~ 0.5], noop; edges...)],
+        [
+            SymbolicContinuousCallback([x ~ 0.5], noop; nonedges...),
+            SymbolicContinuousCallback([x ~ -0.5], noop; nonedges...),
+        ],
+        [SymbolicDiscreteCallback(0.5, noop; edges...)],
+        [SymbolicDiscreteCallback([0.3, 0.6], noop; edges...)],
+        [SymbolicDiscreteCallback(x < 0.5, noop; edges...)],
+    )
+    for events in cases
+        continuous = events[1] isa SymbolicContinuousCallback
+        @mtkcompile esys = System(
+            [D(x) ~ v, D(v) ~ -x], t, [x, v], [c];
+            (continuous ? (; continuous_events = events) : (; discrete_events = events))...
+        )
+        built = Dict{Symbol, Int}()
+        ran = Dict{Symbol, Int}()
+        function wrap(aff, ev, sys; role)
+            built[role] = get(built, role, 0) + 1
+            role in (:initialize, :finalize) || return aff
+            return (args...) -> (ran[role] = get(ran, role, 0) + 1; aff(args...))
+        end
+        eprob = ODEProblem(esys, [], (0.0, 2.0); affect_transform = wrap)
+        nev = length(events)
+        @test built[:initialize] == built[:finalize] == built[:affect] == nev
+        @test get(built, :affect_neg, 0) == (continuous ? nev : 0)
+        @test SciMLBase.successful_retcode(solve(eprob, Tsit5()))
+        @test ran == Dict(:initialize => nev, :finalize => nev)
+    end
+end
