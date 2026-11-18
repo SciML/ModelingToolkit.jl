@@ -250,13 +250,15 @@ struct FunctionalAffect{UF, CTX, MOF, OF, MN, OST, UPS}
 end
 
 @inline function (fa::FunctionalAffect)(integ)
+    # Read through the SII getters, so any value provider works, not just an integrator
+    u = state_values(integ)
+    p = parameter_values(integ)
+    t = current_time(integ)
     # Read the current values of the modified variables (pre-affect baseline)
-    modvals = fa.mod_og_val_fun(integ.u, integ.p, integ.t)
+    modvals = fa.mod_og_val_fun(u, p, t)
     upd_component_array = NamedTuple{unval(fa.mod_names)}(modvals)
     # Read the observed expressions
-    obs_component_array = NamedTuple{unval(fa.obs_sym_tuple)}(
-        fa.obs_fun(integ.u, integ.p, integ.t)
-    )
+    obs_component_array = NamedTuple{unval(fa.obs_sym_tuple)}(fa.obs_fun(u, p, t))
     # Call the user-supplied affect function
     upd_vals = fa.user_affect(upd_component_array, obs_component_array, fa.ctx, integ)
     # Write back any returned values
@@ -273,10 +275,16 @@ The compiled `ImperativeAffect` `fa` with the hooks that the setters of its modi
 parameters carry stripped off. After a write, those hooks call
 `SymbolicIndexingInterface.finalize_parameters_hook!`, which on an integrator marks a
 derivative discontinuity; a callback already marks one before it runs its affect, so inside
-a callback they change nothing. Without them the affect needs only `state_values`,
-`parameter_values` and `current_time` of the value provider it is called with, so it can run
-on a stand-in for the integrator (e.g. inside a GPU kernel), usually together with
-`save_discretes = false` on the problem.
+a callback they change nothing. Without them, MTK's part of the affect needs only
+`state_values`, `parameter_values` and `current_time` of the value provider it is called
+with, so it can run on a stand-in for the integrator (e.g. inside a GPU kernel), usually
+together with `save_discretes = false` on the problem.
+
+Two parts of the affect still see the value provider itself:
+- the user's function receives it as its last argument (`integ`), so a stand-in must
+  support whatever that function does with it;
+- with `reset_jumps = true`, the affect calls `reset_aggregated_jumps!` on it, which needs
+  an integrator.
 """
 function without_parameter_hooks(fa::FunctionalAffect)
     return FunctionalAffect(

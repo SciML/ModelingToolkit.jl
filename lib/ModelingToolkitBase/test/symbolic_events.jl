@@ -2318,14 +2318,15 @@ end
 end
 
 # A value provider standing in for the integrator, as a GPU kernel would pass one
+# (field names differ from the integrator's, so only the interface methods can be used)
 struct AffectStandIn{U, P, T}
-    u::U
-    p::P
-    t::T
+    state::U
+    params::P
+    time::T
 end
-SymbolicIndexingInterface.state_values(s::AffectStandIn) = s.u
-SymbolicIndexingInterface.parameter_values(s::AffectStandIn) = s.p
-SymbolicIndexingInterface.current_time(s::AffectStandIn) = s.t
+SymbolicIndexingInterface.state_values(s::AffectStandIn) = s.state
+SymbolicIndexingInterface.parameter_values(s::AffectStandIn) = s.params
+SymbolicIndexingInterface.current_time(s::AffectStandIn) = s.time
 
 @testset "`affect_transform` and `save_discretes`" begin
     @variables x(t) = 1.0
