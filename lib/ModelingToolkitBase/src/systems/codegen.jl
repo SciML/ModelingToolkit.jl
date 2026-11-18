@@ -64,14 +64,18 @@ function array_derivative_arguments!(rhss::Vector{SymbolicT}, dvs, D, ir::IRStru
         return map(D, dvs), identity
     end
 
-    # A fixed sentinel keeps the generated Expr hash-stable across processes; reject a
-    # collision so a user symbol cannot silently shadow the `du` argument binding.
-    du_name = :__mtk_dae_du
+    # The first unused name of a fixed sequence keeps the generated Expr hash-stable across
+    # processes and cannot shadow a symbol of the system.
+    reserved_names = Set{Symbol}()
     for v in reserved_symbols
         parent, _ = split_indexed_var(v)
-        if hasname(parent) && getname(parent) === du_name
-            throw(ArgumentError("the array derivative sentinel `$du_name` collides with a symbol of the system; this name is reserved for internal use."))
-        end
+        hasname(parent) && push!(reserved_names, getname(parent))
+    end
+    du_name = :__mtk_dae_du
+    suffix = 0
+    while du_name in reserved_names
+        suffix += 1
+        du_name = Symbol(:__mtk_dae_du_, suffix)
     end
     du = unwrap(only(@variables $du_name[1:length(dvs)]))
     subs = Dict{SymbolicT, SymbolicT}(D(v) => du[i] for (i, v) in enumerate(dvs))

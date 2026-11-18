@@ -294,18 +294,77 @@ end
     @test out ≈ zeros(12)
 end
 
-@testset "array derivative sentinel collision" begin
+@testset "array derivative argument name collisions" begin
+    for count in (1, 3), role in (:array_state, :scalar_state, :parameter, :observed)
+        @testset "$role with $count occupied names" begin
+            @independent_variables t
+            @variables x(t)[1:2]
+            D = Differential(t)
+            names = [:__mtk_dae_du; [Symbol(:__mtk_dae_du_, i) for i in 1:(count - 1)]]
+            collisions = map(names) do name
+                if role === :scalar_state
+                    only(@variables $name(t))
+                elseif role === :parameter
+                    only(@parameters $name[1:2])
+                else
+                    only(@variables $name(t)[1:2])
+                end
+            end
+            eqs = [D(x) ~ -x]
+            vars = collect(x)
+            ps = []
+            obs = Equation[]
+            op = Pair[x => [1.0, 2.0], D(x) => [7.0, 11.0]]
+            expected = [-8.0, -13.0]
+            for (i, v) in enumerate(collisions)
+                if role === :parameter
+                    push!(ps, v)
+                    push!(op, v => [3.0i, 5.0i])
+                    eqs[1] = D(x) ~ eqs[1].rhs .+ v
+                    expected .+= [3.0i, 5.0i]
+                elseif role === :observed
+                    push!(obs, v ~ (i + 1) .* x)
+                    eqs[1] = D(x) ~ eqs[1].rhs .+ v
+                    expected .+= (i + 1) .* [1.0, 2.0]
+                elseif role === :scalar_state
+                    push!(vars, v)
+                    push!(eqs, D(v) ~ -v)
+                    append!(op, [v => 3.0i, D(v) => 13.0i])
+                    push!(expected, -16.0i)
+                else
+                    append!(vars, collect(v))
+                    push!(eqs, D(v) ~ -v)
+                    append!(op, [v => [3.0i, 5.0i], D(v) => [13.0i, 17.0i]])
+                    append!(expected, [-16.0i, -22.0i])
+                end
+            end
+            sys = complete(System(eqs, t, vars, ps; observed = obs, name = :collision))
+            prob = DAEProblem(sys, op, (0.0, 1.0); build_initializeprob = false)
+            out = zeros(length(expected))
+            prob.f(out, prob.du0, prob.u0, prob.p, 0.0)
+            @test out == expected
+            @test prob.f(prob.du0, prob.u0, prob.p, 0.0) == expected
+        end
+    end
+end
+
+@testset "observed derivative of an array slice" begin
     @independent_variables t
-    @variables x(t)[1:6]
-    @parameters __mtk_dae_du[1:6]
+    @variables x(t)[1:4] v(t)[1:2]
     D = Differential(t)
     sys = complete(
         System(
-            [D(x) ~ -x .+ __mtk_dae_du], t, collect(x),
-            [__mtk_dae_du]; name = :collision
+            [D(x[1:2]) ~ -x[1:2] .+ v, D(x[3:4]) ~ -x[3:4]], t, collect(x), [];
+            observed = [v ~ D(x[3:4])], name = :observed_slice
         )
     )
-    @test_throws ArgumentError DAEFunction(sys)
+    f = DAEFunction(sys)
+    du = [11.0, 12.0, 13.0, 14.0]
+    u = [1.0, 2.0, 3.0, 4.0]
+    out = zeros(4)
+    f(out, du, u, SciMLBase.NullParameters(), 0.0)
+    @test out == [1.0, 0.0, -16.0, -18.0]
+    @test f(du, u, SciMLBase.NullParameters(), 0.0) == out
 end
 
 @testset "Multidimensional derivative code size" begin
