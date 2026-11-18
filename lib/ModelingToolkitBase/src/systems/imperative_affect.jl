@@ -223,8 +223,9 @@ end
     FunctionalAffect{UF, CTX, MOF, OF, MN, OST, UPS}
 
 Callable struct representing a compiled [`ImperativeAffect`](@ref). On each invocation,
-reads current modified and observed values from the integrator, calls the user function,
-and writes back the returned values. Created by [`compile_functional_affect`](@ref).
+reads current modified and observed values from the integrator (through `state_values`,
+`parameter_values` and `current_time`), calls the user function, and writes back the
+returned values. Created by [`compile_functional_affect`](@ref).
 
 # Fields
 - `user_affect`: the user-supplied function with signature `f(modified, observed, ctx, integ)`
