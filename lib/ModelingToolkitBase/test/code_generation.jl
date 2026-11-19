@@ -2,7 +2,8 @@ using ModelingToolkitBase, OrdinaryDiffEq, SymbolicIndexingInterface
 using SciMLBase
 using SciMLStructures
 using SparseArrays
-using SymbolicUtils: unwrap, iscall, operation
+using SymbolicUtils: unwrap, iscall, operation, replace_node!
+using SymbolicUtils.Code: OptimizationRule
 using ModelingToolkitBase: t_nounits as t, D_nounits as D
 using Test
 import Symbolics
@@ -456,4 +457,26 @@ end
     sol = solve(prob, Tsit5(); reltol = 1.0e-10, abstol = 1.0e-10)
     @test SciMLBase.successful_retcode(sol)
     @test sol[x[1]][end] ≈ exp(-1) / 2
+end
+
+@testset "Array variables read only by the output of `optimize` rules" begin
+    @variables x(t)[1:4]
+    @mtkcompile sys = System([D(x[i]) ~ sin(x[i]) + 1 for i in 1:4], t)
+    whole = unwrap(sum(x))
+    target = unwrap(sin(x[1]))
+    detector(ir, expr) = expr isa AbstractVector && length(expr) == 4 ? true : nothing
+    function transformer(ir, expr, _)
+        new_ir = copy(ir)
+        replace_node!(new_ir, target, whole)
+        return new_ir, expr
+    end
+    rule = OptimizationRule("sum", detector, transformer, 1)
+    for optimize in ([rule], (rule,))
+        prob = ODEProblem(sys, [x => [1.0, 2.0, 3.0, 4.0]], (0.0, 1.0); optimize)
+        u = prob.u0
+        du = zeros(4)
+        prob.f(du, u, prob.p, 0.0)
+        @test du[1] == sum(u) + 1
+        @test prob.f(u, prob.p, 0.0)[1] == sum(u) + 1
+    end
 end

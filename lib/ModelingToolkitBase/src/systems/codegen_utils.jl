@@ -1050,9 +1050,7 @@ Base.@nospecializeinfer function build_function_wrapper(
     SU.search_variables!(search_buffer, expr; is_atomic = find_arrvars_is_atomic, recurse = find_arrvars_recurse)
 
     # assignments for reconstructing scalarized array symbolics
-    if non_standard_param_layout
-        append!(assignments, array_variable_assignments(args...; filter_vars = required_arrvars, argument_name = u_argument_name))
-    else
+    if !non_standard_param_layout
         # `n_param_buffers` marks the boundary between the `reorder_parameters` buffers and
         # any `cachesyms` the caller appended to the parameter slice (cachesyms are always a
         # suffix). When it is `-1` (unspecified) the whole slice is parameters (no cachesym
@@ -1081,14 +1079,16 @@ Base.@nospecializeinfer function build_function_wrapper(
             end
             param_var_to_arridxs = merged
         end
-        append!(
-            assignments, array_variable_buffer_idxs_to_assignments(
-                param_var_to_arridxs; buffer_offset = p_start - 1, filter_vars = required_arrvars
-            )
-        )
-        other_assigns = array_variable_assignments(args...; ignore_vars = keys(param_var_to_arridxs), filter_vars = required_arrvars, argument_name = u_argument_name, ignore_arg_idxs = p_start:p_end)
-        append!(assignments, other_assigns)
     end
+    arrvar_args = copy(args)
+    function array_assignments(filter_vars)
+        non_standard_param_layout && return array_variable_assignments(arrvar_args...; filter_vars, argument_name = u_argument_name)
+        return [
+            array_variable_buffer_idxs_to_assignments(param_var_to_arridxs; buffer_offset = p_start - 1, filter_vars);
+            array_variable_assignments(arrvar_args...; ignore_vars = keys(param_var_to_arridxs), filter_vars, argument_name = u_argument_name, ignore_arg_idxs = p_start:p_end)
+        ]
+    end
+    append!(assignments, array_assignments(required_arrvars))
     append!(assignments, extra_assignments)
 
     for (i, arg) in enumerate(args)
@@ -1127,6 +1127,24 @@ Base.@nospecializeinfer function build_function_wrapper(
     end
 
     wrap_code = opts.codegen.wrap_code .∘ wrap_assignments(false, assignments)
+    optimize = resolve_optimize_option(opts.codegen.optimize)
+    if optimize !== nothing && !isempty(optimize)
+        rule_output = Ref{Any}()
+        record_output(out_ir, out_expr) = (rule_output[] = (out_ir, out_expr); nothing)
+        optimize = push!(collect(Code.OptimizationRule, optimize), Code.OptimizationRule("record_output", record_output, Returns(nothing), typemax(Int)))
+        rule_arrvar_assignments = Ref{Any}(nothing)
+        function bind_rule_arrvars(f)
+            if rule_arrvar_assignments[] === nothing
+                out_ir, out_expr = rule_output[]
+                read_arrvars = Set{SymbolicT}()
+                SU.search_variables!(SU.IRStructureSearchBuffer(out_ir, read_arrvars), out_expr; is_atomic = find_arrvars_is_atomic, recurse = find_arrvars_recurse)
+                setdiff!(read_arrvars, required_arrvars)
+                rule_arrvar_assignments[] = isempty(read_arrvars) ? Assignment[] : array_assignments(read_arrvars)
+            end
+            return isempty(rule_arrvar_assignments[]) ? f : wrap_assignments(true, rule_arrvar_assignments[])(f)
+        end
+        wrap_code = wrap_code .∘ (bind_rule_arrvars, bind_rule_arrvars)
+    end
 
     # handling of `output_type` and `mkarray`. A `similarto` already present on
     # `opts.codegen` (set directly via `codegen_function_options` by callers such as
@@ -1142,7 +1160,6 @@ Base.@nospecializeinfer function build_function_wrapper(
         expr = mkarray(expr, output_type)
     end
 
-    optimize = resolve_optimize_option(opts.codegen.optimize)
     # Write the wrapper-derived code-generation options (the composed `wrap_code`, the
     # `output_type`-derived `similarto`, and the resolved `optimize`) into the nested
     # `CodegenFunctionOptions`. `setproperties` overrides only these fields and preserves the
