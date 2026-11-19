@@ -1,7 +1,7 @@
 using ModelingToolkitBase, OrdinaryDiffEq, NonlinearSolve, Test
 using OrdinaryDiffEqBDF
 using StochasticDiffEq, DelayDiffEq, JumpProcesses
-using ForwardDiff, StaticArrays
+using ForwardDiff, StaticArrays, Random
 using RuntimeGeneratedFunctions: RuntimeGeneratedFunction
 using SymbolicIndexingInterface, SciMLStructures
 using SciMLStructures: Tunable
@@ -2725,4 +2725,40 @@ end
             sys, op, (0.0, 1.0); guesses = [u => [0.0, 0.0]]
         )
     end
+end
+
+@testset "Missing values for variables of integer type are integers of that type" begin
+    @variables x(t)
+    @parameters b::Bool n::Int
+    # `b` and `n` only appear in conditions, so the initialization system cannot solve for
+    # them through an equation and they remain unknowns that need a value or guess
+    @mtkcompile sys = System([D(x) ~ ifelse(b, -x, x) + ifelse(n > 0, 1, 0)], t)
+    op = [x => 0.0, b => missing, n => missing]
+
+    prob = ODEProblem(sys, op, (0.0, 1.0); missing_guess_value = MissingGuessValue.Constant(1.0))
+    @test prob.ps[b] === true
+    @test prob.ps[n] === 1
+    @test_throws "in the `missing_guess_value` cannot be converted to its declared type" ODEProblem(
+        sys, op, (0.0, 1.0); missing_guess_value = MissingGuessValue.Constant(0.5)
+    )
+
+    for missing_guess_value in (
+            MissingGuessValue.HashedRandom(), MissingGuessValue.Random(Random.Xoshiro(1)),
+        )
+        prob = ODEProblem(sys, op, (0.0, 1.0); missing_guess_value)
+        @test prob.ps[b] isa Bool
+        @test prob.ps[n] isa Int
+    end
+
+    @test_throws ModelingToolkitBase.MissingGuessError ODEProblem(
+        sys, op, (0.0, 1.0); missing_guess_value = MissingGuessValue.Error()
+    )
+
+    # a guess takes precedence
+    prob = ODEProblem(
+        sys, op, (0.0, 1.0); guesses = [b => true, n => 2],
+        missing_guess_value = MissingGuessValue.Constant(0.0)
+    )
+    @test prob.ps[b] === true
+    @test prob.ps[n] === 2
 end
