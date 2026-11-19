@@ -491,7 +491,7 @@ end
         "nested", (ir, expr) -> expr isa AbstractVector && length(expr) == 2 && expr[1] isa AbstractVector ? true : nothing,
         (ir, expr, _) -> (populate_ir!(ir, whole); (ir, [[whole], expr[2]])), 1
     )
-    nested = generate_custom_function(sys, [[x[1]], [x[2]]]; optimize = [nested_rule], expression = Val(false))
+    nested, _ = generate_custom_function(sys, [[x[1]], [x[2]]]; optimize = [nested_rule], expression = Val(false))
     @test nested(prob.u0, prob.p, 0.0) == [[10.0], [2.0]]
 
     @variables y(t)[1:4]
