@@ -239,9 +239,8 @@ function _least_damped_mode(ts, names, eigenvalues, damping, participation, thre
     best = nothing
     for i in eachindex(eigenvalues)
         λ = eigenvalues[i]
-        tol = _zero_tol(λ)
         for k in eachindex(λ)
-            abs(imag(λ[k])) > tol || continue
+            iszero(imag(λ[k])) && continue
             if best === nothing || damping[i][k] < damping[best[1]][best[2]]
                 best = (i, k)
             end
@@ -344,11 +343,15 @@ end
 
 # Eigenvalues of `J`, sorted from fastest to slowest (decreasing `|real(λ)|`, ties broken
 # by decreasing `|λ|`), and the matrix of normalized participation factors (column `k` for
-# mode `k`).
+# mode `k`). The two eigenvalues of a complex-conjugate pair are kept adjacent, the one with
+# positive imaginary part first.
 function _modes(J)
     n = size(J, 1)
     n == 0 && return ComplexF64[], zeros(0, 0)
-    E = LinearAlgebra.eigen(J)
+    # Unsorted, LAPACK returns each conjugate pair of a real matrix consecutively, as exact
+    # conjugates with conjugate eigenvectors. Julia's default sorting by (real, imag) would
+    # separate repeated pairs, e.g. [a - bi, a - bi, a + bi, a + bi].
+    E = LinearAlgebra.eigen(J; sortby = nothing)
     λ = ComplexF64.(E.values)
     V = ComplexF64.(E.vectors)
     W = try
@@ -364,7 +367,11 @@ function _modes(J)
         s = sum(@view P[:, k])
         s > 0 && (P[:, k] ./= s)
     end
-    perm = sortperm(collect(zip(abs.(real.(λ)), abs.(λ))); rev = true)
+    groups = _conjugate_groups(λ)
+    order = sortperm(
+        [(abs(real(λ[first(g)])), abs(λ[first(g)])) for g in groups]; rev = true
+    )
+    perm = reduce(vcat, groups[order])
     return λ[perm], P[:, perm]
 end
 
@@ -442,17 +449,17 @@ function _solution_jacobian_report(
     return String(take!(io))
 end
 
-# Indices of the eigenvalues grouped into modes: a complex-conjugate pair (adjacent after
-# the sorting in `_modes`, with identical participation columns) forms one oscillatory
-# mode, represented by the eigenvalue with positive imaginary part.
+# Indices of the eigenvalues grouped into modes: a complex-conjugate pair forms one
+# oscillatory mode, represented by the eigenvalue with positive imaginary part. The
+# eigenvalues of a real matrix are either exactly real or come in exactly conjugate pairs
+# that are adjacent, both in the unsorted LAPACK output and after the sorting in `_modes`,
+# so no tolerance is involved.
 function _conjugate_groups(λ)
-    tol = _zero_tol(λ)
     groups = Vector{Int}[]
     k = 1
     while k <= length(λ)
         l = λ[k]
-        if k < length(λ) && abs(imag(l)) > tol &&
-                isapprox(λ[k + 1], conj(l); atol = tol, rtol = 1.0e-8)
+        if k < length(λ) && !iszero(imag(l)) && λ[k + 1] == conj(l)
             push!(groups, imag(l) > 0 ? [k, k + 1] : [k + 1, k])
             k += 2
         else

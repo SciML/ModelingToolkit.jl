@@ -136,6 +136,24 @@ report = ModelingToolkit._solution_jacobian_report(
 @test count("ζ = 0.02", report) == 2 # the least-damped line and the mode listing
 @test length(ModelingToolkit._conjugate_groups(resd.eigenvalues[1])) == 2
 
+# Repeated conjugate pairs (two identical uncoupled oscillators) form two oscillatory
+# modes, each with the participation of its own position and velocity.
+λrep, Prep = ModelingToolkit._modes([0 1 0 0; -4 -0.1 0 0; 0 0 0 1; 0 0 -4 -0.1])
+@test length(ModelingToolkit._conjugate_groups(λrep)) == 2
+@test all(k -> λrep[2k] == conj(λrep[2k - 1]) && imag(λrep[2k - 1]) > 0, 1:2)
+@test all(k -> Prep[:, 2k] ≈ Prep[:, 2k - 1], 1:2)
+@test all(k -> count(>(0.1), Prep[:, 2k]) == 2, 1:2)
+
+# A fast real mode does not hide a slow, lightly damped oscillatory mode.
+λstiff, _ = ModelingToolkit._modes([-1.0e12 0 0; 0 -0.001 0.1; 0 -0.1 -0.001])
+@test length(ModelingToolkit._conjugate_groups(λstiff)) == 2
+ldstiff = ModelingToolkit._least_damped_mode(
+    [0.0], [:a, :b, :c], [λstiff], [[-real(l) / abs(l) for l in λstiff]],
+    [ModelingToolkit._modes([-1.0e12 0 0; 0 -0.001 0.1; 0 -0.1 -0.001])[2]], 0.05
+)
+@test ldstiff !== nothing
+@test ldstiff.natural_frequency ≈ hypot(0.001, 0.1)
+
 # The report is produced through the `solution_jacobian_analysis` toggle.
 @test_logs (:info, r"Solution Jacobian mode analysis") match_mode = :any analyze_solution_jacobian(sol)
 @test_logs min_level = Logging.Info analyze_solution_jacobian(
