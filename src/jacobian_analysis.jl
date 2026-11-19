@@ -53,6 +53,8 @@ that attribute each mode to the unknowns of the system. This answers questions l
   - *what are the fast and slow time constants of the system, and how do they change
     along the trajectory?*
   - *is the model locally unstable somewhere?* — modes with a positive real part.
+  - *which oscillatory modes are lightly damped, and which unknowns do they involve?* —
+    the relative damping of the complex eigenvalue pairs.
 
 For a mass-matrix DAE `M u' = f(u, p, t)` with a diagonal mass matrix, the algebraic
 unknowns are eliminated by a Schur complement, so the modes are those of the underlying
@@ -100,8 +102,15 @@ A `NamedTuple` with fields
   - `time_constants`: `1 / |real(λ)|` for each eigenvalue (`Inf` for purely oscillatory
     or constant modes, e.g. those of conservation laws, whose real part is zero to
     rounding).
+  - `natural_frequencies`: `|λ|` for each eigenvalue.
+  - `damping`: the relative damping `ζ = -real(λ) / |λ|` of each eigenvalue (`1` for a
+    decaying real mode, `-1` for a growing real mode, `NaN` for `λ = 0`).
   - `participation`: at each time point, a matrix whose column `k` holds the participation
-    of every unknown in mode `k` (columns ordered as `eigenvalues`).
+    of every unknown in mode `k` (columns ordered as `eigenvalues`). The two eigenvalues of
+    a complex-conjugate pair describe one oscillatory mode in a two-dimensional real
+    subspace; their participation columns are identical and are typically distributed over
+    at least two unknowns (e.g. a position and a velocity). The printed report lists such a
+    pair once, as `real(λ) ± imag(λ)im`.
   - `stiffness_ratio`: at each time point, `max |real(λ)| / min |real(λ)|` over the
     decaying modes (`real(λ) < 0`), or `NaN` if there are none.
   - `stiffest_index`: the index of the time point with the largest stiffness ratio.
@@ -109,6 +118,11 @@ A `NamedTuple` with fields
     slowest decaying mode at the stiffest time point, sorted by decreasing participation.
   - `max_unstable`: the largest number of modes with a positive real part at any analyzed
     time point.
+  - `least_damped`: the oscillatory mode (`imag(λ) ≠ 0`) with the smallest relative damping
+    over all analyzed time points, as a `NamedTuple` `(; index, t, eigenvalue, damping,
+    natural_frequency, unknowns)`, where `index` is the time-point index and `unknowns`
+    holds the `unknown => participation` pairs of that mode, or `nothing` if no analyzed
+    time point has an oscillatory mode.
 
 # Examples
 
@@ -117,6 +131,7 @@ sol = solve(prob, Rodas5P())
 res = analyze_solution_jacobian(sol)
 res.fast_unknowns          # which unknowns make the model stiff
 extrema(res.stiffness_ratio)
+res.least_damped           # the least-damped oscillatory mode and its unknowns
 ```
 
 !!! note
@@ -124,7 +139,9 @@ extrema(res.stiffness_ratio)
     time-varying) trajectory describe the linearized dynamics at each point, which is
     what determines stiffness and step-size restrictions of explicit integrators, but
     not necessarily the global behaviour. Parameters are taken from `sol.prob`, so
-    parameter changes made by callbacks during the solve are not reflected.
+    parameter changes made by callbacks during the solve are not reflected. The solution
+    must contain the complete state vector in problem order, i.e. it must not be solved
+    with `save_idxs`.
 """
 function analyze_solution_jacobian(
         sol::SciMLBase.AbstractODESolution; ts = nothing, threshold = 0.05,
@@ -140,8 +157,23 @@ function analyze_solution_jacobian(
     f = prob.f
     p = parameter_values(prob)
     ts_ = ts === nothing ? collect(sol.t) : collect(ts)
+    u0 = state_values(prob)
+    n = length(u0)
+    if hasproperty(sol, :saved_subsystem) && sol.saved_subsystem !== nothing
+        throw(
+            ArgumentError(
+                "`analyze_solution_jacobian` requires the complete state vector; solve without `save_idxs`."
+            )
+        )
+    end
     us = ts === nothing ? sol.u : [sol(t) for t in ts_]
-    n = isempty(us) ? length(state_values(prob)) : length(first(us))
+    if !isempty(us) && length(first(us)) != n
+        throw(
+            ArgumentError(
+                "The saved state vector has length $(length(first(us))) but the problem has state dimension $n; solve without `save_idxs`."
+            )
+        )
+    end
     syms = _state_names(sol, n)
     M = f.mass_matrix
     diffidxs = _differential_indices(M, n)
@@ -149,17 +181,21 @@ function analyze_solution_jacobian(
     jacobians = Matrix{Float64}[]
     eigenvalues = Vector{ComplexF64}[]
     time_constants = Vector{Float64}[]
+    natural_frequencies = Vector{Float64}[]
+    damping = Vector{Float64}[]
     participation = Matrix{Float64}[]
     stiffness_ratio = Float64[]
     nunstable = Int[]
     for (u, t) in zip(us, ts_)
-        J = _rhs_jacobian(f, collect(float.(u)), p, t, autodiff)
+        J = _rhs_jacobian(f, u0, u, p, t, autodiff)
         Jr = _reduced_jacobian(J, M, diffidxs, t)
         λ, P = _modes(Jr)
         push!(jacobians, Jr)
         push!(eigenvalues, λ)
         tol = _zero_tol(λ)
         push!(time_constants, [abs(real(l)) <= tol ? Inf : 1 / abs(real(l)) for l in λ])
+        push!(natural_frequencies, abs.(λ))
+        push!(damping, [iszero(l) ? NaN : -real(l) / abs(l) for l in λ])
         push!(participation, P)
         push!(stiffness_ratio, _stiffness_ratio(λ))
         push!(nunstable, count(l -> real(l) > tol, λ))
@@ -180,16 +216,43 @@ function analyze_solution_jacobian(
         end
     end
     max_unstable = isempty(nunstable) ? 0 : maximum(nunstable)
+    least_damped = _least_damped_mode(
+        ts_, names, eigenvalues, damping, participation, threshold
+    )
 
     @SciMLMessage(verbose, :solution_jacobian_analysis) do
         _solution_jacobian_report(
-            ts_, names, eigenvalues, time_constants, participation, stiffness_ratio,
-            stiffest_index, nunstable, threshold, nmodes
+            ts_, names, eigenvalues, time_constants, damping, participation,
+            stiffness_ratio, stiffest_index, nunstable, least_damped, threshold, nmodes
         )
     end
     return (;
-        t = ts_, unknowns = names, jacobians, eigenvalues, time_constants, participation,
-        stiffness_ratio, stiffest_index, fast_unknowns, slow_unknowns, max_unstable,
+        t = ts_, unknowns = names, jacobians, eigenvalues, time_constants,
+        natural_frequencies, damping, participation, stiffness_ratio, stiffest_index,
+        fast_unknowns, slow_unknowns, max_unstable, least_damped,
+    )
+end
+
+# The oscillatory mode with the smallest relative damping over all time points, or
+# `nothing` if there is no oscillatory mode.
+function _least_damped_mode(ts, names, eigenvalues, damping, participation, threshold)
+    best = nothing
+    for i in eachindex(eigenvalues)
+        λ = eigenvalues[i]
+        tol = _zero_tol(λ)
+        for k in eachindex(λ)
+            abs(imag(λ[k])) > tol || continue
+            if best === nothing || damping[i][k] < damping[best[1]][best[2]]
+                best = (i, k)
+            end
+        end
+    end
+    best === nothing && return nothing
+    i, k = best
+    return (;
+        index = i, t = ts[i], eigenvalue = eigenvalues[i][k], damping = damping[i][k],
+        natural_frequency = abs(eigenvalues[i][k]),
+        unknowns = _weighted_pairs(names, view(participation[i], :, k), threshold),
     )
 end
 
@@ -204,9 +267,15 @@ function _state_names(sol, n)
     return syms === nothing || length(syms) != n ? collect(1:n) : syms
 end
 
-# Jacobian of the ODE right-hand side `f(u, p, t)` with respect to `u`.
-function _rhs_jacobian(f, u, p, t, autodiff)
-    if autodiff === nothing && SciMLBase.has_jac(f)
+# Jacobian of the ODE right-hand side `f(u, p, t)` with respect to `u`, differentiated with
+# respect to a flat vector `x` and evaluated with `x` converted back to the representation
+# of the problem's initial state `u0` (a scalar, or an array of the same type and shape).
+# For a `SplitFunction` the analytic Jacobian covers only its first component, so the
+# complete right-hand side `f1 + f2` is differentiated instead.
+function _rhs_jacobian(f, u0, u, p, t, autodiff)
+    x0 = u isa Number ? [float(u)] : collect(float.(vec(u)))
+    if autodiff === nothing && SciMLBase.has_jac(f) && !(f isa SciMLBase.SplitFunction) &&
+            !(u0 isa Number)
         if SciMLBase.isinplace(f)
             J = f.jac_prototype === nothing ? zeros(eltype(u), length(u), length(u)) :
                 similar(f.jac_prototype, eltype(u))
@@ -216,12 +285,21 @@ function _rhs_jacobian(f, u, p, t, autodiff)
             return Matrix{Float64}(f.jac(u, p, t))
         end
     end
-    rhs = if SciMLBase.isinplace(f)
-        x -> (du = similar(x); f(du, x, p, t); du)
+    rhs = if u0 isa Number
+        x -> [f(only(x), p, t)]
+    elseif SciMLBase.isinplace(f)
+        x -> (xs = _restructure(u0, x); du = similar(xs); f(du, xs, p, t); vec(du))
     else
-        x -> f(x, p, t)
+        x -> vec(f(_restructure(u0, x), p, t))
     end
-    return Matrix{Float64}(_dense_jacobian(rhs, u, autodiff))
+    return Matrix{Float64}(_dense_jacobian(rhs, x0, autodiff))
+end
+
+# `x` in the array type and shape of `template`, with the element type of `x`.
+function _restructure(template, x)
+    y = similar(template, eltype(x))
+    copyto!(y, x)
+    return y
 end
 
 # Indices of the differential unknowns: those with a nonzero diagonal mass-matrix entry
@@ -311,12 +389,12 @@ end
 
 # The human-readable report of `analyze_solution_jacobian`.
 function _solution_jacobian_report(
-        ts, names, eigenvalues, time_constants, participation, stiffness_ratio,
-        stiffest_index, nunstable, threshold, nmodes
+        ts, names, eigenvalues, time_constants, damping, participation,
+        stiffness_ratio, stiffest_index, nunstable, least_damped, threshold, nmodes
     )
     io = IOBuffer()
     println(io, "Solution Jacobian mode analysis")
-    print(io, "  $(length(names)) state(s), $(length(ts)) time point(s)")
+    print(io, "  state dimension $(length(names)), $(length(ts)) time point(s)")
     isempty(ts) || print(io, " in [$(first(ts)), $(last(ts))]")
     println(io)
     finite = filter(!isnan, stiffness_ratio)
@@ -334,30 +412,68 @@ function _solution_jacobian_report(
         i = findfirst(>(0), nunstable)
         print(io, "\n", "  Up to $nu locally unstable mode(s) (real(λ) > 0), first at t = $(ts[i]).")
     end
+    if least_damped !== nothing
+        ld = least_damped
+        print(
+            io, "\n  Least-damped oscillatory mode: ζ = ", round(ld.damping, sigdigits = 3),
+            ", ωn = ", round(ld.natural_frequency, sigdigits = 4), " at t = ", ld.t
+        )
+        for (s, w) in ld.unknowns
+            print(io, "\n      ", lpad(string(round(w, digits = 3)), 6), "  ", s)
+        end
+    end
     stiffest_index > 0 || return String(take!(io))
     λ = eigenvalues[stiffest_index]
     τ = time_constants[stiffest_index]
+    ζ = damping[stiffest_index]
     P = participation[stiffest_index]
-    nλ = length(λ)
+    groups = _conjugate_groups(λ)
+    ng = length(groups)
     tstr = ts[stiffest_index]
-    if nλ <= 2nmodes
+    if ng <= 2nmodes
         print(io, "\n  Modes at t = $tstr, fastest first:")
-        _print_modes(io, 1:nλ, λ, τ, P, names, threshold)
+        _print_modes(io, groups, λ, τ, ζ, P, names, threshold)
     else
         print(io, "\n  Fastest $nmodes mode(s) at t = $tstr:")
-        _print_modes(io, 1:nmodes, λ, τ, P, names, threshold)
+        _print_modes(io, groups[1:nmodes], λ, τ, ζ, P, names, threshold)
         print(io, "\n  Slowest $nmodes mode(s) at t = $tstr:")
-        _print_modes(io, (nλ - nmodes + 1):nλ, λ, τ, P, names, threshold)
+        _print_modes(io, groups[(ng - nmodes + 1):ng], λ, τ, ζ, P, names, threshold)
     end
     return String(take!(io))
 end
 
-function _print_modes(io, idxs, λ, τ, P, names, threshold)
-    for j in idxs
+# Indices of the eigenvalues grouped into modes: a complex-conjugate pair (adjacent after
+# the sorting in `_modes`, with identical participation columns) forms one oscillatory
+# mode, represented by the eigenvalue with positive imaginary part.
+function _conjugate_groups(λ)
+    tol = _zero_tol(λ)
+    groups = Vector{Int}[]
+    k = 1
+    while k <= length(λ)
+        l = λ[k]
+        if k < length(λ) && abs(imag(l)) > tol &&
+                isapprox(λ[k + 1], conj(l); atol = tol, rtol = 1.0e-8)
+            push!(groups, imag(l) > 0 ? [k, k + 1] : [k + 1, k])
+            k += 2
+        else
+            push!(groups, [k])
+            k += 1
+        end
+    end
+    return groups
+end
+
+function _print_modes(io, groups, λ, τ, ζ, P, names, threshold)
+    for g in groups
+        j = first(g)
         l = λ[j]
-        lstr = iszero(imag(l)) ? string(round(real(l), sigdigits = 4)) :
-            string(round(l, sigdigits = 4))
+        lstr = length(g) == 1 ?
+            (iszero(imag(l)) ? string(round(real(l), sigdigits = 4)) : string(round(l, sigdigits = 4))) :
+            string(round(real(l), sigdigits = 4), " ± ", round(abs(imag(l)), sigdigits = 4), "im")
         print(io, "\n    λ = ", lstr, ", τ = ", round(τ[j], sigdigits = 3))
+        iszero(imag(l)) || print(
+            io, ", ωn = ", round(abs(l), sigdigits = 4), ", ζ = ", round(ζ[j], sigdigits = 3)
+        )
         for (s, w) in _weighted_pairs(names, view(P, :, j), threshold)
             print(io, "\n      ", lpad(string(round(w, digits = 3)), 6), "  ", s)
         end

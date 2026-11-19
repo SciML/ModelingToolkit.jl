@@ -61,6 +61,28 @@ resu = analyze_solution_jacobian(solu; verbose = false)
 @test resu.max_unstable == 2
 @test all(isnan, resu.stiffness_ratio)
 @test all(l -> all(≈(0.05), real.(l)) && all(≈(sqrt(1 - 0.05^2)), abs.(imag.(l))), resu.eigenvalues)
+@test all(ζ -> all(≈(-0.05), ζ), resu.damping)
+@test all(ω -> all(≈(1), ω), resu.natural_frequencies)
+
+# A lightly damped oscillator coupled to a fast decaying state: the relative damping and
+# natural frequency of the complex pair, and the unknowns it involves, are reported in
+# `least_damped`. Real eigenvalues have relative damping one.
+@variables q2(t) v2(t) r(t)
+@parameters ωn = 2.0 ζ0 = 0.02
+@named sysd = System(
+    [D(q2) ~ v2, D(v2) ~ -ωn^2 * q2 - 2ζ0 * ωn * v2, D(r) ~ -50r + q2], t
+)
+sysd = mtkcompile(sysd)
+probd = ODEProblem(sysd, [q2 => 1.0, v2 => 0.0, r => 0.0], (0.0, 1.0))
+sold = solve(probd, Rodas5P())
+resd = analyze_solution_jacobian(sold; verbose = false)
+ld = resd.least_damped
+@test ld !== nothing
+@test ld.damping ≈ 0.02 rtol = 1.0e-5
+@test ld.natural_frequency ≈ 2.0 rtol = 1.0e-5
+@test isequal(sort(first.(ld.unknowns); by = string), sort([q2, v2]; by = string))
+@test count(≈(1), resd.damping[1]) == 1
+@test res.least_damped === nothing
 
 # Mass-matrix DAE: the algebraic unknown is eliminated by a Schur complement. The
 # algebraic equation g(w) = g(-100a) with the monotone g(s) = s^3 + s cannot be solved for
@@ -82,6 +104,37 @@ resplain = analyze_solution_jacobian(solve(plainprob, Rodas5P()); verbose = fals
 @test resplain.unknowns == [1, 2]
 @test first(only(resplain.fast_unknowns)) == 1
 @test all(r -> isapprox(r, 10; rtol = 1.0e-5), resplain.stiffness_ratio)
+
+# Scalar problems: the right-hand side receives a number, not an array.
+scalarprob = ODEProblem((u, p, t) -> -u^3, 2.0, (0.0, 1.0))
+scalarsol = solve(scalarprob, Rodas5P())
+resscalar = analyze_solution_jacobian(scalarsol; verbose = false)
+for (u, l) in zip(scalarsol.u, resscalar.eigenvalues)
+    @test only(l) ≈ -3u^2 rtol = 1.0e-5
+end
+
+# For a `SplitFunction` the analytic Jacobian covers only `f1`; the analysis must
+# differentiate the complete right-hand side `f1 + f2`.
+splitf = SplitFunction(
+    (du, u, p, t) -> (du .= -10 .* u), (du, u, p, t) -> (du .= 11 .* u);
+    jac = (J, u, p, t) -> (J .= -10)
+)
+splitprob = SplitODEProblem(splitf, [1.0], (0.0, 1.0))
+@test ModelingToolkit._rhs_jacobian(splitprob.f, [1.0], [1.0], nothing, 0.0, nothing) ≈ fill(1.0, 1, 1) rtol = 1.0e-6
+
+# Solutions saved with `save_idxs` do not hold the complete state vector.
+plainsol_idxs = solve(plainprob, Rodas5P(); save_idxs = [2])
+@test_throws ArgumentError analyze_solution_jacobian(plainsol_idxs; verbose = false)
+
+# Conjugate pairs are listed once in the report.
+report = ModelingToolkit._solution_jacobian_report(
+    resd.t, resd.unknowns, resd.eigenvalues, resd.time_constants, resd.damping,
+    resd.participation, resd.stiffness_ratio, resd.stiffest_index,
+    [0 for _ in resd.t], resd.least_damped, 0.05, 3
+)
+@test occursin("±", report)
+@test count("ζ = 0.02", report) == 2 # the least-damped line and the mode listing
+@test length(ModelingToolkit._conjugate_groups(resd.eigenvalues[1])) == 2
 
 # The report is produced through the `solution_jacobian_analysis` toggle.
 @test_logs (:info, r"Solution Jacobian mode analysis") match_mode = :any analyze_solution_jacobian(sol)
