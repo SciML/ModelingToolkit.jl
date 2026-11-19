@@ -283,10 +283,11 @@ end
 # that `M u'` from the interpolation agrees with `f(u, p, t)`. Neither the solution nor its
 # interpolation records a numeric `save_idxs`, so a permutation of all unknowns can only be
 # detected this way. The tolerance is loose, since the interpolated derivative has the
-# accuracy of the solver; the check is skipped when the interpolation provides no
-# derivative.
+# accuracy of the solver. The check requires dense output: without it (e.g. with `saveat`),
+# the interpolated derivative is a secant slope and is skipped.
 function _check_saved_state(sol, f, u0, p, M)
     isempty(sol.t) && return nothing
+    (hasproperty(sol, :dense) && sol.dense) || return nothing
     t = first(sol.t)
     u = first(sol.u)
     du = try
@@ -346,11 +347,16 @@ function _state_names(sol, n)
     return syms === nothing || length(syms) != n ? collect(1:n) : syms
 end
 
-# The underlying user function of a (possibly specialized) SciML function: with the default
-# `AutoSpecialize`, `f.f` is a `FunctionWrappersWrapper` restricted to the argument types of
-# the solver and cannot be called with dual numbers.
-_raw_function(g::SciMLBase.AbstractSciMLFunction) = SciMLBase.unwrapped_f(g.f)
-_raw_function(g) = SciMLBase.unwrapped_f(g)
+# A callable for the right-hand side that accepts dual numbers. With the default
+# `AutoSpecialize`, the `f` field of an `ODEFunction` is a function wrapper restricted to the
+# argument types of the solver; only then is the unwrapped user function returned. Any other
+# SciML function (e.g. an operator-backed `ODEFunction` or a `DynamicalODEFunction`) is
+# returned as is, so that its calling convention is preserved.
+function _raw_function(g)
+    g isa SciMLBase.ODEFunction || return g
+    h = SciMLBase.unwrapped_f(g.f)
+    return h === g.f ? g : h
+end
 
 # The right-hand side as a function of a flat real vector `x`, evaluated with `x` converted
 # to the representation of the problem's initial state `u0` (a scalar, or an array of the

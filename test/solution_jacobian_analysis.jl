@@ -264,6 +264,18 @@ probiip = ODEProblem((du, u, p, t) -> (du .= -2 .* u), [1.0, 2.0], (0.0, 1.0))
 resiip = analyze_solution_jacobian(solve(probiip, Rodas5P()); verbose = false)
 @test all(l -> all(≈(-2), l), resiip.eigenvalues)
 
+# Solutions without dense output (`saveat`) are not checked against the interpolated
+# derivative, which is a secant slope there.
+probsave = ODEProblem((u, p, t) -> -u, [1.0], (0.0, 1.0))
+ressave = analyze_solution_jacobian(solve(probsave, Rodas5P(); saveat = 1.0); verbose = false)
+@test all(l -> only(l) ≈ -1, ressave.eigenvalues)
+
+# A `DynamicalODEFunction` (no `f` field, partitioned state) is evaluated through its own
+# callable: q' = v, v' = -4q.
+probdyn = DynamicalODEProblem((dv, v, q, p, t) -> (dv .= -4 .* q), (dq, v, q, p, t) -> (dq .= v), [0.0], [1.0], (0.0, 1.0))
+resdyn = analyze_solution_jacobian(solve(probdyn, Rodas5P()); verbose = false)
+@test all(l -> sort(imag.(l)) ≈ [-2, 2] && all(≈(0; atol = 1.0e-10), real.(l)), resdyn.eigenvalues)
+
 # Static arrays keep their type when evaluated with dual numbers.
 SA = ModelingToolkit.StaticArrays
 probsa = ODEProblem((u, p, t) -> SA.SVector(-2u[1], -3u[2]), SA.SVector(1.0, 2.0), (0.0, 1.0))
