@@ -395,14 +395,17 @@ function _modes(J)
 end
 
 # Mask of the eigenvalues that are zero to the accuracy of the computed spectrum `λ`
-# (integrators, conservation laws). Follows `count_eigval_multiplicity` of
+# (integrators, conservation laws). Based on `count_eigval_multiplicity` of
 # ControlSystemsBase.jl: a backward-stable eigenvalue algorithm perturbs an eigenvalue of
-# multiplicity `i` by an amount of order `ϵ^(1/i)` relative to the scale of the problem, so
-# a candidate cluster of multiplicity `i` consists of exactly `i` eigenvalues within the
-# radius `(100ϵ)^(1/i) * max|λ|` of the origin. The cluster is accepted only if the monic
-# polynomial with the normalized cluster eigenvalues as roots is close to `z^i`, which
-# rejects unrelated slow modes inside the radius. The radius is proportional to the scale
-# of the spectrum, so the result does not depend on the time unit.
+# multiplicity `i` by an amount of order `ϵ^(1/i)` relative to the scale of the problem. The
+# candidate cluster of multiplicity `i` consists of the `i` eigenvalues of smallest
+# magnitude; it requires all of them within the radius `(100ϵ)^(1/i) * max|λ|` of the
+# origin, and the monic polynomial with the normalized cluster eigenvalues as roots must be
+# close to `z^i`, which rejects slow modes inside the radius. The largest accepted cluster
+# is returned, so that clusters of different multiplicity (e.g. an exact zero and a
+# numerically split double zero) are all detected, and a rejected larger candidate does not
+# discard a smaller accepted one. The radius is proportional to the scale of the spectrum,
+# so the result does not depend on the time unit.
 function _zero_eigenvalues(λ)
     n = length(λ)
     mask = falses(n)
@@ -410,22 +413,22 @@ function _zero_eigenvalues(λ)
     scale = maximum(abs, λ)
     iszero(scale) && return trues(n)
     η = 100 * eps(Float64)
+    order = sortperm(abs.(λ))
+    # Ascending coefficients of the monic polynomial prod(z - λ[k] / scale) over the
+    # current cluster, extended by one factor per candidate multiplicity.
+    c = zeros(ComplexF64, n + 1)
+    c[1] = 1
+    accepted = 0
     for i in 1:n
-        cluster = findall(l -> abs(l) <= η^(1 / i) * scale, λ)
-        length(cluster) == i || continue
-        # Ascending coefficients of the monic polynomial prod(z - λ[k] / scale).
-        c = zeros(ComplexF64, i + 1)
-        c[end] = 1
-        for (j, k) in enumerate(cluster)
-            q = λ[k] / scale
-            for m in (i - j + 1):i
-                c[m] -= q * c[m + 1]
-            end
+        q = λ[order[i]] / scale
+        for k in (i + 1):-1:2
+            c[k] = c[k - 1] - q * c[k]
         end
-        maximum(abs, @view(c[1:i])) <= i * η || continue
-        mask[cluster] .= true
-        return mask
+        c[1] = -q * c[1]
+        abs(q) <= η^(1 / i) || continue
+        maximum(abs, @view(c[1:i])) <= i * η && (accepted = i)
     end
+    mask[order[1:accepted]] .= true
     return mask
 end
 

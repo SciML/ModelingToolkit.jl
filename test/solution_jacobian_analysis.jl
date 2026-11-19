@@ -172,6 +172,12 @@ zdi = ModelingToolkit._zero_eigenvalues(λdi)
 @test count(>(0), σdi) == 0
 @test ModelingToolkit._stiffness_ratio(σdi) ≈ 1.0e3 rtol = 1.0e-6
 
+# Clusters of different multiplicity and exact zeros next to a slow mode.
+@test ModelingToolkit._zero_eigenvalues(ComplexF64[-1, 0, -1.0e-8, 1.0e-8]) == [false, true, true, true]
+@test ModelingToolkit._zero_eigenvalues(ComplexF64[-1, -1.0e-8, 0, 0]) == [false, false, true, true]
+@test ModelingToolkit._zero_eigenvalues(ComplexF64[-1, -1.0e-3]) == [false, false]
+@test ModelingToolkit._zero_eigenvalues(ComplexF64[0, 0]) == [true, true]
+
 # End to end: a double integrator coupled to a fast and a slow decaying state.
 @variables xd(t) vd(t) wd(t) zd(t)
 @named sysdi = System(
