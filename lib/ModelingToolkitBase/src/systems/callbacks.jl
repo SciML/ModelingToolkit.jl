@@ -580,8 +580,9 @@ The condition can be one of:
 - eqs::Vector{SymbolicT} - events trigger when the condition evaluates to true
 - A `SciMLBase.Clock(dt; phase)` - events trigger with period `dt` and phase `phase`.
   Note that this form will ignore the `initialize_save_discretes` keyword argument in the
-  interest of correctness. The callback will trigger and save at `tspan[1]` if the clock
-  would tick at `tspan[1]`.
+  interest of correctness. The `phase` is an offset from the integration start time, so a
+  zero-phase clock ticks at `t0` (and saves) on every construction path (fresh problem,
+  `remake` and `reinit!`).
 
 Arguments:
 - iv: The independent variable of the system. This must be specified if the independent variable appears in one of the equations explicitly, as in x ~ t + 1.
@@ -1088,6 +1089,42 @@ end
 (ifw::InitFinalizeWrapper)(c, u, t, integ) = ifw.f(integ)
 
 """
+    clock_on_grid(Δ, dt)
+
+Whether the offset `Δ` is an integer multiple of `dt`, up to floating point tolerance.
+"""
+function clock_on_grid(Δ, dt)
+    tol = 8eps(max(abs(Δ), abs(dt)))
+    r = mod(Δ, dt)
+    return r <= tol || dt - r <= tol
+end
+
+"""
+    ClockInitialTick{I, A, T}
+
+Initialization wrapper for periodic clock callbacks. Runs `init`, then decides at run time
+whether the clock ticks at `t0`. The `phase` is an offset from the integration start, so the
+first tick is independent of how the problem was constructed.
+"""
+struct ClockInitialTick{I, A, T}
+    init::I
+    affect::A
+    phase::T
+    dt::T
+end
+
+function (c::ClockInitialTick)(cb, u, t, integ)
+    c.init(cb, u, t, integ)
+    tick = clock_on_grid(c.phase, c.dt)
+    SciMLBase.derivative_discontinuity!(integ, tick)
+    if tick
+        c.affect(integ)
+        SciMLBase.save_discretes!(integ, cb; skip_duplicates = true)
+    end
+    return nothing
+end
+
+"""
     compile_condition(cb::AbstractCallback, sys, dvs, ps; expression, kwargs...)
 
 Returns a function `condition(u,t,integrator)`, condition(out,u,t,integrator)` returning the `condition(cb)`.
@@ -1309,7 +1346,7 @@ to adapt the `f(integrator)` signature to the `(cb, u, t, integrator)` SciMLBase
 # Arguments
 - `cb`: the symbolic callback descriptor
 - `sys`: the parent system providing compilation context
-- `tspan`: required for `PeriodicCallback` phase computation; may be `nothing` otherwise
+- `tspan`: the integration time span; may be `nothing`
 """
 function generate_callback(cb, sys; tspan = nothing, kwargs...)
     is_timed = is_timed_condition(conditions(cb))
@@ -1348,12 +1385,12 @@ function generate_callback(cb, sys; tspan = nothing, kwargs...)
                 initialize_save_discretes = cb.initialize_save_discretes
             )
         elseif is_timed && trigger isa SciMLBase.TimeDomain
-            trigger_at_init = iszero((tspan[1] - trigger.phase) % trigger.dt)
+            phase, dt = promote(trigger.phase, trigger.dt)
             return PeriodicCallback(
-                affect, trigger.dt; phase = trigger.phase, initial_affect = trigger_at_init,
-                initialize, finalize,
+                affect, trigger.dt; phase = trigger.phase, initial_affect = false,
+                initialize = ClockInitialTick(initialize, affect, phase, dt), finalize,
                 initializealg = cb.reinitializealg, saved_clock_partitions,
-                initialize_save_discretes = trigger_at_init
+                initialize_save_discretes = false
             )
         elseif is_timed
             return PeriodicCallback(
@@ -1678,7 +1715,7 @@ Returns `nothing` if `sys` has no events and `callback` is `nothing`.
 # Arguments
 - `sys`: a compiled `AbstractSystem` with attached symbolic events
 - `callback`: an optional pre-built SciMLBase callback to merge into the result
-- `tspan`: the integration time span; required for `PeriodicCallback` phase computation
+- `tspan`: the integration time span
 - `kwargs...`: forwarded to [`generate_continuous_callbacks`](@ref) and
   [`generate_discrete_callbacks`](@ref)
 

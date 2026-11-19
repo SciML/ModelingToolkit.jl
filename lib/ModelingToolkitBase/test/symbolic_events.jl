@@ -1998,6 +1998,31 @@ if !@isdefined(ModelingToolkit)
             @test sol.discretes[1].t ≈ 0.05:0.1:1.0
             @test sol[d] ≈ 1:10
         end
+        @testset "Issue #5334: first tick independent of construction path" begin
+            @discretes d(t)
+            devt = SymbolicDiscreteCallback(
+                SciMLBase.Clock(0.005), [d ~ Pre(d) + 1]; discrete_parameters = [d],
+            )
+            @mtkcompile sys = System([D(x) ~ -x], t, [x, d], []; discrete_events = [devt])
+            prob0 = ODEProblem(sys, [x => 1.0, d => 0.0], (0.0, 1.0))
+            for t0 in (0.2, 0.203)
+                tspan = (t0, t0 + 0.05)
+                fresh = solve(ODEProblem(sys, [x => 1.0, d => 0.0], tspan), Tsit5())
+                rmk = solve(remake(prob0; tspan), Tsit5())
+                integ = init(prob0, Tsit5())
+                reinit!(integ; t0 = tspan[1], tf = tspan[2])
+                solve!(integ)
+                # `reinit!` keeps ticks saved before the reinitialization, and a tick
+                # at `tf` is subject to rounding, so compare only ticks in `[t0, tf)`
+                for sol in (fresh, rmk, integ.sol)
+                    ts = filter(
+                        x -> t0 - 1.0e-9 <= x < tspan[2] - 1.0e-9, sol.discretes[1].t
+                    )
+                    @test first(ts) ≈ t0
+                    @test ts ≈ fresh.discretes[1].t
+                end
+            end
+        end
     end
 
     vlk(v, i) = v[clamp(round(Int, i), 1, length(v))]
