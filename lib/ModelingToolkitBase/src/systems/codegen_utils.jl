@@ -1140,9 +1140,7 @@ Base.@nospecializeinfer function build_function_wrapper(
             if all_assignments[] === nothing
                 out_ir, out_expr = rule_output[]
                 read_arrvars = Set{SymbolicT}()
-                for ex in (out_expr isa MakeTuple ? out_expr.elems : out_expr isa AbstractArray ? out_expr : (out_expr,))
-                    ex isa SymbolicT && SU.search_variables!(read_arrvars, out_ir, ex; is_atomic = find_arrvars_is_atomic, recurse = find_arrvars_recurse)
-                end
+                SU.search_variables!(SU.IRStructureSearchBuffer(out_ir, read_arrvars), out_expr isa MakeTuple ? collect(out_expr.elems) : out_expr; is_atomic = find_arrvars_is_atomic, recurse = find_arrvars_recurse)
                 setdiff!(read_arrvars, required_arrvars)
                 all_assignments[] = isempty(read_arrvars) ? assignments : [array_assignments(read_arrvars); assignments]
             end
