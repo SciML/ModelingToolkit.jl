@@ -1050,6 +1050,7 @@ Base.@nospecializeinfer function build_function_wrapper(
     SU.search_variables!(search_buffer, expr; is_atomic = find_arrvars_is_atomic, recurse = find_arrvars_recurse)
 
     # assignments for reconstructing scalarized array symbolics
+    param_var_to_arridxs = Dict{SymbolicT, Vector{Tuple{Int, Int}}}()
     if !non_standard_param_layout
         # `n_param_buffers` marks the boundary between the `reorder_parameters` buffers and
         # any `cachesyms` the caller appended to the parameter slice (cachesyms are always a
