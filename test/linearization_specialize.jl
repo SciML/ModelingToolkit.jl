@@ -1,8 +1,10 @@
 using ModelingToolkit, SciMLBase, SymbolicIndexingInterface, LinearAlgebra, Test
 using ModelingToolkit: t_nounits as t, D_nounits as D
 using RuntimeGeneratedFunctions: RuntimeGeneratedFunction
+using FunctionWrappersWrappers: FunctionWrappersWrapper
 
 is_rgf(x) = x isa RuntimeGeneratedFunction
+is_wrapper(x) = x isa FunctionWrappersWrapper || SciMLBase.isfunctionwrapper(x)
 
 # Whether an object satisfying `pred` is reachable from `x`. Modules and types are not entered.
 function reaches(pred, x, seen = IdDict{Any, Nothing}())
@@ -61,8 +63,10 @@ end
             scalar_plant, [u], [x]; initialize, specialize = SciMLBase.FullSpecialize, kwargs...
         )
         @test SciMLBase.specialization(lfs.prob.f) === SciMLBase.FullSpecialize
-        @test any(f -> reaches(SciMLBase.isfunctionwrapper, f), prepared(lf))
-        @test !any(f -> reaches(SciMLBase.isfunctionwrapper, f), prepared(lfs))
+        @test lf.prob.f.f isa FunctionWrappersWrapper
+        @test SciMLBase.unwrapped_f(lfs.prob.f.f) === lfs.prob.f.f
+        @test any(f -> reaches(is_wrapper, f), prepared(lf))
+        @test !any(f -> reaches(is_wrapper, f), prepared(lfs))
         set, sets = setp(sys, k), setp(syss, k)
         for kv in (0.5, 1.2, 0.2)
             set(lf.prob.p, kv)
@@ -111,7 +115,7 @@ end
     lfs, syss = get_sensitivity_function(
         model, model.plant_input; specialize = SciMLBase.FullSpecialize, kwargs...
     )
-    @test !any(f -> reaches(SciMLBase.isfunctionwrapper, f), prepared(lfs))
+    @test !any(f -> reaches(is_wrapper, f), prepared(lfs))
     for (kp, ki) in ((1.0, 0.5), (2.5, 0.1), (0.3, 3.0))
         setp(sys, sys.C.kp)(lf.prob.p, kp)
         setp(sys, sys.C.ki)(lf.prob.p, ki)
