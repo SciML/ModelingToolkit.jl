@@ -1,21 +1,21 @@
 using ModelingToolkit, SciMLBase, SymbolicIndexingInterface, LinearAlgebra, Test
 using ModelingToolkit: t_nounits as t, D_nounits as D
+using RuntimeGeneratedFunctions: RuntimeGeneratedFunction
 
-const FWW = SciMLBase.FunctionWrappersWrappers.FunctionWrappersWrapper
-const RGF = ModelingToolkit.RuntimeGeneratedFunctions.RuntimeGeneratedFunction
+is_rgf(x) = x isa RuntimeGeneratedFunction
 
-# Whether an object of type `T` is reachable from `x`. Modules and types are not entered.
-function reaches(::Type{T}, x, seen = IdDict{Any, Nothing}()) where {T}
-    x isa T && return true
+# Whether an object satisfying `pred` is reachable from `x`. Modules and types are not entered.
+function reaches(pred, x, seen = IdDict{Any, Nothing}())
+    pred(x) && return true
     (x isa Module || x isa Type || x isa Symbol || x isa String || isbits(x)) && return false
     haskey(seen, x) && return false
     seen[x] = nothing
     if x isa AbstractArray
-        return any(i -> isassigned(x, i) && reaches(T, x[i], seen), eachindex(x))
+        return any(i -> isassigned(x, i) && reaches(pred, x[i], seen), eachindex(x))
     elseif x isa AbstractDict
-        return any(((k, v),) -> reaches(T, k, seen) || reaches(T, v, seen), x)
+        return any(((k, v),) -> reaches(pred, k, seen) || reaches(pred, v, seen), x)
     end
-    return any(i -> isdefined(x, i) && reaches(T, getfield(x, i), seen), 1:fieldcount(typeof(x)))
+    return any(i -> isdefined(x, i) && reaches(pred, getfield(x, i), seen), 1:fieldcount(typeof(x)))
 end
 
 # Whether the optimized code of `f` for `argtypes` refers to a function whose name contains one of `names`.
@@ -61,8 +61,8 @@ end
             scalar_plant, [u], [x]; initialize, specialize = SciMLBase.FullSpecialize, kwargs...
         )
         @test SciMLBase.specialization(lfs.prob.f) === SciMLBase.FullSpecialize
-        @test any(f -> reaches(FWW, f), prepared(lf))
-        @test !any(f -> reaches(FWW, f), prepared(lfs))
+        @test any(f -> reaches(SciMLBase.isfunctionwrapper, f), prepared(lf))
+        @test !any(f -> reaches(SciMLBase.isfunctionwrapper, f), prepared(lfs))
         set, sets = setp(sys, k), setp(syss, k)
         for kv in (0.5, 1.2, 0.2)
             set(lf.prob.p, kv)
@@ -72,8 +72,7 @@ end
             @test jacobians(js) == jacobians(j)
             @test js.f_x == fill(-kv, 1, 1)
         end
-        T = Base.return_types(lfs, Tuple{typeof(lfs.prob.u0), typeof(lfs.prob.p), Float64})
-        @test isconcretetype(only(T))
+        @test isconcretetype(typeof(@inferred lfs(lfs.prob.u0, lfs.prob.p, 0.0)))
     end
 end
 
@@ -84,14 +83,13 @@ end
         scalar_plant, [u], [x]; specialize = SciMLBase.FullSpecialize, eval_expression = true,
         eval_module = @__MODULE__, kwargs...
     )
-    @test reaches(RGF, lf.prob.f)
-    @test !reaches(RGF, lfe.prob.f)
-    @test !any(f -> reaches(RGF, f), prepared(lfe))
+    @test reaches(is_rgf, lf.prob.f)
+    @test !reaches(is_rgf, lfe.prob.f)
+    @test !any(f -> reaches(is_rgf, f), prepared(lfe))
     @test jacobians(lfe(lfe.prob.u0, lfe.prob.p, 0.0)) == jacobians(lf(lf.prob.u0, lf.prob.p, 0.0))
     # Without `FullSpecialize`, `eval_expression` applies to the observed function only, so the
     # system function the problem wraps is still built from `RuntimeGeneratedFunction`s.
-    unwrapped(f) = f isa FWW ? unwrapped(first(f.fw).obj[]) : f isa SciMLBase.Void ? unwrapped(f.f) : f
-    has_rgf_type(f) = occursin("RuntimeGeneratedFunction", string(typeof(unwrapped(f))))
+    has_rgf_type(f) = occursin("RuntimeGeneratedFunction", string(typeof(SciMLBase.unwrapped_f(f))))
     @test !has_rgf_type(lfe.prob.f.f)
     for option in ((;), (; specialize = nothing))
         lfd, _ = linearization_function(
@@ -113,7 +111,7 @@ end
     lfs, syss = get_sensitivity_function(
         model, model.plant_input; specialize = SciMLBase.FullSpecialize, kwargs...
     )
-    @test !any(f -> reaches(FWW, f), prepared(lfs))
+    @test !any(f -> reaches(SciMLBase.isfunctionwrapper, f), prepared(lfs))
     for (kp, ki) in ((1.0, 0.5), (2.5, 0.1), (0.3, 3.0))
         setp(sys, sys.C.kp)(lf.prob.p, kp)
         setp(sys, sys.C.ki)(lf.prob.p, ki)
