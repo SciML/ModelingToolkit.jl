@@ -110,6 +110,7 @@ The available toggles are documented on [`MTKVerbosity`](@ref):
 | `dynamic_opt_time_grid`           | `WarnLevel` | Ignored `dt`/`steps` argument in dynamic optimization                   |
 | `empty_operating_point`           | `WarnLevel` | Empty operating point passed to `linearization_function`                |
 | `initialization_analysis`         | `InfoLevel` | The report of `analyze_initialization_jacobian`                         |
+| `solution_jacobian_analysis`      | `InfoLevel` | The report of `analyze_solution_jacobian`                               |
 | `no_unbound_inputs`               | `WarnLevel` | `generate_control_function` found no unbound inputs                     |
 | `analysis_point_causality`        | `WarnLevel` | Reversed causality in an analysis-point `connect`                       |
 | `imperative_affect_specification` | `WarnLevel` | Duplicate, unassignable, or observed-and-modified `ImperativeAffect` symbols |
