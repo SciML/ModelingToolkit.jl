@@ -1127,24 +1127,28 @@ Base.@nospecializeinfer function build_function_wrapper(
         append!(assignments, pref)
     end
 
-    wrap_code = opts.codegen.wrap_code .∘ wrap_assignments(false, assignments)
     optimize = resolve_optimize_option(opts.codegen.optimize)
-    if optimize !== nothing && !isempty(optimize)
+    wrap_code = if optimize === nothing || isempty(optimize)
+        opts.codegen.wrap_code .∘ wrap_assignments(false, assignments)
+    else
         rule_output = Ref{Any}()
         record_output(out_ir, out_expr) = (rule_output[] = (out_ir, out_expr); nothing)
-        optimize = push!(collect(Code.OptimizationRule, optimize), Code.OptimizationRule("record_output", record_output, Returns(nothing), typemax(Int)))
-        rule_arrvar_assignments = Ref{Any}(nothing)
+        recorder(priority) = Code.OptimizationRule("record_output", record_output, Returns(nothing), priority)
+        optimize = [recorder(typemin(Int)); collect(Code.OptimizationRule, optimize); recorder(typemax(Int))]
+        all_assignments = Ref{Any}(nothing)
         function bind_rule_arrvars(f)
-            if rule_arrvar_assignments[] === nothing
+            if all_assignments[] === nothing
                 out_ir, out_expr = rule_output[]
                 read_arrvars = Set{SymbolicT}()
-                SU.search_variables!(SU.IRStructureSearchBuffer(out_ir, read_arrvars), out_expr; is_atomic = find_arrvars_is_atomic, recurse = find_arrvars_recurse)
+                for ex in (out_expr isa MakeTuple ? out_expr.elems : out_expr isa AbstractArray ? out_expr : (out_expr,))
+                    ex isa SymbolicT && SU.search_variables!(read_arrvars, out_ir, ex; is_atomic = find_arrvars_is_atomic, recurse = find_arrvars_recurse)
+                end
                 setdiff!(read_arrvars, required_arrvars)
-                rule_arrvar_assignments[] = isempty(read_arrvars) ? Assignment[] : array_assignments(read_arrvars)
+                all_assignments[] = isempty(read_arrvars) ? assignments : [array_assignments(read_arrvars); assignments]
             end
-            return isempty(rule_arrvar_assignments[]) ? f : wrap_assignments(true, rule_arrvar_assignments[])(f)
+            return Func(f.args, [], Let(all_assignments[], f.body, false))
         end
-        wrap_code = wrap_code .∘ (bind_rule_arrvars, bind_rule_arrvars)
+        opts.codegen.wrap_code .∘ (bind_rule_arrvars, bind_rule_arrvars)
     end
 
     # handling of `output_type` and `mkarray`. A `similarto` already present on

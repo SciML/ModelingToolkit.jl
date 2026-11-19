@@ -2,8 +2,8 @@ using ModelingToolkitBase, OrdinaryDiffEq, SymbolicIndexingInterface
 using SciMLBase
 using SciMLStructures
 using SparseArrays
-using SymbolicUtils: unwrap, iscall, operation, replace_node!
-using SymbolicUtils.Code: OptimizationRule
+using SymbolicUtils: unwrap, iscall, operation, populate_ir!, IRStructure
+using SymbolicUtils.Code: OptimizationRule, Assignment, MakeTuple
 using ModelingToolkitBase: t_nounits as t, D_nounits as D
 using Test
 import Symbolics
@@ -463,12 +463,12 @@ end
     @variables x(t)[1:4]
     @mtkcompile sys = System([D(x[i]) ~ sin(x[i]) + 1 for i in 1:4], t)
     whole = unwrap(sum(x))
-    target = unwrap(sin(x[1]))
     detector(ir, expr) = expr isa AbstractVector && length(expr) == 4 ? true : nothing
     function transformer(ir, expr, _)
-        new_ir = copy(ir)
-        replace_node!(new_ir, target, whole)
-        return new_ir, expr
+        new_ir = IRStructure{SymReal}()
+        new = [whole + 1; expr[2:end]]
+        foreach(e -> populate_ir!(new_ir, e), new)
+        return new_ir, new
     end
     rule = OptimizationRule("sum", detector, transformer, 1)
     for optimize in ([rule], (rule,))
@@ -479,4 +479,20 @@ end
         @test du[1] == sum(u) + 1
         @test prob.f(u, prob.p, 0.0)[1] == sum(u) + 1
     end
+
+    tuple_rule = OptimizationRule(
+        "tuple", (ir, expr) -> expr isa MakeTuple ? true : nothing,
+        (ir, expr, _) -> (foreach(e -> populate_ir!(ir, e), (whole, unwrap(x[2]))); (ir, MakeTuple((whole, unwrap(x[2]))))), 1
+    )
+    obs = ModelingToolkitBase.build_explicit_observed_function(sys, (x[1], x[2]); optimize = [tuple_rule])
+    prob = ODEProblem(sys, [x => [1.0, 2.0, 3.0, 4.0]], (0.0, 1.0))
+    @test obs(prob.u0, prob.p, 0.0) == (10.0, 2.0)
+
+    @variables y(t)[1:4]
+    ys = unwrap.(collect(y))
+    pre = complete(System(Equation[], t, ys, []; name = :pre, preface = [Assignment(unwrap(y), [10.0, 20.0, 30.0, 40.0])]); split = false)
+    swap_sum = OptimizationRule("sum", (ir, expr) -> expr isa Symbolics.SymbolicT ? true : nothing, (ir, expr, _) -> (populate_ir!(ir, unwrap(sum(y)) + 1); (ir, unwrap(sum(y)) + 1)), 1)
+    direct = generate_custom_function(pre, sum(y) + 1; expression = Val(false))
+    optimized = generate_custom_function(pre, sin(y[1]) + 1; optimize = [swap_sum], expression = Val(false))
+    @test optimized([2.0, 4.0, 6.0, 8.0], Float64[], 0.0) == direct([2.0, 4.0, 6.0, 8.0], Float64[], 0.0) == 101.0
 end
