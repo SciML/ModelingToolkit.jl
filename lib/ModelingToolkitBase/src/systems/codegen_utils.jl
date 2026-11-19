@@ -649,6 +649,8 @@ const DEFAULT_MAX_CHUNK_DUPLICATION = 1.25
 
 # An atomic term can hold a non-constant index (`x[k]`, `Pre(x[k])`, `y(t - τ[k])`),
 # and codegen needs the indexed array, so only elements with constant indices stop the search
+expand_tuples(x) = x isa MakeTuple ? map(expand_tuples, collect(x.elems)) : x
+
 function find_arrvars_recurse(ex::SymbolicT)
     return !SU.default_is_atomic(ex) || !has_const_int_indices(ex)
 end
@@ -1140,7 +1142,7 @@ Base.@nospecializeinfer function build_function_wrapper(
             if all_assignments[] === nothing
                 out_ir, out_expr = rule_output[]
                 read_arrvars = Set{SymbolicT}()
-                SU.search_variables!(SU.IRStructureSearchBuffer(out_ir, read_arrvars), out_expr isa MakeTuple ? collect(out_expr.elems) : out_expr; is_atomic = find_arrvars_is_atomic, recurse = find_arrvars_recurse)
+                SU.search_variables!(SU.IRStructureSearchBuffer(out_ir, read_arrvars), expand_tuples(out_expr); is_atomic = find_arrvars_is_atomic, recurse = find_arrvars_recurse)
                 setdiff!(read_arrvars, required_arrvars)
                 all_assignments[] = isempty(read_arrvars) ? assignments : [array_assignments(read_arrvars); assignments]
             end

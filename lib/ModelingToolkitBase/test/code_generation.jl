@@ -487,6 +487,12 @@ end
     obs = ModelingToolkitBase.build_explicit_observed_function(sys, (x[1], x[2]); optimize = [tuple_rule])
     prob = ODEProblem(sys, [x => [1.0, 2.0, 3.0, 4.0]], (0.0, 1.0))
     @test obs(prob.u0, prob.p, 0.0) == (10.0, 2.0)
+    nested_tuple_rule = OptimizationRule(
+        "nested tuple", (ir, expr) -> expr isa MakeTuple ? true : nothing,
+        (ir, expr, _) -> (populate_ir!(ir, whole); (ir, MakeTuple((MakeTuple((whole, unwrap(x[2]))), unwrap(x[3]))))), 1
+    )
+    nested_obs = ModelingToolkitBase.build_explicit_observed_function(sys, (x[1], x[2]); optimize = [nested_tuple_rule])
+    @test nested_obs(prob.u0, prob.p, 0.0) == ((10.0, 2.0), 3.0)
     nested_rule = OptimizationRule(
         "nested", (ir, expr) -> expr isa AbstractVector && length(expr) == 2 && expr[1] isa AbstractVector ? true : nothing,
         (ir, expr, _) -> (populate_ir!(ir, whole); (ir, [[whole], expr[2]])), 1
