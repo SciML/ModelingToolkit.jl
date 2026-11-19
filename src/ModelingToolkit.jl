@@ -77,6 +77,7 @@ using UnPack: @unpack
 RuntimeGeneratedFunctions.init(@__MODULE__)
 
 import DifferentiationInterface as DI
+import ADTypes
 using ADTypes: AutoForwardDiff, AutoFiniteDiff
 import SciMLPublic: @public
 import PreallocationTools

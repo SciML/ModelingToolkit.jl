@@ -1,5 +1,6 @@
 using ModelingToolkit, Test, OrdinaryDiffEqRosenbrock, OrdinaryDiffEqNonlinearSolve
 using LinearAlgebra
+using ModelingToolkit: SciMLBase
 import SciMLLogging, Logging
 using ModelingToolkit: t_nounits as t, D_nounits as D
 
@@ -94,6 +95,8 @@ sysdae = mtkcompile(sysdae)
 soldae = solve(
     ODEProblem(sysdae, [a => 1.0], (0.0, 0.1); guesses = [w => -100.0]), Rodas5P()
 )
+@test SciMLBase.successful_retcode(soldae)
+@test length(soldae.t) > 2
 resdae = analyze_solution_jacobian(soldae; verbose = false)
 @test isequal(only(resdae.unknowns), a)
 @test all(l -> isapprox(only(l), -101; rtol = 1.0e-5), resdae.eigenvalues)
@@ -120,7 +123,7 @@ splitf = SplitFunction(
     jac = (J, u, p, t) -> (J .= -10)
 )
 splitprob = SplitODEProblem(splitf, [1.0], (0.0, 1.0))
-@test ModelingToolkit._rhs_jacobian(splitprob.f, [1.0], [1.0], nothing, 0.0, nothing) ≈ fill(1.0, 1, 1) rtol = 1.0e-6
+@test first(ModelingToolkit._rhs_jacobian(splitprob.f, [1.0], [1.0], nothing, 0.0, nothing)) ≈ fill(1.0, 1, 1) rtol = 1.0e-6
 
 # Solutions saved with `save_idxs` do not hold the complete state vector.
 plainsol_idxs = solve(plainprob, Rodas5P(); save_idxs = [2])
@@ -136,47 +139,65 @@ report = ModelingToolkit._solution_jacobian_report(
 @test count("ζ = 0.02", report) == 2 # the least-damped line and the mode listing
 @test length(ModelingToolkit._conjugate_groups(resd.eigenvalues[1])) == 2
 
+# Classification of the eigenvalues of a matrix with entries accurate to `ϵ`.
+function classify(J)
+    λ, P, κ = ModelingToolkit._modes(J, eps())
+    r = ModelingToolkit._eigenvalue_error_bounds(J, κ, eps())
+    zm = abs.(λ) .<= r
+    σ = [zm[k] || abs(real(λ[k])) <= r[k] ? 0.0 : real(λ[k]) for k in eachindex(λ)]
+    return (; λ, P, κ, zm, σ)
+end
+
 # Repeated conjugate pairs (two identical uncoupled oscillators) form two oscillatory
 # modes, each with the participation of its own position and velocity.
-λrep, Prep = ModelingToolkit._modes([0 1 0 0; -4 -0.1 0 0; 0 0 0 1; 0 0 -4 -0.1])
+crep = classify([0 1 0 0; -4 -0.1 0 0; 0 0 0 1; 0 0 -4 -0.1])
+λrep, Prep = crep.λ, crep.P
 @test length(ModelingToolkit._conjugate_groups(λrep)) == 2
 @test all(k -> λrep[2k] == conj(λrep[2k - 1]) && imag(λrep[2k - 1]) > 0, 1:2)
 @test all(k -> Prep[:, 2k] ≈ Prep[:, 2k - 1], 1:2)
 @test all(k -> count(>(0.1), Prep[:, 2k]) == 2, 1:2)
 
-# A fast real mode does not hide a slower, lightly damped oscillatory mode whose real part
-# is resolved (larger than `100ϵ` times the fastest mode).
-Jstiff = [-1.0e6 0 0; 0 -0.1 10; 0 -10 -0.1]
-λstiff, Pstiff = ModelingToolkit._modes(Jstiff)
-zstiff = ModelingToolkit._zero_eigenvalues(λstiff)
-@test !any(zstiff)
-σstiff = ModelingToolkit._resolved_real_parts(λstiff, zstiff)
+# A fast real mode does not hide a slower, lightly damped oscillatory mode.
+cstiff = classify([-1.0e6 0 0; 0 -0.1 10; 0 -10 -0.1])
+@test !any(cstiff.zm)
 ldstiff = ModelingToolkit._least_damped_mode(
-    [0.0], [:a, :b, :c], [λstiff], [zstiff], [-σstiff ./ abs.(λstiff)], [Pstiff], 0.05
+    [0.0], [:a, :b, :c], [cstiff.λ], [BitVector(cstiff.zm)],
+    [-cstiff.σ ./ abs.(cstiff.λ)], [cstiff.P], 0.05
 )
 @test ldstiff !== nothing
 @test ldstiff.natural_frequency ≈ hypot(0.1, 10)
 @test ldstiff.damping ≈ 0.1 / hypot(0.1, 10)
-@test ModelingToolkit._stiffness_ratio(σstiff) ≈ 1.0e7
+@test ModelingToolkit._stiffness_ratio(cstiff.σ) ≈ 1.0e7
+
+# Well-conditioned small eigenvalues are resolved, however small relative to the fastest
+# mode: the exact zero is the only zero eigenvalue.
+cdiag = classify(Matrix(Diagonal([-1, 0, -1.0e-8, 1.0e-8])))
+@test count(cdiag.zm) == 1 && iszero(only(cdiag.λ[cdiag.zm]))
+@test count(>(0), cdiag.σ) == 1
+@test ModelingToolkit._stiffness_ratio(cdiag.σ) ≈ 1.0e8
 
 # A double integrator in a non-modal basis: the double zero eigenvalue is perturbed by
-# about √ϵ to a pair of small real eigenvalues of opposite sign. It must be classified as
-# two zero eigenvalues rather than as a slow decaying and a spurious unstable mode.
+# about √ϵ to a pair of ill-conditioned small eigenvalues. Their condition numbers identify
+# them as two zero eigenvalues rather than a slow decaying and a spurious unstable mode;
+# their participation is not resolved.
 Qdi = [1.0 2 0 1; 0 1 3 0; 1 0 1 2; 2 1 0 1]
-Jdi = Qdi * [0 1 0 0; 0 0 0 0; 0 0 -1.0e3 0; 0 0 0 -1] / Qdi
-λdi, _ = ModelingToolkit._modes(Jdi)
-zdi = ModelingToolkit._zero_eigenvalues(λdi)
-@test count(zdi) == 2
-@test all(abs.(λdi[zdi]) .< 1.0e-4)
-σdi = ModelingToolkit._resolved_real_parts(λdi, zdi)
-@test count(>(0), σdi) == 0
-@test ModelingToolkit._stiffness_ratio(σdi) ≈ 1.0e3 rtol = 1.0e-6
+cdi = classify(Qdi * [0 1 0 0; 0 0 0 0; 0 0 -1.0e3 0; 0 0 0 -1] / Qdi)
+@test count(cdi.zm) == 2
+@test count(>(0), cdi.σ) == 0
+@test ModelingToolkit._stiffness_ratio(cdi.σ) ≈ 1.0e3 rtol = 1.0e-6
+@test all(isnan, cdi.P[:, cdi.zm])
 
-# Clusters of different multiplicity and exact zeros next to a slow mode.
-@test ModelingToolkit._zero_eigenvalues(ComplexF64[-1, 0, -1.0e-8, 1.0e-8]) == [false, true, true, true]
-@test ModelingToolkit._zero_eigenvalues(ComplexF64[-1, -1.0e-8, 0, 0]) == [false, false, true, true]
-@test ModelingToolkit._zero_eigenvalues(ComplexF64[-1, -1.0e-3]) == [false, false]
-@test ModelingToolkit._zero_eigenvalues(ComplexF64[0, 0]) == [true, true]
+# An exact integrator next to a double integrator in a non-modal basis.
+Qmix = [1.0 2 0 1 0; 0 1 3 0 1; 1 0 1 2 0; 2 1 0 1 1; 0 1 1 0 2]
+cmix = classify(Qmix * [0 1 0 0 0; 0 0 0 0 0; 0 0 0 0 0; 0 0 0 -1 0; 0 0 0 0 -10] / Qmix)
+@test count(cmix.zm) == 3
+
+# A defective eigenvalue away from the origin is neither a zero eigenvalue nor resolved
+# into participations of individual unknowns.
+cdef = classify([-1.0 1; 0 -1])
+@test !any(cdef.zm)
+@test all(isnan, cdef.P)
+@test all(≈(-1), cdef.σ)
 
 # End to end: a double integrator coupled to a fast and a slow decaying state.
 @variables xd(t) vd(t) wd(t) zd(t)
@@ -195,6 +216,68 @@ resdi = analyze_solution_jacobian(soldi; verbose = false)
 @test all(r -> isapprox(r, 1000; rtol = 1.0e-6), resdi.stiffness_ratio)
 @test all(d -> all(isnan, d[resdi.zero_eigenvalues[1]]), resdi.damping)
 @test all(τ -> count(isinf, τ) == 2, resdi.time_constants)
+
+# Diagonal Jacobian with slow modes of both signs (analytic Jacobian): one growing mode,
+# a stiffness ratio of 1e8 and finite time constants.
+fdiag = ODEFunction((u, p, t) -> [-u[1], -1.0e-8 * u[2], 1.0e-8 * u[3]]; jac = (u, p, t) -> Matrix(Diagonal([-1, -1.0e-8, 1.0e-8])))
+soldiag = solve(ODEProblem(fdiag, [1.0, 1.0, 1.0], (0.0, 1.0)), Rodas5P())
+resdiag = analyze_solution_jacobian(soldiag; verbose = false)
+@test resdiag.max_unstable == 1
+@test all(r -> r ≈ 1.0e8, resdiag.stiffness_ratio)
+@test all(τ -> sort(τ) ≈ [1, 1.0e8, 1.0e8], resdiag.time_constants)
+
+# An exact zero eigenvalue at an equilibrium is not reported as a growing mode: the default
+# Jacobian (ForwardDiff) is exact there, also for single-precision states.
+for T in (Float64, Float32)
+    probeq = ODEProblem((u, p, t) -> [-u[1], u[2]^3], T[1, 0], (T(0), T(1)))
+    reseq = analyze_solution_jacobian(solve(probeq, Rodas5P()); verbose = false)
+    @test reseq.max_unstable == 0
+    @test all(m -> count(m) == 1, reseq.zero_eigenvalues)
+end
+
+# A singular algebraic block is rejected, also when it is singular only to the accuracy
+# of the Jacobian.
+@test_throws ArgumentError ModelingToolkit._reduced_jacobian(
+    [-1.0 1; 1 0], Diagonal([1.0, 0]), [1], 0.0, eps()
+)
+@test_throws ArgumentError ModelingToolkit._reduced_jacobian(
+    [-1.0 1; 1 1.0e-12], Diagonal([1.0, 0]), [1], 0.0, sqrt(eps())
+)
+Jred, _ = ModelingToolkit._reduced_jacobian([-1.0 1; 1 -2], Diagonal([1.0, 0]), [1], 0.0, eps())
+@test only(Jred) ≈ -0.5
+
+# A defective Jacobian: no participation and no fast/slow unknowns are reported.
+soldef = solve(ODEProblem((u, p, t) -> [-u[1] + u[2], -u[2]], [1.0, 1.0], (0.0, 1.0)), Rodas5P())
+resdef = analyze_solution_jacobian(soldef; verbose = false)
+@test all(P -> all(isnan, P), resdef.participation)
+@test isempty(resdef.fast_unknowns) && isempty(resdef.slow_unknowns)
+
+# A solution saved with `save_idxs` permuting all unknowns is detected.
+probperm = ODEProblem((u, p, t) -> [-u[1]^3, -2u[2]^3], [1.0, 10.0], (0.0, 0.01))
+@test_throws ArgumentError analyze_solution_jacobian(
+    solve(probperm, Rodas5P(); save_idxs = [2, 1]); verbose = false
+)
+@test analyze_solution_jacobian(solve(probperm, Rodas5P()); verbose = false).max_unstable == 0
+
+# In-place right-hand side under the default `AutoSpecialize` (function wrappers).
+probiip = ODEProblem((du, u, p, t) -> (du .= -2 .* u), [1.0, 2.0], (0.0, 1.0))
+resiip = analyze_solution_jacobian(solve(probiip, Rodas5P()); verbose = false)
+@test all(l -> all(≈(-2), l), resiip.eigenvalues)
+
+# Static arrays keep their type when evaluated with dual numbers.
+SA = ModelingToolkit.StaticArrays
+probsa = ODEProblem((u, p, t) -> SA.SVector(-2u[1], -3u[2]), SA.SVector(1.0, 2.0), (0.0, 1.0))
+ressa = analyze_solution_jacobian(solve(probsa, Rodas5P()); verbose = false)
+@test all(l -> sort(real.(l)) ≈ [-3, -2], ressa.eigenvalues)
+
+# Complex states and Jacobians of the wrong size are rejected at the API boundary.
+probc = ODEProblem((u, p, t) -> (-1 + 2im) .* u, [1.0 + 0im], (0.0, 1.0))
+solc = SciMLBase.build_solution(probc, nothing, [0.0], [[1.0 + 0im]])
+@test_throws ArgumentError analyze_solution_jacobian(solc; verbose = false)
+fbad = ODEFunction((u, p, t) -> -u; jac = (u, p, t) -> zeros(2, 3))
+probbad = ODEProblem(fbad, [1.0, 1.0], (0.0, 1.0))
+solbad = SciMLBase.build_solution(probbad, nothing, [0.0], [[1.0, 1.0]])
+@test_throws DimensionMismatch analyze_solution_jacobian(solbad; verbose = false, check_state = false)
 
 # The report is produced through the `solution_jacobian_analysis` toggle.
 @test_logs (:info, r"Solution Jacobian mode analysis") match_mode = :any analyze_solution_jacobian(sol)
