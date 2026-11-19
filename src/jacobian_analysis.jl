@@ -99,12 +99,14 @@ A `NamedTuple` with fields
   - `jacobians`: the (reduced) Jacobian at each time point.
   - `eigenvalues`: the eigenvalues at each time point, sorted from fastest to slowest
     (by decreasing `|real(λ)|`).
-  - `time_constants`: `1 / |real(λ)|` for each eigenvalue (`Inf` for purely oscillatory
-    or constant modes, e.g. those of conservation laws, whose real part is zero to
-    rounding).
+  - `time_constants`: `1 / |real(λ)|` for each eigenvalue (`Inf` for zero eigenvalues and
+    for modes whose real part is zero to the accuracy of the computed spectrum, e.g.
+    undamped oscillatory modes).
   - `natural_frequencies`: `|λ|` for each eigenvalue.
   - `damping`: the relative damping `ζ = -real(λ) / |λ|` of each eigenvalue (`1` for a
-    decaying real mode, `-1` for a growing real mode, `NaN` for `λ = 0`).
+    decaying real mode, `-1` for a growing real mode, `NaN` for a zero eigenvalue).
+  - `zero_eigenvalues`: at each time point, a mask of the eigenvalues that are zero to the
+    accuracy of the computed spectrum, e.g. integrators and conservation laws (see below).
   - `participation`: at each time point, a matrix whose column `k` holds the participation
     of every unknown in mode `k` (columns ordered as `eigenvalues`). The two eigenvalues of
     a complex-conjugate pair describe one oscillatory mode in a two-dimensional real
@@ -133,6 +135,16 @@ res.fast_unknowns          # which unknowns make the model stiff
 extrema(res.stiffness_ratio)
 res.least_damped           # the least-damped oscillatory mode and its unknowns
 ```
+
+# Zero eigenvalues and numerical resolution
+
+A computed eigenvalue is accurate only to about `ϵ * max|λ|` (and `ϵ^(1/i) * max|λ|` for an
+eigenvalue of multiplicity `i`, e.g. the double zero eigenvalue of a double integrator).
+Eigenvalues within these radii of the origin are classified as zero eigenvalues, following
+`count_eigval_multiplicity` of ControlSystemsBase.jl; they are excluded from the stiffness
+ratio and from the count of unstable modes. Real parts smaller than `100ϵ * max|λ|` are
+treated as zero. Consequently, in a stiff system a mode slower than about `100ϵ` times the
+fastest mode cannot be distinguished from a zero eigenvalue and is reported as one.
 
 !!! note
     The analysis is local: eigenvalues of the Jacobian along a nonlinear (or
@@ -185,6 +197,8 @@ function analyze_solution_jacobian(
     damping = Vector{Float64}[]
     participation = Matrix{Float64}[]
     stiffness_ratio = Float64[]
+    zero_eigenvalues = BitVector[]
+    real_parts = Vector{Float64}[]
     nunstable = Int[]
     for (u, t) in zip(us, ts_)
         J = _rhs_jacobian(f, u0, u, p, t, autodiff)
@@ -192,13 +206,16 @@ function analyze_solution_jacobian(
         λ, P = _modes(Jr)
         push!(jacobians, Jr)
         push!(eigenvalues, λ)
-        tol = _zero_tol(λ)
-        push!(time_constants, [abs(real(l)) <= tol ? Inf : 1 / abs(real(l)) for l in λ])
+        zm = _zero_eigenvalues(λ)
+        σ = _resolved_real_parts(λ, zm)
+        push!(zero_eigenvalues, zm)
+        push!(real_parts, σ)
+        push!(time_constants, [iszero(s) ? Inf : 1 / abs(s) for s in σ])
         push!(natural_frequencies, abs.(λ))
-        push!(damping, [iszero(l) ? NaN : -real(l) / abs(l) for l in λ])
+        push!(damping, [zm[k] ? NaN : -σ[k] / abs(λ[k]) for k in eachindex(λ)])
         push!(participation, P)
-        push!(stiffness_ratio, _stiffness_ratio(λ))
-        push!(nunstable, count(l -> real(l) > tol, λ))
+        push!(stiffness_ratio, _stiffness_ratio(σ))
+        push!(nunstable, count(>(0), σ))
     end
 
     names = syms[diffidxs]
@@ -209,7 +226,7 @@ function analyze_solution_jacobian(
     if stiffest_index > 0
         λ = eigenvalues[stiffest_index]
         P = participation[stiffest_index]
-        decaying = findall(l -> real(l) < -_zero_tol(λ), λ)
+        decaying = findall(<(0), real_parts[stiffest_index])
         if !isempty(decaying)
             fast_unknowns = _weighted_pairs(names, P[:, first(decaying)], threshold)
             slow_unknowns = _weighted_pairs(names, P[:, last(decaying)], threshold)
@@ -217,7 +234,7 @@ function analyze_solution_jacobian(
     end
     max_unstable = isempty(nunstable) ? 0 : maximum(nunstable)
     least_damped = _least_damped_mode(
-        ts_, names, eigenvalues, damping, participation, threshold
+        ts_, names, eigenvalues, zero_eigenvalues, damping, participation, threshold
     )
 
     @SciMLMessage(verbose, :solution_jacobian_analysis) do
@@ -228,19 +245,21 @@ function analyze_solution_jacobian(
     end
     return (;
         t = ts_, unknowns = names, jacobians, eigenvalues, time_constants,
-        natural_frequencies, damping, participation, stiffness_ratio, stiffest_index,
-        fast_unknowns, slow_unknowns, max_unstable, least_damped,
+        natural_frequencies, damping, zero_eigenvalues, participation, stiffness_ratio,
+        stiffest_index, fast_unknowns, slow_unknowns, max_unstable, least_damped,
     )
 end
 
 # The oscillatory mode with the smallest relative damping over all time points, or
 # `nothing` if there is no oscillatory mode.
-function _least_damped_mode(ts, names, eigenvalues, damping, participation, threshold)
+function _least_damped_mode(
+        ts, names, eigenvalues, zero_eigenvalues, damping, participation, threshold
+    )
     best = nothing
     for i in eachindex(eigenvalues)
         λ = eigenvalues[i]
         for k in eachindex(λ)
-            iszero(imag(λ[k])) && continue
+            (iszero(imag(λ[k])) || zero_eigenvalues[i][k]) && continue
             if best === nothing || damping[i][k] < damping[best[1]][best[2]]
                 best = (i, k)
             end
@@ -375,12 +394,52 @@ function _modes(J)
     return λ[perm], P[:, perm]
 end
 
-# Real parts below this are treated as zero (constant/purely oscillatory modes).
-_zero_tol(λ) = isempty(λ) ? 0.0 : 1.0e3 * eps(Float64) * max(1.0, maximum(abs, λ))
+# Mask of the eigenvalues that are zero to the accuracy of the computed spectrum `λ`
+# (integrators, conservation laws). Follows `count_eigval_multiplicity` of
+# ControlSystemsBase.jl: a backward-stable eigenvalue algorithm perturbs an eigenvalue of
+# multiplicity `i` by an amount of order `ϵ^(1/i)` relative to the scale of the problem, so
+# a candidate cluster of multiplicity `i` consists of exactly `i` eigenvalues within the
+# radius `(100ϵ)^(1/i) * max|λ|` of the origin. The cluster is accepted only if the monic
+# polynomial with the normalized cluster eigenvalues as roots is close to `z^i`, which
+# rejects unrelated slow modes inside the radius. The radius is proportional to the scale
+# of the spectrum, so the result does not depend on the time unit.
+function _zero_eigenvalues(λ)
+    n = length(λ)
+    mask = falses(n)
+    n == 0 && return mask
+    scale = maximum(abs, λ)
+    iszero(scale) && return trues(n)
+    η = 100 * eps(Float64)
+    for i in 1:n
+        cluster = findall(l -> abs(l) <= η^(1 / i) * scale, λ)
+        length(cluster) == i || continue
+        # Ascending coefficients of the monic polynomial prod(z - λ[k] / scale).
+        c = zeros(ComplexF64, i + 1)
+        c[end] = 1
+        for (j, k) in enumerate(cluster)
+            q = λ[k] / scale
+            for m in (i - j + 1):i
+                c[m] -= q * c[m + 1]
+            end
+        end
+        maximum(abs, @view(c[1:i])) <= i * η || continue
+        mask[cluster] .= true
+        return mask
+    end
+    return mask
+end
 
-function _stiffness_ratio(λ)
-    tol = _zero_tol(λ)
-    rates = [-real(l) for l in λ if real(l) < -tol]
+# Real parts of `λ`, set to zero for the zero eigenvalues `zero_mask` and for real parts
+# within the accuracy `100ϵ * max|λ|` of a simple eigenvalue (e.g. undamped oscillatory
+# modes).
+function _resolved_real_parts(λ, zero_mask)
+    tol = isempty(λ) ? 0.0 : 100 * eps(Float64) * maximum(abs, λ)
+    return [zero_mask[k] || abs(real(λ[k])) <= tol ? 0.0 : real(λ[k]) for k in eachindex(λ)]
+end
+
+# `max |σ| / min |σ|` over the negative (resolved) real parts `σ`.
+function _stiffness_ratio(σ)
+    rates = [-s for s in σ if s < 0]
     isempty(rates) && return NaN
     return maximum(rates) / minimum(rates)
 end

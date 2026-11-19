@@ -144,15 +144,51 @@ report = ModelingToolkit._solution_jacobian_report(
 @test all(k -> Prep[:, 2k] ≈ Prep[:, 2k - 1], 1:2)
 @test all(k -> count(>(0.1), Prep[:, 2k]) == 2, 1:2)
 
-# A fast real mode does not hide a slow, lightly damped oscillatory mode.
-λstiff, _ = ModelingToolkit._modes([-1.0e12 0 0; 0 -0.001 0.1; 0 -0.1 -0.001])
-@test length(ModelingToolkit._conjugate_groups(λstiff)) == 2
+# A fast real mode does not hide a slower, lightly damped oscillatory mode whose real part
+# is resolved (larger than `100ϵ` times the fastest mode).
+Jstiff = [-1.0e6 0 0; 0 -0.1 10; 0 -10 -0.1]
+λstiff, Pstiff = ModelingToolkit._modes(Jstiff)
+zstiff = ModelingToolkit._zero_eigenvalues(λstiff)
+@test !any(zstiff)
+σstiff = ModelingToolkit._resolved_real_parts(λstiff, zstiff)
 ldstiff = ModelingToolkit._least_damped_mode(
-    [0.0], [:a, :b, :c], [λstiff], [[-real(l) / abs(l) for l in λstiff]],
-    [ModelingToolkit._modes([-1.0e12 0 0; 0 -0.001 0.1; 0 -0.1 -0.001])[2]], 0.05
+    [0.0], [:a, :b, :c], [λstiff], [zstiff], [-σstiff ./ abs.(λstiff)], [Pstiff], 0.05
 )
 @test ldstiff !== nothing
-@test ldstiff.natural_frequency ≈ hypot(0.001, 0.1)
+@test ldstiff.natural_frequency ≈ hypot(0.1, 10)
+@test ldstiff.damping ≈ 0.1 / hypot(0.1, 10)
+@test ModelingToolkit._stiffness_ratio(σstiff) ≈ 1.0e7
+
+# A double integrator in a non-modal basis: the double zero eigenvalue is perturbed by
+# about √ϵ to a pair of small real eigenvalues of opposite sign. It must be classified as
+# two zero eigenvalues rather than as a slow decaying and a spurious unstable mode.
+Qdi = [1.0 2 0 1; 0 1 3 0; 1 0 1 2; 2 1 0 1]
+Jdi = Qdi * [0 1 0 0; 0 0 0 0; 0 0 -1.0e3 0; 0 0 0 -1] / Qdi
+λdi, _ = ModelingToolkit._modes(Jdi)
+zdi = ModelingToolkit._zero_eigenvalues(λdi)
+@test count(zdi) == 2
+@test all(abs.(λdi[zdi]) .< 1.0e-4)
+σdi = ModelingToolkit._resolved_real_parts(λdi, zdi)
+@test count(>(0), σdi) == 0
+@test ModelingToolkit._stiffness_ratio(σdi) ≈ 1.0e3 rtol = 1.0e-6
+
+# End to end: a double integrator coupled to a fast and a slow decaying state.
+@variables xd(t) vd(t) wd(t) zd(t)
+@named sysdi = System(
+    [
+        D(xd) ~ vd + 0.5wd, D(vd) ~ 0.3wd - 0.2zd, D(wd) ~ -1000wd + 3zd,
+        D(zd) ~ -zd,
+    ], t
+)
+sysdi = mtkcompile(sysdi)
+probdi = ODEProblem(sysdi, [xd => 0.0, vd => 1.0, wd => 1.0, zd => 1.0], (0.0, 1.0))
+soldi = solve(probdi, Rodas5P())
+resdi = analyze_solution_jacobian(soldi; verbose = false)
+@test all(m -> count(m) == 2, resdi.zero_eigenvalues)
+@test resdi.max_unstable == 0
+@test all(r -> isapprox(r, 1000; rtol = 1.0e-6), resdi.stiffness_ratio)
+@test all(d -> all(isnan, d[resdi.zero_eigenvalues[1]]), resdi.damping)
+@test all(τ -> count(isinf, τ) == 2, resdi.time_constants)
 
 # The report is produced through the `solution_jacobian_analysis` toggle.
 @test_logs (:info, r"Solution Jacobian mode analysis") match_mode = :any analyze_solution_jacobian(sol)
