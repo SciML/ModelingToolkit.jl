@@ -493,6 +493,22 @@ end
     )
     nested_obs = ModelingToolkitBase.build_explicit_observed_function(sys, (x[1], x[2]); optimize = [nested_tuple_rule])
     @test nested_obs(prob.u0, prob.p, 0.0) == ((10.0, 2.0), 3.0)
+    tuple_in_array_rule = OptimizationRule(
+        "tuple in array", (ir, expr) -> expr isa AbstractVector && length(expr) == 2 ? true : nothing,
+        (ir, expr, _) -> (populate_ir!(ir, whole); (ir, Any[MakeTuple((whole, unwrap(x[2]))), expr[2]])), 1
+    )
+    tuple_in_array, _ = generate_custom_function(sys, [x[1], x[2]]; optimize = [tuple_in_array_rule], expression = Val(false))
+    @test tuple_in_array(prob.u0, prob.p, 0.0) == Any[(10.0, 2.0), 2.0]
+
+    @parameters k[1:4]
+    @mtkcompile psys = System([D(x[i]) ~ -k[i] * x[i] for i in 1:4], t)
+    psum = unwrap(sum(k))
+    param_rule = OptimizationRule(
+        "param", (ir, expr) -> expr isa AbstractVector && length(expr) == 4 ? true : nothing,
+        (ir, expr, _) -> (populate_ir!(ir, psum); (ir, [psum; expr[2:end]])), 1
+    )
+    pprob = ODEProblem(psys, [x => [1.0, 2.0, 3.0, 4.0], k => [1.0, 2.0, 3.0, 2.0]], (0.0, 1.0); optimize = [param_rule])
+    @test pprob.f(pprob.u0, pprob.p, 0.0)[1] == 8.0
     nested_rule = OptimizationRule(
         "nested", (ir, expr) -> expr isa AbstractVector && length(expr) == 2 && expr[1] isa AbstractVector ? true : nothing,
         (ir, expr, _) -> (populate_ir!(ir, whole); (ir, [[whole], expr[2]])), 1
