@@ -115,7 +115,7 @@ struct ShiftIndex
     ShiftIndex(::Num, steps::Int) = new(IntegerSequence(), steps)
 end
 
-(xn::Num)(k::ShiftIndex) = wrap(unwrap(xn)(k))
+(xn::Num)(k::ShiftIndex) = Num(unwrap(xn)(k))
 
 function (xn::SymbolicT)(k::ShiftIndex)
     @unpack clock, steps = k
