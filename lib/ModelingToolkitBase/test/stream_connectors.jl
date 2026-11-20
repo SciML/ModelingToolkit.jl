@@ -724,3 +724,61 @@ end
     term = Symbolics.STerm(ModelingToolkitBase.instream_rt, [Val(1), Val(1), x, y, a, b]; type = Real, shape = UnitRange{Int}[])
     @test isequal(term, SU.scalarize(term))
 end
+
+@testset "Issue#5217: `instream_rt` outer weights use Modelica §15.2 sign" begin
+    @connector function SPort5217(; name)
+        @variables p(t) m(t) [connect = Flow] h(t) [connect = Stream]
+        System(Equation[], t, [p, m, h], []; name)
+    end
+
+    function Src5217(; name, q0, x0)
+        @named port = SPort5217()
+        @variables x(t) = x0 q(t) = q0
+        System([port.m ~ -q, port.h ~ x, D(x) ~ -x, D(q) ~ -q], t; name, systems = [port])
+    end
+
+    function Recv5217(; name)
+        @named port = SPort5217()
+        @variables z(t) = 3.0
+        System(
+            [port.m ~ 0.3 * z, port.h ~ z, D(z) ~ instream(port.h) - z], t;
+            name, systems = [port]
+        )
+    end
+
+    function RecvP5217(; name)
+        @named port = SPort5217()
+        @variables z(t) = 3.0
+        System(
+            [port.p ~ 1.0, port.h ~ z, D(z) ~ instream(port.h) - z], t;
+            name, systems = [port]
+        )
+    end
+
+    function Group5217(; name)
+        @named gp = SPort5217()
+        @named s1 = Src5217(q0 = 1.0, x0 = 2.0)
+        @named r = Recv5217()
+        System([connect(gp, s1.port, r.port)], t; name, systems = [gp, s1, r])
+    end
+
+    @named g5217 = Group5217()
+    @named b5217 = Src5217(q0 = 1.5, x0 = 4.0)
+    @named c5217 = RecvP5217()
+    sys5217 = mtkcompile(
+        System(
+            [connect(g5217.gp, b5217.port, c5217.port)], t;
+            name = :hier, systems = [g5217, b5217, c5217]
+        )
+    )
+    prob5217 = ODEProblem(sys5217, [], (0.0, 1.0); jac = false)
+    # The inner source withdraws (inner outflow) while fluid enters through
+    # the outer port, so the inflow mix must be the outer stream value.
+    u5217 = copy(prob5217.u0)
+    u5217[findfirst(isequal(sys5217.g5217.s1.q), unknowns(sys5217))] = -1.0
+    u5217[findfirst(isequal(sys5217.b5217.q), unknowns(sys5217))] = 1.5
+    f5217 = prob5217.f(u5217, prob5217.p, 0.0)
+    idx5217 = findfirst(isequal(sys5217.g5217.r.z), unknowns(sys5217))
+    @test !isnan(f5217[idx5217])
+    @test f5217[idx5217] ≈ -0.5
+end
