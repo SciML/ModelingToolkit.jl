@@ -647,8 +647,17 @@ const DEFAULT_CHUNK_SIZE = 500
 # of the whole function's IR, i.e. if they would recompute too many shared subexpressions.
 const DEFAULT_MAX_CHUNK_DUPLICATION = 1.25
 
-expand_tuples(x) = x isa Union{MakeTuple, Code.MakeArray} ? map(expand_tuples, collect(x.elems)) :
-    x isa AbstractArray && !(eltype(x) <: SymbolicT) ? map(expand_tuples, x) : x
+rule_output_leaves!(leaves, x::SymbolicT) = push!(leaves, x)
+function rule_output_leaves!(leaves, x::AbstractArray)
+    eltype(x) <: SymbolicT && return push!(leaves, x)
+    foreach(el -> rule_output_leaves!(leaves, el), x)
+    return leaves
+end
+function rule_output_leaves!(leaves, x::Union{Tuple, Code.Assignment, Code.Let, Code.Func, Code.SetArray, Code.AtIndex, Code.MakeArray, Code.MakeSparseArray, MakeTuple, Code.SpawnFetch, Code.ForLoop})
+    foreach(i -> rule_output_leaves!(leaves, getfield(x, i)), 1:nfields(x))
+    return leaves
+end
+rule_output_leaves!(leaves, x) = leaves
 
 # An atomic term can hold a non-constant index (`x[k]`, `Pre(x[k])`, `y(t - τ[k])`),
 # and codegen needs the indexed array, so only elements with constant indices stop the search
@@ -1143,7 +1152,7 @@ Base.@nospecializeinfer function build_function_wrapper(
             if all_assignments[] === nothing
                 out_ir, out_expr = rule_output[]
                 read_arrvars = Set{SymbolicT}()
-                SU.search_variables!(SU.IRStructureSearchBuffer(out_ir, read_arrvars), expand_tuples(out_expr); is_atomic = find_arrvars_is_atomic, recurse = find_arrvars_recurse)
+                SU.search_variables!(SU.IRStructureSearchBuffer(out_ir, read_arrvars), rule_output_leaves!(Any[], out_expr); is_atomic = find_arrvars_is_atomic, recurse = find_arrvars_recurse)
                 setdiff!(read_arrvars, required_arrvars)
                 all_assignments[] = isempty(read_arrvars) ? assignments : [array_assignments(read_arrvars); assignments]
             end
