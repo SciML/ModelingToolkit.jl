@@ -305,6 +305,44 @@ Returns true if the expression or equation `O` contains [`Hold`](@ref) terms.
 """
 hashold(O) = recursive_hasoperator(Hold, unwrap(O))
 
+"""
+    ZeroCrossing(expr; name = gensym(), up = true, down = true, kwargs...)
+
+Construct a [`SymbolicContinuousCallback`](@ref) that detects when `expr` crosses zero.
+Include the callback in the `continuous_events` vector of a [`System`](@ref).
+By default, a crossing leaves the model state unchanged.
+
+# Arguments
+
+- `expr` is the scalar symbolic expression whose sign determines the crossing direction.
+
+# Keyword Arguments
+
+- `name::Symbol` identifies the callback for `SciMLBase.Clocks.EventClock(callback)`.
+  It defaults to a freshly generated symbol.
+- `up::Bool = true` installs the affect for crossings from negative to positive.
+- `down::Bool = true` installs the affect for crossings from positive to negative.
+- `kwargs...` are forwarded to [`SymbolicContinuousCallback`](@ref).
+
+The solver can still save a time point at a crossing with its affect disabled.
+
+# Examples
+
+```jldoctest
+julia> using ModelingToolkitBase
+
+julia> using ModelingToolkitBase: ZeroCrossing, t_nounits as t, D_nounits as D
+
+julia> @variables x(t);
+
+julia> crossing = ZeroCrossing(x - 1; name = :threshold, down = false);
+
+julia> @named sys = System([D(x) ~ 1], t; continuous_events = [crossing]);
+
+julia> length(continuous_events(sys))
+1
+```
+"""
 function ZeroCrossing(expr; name = gensym(), up = true, down = true, kwargs...)
     return SymbolicContinuousCallback(
         [expr ~ 0], up ? ImperativeAffect(Returns(nothing)) : nothing;
