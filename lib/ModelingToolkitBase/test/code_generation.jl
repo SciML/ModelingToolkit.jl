@@ -6,7 +6,7 @@ using SymbolicUtils: unwrap, iscall, operation, populate_ir!, IRStructure
 using SymbolicUtils.Code: OptimizationRule, Assignment, MakeTuple, MakeArray, MakeSparseArray, Let, LiteralExpr
 using ModelingToolkitBase: t_nounits as t, D_nounits as D
 using Test
-import Symbolics
+import Symbolics, SymbolicUtils
 
 @testset "`generate_custom_function`" begin
     @variables x(t) y(t)[1:3]
@@ -506,20 +506,20 @@ end
     maker, _ = generate_custom_function(sys, [x[1], x[2]]; optimize = [maker_rule], expression = Val(false))
     @test maker(prob.u0, prob.p, 0.0) == [(10.0, 2.0)]
     let_rule = OptimizationRule(
-        "let", (ir, expr) -> expr isa Symbolics.SymbolicT ? true : nothing,
+        "let", (ir, expr) -> expr isa SymbolicUtils.BasicSymbolic ? true : nothing,
         (ir, expr, _) -> (populate_ir!(ir, whole); (ir, Let(Assignment[], whole, false))), 1
     )
     let_fn = generate_custom_function(sys, x[1]; optimize = [let_rule], expression = Val(false))
     @test let_fn(prob.u0, prob.p, 0.0) == 10.0
     literal_rule = OptimizationRule(
-        "literal", (ir, expr) -> expr isa Symbolics.SymbolicT ? true : nothing,
+        "literal", (ir, expr) -> expr isa SymbolicUtils.BasicSymbolic ? true : nothing,
         (ir, expr, _) -> (populate_ir!(ir, whole); (ir, LiteralExpr(Expr(:call, identity, whole)))), 1
     )
     literal_fn = generate_custom_function(sys, x[1]; optimize = [literal_rule], expression = Val(false))
     @test literal_fn(prob.u0, prob.p, 0.0) == 10.0
     const_rule = OptimizationRule(
-        "const", (ir, expr) -> expr isa Symbolics.SymbolicT ? true : nothing,
-        (ir, expr, _) -> (populate_ir!(ir, whole); (ir, Symbolics.SConst(MakeTuple((whole, unwrap(x[2])))))), 1
+        "const", (ir, expr) -> expr isa SymbolicUtils.BasicSymbolic ? true : nothing,
+        (ir, expr, _) -> (populate_ir!(ir, whole); (ir, SymbolicUtils.Const{SymbolicUtils.SymReal}(MakeTuple((whole, unwrap(x[2])))))), 1
     )
     const_fn = generate_custom_function(sys, x[1]; optimize = [const_rule], expression = Val(false))
     @test const_fn(prob.u0, prob.p, 0.0) == (10.0, 2.0)
@@ -554,7 +554,7 @@ end
     @variables y(t)[1:4]
     ys = unwrap.(collect(y))
     pre = complete(System(Equation[], t, ys, []; name = :pre, preface = [Assignment(unwrap(y), [10.0, 20.0, 30.0, 40.0])]); split = false)
-    swap_sum = OptimizationRule("sum", (ir, expr) -> expr isa Symbolics.SymbolicT ? true : nothing, (ir, expr, _) -> (populate_ir!(ir, unwrap(sum(y)) + 1); (ir, unwrap(sum(y)) + 1)), 1)
+    swap_sum = OptimizationRule("sum", (ir, expr) -> expr isa SymbolicUtils.BasicSymbolic ? true : nothing, (ir, expr, _) -> (populate_ir!(ir, unwrap(sum(y)) + 1); (ir, unwrap(sum(y)) + 1)), 1)
     direct = generate_custom_function(pre, sum(y) + 1; expression = Val(false))
     optimized = generate_custom_function(pre, sin(y[1]) + 1; optimize = [swap_sum], expression = Val(false))
     @test optimized([2.0, 4.0, 6.0, 8.0], Float64[], 0.0) == direct([2.0, 4.0, 6.0, 8.0], Float64[], 0.0) == 101.0
