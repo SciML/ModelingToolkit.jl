@@ -657,7 +657,8 @@ function rule_output_leaves!(leaves, x::Union{Tuple, Code.Assignment, Code.Let, 
     foreach(i -> rule_output_leaves!(leaves, getfield(x, i)), 1:nfields(x))
     return leaves
 end
-rule_output_leaves!(leaves, x) = leaves
+rule_output_leaves!(leaves, x::Symbolics.Arr) = rule_output_leaves!(leaves, unwrap(x))
+rule_output_leaves!(leaves, x) = (y = unwrap(x); y === x ? leaves : rule_output_leaves!(leaves, y))
 
 # An atomic term can hold a non-constant index (`x[k]`, `Pre(x[k])`, `y(t - τ[k])`),
 # and codegen needs the indexed array, so only elements with constant indices stop the search

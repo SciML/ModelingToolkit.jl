@@ -511,6 +511,11 @@ end
     )
     let_fn = generate_custom_function(sys, x[1]; optimize = [let_rule], expression = Val(false))
     @test let_fn(prob.u0, prob.p, 0.0) == 10.0
+    wrapped_rule = OptimizationRule(
+        "wrapped", detector, (ir, expr, _) -> (populate_ir!(ir, whole); (ir, Symbolics.Num[Symbolics.Num(whole); Symbolics.Num.(expr[2:end])])), 1
+    )
+    wprob = ODEProblem(sys, [x => [1.0, 2.0, 3.0, 4.0]], (0.0, 1.0); optimize = [wrapped_rule])
+    @test wprob.f(wprob.u0, wprob.p, 0.0)[1] == 10.0
 
     @parameters k[1:4]
     @mtkcompile psys = System([D(x[i]) ~ -k[i] * x[i] for i in 1:4], t)
