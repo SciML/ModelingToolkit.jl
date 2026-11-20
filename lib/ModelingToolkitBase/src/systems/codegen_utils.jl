@@ -1153,22 +1153,23 @@ Base.@nospecializeinfer function build_function_wrapper(
         opts.codegen.wrap_code .∘ wrap_assignments(false, assignments)
     else
         rule_output = Ref{Any}()
-        record_output(_, out_expr) = (rule_output[] = out_expr; nothing)
+        record_output(out_ir, out_expr) = (rule_output[] = (out_ir, out_expr); nothing)
         recorder(priority) = Code.OptimizationRule("record_output", record_output, Returns(nothing), priority)
         optimize = [collect(Code.OptimizationRule, optimize); recorder(typemin(Int)); recorder(typemax(Int))]
         all_assignments = Ref{Any}(nothing)
         function bind_rule_arrvars(f)
             if all_assignments[] === nothing
+                out_ir, out_expr = rule_output[]
                 read_arrvars = Set{SymbolicT}()
-                leaves = rule_output_leaves!(Any[], rule_output[])
+                leaves = rule_output_leaves!(Any[], out_expr)
                 seen_consts = Set{SymbolicT}()
                 while !isempty(leaves)
                     nodes = SymbolicT[]
                     foreach(l -> l isa AbstractArray ? append!(nodes, l) : push!(nodes, l), leaves)
                     joined = SU.Const{VartypeT}(nodes)
-                    SU.search_variables!(read_arrvars, joined; is_atomic = find_arrvars_is_atomic, recurse = x -> iscall(x) && find_arrvars_recurse(x))
+                    SU.search_variables!(read_arrvars, out_ir, joined; is_atomic = find_arrvars_is_atomic, recurse = x -> iscall(x) && find_arrvars_recurse(x))
                     consts = Set{SymbolicT}()
-                    SU.search_variables!(consts, joined; is_atomic = holds_code)
+                    SU.search_variables!(consts, out_ir, joined; is_atomic = holds_code)
                     setdiff!(consts, seen_consts)
                     union!(seen_consts, consts)
                     leaves = foldl((acc, c) -> rule_output_leaves!(acc, unwrap_const(c)), consts; init = Any[])

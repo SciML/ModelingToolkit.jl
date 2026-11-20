@@ -558,4 +558,41 @@ end
     direct = generate_custom_function(pre, sum(y) + 1; expression = Val(false))
     optimized = generate_custom_function(pre, sin(y[1]) + 1; optimize = [swap_sum], expression = Val(false))
     @test optimized([2.0, 4.0, 6.0, 8.0], Float64[], 0.0) == direct([2.0, 4.0, 6.0, 8.0], Float64[], 0.0) == 101.0
+
+    nested_node = OptimizationRule(
+        "nested node", detector, (ir, expr, _) -> (new_ir = copy(ir); SymbolicUtils.replace_node!(new_ir, unwrap(sin(x[1])), whole); (new_ir, expr)), 1
+    )
+    nprob = ODEProblem(sys, [x => [1.0, 2.0, 3.0, 4.0]], (0.0, 1.0); optimize = [nested_node])
+    du = zeros(4)
+    nprob.f(du, nprob.u0, nprob.p, 0.0)
+    @test du[1] == nprob.f(nprob.u0, nprob.p, 0.0)[1] == 11.0
+
+    @variables z(t)[1:4]
+    @mtkcompile zsys = System([D(z[i]) ~ -i * z[i] for i in 1:4], t)
+    zprob = ODEProblem(zsys, [z => [1.0, 2.0, 3.0, 4.0]], (0.0, 1.0))
+    arr_rule = OptimizationRule("arr", (ir, expr) -> true, (ir, expr, _) -> (populate_ir!(ir, unwrap(z)); (ir, z)), 1)
+    arr_out = generate_custom_function(zsys, z[1]; optimize = [arr_rule], expression = Val(false))
+    @test arr_out(zprob.u0, zprob.p, 0.0) == [1.0, 2.0, 3.0, 4.0]
+    @variables tmp
+    zsum = unwrap(sum(z))
+    let_rule = OptimizationRule(
+        "let rhs", (ir, expr) -> true,
+        (ir, expr, _) -> (populate_ir!(ir, zsum); (ir, Let([Assignment(unwrap(tmp), zsum)], unwrap(tmp), false))), 1
+    )
+    let_rhs = generate_custom_function(zsys, z[1]; optimize = [let_rule], expression = Val(false))
+    @test let_rhs(zprob.u0, zprob.p, 0.0) == 10.0
+    @parameters q[1:4]
+    @mtkcompile qsys = System([D(z[i]) ~ -q[i] * z[i] for i in 1:4], t)
+    qsum = unwrap(sum(q))
+    q_rule = OptimizationRule("q", (ir, expr) -> true, (ir, expr, _) -> (populate_ir!(ir, qsum); (ir, qsum)), 1)
+    qopts = ModelingToolkitBase.BuildFunctionWrapperOptions(;
+        non_standard_param_layout = true, wrap_mtkparameters = false,
+        codegen_function_options = Symbolics.CodegenFunctionOptions(; optimize = [q_rule])
+    )
+    qex = ModelingToolkitBase.build_function_wrapper(qsys, unwrap(z[1]), Any[unwrap.(collect(z)), unwrap.(collect(q)), t], qopts)
+    @test ModelingToolkitBase.eval_or_rgf(qex[1])([1.0, 2.0, 3.0, 4.0], [1.0, 2.0, 3.0, 2.0], 0.0) == 8.0
+    count_views(e) = e isa Expr ? Int(Meta.isexpr(e, :call) && e.args[1] in (view, GlobalRef(Base, :view))) + sum(count_views, e.args; init = 0) : 0
+    noop = OptimizationRule("noop", (ir, expr) -> nothing, Returns(nothing), 1)
+    @test count_views(generate_custom_function(zsys, z[1]; expression = Val(true))[1]) == 0
+    @test count_views(generate_custom_function(zsys, sum(z) + 1; optimize = [noop], expression = Val(true))[1]) == 1
 end
