@@ -3,7 +3,7 @@ using SciMLBase
 using SciMLStructures
 using SparseArrays
 using SymbolicUtils: unwrap, iscall, operation, populate_ir!, IRStructure
-using SymbolicUtils.Code: OptimizationRule, Assignment, MakeTuple, MakeArray, MakeSparseArray, Let, LiteralExpr
+using SymbolicUtils.Code: OptimizationRule, Assignment, MakeTuple, MakeArray, MakeSparseArray, Let, LiteralExpr, SetArray, AtIndex
 using ModelingToolkitBase: t_nounits as t, D_nounits as D
 using Test
 import Symbolics, SymbolicUtils
@@ -565,7 +565,9 @@ end
     nprob = ODEProblem(sys, [x => [1.0, 2.0, 3.0, 4.0]], (0.0, 1.0); optimize = [nested_node])
     du = zeros(4)
     nprob.f(du, nprob.u0, nprob.p, 0.0)
-    @test du[1] == nprob.f(nprob.u0, nprob.p, 0.0)[1] == 11.0
+    i1 = findfirst(isequal(unwrap(x[1])), unwrap.(unknowns(sys)))
+    @test du == nprob.f(nprob.u0, nprob.p, 0.0)
+    @test du[i1] == 11.0
 
     @variables z(t)[1:4]
     @mtkcompile zsys = System([D(z[i]) ~ -i * z[i] for i in 1:4], t)
@@ -595,4 +597,12 @@ end
     noop = OptimizationRule("noop", (ir, expr) -> nothing, Returns(nothing), 1)
     @test count_views(generate_custom_function(zsys, z[1]; expression = Val(true))[1]) == 0
     @test count_views(generate_custom_function(zsys, sum(z) + 1; optimize = [noop], expression = Val(true))[1]) == 1
+    @test count_views(generate_custom_function(zsys, z[1]; optimize = [noop], expression = Val(true))[1]) == 0
+    for (elems, wrap) in (([AtIndex(1, zsum)], identity), ((AtIndex(i, zsum) for i in 1:1), identity), ((AtIndex(i, zsum) for i in 1:1), SymbolicUtils.Const{SymbolicUtils.SymReal}))
+        set_rule = OptimizationRule(
+            "set", (ir, expr) -> true,
+            (ir, expr, _) -> (populate_ir!(ir, zsum); (ir, wrap(Let([Assignment(:buf, LiteralExpr(:(zeros(1))))], SetArray(false, :buf, elems, true), false)))), 1
+        )
+        @test generate_custom_function(zsys, z[1]; optimize = [set_rule], expression = Val(false))(zprob.u0, zprob.p, 0.0) == [10.0]
+    end
 end

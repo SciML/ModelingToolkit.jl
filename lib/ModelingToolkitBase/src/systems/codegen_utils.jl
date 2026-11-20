@@ -654,19 +654,19 @@ function rule_output_leaves!(leaves, x::AbstractArray)
     foreach(el -> rule_output_leaves!(leaves, el), x)
     return leaves
 end
-const CodegenContainer = Union{
-    Code.Assignment, Code.Let, Code.Func, Code.DestructuredArgs, Code.LiteralExpr, Code.SetArray,
-    Code.AtIndex, Code.MakeArray, Code.MakeSparseArray, MakeTuple, Code.SpawnFetch, Code.ForLoop,
-}
-function rule_output_leaves!(leaves, x::Union{Tuple, CodegenContainer})
-    foreach(i -> rule_output_leaves!(leaves, getfield(x, i)), 1:nfields(x))
-    return leaves
-end
+is_codegen_container(x) = parentmodule(typeof(x)) === Code
+rule_output_fields!(leaves, x) = (foreach(i -> rule_output_leaves!(leaves, getfield(x, i)), 1:nfields(x)); leaves)
+rule_output_leaves!(leaves, x::Tuple) = rule_output_fields!(leaves, x)
+rule_output_leaves!(leaves, x::Base.Generator) = (foreach(el -> rule_output_leaves!(leaves, el), x); leaves)
 rule_output_leaves!(leaves, x::Symbolics.Arr) = rule_output_leaves!(leaves, unwrap(x))
 rule_output_leaves!(leaves, x::Expr) = rule_output_leaves!(leaves, x.args)
-rule_output_leaves!(leaves, x) = (y = unwrap(x); y === x ? leaves : rule_output_leaves!(leaves, y))
+function rule_output_leaves!(leaves, x)
+    is_codegen_container(x) && return rule_output_fields!(leaves, x)
+    y = unwrap(x)
+    return y === x ? leaves : rule_output_leaves!(leaves, y)
+end
 
-holds_code(x::SymbolicT) = unwrap_const(x) isa CodegenContainer
+holds_code(x::SymbolicT) = is_codegen_container(unwrap_const(x))
 
 # An atomic term can hold a non-constant index (`x[k]`, `Pre(x[k])`, `y(t - τ[k])`),
 # and codegen needs the indexed array, so only elements with constant indices stop the search
