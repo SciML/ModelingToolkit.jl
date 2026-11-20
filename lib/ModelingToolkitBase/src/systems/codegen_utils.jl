@@ -648,6 +648,7 @@ const DEFAULT_CHUNK_SIZE = 500
 const DEFAULT_MAX_CHUNK_DUPLICATION = 1.25
 
 rule_output_leaves!(leaves, x::SymbolicT) = push!(leaves, x)
+rule_output_leaves!(leaves, x::AbstractSparseArray) = rule_output_leaves!(leaves, nonzeros(x))
 function rule_output_leaves!(leaves, x::AbstractArray)
     eltype(x) <: SymbolicT && return push!(leaves, x)
     foreach(el -> rule_output_leaves!(leaves, el), x)

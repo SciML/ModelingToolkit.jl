@@ -3,7 +3,7 @@ using SciMLBase
 using SciMLStructures
 using SparseArrays
 using SymbolicUtils: unwrap, iscall, operation, populate_ir!, IRStructure
-using SymbolicUtils.Code: OptimizationRule, Assignment, MakeTuple, MakeArray, Let
+using SymbolicUtils.Code: OptimizationRule, Assignment, MakeTuple, MakeArray, MakeSparseArray, Let
 using ModelingToolkitBase: t_nounits as t, D_nounits as D
 using Test
 import Symbolics
@@ -516,6 +516,12 @@ end
     )
     wprob = ODEProblem(sys, [x => [1.0, 2.0, 3.0, 4.0]], (0.0, 1.0); optimize = [wrapped_rule])
     @test wprob.f(wprob.u0, wprob.p, 0.0)[1] == 10.0
+    sparse_rule = OptimizationRule(
+        "sparse", (ir, expr) -> expr isa AbstractVector && length(expr) == 2 ? true : nothing,
+        (ir, expr, _) -> (populate_ir!(ir, whole); (ir, MakeSparseArray(SparseMatrixCSC{Any, Int}(2, 2, [1, 2, 2], [1], Any[whole])))), 1
+    )
+    sparse_fn, _ = generate_custom_function(sys, [x[1], x[2]]; optimize = [sparse_rule], expression = Val(false))
+    @test sparse_fn(prob.u0, prob.p, 0.0)[1, 1] == 10.0
 
     @parameters k[1:4]
     @mtkcompile psys = System([D(x[i]) ~ -k[i] * x[i] for i in 1:4], t)
