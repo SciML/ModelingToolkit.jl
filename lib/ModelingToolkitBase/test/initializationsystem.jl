@@ -2052,6 +2052,109 @@ end
     @test typeof(nonbits_p.initials) === typeof(nonbits_prob.p.initials)
     @test !any(buf -> buf isa StaticArray, nonbits_p.nonnumeric)
     @test remake(nonbits_prob, p = [nonbits_rate => 3.0]).p.tunable == [3.0]
+
+    @testset "maps as expressions" begin
+        # With `expression = Val{true}` the generators hand back the `Expr` instead of
+        # compiling it. A downstream code generator (FMUGeneration) `string`s that `Expr`
+        # into a package of its own, so it has to re-parse and evaluate in a module that
+        # merely `import`s the packages (no exported names in scope): no bare `SVector`,
+        # no `StaticArraysCore.`/`BlockArrays.` prefixes, no interpolated closures.
+        # `SymbolicUtils` is what the observed-function bodies themselves refer to.
+        FMUProxy = Module(:FMUProxy)
+        Core.eval(FMUProxy, :(import ModelingToolkitBase, SciMLStructures, SymbolicIndexingInterface, SymbolicUtils))
+        roundtrip(ex::Expr) = Core.eval(FMUProxy, Meta.parse(string(Base.remove_linenums!(ex))))
+        gen_opts = ModelingToolkitBase.GeneratedFunctionOptions(; expression = Val{true})
+        same_params(a::ModelingToolkitBase.MTKParameters, b::ModelingToolkitBase.MTKParameters) =
+            a.tunable == b.tunable && a.initials == b.initials && a.discrete == b.discrete &&
+            a.constant == b.constant && a.nonnumeric == b.nonnumeric
+        same_params(a, b) = a == b
+
+        nosplit_sys = mtkcompile(
+            System(
+                [D(map_x) ~ -map_rate * map_x, D(map_y) ~ -map_scale * map_y], t; name = :nosplit_map,
+                initialization_eqs = [map_x^3 + map_x ~ 2, map_y ~ 2map_x + 1]
+            ); split = false
+        )
+        nosplit_prob = ODEProblem{true, SciMLBase.FullSpecialize}(
+            nosplit_sys, [], (0.0, 1.0); guesses
+        )
+        for (sys, prob) in (
+                (map_sys, full_prob), (array_sys, array_prob),
+                (nonbits_sys, nonbits_prob), (nosplit_sys, nosplit_prob),
+            )
+            data = prob.f.initialization_data
+            initprob = data.initializeprob
+            initsys = initprob.f.sys
+            all_init_syms = Set(all_symbols(initprob))
+            solved = filter(in(all_init_syms), ModelingToolkitBase.flat_unknowns(sys))
+
+            ex = ModelingToolkitBase._construct_fullspecialize_initializeprobmap(
+                initsys, solved, gen_opts; iip = true, u0_constructor = identity,
+                floatT = Float64, expression = Val{true}
+            )
+            @test ex isa Expr
+            u0map = roundtrip(ex)
+            # `invokelatest`: the maps were `eval`ed in this same top-level expression.
+            u0_ex = Base.invokelatest(u0map, initprob)
+            @test u0_ex == data.initializeprobmap(initprob)
+            @test typeof(u0_ex) === typeof(data.initializeprobmap(initprob))
+
+            ex = ModelingToolkitBase._construct_fullspecialize_initializeprobpmap(
+                sys, initsys, gen_opts; p_constructor = identity, expression = Val{true}
+            )
+            @test ex isa Expr
+            pmap = roundtrip(ex)
+            p_ex = Base.invokelatest(pmap, prob, initprob)
+            @test same_params(p_ex, data.initializeprobpmap(prob, initprob))
+            @test typeof(p_ex) === typeof(prob.p)
+
+            # The reconstruct direction refreshes the initialization problem from the
+            # parent problem, like `ReconstructInitializeprob` does for `remake`.
+            rc = ModelingToolkitBase._construct_fullspecialize_reconstruct(
+                sys, initsys, gen_opts; expression = Val{true}
+            )
+            @test rc.pgetter isa Expr
+            pgetter = roundtrip(rc.pgetter)
+            valp = ProblemState(; u = 2 .* prob.u0, p = prob.p, t = 0.0)
+            ref_u0, ref_p = data.metadata.oop_reconstruct_u0_p(valp, initprob)
+            p_rc = Base.invokelatest(pgetter, valp, initprob)
+            @test same_params(p_rc, ref_p)
+            @test typeof(p_rc) === typeof(initprob.p)
+            # `static_eltype` fixes the `u0` eltype at generation time; same values, and the
+            # result type is then inferable (what a `--trim`med consumer needs).
+            static_ex = ModelingToolkitBase._construct_fullspecialize_initializeprobmap(
+                initsys, solved, gen_opts; iip = true, u0_constructor = identity,
+                floatT = Float64, expression = Val{true}, static_eltype = Float64
+            )
+            static_u0map = roundtrip(static_ex)
+            @test Base.invokelatest(static_u0map, initprob) == u0_ex
+            if isdefined(Base, :infer_return_type)
+                @test Base.invokelatest(Base.infer_return_type, static_u0map, (typeof(initprob),)) === Vector{Float64}
+            end
+            # Compiled (non-expression) form of the reconstruct getters is a plain function.
+            rc_fn = ModelingToolkitBase._construct_fullspecialize_reconstruct(sys, initsys, gen_opts)
+            @test same_params(rc_fn.pgetter(valp, initprob), ref_p)
+            # No unknowns to solve for (trivial initialization) means no `u0` getter.
+            if isempty(unknowns(initsys))
+                @test ref_u0 === nothing
+                @test rc.ugetter === nothing && rc_fn.ugetter === nothing
+            else
+                @test rc.ugetter isa Expr
+                u0_rc = Base.invokelatest(roundtrip(rc.ugetter), valp)
+                @test u0_rc == ref_u0
+                @test typeof(u0_rc) === typeof(ref_u0)
+                @test rc_fn.ugetter(valp) == ref_u0
+                static_rc = ModelingToolkitBase._construct_fullspecialize_reconstruct(
+                    sys, initsys, gen_opts; expression = Val{true}, static_eltype = Float64
+                )
+                static_ugetter = roundtrip(static_rc.ugetter)
+                @test Base.invokelatest(static_ugetter, valp) == ref_u0
+                if isdefined(Base, :infer_return_type)
+                    @test Base.invokelatest(Base.infer_return_type, static_ugetter, (typeof(valp),)) === Vector{Float64}
+                end
+            end
+        end
+    end
 end
 
 @testset "FullSpecialize initialization survives a solve-time initialization" begin
