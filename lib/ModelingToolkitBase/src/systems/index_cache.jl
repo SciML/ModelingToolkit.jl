@@ -249,7 +249,7 @@ function IndexCache(sys::AbstractSystem)
         if isarr && symbolic_has_known_size(arrsym)
             arrsym in scalarized_arrays && continue
             if !(arrsym in partial_arrays)
-                elems = vec(collect(arrsym)::Array{SymbolicT})::Vector{SymbolicT}
+                elems = map(Base.Fix1(getindex, arrsym), SU.stable_eachindex(arrsym))
                 if all(in(tunable_pars_set), elems)
                     # An array passed as scalarized elements takes one column-major block
                     # at its first element, whatever order the elements are listed in.
