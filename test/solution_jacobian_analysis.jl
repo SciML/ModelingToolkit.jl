@@ -142,7 +142,7 @@ report = ModelingToolkit._solution_jacobian_report(
 # Classification of the eigenvalues of a matrix with entries accurate to `ϵ`.
 function classify(J)
     λ, P, κ = ModelingToolkit._modes(J, eps())
-    r = ModelingToolkit._eigenvalue_error_bounds(κ, eps(), norm(J))
+    r = ModelingToolkit._eigenvalue_error_bounds(λ, κ, eps(), norm(J))
     zm = abs.(λ) .<= r
     σ = [zm[k] || abs(real(λ[k])) <= r[k] ? 0.0 : real(λ[k]) for k in eachindex(λ)]
     return (; λ, P, κ, zm, σ)
@@ -203,6 +203,12 @@ c4 = classify(A4)
 Q3 = [1.0 2 0; 0 1 3; 1 0 1]
 c3 = classify(Q3 * [0 1 0; 0 0 1; 0 0 0] / Q3)
 @test all(c3.zm)
+
+# A nearly defective pair near -1: the first-order bound reaches the other eigenvalue and is
+# limited to the bound of a double eigenvalue, so the pair is resolved as decaying.
+cnear = classify([-1.0 1; 2.0e-28 -1])
+@test !any(cnear.zm)
+@test all(≈(-1), cnear.σ)
 
 # A defective eigenvalue away from the origin is neither a zero eigenvalue nor resolved
 # into participations of individual unknowns.
@@ -284,6 +290,17 @@ for s in (1.0f0, 2.0f0^-20)
     ress = analyze_solution_jacobian(sols; verbose = false)
     @test all(l -> only(l) ≈ -0.5, ress.eigenvalues)
 end
+
+# A nonsingular non-diagonal mass matrix: `M⁻¹ J = -I` exactly, decaying modes.
+Mnd = [1.0 1; 0 1.0e-8]
+Jnd, Snd = ModelingToolkit._reduced_jacobian(-Mnd, Mnd, [1, 2], 0.0, eps())
+@test Jnd ≈ -I
+λnd, _, κnd = ModelingToolkit._modes(Jnd, eps())
+@test !any(abs.(λnd) .<= ModelingToolkit._eigenvalue_error_bounds(λnd, κnd, eps(), Snd))
+
+# A purely algebraic mass-matrix problem reduces to an empty Jacobian.
+Jempty, _ = ModelingToolkit._reduced_jacobian(ones(1, 1), zeros(1, 1), Int[], 0.0, eps())
+@test size(Jempty) == (0, 0)
 
 # A defective Jacobian: no participation and no fast/slow unknowns are reported.
 soldef = solve(ODEProblem((u, p, t) -> [-u[1] + u[2], -u[2]], [1.0, 1.0], (0.0, 1.0)), Rodas5P())

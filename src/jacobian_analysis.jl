@@ -156,11 +156,13 @@ To first order, a perturbation `E` of the Jacobian moves an eigenvalue `λ` by a
 (see `autodiff`), `‖E‖ ≈ δ S`, where `S` is `‖J‖` for an ODE and, for a mass-matrix DAE,
 the scale of the terms entering the Schur complement (so that a reduced Jacobian that is
 small because of cancellation is not resolved beyond the accuracy of those terms). The
-error bound of `λ` is taken as `100 δ S κ`. For a defective cluster perturbed into split
-eigenvalues, `κ` is large and this bound has the order of the splitting, so that, e.g.,
-the split eigenvalues of a double or quadruple integrator expressed in a non-modal basis
-are recognized as zero eigenvalues. When the computed eigenvectors are numerically
-parallel (`κ ≥ 0.01 / δ`), the condition number is meaningless and `100 √δ S` is used. An
+error bound of `λ` is taken as `100 δ S κ`. This first-order bound is valid only while it
+does not reach another eigenvalue; otherwise, the `m` eigenvalues within it form a (nearly)
+defective cluster, and the bound is limited to `100 δ^(1/m) S`. For a defective cluster
+perturbed into split eigenvalues, `κ` is large and the bound has the order of the
+splitting, so that, e.g., the split eigenvalues of a double or quadruple integrator
+expressed in a non-modal basis are recognized as zero eigenvalues, while a nearly defective
+pair of eigenvalues near `-1` is resolved. An
 eigenvalue within its bound of the origin is reported as a zero eigenvalue (integrator,
 conservation law), and a real part within its bound of zero is treated as zero; the sign
 of such a real part is not resolved, and the mode is neither counted as unstable nor
@@ -242,7 +244,7 @@ function analyze_solution_jacobian(
         )
         Jr, S = _reduced_jacobian(J, M, diffidxs, t, δ)
         λ, P, κ = _modes(Jr, δ)
-        radius = _eigenvalue_error_bounds(κ, δ, S)
+        radius = _eigenvalue_error_bounds(λ, κ, δ, S)
         zm = BitVector(abs.(λ) .<= radius)
         σ = [zm[k] || abs(real(λ[k])) <= radius[k] ? 0.0 : real(λ[k]) for k in eachindex(λ)]
         push!(jacobians, Jr)
@@ -463,7 +465,9 @@ function _reduced_jacobian(J, M, diffidxs, t, δ)
             )
         )
         Jr = Md \ J
-        S = LinearAlgebra.opnorm(inv(Md)) * norm(J) * max(1.0, c * eps(Float64) / δ)
+        # The uncertainty of `J` propagates through `M⁻¹`; the rounding of the solve adds
+        # an error of about `cond(M) ϵ ‖Jr‖`, expressed relative to `δ`.
+        S = LinearAlgebra.opnorm(inv(Md)) * norm(J) + c * (eps(Float64) / δ) * norm(Jr)
         return Jr, max(S, norm(Jr))
     end
     m = LinearAlgebra.diag(Md)
@@ -478,6 +482,7 @@ function _reduced_jacobian(J, M, diffidxs, t, δ)
             "The Jacobian of the algebraic equations with respect to the algebraic unknowns is singular to the accuracy of the Jacobian at t = $t (smallest singular value $(round(σmin, sigdigits = 3)) after scaling the algebraic equations to unit norm), so the algebraic unknowns cannot be eliminated. The DAE may be of index greater than one there."
         )
     )
+    isempty(d) && return zeros(0, 0), 0.0
     Ã = J[a, a] ./ rownorms
     X = Ã \ (J[a, d] ./ rownorms)
     Y = J[d, a] / Ã
@@ -533,20 +538,26 @@ function _modes(J, δ)
     return λ[perm], P[:, perm], κ[perm]
 end
 
-# Bounds on the error of the computed eigenvalues of a matrix whose entries have the
+# Bounds on the error of the computed eigenvalues `λ` of a matrix whose entries have the
 # absolute error `δ S`, with eigenvalue condition numbers `κ`. To first order, a
-# perturbation `E` moves the eigenvalue `λ_k` by at most `κ_k ‖E‖`. For an eigenvalue of a
-# defective cluster of order `m` that is perturbed by `‖E‖`, the computed condition number
-# is of order `(‖E‖ / S)^(-(m - 1) / m)`, so the first-order bound has the correct order
-# `‖E‖^(1/m) S^(1 - 1/m)` of the perturbation. When the computed eigenvectors are
-# numerically parallel (`κ_k ≥ 0.01 / δ`, e.g. an exactly defective eigenvalue computed
-# without splitting), the condition number is meaningless, and the perturbation of a double
-# eigenvalue, `√δ S`, is used instead. A safety factor of 100 is applied. An eigenvalue
-# within its bound of the origin is a zero eigenvalue; a real part within its bound of zero
-# is not resolved.
-function _eigenvalue_error_bounds(κ, δ, S)
+# perturbation `E` moves the eigenvalue `λ_k` by at most `κ_k ‖E‖`, and a safety factor of
+# 100 is applied. The first-order bound is valid only while it does not reach another
+# eigenvalue. Otherwise, the eigenvalues within the bound form a (nearly) defective cluster
+# of size `m`, whose perturbation is of order `δ^(1/m) S`, and the bound is limited to
+# `100 δ^(1/m) S`. For a split defective cluster, the computed condition numbers are of order
+# `δ^(-(m - 1) / m)`, so both bounds have the order of the splitting; for an exactly or
+# nearly defective cluster computed without splitting, the condition numbers are
+# meaningless and the limit applies. An eigenvalue within its bound of the origin is a zero
+# eigenvalue; a real part within its bound of zero is not resolved.
+function _eigenvalue_error_bounds(λ, κ, δ, S)
     δ = max(δ, eps(Float64))
-    return [κk < 1.0e-2 / δ ? 100 * δ * S * κk : 100 * sqrt(δ) * S for κk in κ]
+    bounds = similar(κ)
+    for k in eachindex(λ)
+        first_order = 100 * δ * S * κ[k]
+        m = count(l -> abs(l - λ[k]) <= first_order, λ)
+        bounds[k] = m == 1 ? first_order : min(first_order, 100 * δ^(1 / m) * S)
+    end
+    return bounds
 end
 
 # `max |σ| / min |σ|` over the negative (resolved) real parts `σ`.
