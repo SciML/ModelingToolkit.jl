@@ -3,7 +3,7 @@ using SciMLBase
 using SciMLStructures
 using SparseArrays
 using SymbolicUtils: unwrap, iscall, operation, populate_ir!, IRStructure
-using SymbolicUtils.Code: OptimizationRule, Assignment, MakeTuple
+using SymbolicUtils.Code: OptimizationRule, Assignment, MakeTuple, MakeArray
 using ModelingToolkitBase: t_nounits as t, D_nounits as D
 using Test
 import Symbolics
@@ -499,6 +499,12 @@ end
     )
     tuple_in_array, _ = generate_custom_function(sys, [x[1], x[2]]; optimize = [tuple_in_array_rule], expression = Val(false))
     @test tuple_in_array(prob.u0, prob.p, 0.0) == Any[(10.0, 2.0), 2.0]
+    maker_rule = OptimizationRule(
+        "maker", (ir, expr) -> expr isa AbstractVector && length(expr) == 2 ? true : nothing,
+        (ir, expr, _) -> (populate_ir!(ir, whole); (ir, MakeArray([MakeTuple((whole, unwrap(x[2])))], Array))), 1
+    )
+    maker, _ = generate_custom_function(sys, [x[1], x[2]]; optimize = [maker_rule], expression = Val(false))
+    @test maker(prob.u0, prob.p, 0.0) == [(10.0, 2.0)]
 
     @parameters k[1:4]
     @mtkcompile psys = System([D(x[i]) ~ -k[i] * x[i] for i in 1:4], t)

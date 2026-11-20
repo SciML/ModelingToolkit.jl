@@ -647,7 +647,7 @@ const DEFAULT_CHUNK_SIZE = 500
 # of the whole function's IR, i.e. if they would recompute too many shared subexpressions.
 const DEFAULT_MAX_CHUNK_DUPLICATION = 1.25
 
-expand_tuples(x) = x isa MakeTuple ? map(expand_tuples, collect(x.elems)) :
+expand_tuples(x) = x isa Union{MakeTuple, Code.MakeArray} ? map(expand_tuples, collect(x.elems)) :
     x isa AbstractArray && !(eltype(x) <: SymbolicT) ? map(expand_tuples, x) : x
 
 # An atomic term can hold a non-constant index (`x[k]`, `Pre(x[k])`, `y(t - τ[k])`),
