@@ -158,7 +158,8 @@ the scale of the terms entering the Schur complement (so that a reduced Jacobian
 small because of cancellation is not resolved beyond the accuracy of those terms). The
 error bound of `λ` is taken as `100 δ S κ`. This first-order bound is valid only while it
 does not reach another eigenvalue; otherwise, the `m` eigenvalues within it form a (nearly)
-defective cluster, and the bound is limited to `100 δ^(1/m) S`. For a defective cluster
+defective cluster (identified by nearly parallel eigenvectors), and the bound is limited to
+`100 δ^(1/m) S`. For a defective cluster
 perturbed into split eigenvalues, `κ` is large and the bound has the order of the
 splitting, so that, e.g., the split eigenvalues of a double or quadruple integrator
 expressed in a non-modal basis are recognized as zero eigenvalues, while a nearly defective
@@ -243,8 +244,8 @@ function analyze_solution_jacobian(
             )
         )
         Jr, S = _reduced_jacobian(J, M, diffidxs, t, δ)
-        λ, P, κ = _modes(Jr, δ)
-        radius = _eigenvalue_error_bounds(λ, κ, δ, S)
+        λ, P, κ, V = _modes(Jr, δ)
+        radius = _eigenvalue_error_bounds(λ, κ, V, δ, S)
         zm = BitVector(abs.(λ) .<= radius)
         σ = [zm[k] || abs(real(λ[k])) <= radius[k] ? 0.0 : real(λ[k]) for k in eachindex(λ)]
         push!(jacobians, Jr)
@@ -493,7 +494,7 @@ end
 
 # Eigenvalues of `J`, sorted from fastest to slowest (decreasing `|real(λ)|`, ties broken
 # by decreasing `|λ|`), the matrix of normalized participation factors (column `k` for
-# mode `k`) and the eigenvalue condition numbers `κ`. The two eigenvalues of a
+# mode `k`), the eigenvalue condition numbers `κ` and the right eigenvectors. The two eigenvalues of a
 # complex-conjugate pair are kept adjacent, the one with positive imaginary part first. The
 # participation of a mode whose eigenvalue condition number exceeds `0.01 / √δ` is `NaN`:
 # its eigenvector is nearly parallel to others (a defective or nearly defective
@@ -501,7 +502,7 @@ end
 # individual unknowns.
 function _modes(J, δ)
     n = size(J, 1)
-    n == 0 && return ComplexF64[], zeros(0, 0), Float64[]
+    n == 0 && return ComplexF64[], zeros(0, 0), Float64[], zeros(ComplexF64, 0, 0)
     # Unsorted, LAPACK returns each conjugate pair of a real matrix consecutively, as exact
     # conjugates with conjugate eigenvectors. Julia's default sorting by (real, imag) would
     # separate repeated pairs, e.g. [a - bi, a - bi, a + bi, a + bi].
@@ -535,43 +536,42 @@ function _modes(J, δ)
         [(abs(real(λ[first(g)])), abs(λ[first(g)])) for g in groups]; rev = true
     )
     perm = reduce(vcat, groups[order])
-    return λ[perm], P[:, perm], κ[perm]
+    return λ[perm], P[:, perm], κ[perm], V[:, perm]
 end
 
-# Bounds on the error of the computed eigenvalues `λ` of a matrix whose entries have the
-# absolute error `δ S`, with eigenvalue condition numbers `κ`. To first order, a
-# perturbation `E` moves the eigenvalue `λ_k` by at most `κ_k ‖E‖`, and a safety factor of
-# 100 is applied. The first-order bound is valid only while it does not reach another
-# eigenvalue. Otherwise, `λ_k` belongs to a (nearly) defective cluster of size `m`, whose
-# perturbation is of order `δ^(1/m) S`, and the bound is limited to `100 δ^(1/m) S`. The
-# first-order bound may cover unrelated, well-separated eigenvalues, so the cluster is
-# determined with its own radius: `m` is the smallest size `≥ 2` for which exactly `m`
-# eigenvalues lie within `100 δ^(1/m) S` of `λ_k` (at most the number within the
-# first-order bound, which is used if no smaller size is consistent). For a split defective cluster, the computed condition numbers are of order
-# `δ^(-(m - 1) / m)`, so both bounds have the order of the splitting; for an exactly or
-# nearly defective cluster computed without splitting, the condition numbers are
-# meaningless and the limit applies. An eigenvalue within its bound of the origin is a zero
-# eigenvalue; a real part within its bound of zero is not resolved.
-function _eigenvalue_error_bounds(λ, κ, δ, S)
+# Bounds on the error of the computed eigenvalues `λ` (right eigenvectors `V`) of a matrix
+# whose entries have the absolute error `δ S`, with eigenvalue condition numbers `κ`. To
+# first order, a perturbation `E` moves the eigenvalue `λ_k` by at most `κ_k ‖E‖`, and a
+# safety factor of 100 is applied. The first-order bound is not valid for an eigenvalue of
+# a (nearly) defective cluster: there, the computed eigenvalues of the cluster are split by
+# an amount of order `δ^(1/m) S`, `m` being the size of the cluster, and their computed
+# eigenvectors are nearly parallel. The cluster of `λ_k` is therefore taken to consist of
+# the eigenvalues within its first-order bound whose eigenvectors are nearly parallel to
+# that of `λ_k`; this excludes well-separated modes and the coincident eigenvalues of other,
+# identical blocks, which the first-order bound of an exactly defective eigenvalue may
+# cover. For a cluster of size `m > 1`, the bound is limited to `100 δ^(1/m) S`. For a split
+# defective cluster, the computed condition numbers are of order `δ^(-(m - 1) / m)`, so both
+# bounds have the order of the splitting. An eigenvalue within its bound of the origin is a
+# zero eigenvalue; a real part within its bound of zero is not resolved.
+function _eigenvalue_error_bounds(λ, κ, V, δ, S)
     δ = max(δ, eps(Float64))
     bounds = similar(κ)
     for k in eachindex(λ)
         first_order = 100 * δ * S * κ[k]
-        m_first_order = count(l -> abs(l - λ[k]) <= first_order, λ)
-        if m_first_order == 1
-            bounds[k] = first_order
-            continue
+        vk = @view V[:, k]
+        m = count(eachindex(λ)) do j
+            abs(λ[j] - λ[k]) <= first_order && _nearly_parallel(@view(V[:, j]), vk)
         end
-        m = something(
-            findfirst(
-                i -> count(l -> abs(l - λ[k]) <= 100 * δ^(1 / i) * S, λ) == i,
-                2:m_first_order
-            ),
-            m_first_order - 1
-        ) + 1
-        bounds[k] = min(first_order, 100 * δ^(1 / m) * S)
+        bounds[k] = m == 1 ? first_order : min(first_order, 100 * δ^(1 / m) * S)
     end
     return bounds
+end
+
+# Whether the vectors `v` and `w` enclose an angle of less than about 8 degrees.
+function _nearly_parallel(v, w)
+    nv, nw = LinearAlgebra.norm(v), LinearAlgebra.norm(w)
+    (iszero(nv) || iszero(nw)) && return false
+    return 1 - abs(LinearAlgebra.dot(v, w)) / (nv * nw) <= 1.0e-2
 end
 
 # `max |σ| / min |σ|` over the negative (resolved) real parts `σ`.

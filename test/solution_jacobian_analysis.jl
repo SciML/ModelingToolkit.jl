@@ -141,8 +141,8 @@ report = ModelingToolkit._solution_jacobian_report(
 
 # Classification of the eigenvalues of a matrix with entries accurate to `ϵ`.
 function classify(J)
-    λ, P, κ = ModelingToolkit._modes(J, eps())
-    r = ModelingToolkit._eigenvalue_error_bounds(λ, κ, eps(), norm(J))
+    λ, P, κ, V = ModelingToolkit._modes(J, eps())
+    r = ModelingToolkit._eigenvalue_error_bounds(λ, κ, V, eps(), norm(J))
     zm = abs.(λ) .<= r
     σ = [zm[k] || abs(real(λ[k])) <= r[k] ? 0.0 : real(λ[k]) for k in eachindex(λ)]
     return (; λ, P, κ, zm, σ)
@@ -200,6 +200,11 @@ A4 = [-3.0 6 -4 1; -1 1 0 0; 0 -1 1 0; 0 0 -1 1]
 c4 = classify(A4)
 @test all(c4.zm)
 @test count(>(0), c4.σ) == 0
+# Two identical nilpotent blocks of order four: the coincident split eigenvalues of the two
+# blocks do not form defective pairs.
+c44 = classify(kron(Matrix{Float64}(I, 2, 2), A4))
+@test all(c44.zm)
+@test count(>(0), c44.σ) == 0
 Q3 = [1.0 2 0; 0 1 3; 1 0 1]
 c3 = classify(Q3 * [0 1 0; 0 0 1; 0 0 0] / Q3)
 @test all(c3.zm)
@@ -304,8 +309,8 @@ end
 Mnd = [1.0 1; 0 1.0e-8]
 Jnd, Snd = ModelingToolkit._reduced_jacobian(-Mnd, Mnd, [1, 2], 0.0, eps())
 @test Jnd ≈ -I
-λnd, _, κnd = ModelingToolkit._modes(Jnd, eps())
-@test !any(abs.(λnd) .<= ModelingToolkit._eigenvalue_error_bounds(λnd, κnd, eps(), Snd))
+λnd, _, κnd, Vnd = ModelingToolkit._modes(Jnd, eps())
+@test !any(abs.(λnd) .<= ModelingToolkit._eigenvalue_error_bounds(λnd, κnd, Vnd, eps(), Snd))
 
 # A purely algebraic mass-matrix problem reduces to an empty Jacobian.
 Jempty, _ = ModelingToolkit._reduced_jacobian(ones(1, 1), zeros(1, 1), Int[], 0.0, eps())
