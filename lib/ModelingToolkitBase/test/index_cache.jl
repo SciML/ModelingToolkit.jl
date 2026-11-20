@@ -74,6 +74,43 @@ ic = ModelingToolkitBase.get_index_cache(sys)
     end
 end
 
+@testset "scalarized tunable arrays take contiguous blocks" begin
+    @parameters p[1:2, 1:2] q r[1:3]
+    P = collect(p)
+    R = collect(r)
+    @testset "$name" for (name, ps) in [
+            "row-major" => [vec(permutedims(P)); q; R],
+            "reversed" => [reverse(vec(P)); q; reverse(R)],
+            "interleaved" => [P[1, 1], q, R[3], P[2, 1], R[1], P[1, 2], P[2, 2], R[2]],
+        ]
+        @named sys = System(Equation[], t, [], ps)
+        sys = complete(sys)
+        @test issetequal(parameters(sys), [p, q, r])
+        offset = 1
+        for par in tunable_parameters(sys)
+            idx = parameter_index(sys, par)
+            @test idx.portion isa SciMLStructures.Tunable
+            if Symbolics.isarraysymbolic(par)
+                @test vec(idx.idx) == offset:(offset + length(par) - 1)
+                @test all(parameter_index(sys, par[i]).idx == idx.idx[i] for i in eachindex(par))
+            else
+                @test idx.idx == offset
+            end
+            offset += length(par)
+        end
+        sys2 = complete(sys)
+        @test all(parameter_index(sys2, par) == parameter_index(sys, par) for par in [p, q, r])
+    end
+
+    @testset "partially present array stays scalarized" begin
+        @named sys = System(Equation[], t, [], [P[1, 1], q, R[3], P[2, 1], R[1], R[2]])
+        sys = complete(sys)
+        @test issetequal(parameters(sys), [P[1, 1], P[2, 1], q, r])
+        @test vec(parameter_index(sys, r).idx) == 3:5
+        @test !is_parameter(sys, p)
+    end
+end
+
 @testset "reorder_dimension_by_tunables" begin
     @parameters p q[1:3] r[1:2, 1:2] s [tunable = false]
     @named sys = System(Equation[], t, [], [p, q, r, s])

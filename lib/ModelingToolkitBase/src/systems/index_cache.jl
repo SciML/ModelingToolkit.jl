@@ -241,7 +241,37 @@ function IndexCache(sys::AbstractSystem)
         append!(tunable_pars, initial_pars)
         empty!(initial_pars)
     end
+    tunable_pars_set = Set{SymbolicT}(tunable_pars)
+    scalarized_arrays = Set{SymbolicT}()
+    partial_arrays = Set{SymbolicT}()
     for p in tunable_pars
+        arrsym, isarr = split_indexed_var(p)
+        if isarr && symbolic_has_known_size(arrsym)
+            arrsym in scalarized_arrays && continue
+            if !(arrsym in partial_arrays)
+                elems = vec(collect(arrsym)::Array{SymbolicT})::Vector{SymbolicT}
+                if all(in(tunable_pars_set), elems)
+                    # An array passed as scalarized elements takes one column-major block
+                    # at its first element, whatever order the elements are listed in.
+                    # `tunable_parameters` and `unflatten_parameters!` rely on every
+                    # array occupying such a block.
+                    idxs = reshape(
+                        (tunable_buffer_size + 1):(tunable_buffer_size + length(arrsym)),
+                        size(arrsym)
+                    )
+                    tunable_buffer_size += length(arrsym)
+                    tunable_idxs[arrsym] = idxs
+                    tunable_idxs[renamespace(sys, arrsym)] = idxs
+                    for (el, i) in zip(elems, idxs)
+                        tunable_idxs[el] = i
+                        tunable_idxs[default_toterm(el)] = i
+                    end
+                    push!(scalarized_arrays, arrsym)
+                    continue
+                end
+                push!(partial_arrays, arrsym)
+            end
+        end
         sh = SU.shape(p)
         idx = if !SU.is_array_shape(sh)
             tunable_buffer_size + 1
@@ -257,32 +287,6 @@ function IndexCache(sys::AbstractSystem)
             symbol_to_variable[getname(p)] = p
             symbol_to_variable[getname(default_toterm(p))] = p
         end
-    end
-    found_array_syms = Set{SymbolicT}()
-    for p in tunable_pars
-        arrsym, isarr = split_indexed_var(p)
-        isarr || continue
-        arrsym in found_array_syms && continue
-        symbolic_has_known_size(arrsym) || continue
-        idxs = Int[]
-        valid_arrsym = true
-        for i in eachindex(arrsym)
-            idxsym = arrsym[i]
-            idx = get(tunable_idxs, idxsym, nothing)::Union{Int, Nothing}
-            valid_arrsym = idx !== nothing
-            valid_arrsym || break
-            push!(idxs, idx::Int)
-        end
-        push!(found_array_syms, arrsym)
-        valid_arrsym || break
-        if idxs == idxs[begin]:idxs[end]
-            idxs = reshape(idxs[begin]:idxs[end], size(arrsym))::AbstractArray{Int}
-        else
-            idxs = reshape(idxs, size(arrsym))::AbstractArray{Int}
-        end
-        rsym = renamespace(sys, arrsym)
-        tunable_idxs[arrsym] = idxs
-        tunable_idxs[rsym] = idxs
     end
 
     initials_idxs = TunableIndexMap()

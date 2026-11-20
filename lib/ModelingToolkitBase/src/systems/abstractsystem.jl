@@ -876,13 +876,17 @@ function unflatten_parameters!(buffer::Vector{SymbolicT}, params::Vector{Symboli
             continue
         end
 
-        # the next `length(sym)` symbols should be scalarized versions of the same
-        # array symbolic
-        for j in (i + 1):(i + length(sym) - 1)
-            p = params[j]
-            if !(iscall(p) && operation(p) === getindex && isequal(arguments(p)[1], arrsym))
-                error("This should not be possible. Please open an issue in ModelingToolkitBase.jl with an MWE and stacktrace.")
-            end
+        # `IndexCache` gives an array one block only when all of its elements are
+        # present. Elements of a partially present array stay scalarized.
+        block = i:(i + length(arrsym) - 1)
+        is_block = last(block) <= length(params) && all(block) do j
+            arr, isarr = split_indexed_var(params[j])
+            isarr && isequal(arr, arrsym)
+        end
+        if !is_block
+            push!(buffer, sym)
+            i += 1
+            continue
         end
         push!(buffer, arrsym)
         i += length(arrsym)
