@@ -2013,6 +2013,40 @@ if !@isdefined(ModelingToolkit)
                     sol.discretes[1].t
             end
         end
+        @testset "Issue #5334: ticks independent of the construction of the problem" begin
+            # A fresh problem, `remake` and `reinit!` give the same ticks, at
+            # `t0 + phase + k * dt`, also when `t0` is not a multiple of `dt`.
+            for (phase, nticks_at_t0) in ((0.0, 1), (0.005, 0), (0.002, 0))
+                calls = Float64[]
+                cb = SymbolicDiscreteCallback(
+                    SciMLBase.Clock(0.005; phase),
+                    ModelingToolkitBase.ImperativeAffect((m, o, c, i) -> (push!(calls, i.t); nothing))
+                )
+                @mtkcompile sys = System([D(x) ~ -x], t, [x], []; discrete_events = [cb])
+                prob0 = ODEProblem(sys, [x => 1.0], (0.0, 1.0))
+                for t0 in (0.2, 0.203)
+                    tspan = (t0, t0 + 0.05)
+                    ticks = map((:fresh, :remake, :reinit)) do path
+                        empty!(calls)
+                        if path == :reinit
+                            integ = init(prob0, Tsit5())
+                            empty!(calls)
+                            reinit!(integ; t0 = tspan[1], tf = tspan[2])
+                            solve!(integ)
+                        else
+                            prob = path == :fresh ? ODEProblem(sys, [x => 1.0], tspan) :
+                                remake(prob0; tspan)
+                            solve(prob, Tsit5())
+                        end
+                        filter(<(tspan[2]), calls)
+                    end
+                    @test ticks[1] == ticks[2] == ticks[3]
+                    @test count(==(t0), ticks[1]) == nticks_at_t0
+                    @test first(ticks[1]) ≈ t0 + (iszero(phase) ? 0.0 : phase)
+                    @test all(≈(0.005), diff(ticks[1]))
+                end
+            end
+        end
         @testset "Coincident ticks of rational clocks" begin
             @discretes d2(t)
             devt1 = SymbolicDiscreteCallback(
