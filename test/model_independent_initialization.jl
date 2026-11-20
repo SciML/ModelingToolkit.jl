@@ -1,4 +1,5 @@
 using Test, ModelingToolkit, SciMLBase, OrdinaryDiffEq
+using OrdinaryDiffEqBDF: DFBDF
 using ModelingToolkit: t_nounits as t, D_nounits as D
 using ModelingToolkit: ModelingToolkitBase
 
@@ -33,15 +34,24 @@ function chain_dae(n, spec = SciMLBase.AutoDespecialize)
     )
 end
 
+function residual_dae(n, spec = SciMLBase.AutoDespecialize)
+    @variables q(t)[1:n]
+    sys = complete(System([zeros(n) ~ D(q) + q], t; name = :residual_dae))
+    return DAEProblem{true, spec}(sys, [q => ones(n), D(q) => -q], (0.0, 1.0))
+end
+
 @testset "Model-independent initialization data" begin
     # DAE sizes both exceed 5 SCC blocks so type equality does not depend on
     # the ≤5-block tuple container (left to ModelingToolkit.jl#5202).
     for (makeprob, alg, ns) in (
             (chain_ode, Tsit5(), (6, 9)),
             (chain_dae, FBDF(), (6, 9)),
+            (residual_dae, DFBDF(), (6, 9)),
         )
         probs = [makeprob(n) for n in ns]
         @test typeof(probs[1].f.initialization_data) === typeof(probs[2].f.initialization_data)
+        @test typeof(probs[1].f.initialization_data.initializeprobpmap) ===
+            typeof(probs[2].f.initialization_data.initializeprobpmap)
         for (n, prob) in zip(ns, probs)
             fullprob = makeprob(n, SciMLBase.FullSpecialize)
             sol = solve(prob, alg)
