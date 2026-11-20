@@ -65,23 +65,225 @@ macro statuscheck(expr)
     is_v2 = startswith(string(fnname), "fmi2")
 
     version = Val(is_v2 ? 2 : 3)
-    fmiStatusFatal = is_v2 ? FMI.fmi2StatusFatal : FMI.fmi3StatusFatal
-    fmiTerminate = is_v2 ? FMI.fmi2Terminate : FMI.fmi3Terminate
-    fmiFreeInstance! = is_v2 ? FMI.fmi2FreeInstance! : FMI.fmi3FreeInstance!
     return quote
         result = $expr
-        status = result isa Tuple ? result[1] : result
-        if fmu_status_is_error($version, status, $(QuoteNode(fnname)))
-            # a fatal status leaves the instance in a state where no further call is allowed
-            if status != $fmiStatusFatal
-                $fmiTerminate(wrapper.instance)
-            end
-            $fmiFreeInstance!(wrapper.instance)
-            wrapper.instance = nothing
-            error("FMU Error in $($(QuoteNode(fnname))): status $status")
-        end
+        check_status!(wrapper, $version, result isa Tuple ? result[1] : result, $(QuoteNode(fnname)))
         result
     end |> esc
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+The function behind `@statuscheck`, for calls whose FMI function is chosen at run time. On a
+failing `status` this frees the instance and errors, terminating it first unless the status
+is fatal.
+"""
+function check_status!(wrapper, version::Val{V}, status, fnname) where {V}
+    fmu_status_is_error(version, status, fnname) || return
+    # a fatal status leaves the instance in a state where no further call is allowed
+    if status != (V == 2 ? FMI.fmi2StatusFatal : FMI.fmi3StatusFatal)
+        V == 2 ? FMI.fmi2Terminate(wrapper.instance) : FMI.fmi3Terminate(wrapper.instance)
+    end
+    V == 2 ? FMI.fmi2FreeInstance!(wrapper.instance) : FMI.fmi3FreeInstance!(wrapper.instance)
+    wrapper.instance = nothing
+    error("FMU Error in $fnname: status $status")
+end
+
+"""
+For each FMI 2 type FMIComponent can carry as a number: the element type FMI uses for it,
+and its C-level setter and getter (`(instance, vrs, nvr, values)`).
+"""
+const FMI2_ACCESSORS = Dict(
+    :Real => (FMI.fmi2Real, FMI.fmi2SetReal, FMI.fmi2GetReal!),
+    :Integer => (FMI.fmi2Integer, FMI.fmi2SetInteger, FMI.fmi2GetInteger!),
+    :Boolean => (FMI.fmi2Boolean, FMI.fmi2SetBoolean, FMI.fmi2GetBoolean!),
+)
+
+"""
+The FMI 3 counterpart of `FMI2_ACCESSORS`; the C-level functions take
+`(instance, vrs, nvr, values, nvalues)`. FMI 3 reads and writes enumerations as `Int64`.
+"""
+const FMI3_ACCESSORS = Dict(
+    :Float64 => (FMI.fmi3Float64, FMI.fmi3SetFloat64, FMI.fmi3GetFloat64!),
+    :Float32 => (FMI.fmi3Float32, FMI.fmi3SetFloat32, FMI.fmi3GetFloat32!),
+    :Int8 => (FMI.fmi3Int8, FMI.fmi3SetInt8, FMI.fmi3GetInt8!),
+    :Int16 => (FMI.fmi3Int16, FMI.fmi3SetInt16, FMI.fmi3GetInt16!),
+    :Int32 => (FMI.fmi3Int32, FMI.fmi3SetInt32, FMI.fmi3GetInt32!),
+    :Int64 => (FMI.fmi3Int64, FMI.fmi3SetInt64, FMI.fmi3GetInt64!),
+    :UInt8 => (FMI.fmi3UInt8, FMI.fmi3SetUInt8, FMI.fmi3GetUInt8!),
+    :UInt16 => (FMI.fmi3UInt16, FMI.fmi3SetUInt16, FMI.fmi3GetUInt16!),
+    :UInt32 => (FMI.fmi3UInt32, FMI.fmi3SetUInt32, FMI.fmi3GetUInt32!),
+    :UInt64 => (FMI.fmi3UInt64, FMI.fmi3SetUInt64, FMI.fmi3GetUInt64!),
+    :Boolean => (FMI.fmi3Boolean, FMI.fmi3SetBoolean, FMI.fmi3GetBoolean!),
+    :Enumeration => (FMI.fmi3Int64, FMI.fmi3SetInt64, FMI.fmi3GetInt64!),
+)
+
+"""
+    $(TYPEDSIGNATURES)
+
+The FMI type the FMU declares for `vr`, as a key of `FMI2_ACCESSORS`, or `nothing` when
+FMIComponent cannot carry it as a number (a string).
+"""
+function fmi_kind(fmu::FMI.FMU2, vr)
+    mv = FMI.modelVariablesForValueReference(fmu.modelDescription, vr)[1]
+    mv.Real === nothing || return :Real
+    (mv.Integer === nothing && mv.Enumeration === nothing) || return :Integer
+    mv.Boolean === nothing || return :Boolean
+    return nothing
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+The FMI type the FMU declares for `vr`, as a key of `FMI3_ACCESSORS`, or `nothing` when
+FMIComponent cannot carry it as a number (a string, binary or clock).
+"""
+function fmi_kind(fmu::FMI.FMU3, vr)
+    mv = FMI.modelVariablesForValueReference(fmu.modelDescription, vr)[1]
+    kind = Symbol(chopprefix(string(nameof(typeof(mv))), "fmi3Variable"))
+    return haskey(FMI3_ACCESSORS, kind) ? kind : nothing
+end
+
+real_kind(::FMI.FMU2) = :Real
+real_kind(::FMI.FMU3) = :Float64
+
+"""
+    $(TYPEDEF)
+
+Value references in the order the caller passes or expects their values, grouped by the FMI
+type the FMU declares for each. ModelingToolkit carries every FMU variable as a `Float64`; the
+groups say which typed FMI function reads or writes each one, so the conversion happens only
+at the FMU boundary.
+
+# Fields
+
+$(TYPEDFIELDS)
+"""
+struct TypedValueReferences{V}
+    """
+    Every value reference, in the caller's order.
+    """
+    all::Vector{V}
+    """
+    Whether every variable has the FMI version's 64-bit float type, so that `all` can be
+    read or written in one call without conversion.
+    """
+    all_real::Bool
+    """
+    For each FMI type present: its key in the accessor table, the positions of its variables
+    in `all`, and their value references.
+    """
+    groups::Vector{Tuple{Symbol, Vector{Int}, Vector{V}}}
+end
+
+function TypedValueReferences(fmu, vrs::Vector{V}) where {V}
+    kinds = [fmi_kind(fmu, vr) for vr in vrs]
+    groups = Tuple{Symbol, Vector{Int}, Vector{V}}[]
+    for kind in unique(kinds)
+        positions = findall(==(kind), kinds)
+        push!(groups, (kind, positions, vrs[positions]))
+    end
+    return TypedValueReferences{V}(vrs, all(==(real_kind(fmu)), kinds), groups)
+end
+
+to_fmi(::Type{T}, x) where {T <: AbstractFloat} = T(x)
+to_fmi(::Type{T}, x) where {T <: Integer} = round(T, x)
+
+"""
+    $(TYPEDSIGNATURES)
+
+Whether `vr` changes only at events: every non-float variable, and a float one the FMU
+declares `discrete`. A Model Exchange FMU accepts a new value for such an input only in
+Event Mode.
+"""
+function is_discrete(fmu::FMI.FMU2, vr)
+    mv = FMI.modelVariablesForValueReference(fmu.modelDescription, vr)[1]
+    return fmi_kind(fmu, vr) !== :Real || mv.variability == FMI.fmi2VariabilityDiscrete
+end
+function is_discrete(fmu::FMI.FMU3, vr)
+    mv = FMI.modelVariablesForValueReference(fmu.modelDescription, vr)[1]
+    return !(fmi_kind(fmu, vr) in (:Float64, :Float32)) ||
+        mv.variability == FMI.fmi3VariabilityDiscrete
+end
+
+"""
+    $(TYPEDEF)
+
+The inputs of a Model Exchange FMU, split into those that may change continuously and
+those that change only at events.
+
+# Fields
+
+$(TYPEDFIELDS)
+"""
+struct InputSplit{V}
+    """
+    Positions of the continuous inputs in the full input vector.
+    """
+    continuous_positions::Vector{Int}
+    continuous::TypedValueReferences{V}
+    """
+    Positions of the discrete inputs in the full input vector.
+    """
+    discrete_positions::Vector{Int}
+    discrete::TypedValueReferences{V}
+    """
+    The full input vector as last written to the FMU, to tell when a discrete input changed.
+    """
+    last::Vector{Float64}
+end
+
+function InputSplit(fmu, vrs::Vector{V}) where {V}
+    discrete = [is_discrete(fmu, vr) for vr in vrs]
+    cpos, dpos = findall(!, discrete), findall(discrete)
+    return InputSplit{V}(
+        cpos, TypedValueReferences(fmu, vrs[cpos]), dpos, TypedValueReferences(fmu, vrs[dpos]),
+        fill(NaN, length(vrs))
+    )
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Write `values` (in the order of `refs.all`) to `wrapper.instance`, one typed FMI call per
+group.
+"""
+function set_values!(wrapper, refs::TypedValueReferences, values)
+    version = fmi_version(wrapper)
+    accessors = version isa Val{2} ? FMI2_ACCESSORS : FMI3_ACCESSORS
+    for (kind, positions, vrs) in refs.groups
+        T, set, _ = accessors[kind]
+        converted = T[to_fmi(T, values[i]) for i in positions]
+        n = Csize_t(length(vrs))
+        status = version isa Val{2} ? set(wrapper.instance, vrs, n, converted) :
+            set(wrapper.instance, vrs, n, converted, n)
+        check_status!(wrapper, version, status, nameof(set))
+    end
+    return
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Read the variables in `refs` from `wrapper.instance` into `out` (in the order of
+`refs.all`), one typed FMI call per group. Returns `out`.
+"""
+function get_values!(out, wrapper, refs::TypedValueReferences)
+    version = fmi_version(wrapper)
+    accessors = version isa Val{2} ? FMI2_ACCESSORS : FMI3_ACCESSORS
+    for (kind, positions, vrs) in refs.groups
+        T, _, get! = accessors[kind]
+        values = zeros(T, length(vrs))
+        n = Csize_t(length(vrs))
+        status = version isa Val{2} ? get!(wrapper.instance, vrs, n, values) :
+            get!(wrapper.instance, vrs, n, values, n)
+        check_status!(wrapper, version, status, nameof(get!))
+        for (j, i) in enumerate(positions)
+            out[i] = values[j]
+        end
+    end
+    return out
 end
 
 @static if !hasmethod(FMI.getValueReferencesAndNames, Tuple{FMI.fmi3ModelDescription})
@@ -107,8 +309,10 @@ end
 
 A component that wraps an FMU loaded via FMI.jl. The FMI version (2 or 3) should be
 provided as a `Val` to the function. Supports Model Exchange and CoSimulation FMUs.
-All inputs, continuous variables and outputs must be `FMI.fmi2Real` or `FMI.fmi3Float64`.
-Does not support events or discrete variables in the FMU. Does not support automatic
+Continuous states must be `FMI.fmi2Real` or `FMI.fmi3Float64`. Inputs, outputs and
+parameters of any numeric FMI type (integers, enumerations and booleans included) are carried
+as `Float64` variables and converted when they are passed to or read from the FMU; string,
+binary and clock variables are left out with a warning. Does not support events in the FMU. Does not support automatic
 differentiation. Parameters of the FMU will have defaults corresponding to their initial
 values in the FMU specification. All other variables will not have a default. Hierarchical
 names in the FMU of the form `namespace.variable` are transformed into symbolic variables
@@ -392,7 +596,13 @@ function fmi_variables_to_mtk_variables!(
         obseqs, defs = Dict(); parameters = false, postprocess_variable = (v, _) -> v
     )
     for (valRef, varnames) in varmap
-        stateT = FMI.dataTypeForValueReference(fmu, valRef)
+        # every numeric FMU variable is carried as a `Float64`; `set_values!` and
+        # `get_values!` convert to and from the FMU's declared type
+        if fmi_kind(fmu, valRef) === nothing
+            @warn "FMU variable $(join(varnames, ", ")) is not numeric and is left out of the component."
+            continue
+        end
+        stateT = Float64
         snames = Symbol[]
         ders = Int[]
         for name in varnames
@@ -429,7 +639,7 @@ function fmi_variables_to_mtk_variables!(
         end
         append!(allvars, vars)
         defval = FMI.getStartValue(fmu, valRef)
-        defs[vars[1]] = defval
+        defs[vars[1]] = defval isa Number ? Float64(defval) : defval
     end
     return
 end
@@ -527,6 +737,14 @@ mutable struct FMI2InstanceWrapper
     Return buffer caching state and output arrays to eliminate return vcat allocations.
     """
     const res_buffer::Vector{FMI.fmi2Real}
+    """
+    `output_value_references`, `param_value_references` and `input_value_references`
+    grouped by the FMI type of each variable.
+    """
+    const outputs::TypedValueReferences{FMI.fmi2ValueReference}
+    const params::TypedValueReferences{FMI.fmi2ValueReference}
+    const inputs::TypedValueReferences{FMI.fmi2ValueReference}
+    const input_split::InputSplit{FMI.fmi2ValueReference}
 end
 
 """
@@ -535,10 +753,17 @@ end
 Create an `FMI2InstanceWrapper` with no instance.
 """
 function FMI2InstanceWrapper(fmu, ders, states, outputs, params, inputs, tolerance)
-    return FMI2InstanceWrapper(fmu, ders, states, outputs, params, inputs, tolerance, nothing, zeros(FMI.fmi2Real, length(states)), zeros(FMI.fmi2Real, length(outputs)), zeros(FMI.fmi2Real, length(states) + length(outputs)))
+    return FMI2InstanceWrapper(
+        fmu, ders, states, outputs, params, inputs, tolerance, nothing,
+        zeros(FMI.fmi2Real, length(states)), zeros(FMI.fmi2Real, length(outputs)),
+        zeros(FMI.fmi2Real, length(states) + length(outputs)),
+        TypedValueReferences(fmu, outputs), TypedValueReferences(fmu, params),
+        TypedValueReferences(fmu, inputs), InputSplit(fmu, inputs)
+    )
 end
 
 Base.nameof(::FMI2InstanceWrapper) = :FMI2InstanceWrapper
+fmi_version(::FMI2InstanceWrapper) = Val(2)
 
 """
     $(TYPEDSIGNATURES)
@@ -551,18 +776,9 @@ time. Returns the created instance, which is also stored in `wrapper.instance`.
 """
 function get_instance_common!(wrapper::FMI2InstanceWrapper, inputs, params, t, t_end = nothing)
     wrapper.instance = FMI.fmi2Instantiate!(wrapper.fmu)::FMI.FMU2Component
-    if !isempty(inputs)
-        @statuscheck FMI.fmi2SetReal(
-            wrapper.instance, wrapper.input_value_references,
-            Csize_t(length(inputs)), inputs
-        )
-    end
-    if !isempty(params)
-        @statuscheck FMI.fmi2SetReal(
-            wrapper.instance, wrapper.param_value_references,
-            Csize_t(length(wrapper.param_value_references)), params
-        )
-    end
+    set_values!(wrapper, wrapper.inputs, inputs)
+    wrapper.input_split.last .= inputs
+    set_values!(wrapper, wrapper.params, params)
     stop_time_defined = t_end === nothing ? FMI.fmi2False : FMI.fmi2True
     stop_time = something(t_end, t)
     @statuscheck FMI.fmi2SetupExperiment(
@@ -618,12 +834,7 @@ function get_instance_CS!(wrapper::FMI2InstanceWrapper, states, inputs, params, 
                 Csize_t(length(wrapper.state_value_references)), states
             )
         end
-        if !isempty(inputs)
-            @statuscheck FMI.fmi2SetReal(
-                wrapper.instance, wrapper.input_value_references,
-                Csize_t(length(inputs)), inputs
-            )
-        end
+        set_values!(wrapper, wrapper.inputs, inputs)
     end
     return wrapper.instance
 end
@@ -701,6 +912,14 @@ mutable struct FMI3InstanceWrapper
     Return buffer caching state and output arrays to eliminate return vcat allocations.
     """
     const res_buffer::Vector{FMI.fmi3Float64}
+    """
+    `output_value_references`, `param_value_references` and `input_value_references`
+    grouped by the FMI type of each variable.
+    """
+    const outputs::TypedValueReferences{FMI.fmi3ValueReference}
+    const params::TypedValueReferences{FMI.fmi3ValueReference}
+    const inputs::TypedValueReferences{FMI.fmi3ValueReference}
+    const input_split::InputSplit{FMI.fmi3ValueReference}
 end
 
 """
@@ -709,10 +928,17 @@ end
 Create an `FMI3InstanceWrapper` with no instance.
 """
 function FMI3InstanceWrapper(fmu, ders, states, outputs, params, inputs)
-    return FMI3InstanceWrapper(fmu, ders, states, outputs, params, inputs, nothing, zeros(FMI.fmi3Float64, length(states)), zeros(FMI.fmi3Float64, length(outputs)), zeros(FMI.fmi3Float64, length(states) + length(outputs)))
+    return FMI3InstanceWrapper(
+        fmu, ders, states, outputs, params, inputs, nothing,
+        zeros(FMI.fmi3Float64, length(states)), zeros(FMI.fmi3Float64, length(outputs)),
+        zeros(FMI.fmi3Float64, length(states) + length(outputs)),
+        TypedValueReferences(fmu, outputs), TypedValueReferences(fmu, params),
+        TypedValueReferences(fmu, inputs), InputSplit(fmu, inputs)
+    )
 end
 
 Base.nameof(::FMI3InstanceWrapper) = :FMI3InstanceWrapper
+fmi_version(::FMI3InstanceWrapper) = Val(3)
 
 """
     $(TYPEDSIGNATURES)
@@ -724,22 +950,14 @@ of `wrapper.input_value_references`. `params` should be in the order of
 `wrapper.param_value_references`. `t` is the current time. Returns `wrapper.instance`.
 """
 function get_instance_common!(wrapper::FMI3InstanceWrapper, inputs, params, t, t_end = nothing)
-    if !isempty(params)
-        @statuscheck FMI.fmi3SetFloat64(
-            wrapper.instance, wrapper.param_value_references,
-            params
-        )
-    end
+    set_values!(wrapper, wrapper.params, params)
     stop_time_defined = t_end === nothing ? FMI.fmi3False : FMI.fmi3True
     stop_time = something(t_end, t)
     @statuscheck FMI.fmi3EnterInitializationMode(
         wrapper.instance, FMI.fmi3False, zero(FMI.fmi3Float64), t, stop_time_defined, stop_time
     )
-    if !isempty(inputs)
-        @statuscheck FMI.fmi3SetFloat64(
-            wrapper.instance, wrapper.input_value_references, inputs
-        )
-    end
+    set_values!(wrapper, wrapper.inputs, inputs)
+    wrapper.input_split.last .= inputs
 
     return wrapper.instance
 end
@@ -787,11 +1005,7 @@ function get_instance_CS!(wrapper::FMI3InstanceWrapper, states, inputs, params, 
         end
         @statuscheck FMI.fmi3ExitInitializationMode(wrapper.instance)
     else
-        if !isempty(inputs)
-            @statuscheck FMI.fmi3SetFloat64(
-                wrapper.instance, wrapper.input_value_references, inputs
-            )
-        end
+        set_values!(wrapper, wrapper.inputs, inputs)
         if !isempty(states)
             @statuscheck FMI.fmi3SetFloat64(
                 wrapper.instance, wrapper.state_value_references, states
@@ -844,6 +1058,75 @@ end
 """
     $(TYPEDSIGNATURES)
 
+Move a Model Exchange instance from Continuous-Time Mode into Event Mode.
+"""
+function enter_event_mode!(wrapper::FMI2InstanceWrapper)
+    @statuscheck FMI.fmi2EnterEventMode(wrapper.instance)
+end
+function enter_event_mode!(wrapper::FMI3InstanceWrapper)
+    @statuscheck FMI.fmi3EnterEventMode(
+        wrapper.instance, FMI.fmi3False, FMI.fmi3False, FMI.fmi3Int32[], Csize_t(0), FMI.fmi3False
+    )
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Iterate the FMU's discrete states until they settle (the event iteration of the FMI
+standard), then return to Continuous-Time Mode. Returns whether the FMU changed the values
+of its continuous states.
+"""
+function leave_event_mode!(wrapper::FMI2InstanceWrapper)
+    info = FMI.fmi2EventInfo()
+    info.newDiscreteStatesNeeded = FMI.fmi2True
+    changed = false
+    while info.newDiscreteStatesNeeded == FMI.fmi2True
+        @statuscheck FMI.fmi2NewDiscreteStates!(wrapper.instance, info)
+        info.terminateSimulation == FMI.fmi2True && error("The FMU asked to terminate the simulation.")
+        changed |= info.valuesOfContinuousStatesChanged == FMI.fmi2True
+    end
+    @statuscheck FMI.fmi2EnterContinuousTimeMode(wrapper.instance)
+    return changed
+end
+function leave_event_mode!(wrapper::FMI3InstanceWrapper)
+    needed = Ref(FMI.fmi3True)
+    terminate = Ref(FMI.fmi3False)
+    nominals = Ref(FMI.fmi3False)
+    values = Ref(FMI.fmi3False)
+    next_defined = Ref(FMI.fmi3False)
+    next_time = Ref(zero(FMI.fmi3Float64))
+    changed = false
+    while needed[] == FMI.fmi3True
+        @statuscheck FMI.fmi3UpdateDiscreteStates(
+            wrapper.instance, needed, terminate, nominals, values, next_defined, next_time
+        )
+        terminate[] == FMI.fmi3True && error("The FMU asked to terminate the simulation.")
+        changed |= values[] == FMI.fmi3True
+    end
+    @statuscheck FMI.fmi3EnterContinuousTimeMode(wrapper.instance)
+    return changed
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Write the discrete inputs of a Model Exchange instance if any differs from the value last
+written. The FMI standard lets them change only in Event Mode, so this enters it, writes
+them, iterates and returns to Continuous-Time Mode.
+"""
+function update_discrete_inputs!(wrapper, inputs)
+    split = wrapper.input_split
+    any(i -> !isequal(inputs[i], split.last[i]), split.discrete_positions) || return
+    enter_event_mode!(wrapper)
+    set_values!(wrapper, split.discrete, view(inputs, split.discrete_positions))
+    leave_event_mode!(wrapper)
+    split.last .= inputs
+    return
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
 Update the internal state of the ME FMU and return a vector of updated values
 for continuous state derivatives and output variables respectively. Needs to be a
 callable struct to enable symbolic registration with an inferred return size.
@@ -860,16 +1143,36 @@ function (wrapper::Union{FMI2InstanceWrapper, FMI3InstanceWrapper})(
     # Defined in FMIBase.jl/src/eval.jl
     # Doesn't seem to be documented, but somehow this is the only way to
     # propagate inputs to the FMU consistently. I have no idea why.
-    instance(;
-        x = states, u = inputs, u_refs = wrapper.input_value_references,
-        p = params, p_refs = wrapper.param_value_references, t = t
-    )
+    # FMIBase's evaluation reads and writes only 64-bit floats; any other input or output
+    # goes through the typed calls instead. Discrete inputs are written only when they
+    # change, in Event Mode.
+    split = wrapper.input_split
+    continuous_inputs = isempty(split.discrete_positions) ? inputs :
+        inputs[split.continuous_positions]
+    if split.continuous.all_real
+        instance(;
+            x = states, u = continuous_inputs, u_refs = split.continuous.all,
+            p = params, p_refs = wrapper.param_value_references, t = t
+        )
+    else
+        set_values!(wrapper, split.continuous, continuous_inputs)
+        instance(; x = states, t = t)
+    end
+    update_discrete_inputs!(wrapper, inputs)
     # the spec requires completing the step before getting updated derivative/output values
     partiallyCompleteIntegratorStep(wrapper)
-    instance(;
-        dx = states_buffer, dx_refs = wrapper.derivative_value_references,
-        y = outputs_buffer, y_refs = wrapper.output_value_references
-    )
+    if !wrapper.outputs.all_real
+        instance(;
+            dx = states_buffer, dx_refs = wrapper.derivative_value_references,
+            y = similar(outputs_buffer, 0), y_refs = similar(wrapper.output_value_references, 0)
+        )
+        get_values!(outputs_buffer, wrapper, wrapper.outputs)
+    else
+        instance(;
+            dx = states_buffer, dx_refs = wrapper.derivative_value_references,
+            y = outputs_buffer, y_refs = wrapper.output_value_references
+        )
+    end
     wrapper.res_buffer[1:length(states_buffer)] .= states_buffer
     wrapper.res_buffer[(length(states_buffer) + 1):end] .= outputs_buffer
     return wrapper.res_buffer
@@ -922,7 +1225,7 @@ function (fn::FMI2CSFunctor)(wrapper::FMI2InstanceWrapper, states, inputs, param
     if isempty(fn.output_value_references)
         return eltype(states)[]
     else
-        return FMI.fmi2GetReal(instance, fn.output_value_references)
+        return get_values!(zeros(eltype(states), length(fn.output_value_references)), wrapper, wrapper.outputs)
     end
 end
 
@@ -964,7 +1267,7 @@ function fmiCSInitialize!(m, o, ctx::FMI2CSFunctor, integrator)
         @statuscheck FMI.fmi2GetReal!(instance, ctx.state_value_references, m.states)
     end
     if isdefined(m, :outputs)
-        @statuscheck FMI.fmi2GetReal!(instance, ctx.output_value_references, m.outputs)
+        get_values!(m.outputs, wrapper, wrapper.outputs)
     end
 
     return m
@@ -987,18 +1290,14 @@ function fmiCSStep!(m, o, ctx::FMI2CSFunctor, integrator)
     dt = o.dt
 
     instance = get_instance_CS!(wrapper, states, inputs, params, integrator.t, ctx.t_end[])
-    if !isempty(inputs)
-        FMI.fmi2SetReal(
-            instance, wrapper.input_value_references, Csize_t(length(inputs)), inputs
-        )
-    end
+    set_values!(wrapper, wrapper.inputs, inputs)
     @statuscheck FMI.fmi2DoStep(instance, integrator.t - dt, dt, FMI.fmi2True)
 
     if isdefined(m, :states)
         @statuscheck FMI.fmi2GetReal!(instance, ctx.state_value_references, m.states)
     end
     if isdefined(m, :outputs)
-        @statuscheck FMI.fmi2GetReal!(instance, ctx.output_value_references, m.outputs)
+        get_values!(m.outputs, wrapper, wrapper.outputs)
     end
 
     return m
@@ -1038,7 +1337,7 @@ function (fn::FMI3CSFunctor)(wrapper::FMI3InstanceWrapper, states, inputs, param
     if isempty(fn.output_value_references)
         return eltype(states)[]
     else
-        return FMI.fmi3GetFloat64(instance, fn.output_value_references)
+        return get_values!(zeros(eltype(states), length(fn.output_value_references)), wrapper, wrapper.outputs)
     end
 end
 
@@ -1071,7 +1370,7 @@ function fmiCSInitialize!(m, o, ctx::FMI3CSFunctor, integrator)
         @statuscheck FMI.fmi3GetFloat64!(instance, ctx.state_value_references, m.states)
     end
     if isdefined(m, :outputs)
-        @statuscheck FMI.fmi3GetFloat64!(instance, ctx.output_value_references, m.outputs)
+        get_values!(m.outputs, wrapper, wrapper.outputs)
     end
 
     return m
@@ -1089,9 +1388,7 @@ function fmiCSStep!(m, o, ctx::FMI3CSFunctor, integrator)
     dt = o.dt
 
     instance = get_instance_CS!(wrapper, states, inputs, params, integrator.t, ctx.t_end[])
-    if !isempty(inputs)
-        FMI.fmi3SetFloat64(instance, wrapper.input_value_references, inputs)
-    end
+    set_values!(wrapper, wrapper.inputs, inputs)
     eventEncountered = Ref(FMI.fmi3False)
     terminateSimulation = Ref(FMI.fmi3False)
     earlyReturn = Ref(FMI.fmi3False)
@@ -1108,7 +1405,7 @@ function fmiCSStep!(m, o, ctx::FMI3CSFunctor, integrator)
         @statuscheck FMI.fmi3GetFloat64!(instance, ctx.state_value_references, m.states)
     end
     if isdefined(m, :outputs)
-        @statuscheck FMI.fmi3GetFloat64!(instance, ctx.output_value_references, m.outputs)
+        get_values!(m.outputs, wrapper, wrapper.outputs)
     end
 
     return m
