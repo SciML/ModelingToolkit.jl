@@ -2,7 +2,15 @@ using ModelingToolkitBase, OrdinaryDiffEq, StochasticDiffEq, SymbolicIndexingInt
 import Logging
 using ModelingToolkitBase: t_nounits as t, D_nounits as D, ASSERTION_LOG_VARIABLE
 import DiffEqNoiseProcess
+import SparseConnectivityTracer as SCT
 using Test
+
+@testset "Assertion sparsity tracing" begin
+    f = u -> ModelingToolkitBase._nan_condition(u[1] * u[2] > 0)
+    detector = SCT.TracerSparsityDetector()
+    @test SCT.jacobian_sparsity(u -> [f(u)], [1.0, 2.0], detector) == falses(1, 2)
+    @test SCT.hessian_sparsity(f, [1.0, 2.0], detector) == falses(2, 2)
+end
 
 @variables x(t)
 @brownians a
