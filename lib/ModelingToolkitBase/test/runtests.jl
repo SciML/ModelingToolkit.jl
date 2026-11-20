@@ -44,6 +44,7 @@ end
             @safetestset "AbstractSystem Interface Contract" include("abstractsystem_interface.jl")
             @safetestset "AbstractCollocation Public Boundary" include("abstractcollocation.jl")
             @safetestset "Variable Scope Tests" include("variable_scope.jl")
+            @safetestset "Array Slice Namespacing" include("array_slice_namespacing.jl")
             @safetestset "Parsing Test" include("variable_parsing.jl")
             @safetestset "System Linearity Test" include("linearity.jl")
             @safetestset "Variable binding semantics" include("binding_semantics.jl")
