@@ -223,8 +223,9 @@ end
     FunctionalAffect{UF, CTX, MOF, OF, MN, OST, UPS}
 
 Callable struct representing a compiled [`ImperativeAffect`](@ref). On each invocation,
-reads current modified and observed values from the integrator, calls the user function,
-and writes back the returned values. Created by [`compile_functional_affect`](@ref).
+reads current modified and observed values from the integrator (through `state_values`,
+`parameter_values` and `current_time`), calls the user function, and writes back the
+returned values. Created by [`compile_functional_affect`](@ref).
 
 # Fields
 - `user_affect`: the user-supplied function with signature `f(modified, observed, ctx, integ)`
@@ -232,8 +233,10 @@ and writes back the returned values. Created by [`compile_functional_affect`](@r
 - `reset_jumps`: if `true`, call `reset_aggregated_jumps!` after the affect
 - `mod_og_val_fun`: OOP function that reads the current values of all modified variables
 - `obs_fun`: OOP function that reads the observed expressions
-- `mod_names`: `NTuple{N, Symbol}` naming the modified variables (for `NamedTuple` construction)
-- `obs_sym_tuple`: `NTuple{M, Symbol}` naming the observed values
+- `mod_names`: `Val` of the `NTuple{N, Symbol}` naming the modified variables (for
+  `NamedTuple` construction). A `Val`, so that the struct is `isbits` when its other fields
+  are, as a GPU kernel needs.
+- `obs_sym_tuple`: `Val` of the `NTuple{M, Symbol}` naming the observed values
 - `upd_funs`: `NamedTuple` of setter callables mapping each modified variable name to its setter
 """
 struct FunctionalAffect{UF, CTX, MOF, OF, MN, OST, UPS}
@@ -248,13 +251,15 @@ struct FunctionalAffect{UF, CTX, MOF, OF, MN, OST, UPS}
 end
 
 @inline function (fa::FunctionalAffect)(integ)
+    # Read through the SII getters, so any value provider works, not just an integrator
+    u = state_values(integ)
+    p = parameter_values(integ)
+    t = current_time(integ)
     # Read the current values of the modified variables (pre-affect baseline)
-    modvals = fa.mod_og_val_fun(integ.u, integ.p, integ.t)
-    upd_component_array = NamedTuple{fa.mod_names}(modvals)
+    modvals = fa.mod_og_val_fun(u, p, t)
+    upd_component_array = NamedTuple{unval(fa.mod_names)}(modvals)
     # Read the observed expressions
-    obs_component_array = NamedTuple{fa.obs_sym_tuple}(
-        fa.obs_fun(integ.u, integ.p, integ.t)
-    )
+    obs_component_array = NamedTuple{unval(fa.obs_sym_tuple)}(fa.obs_fun(u, p, t))
     # Call the user-supplied affect function
     upd_vals = fa.user_affect(upd_component_array, obs_component_array, fa.ctx, integ)
     # Write back any returned values
@@ -262,6 +267,71 @@ end
         _generated_writeback(integ, fa.upd_funs, upd_vals)
     end
     return fa.reset_jumps && reset_aggregated_jumps!(integ)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+The compiled `ImperativeAffect` `fa` with the hooks that the setters of its modified
+parameters carry stripped off. After a write, those hooks call
+`SymbolicIndexingInterface.finalize_parameters_hook!`, which on an integrator marks a
+derivative discontinuity. While the integrator steps, a callback already marks one before it
+runs its affect, so there the hooks change nothing. An affect that runs while the callback
+is initialized (a preset time or a periodic event at the initial time) is different: the
+integrator saves a second time at the initial time only when the discontinuity is marked,
+so without the hooks a parameter-only affect there is not followed by that save.
+
+Without the hooks, MTK's part of the affect needs only `state_values`, `parameter_values`
+and `current_time` of the value provider it is called with, so it can run on a stand-in for
+the integrator (e.g. inside a GPU kernel), usually together with `save_discretes = false` on
+the problem.
+
+Two parts of the affect still see the value provider itself:
+- the user's function receives it as its last argument (`integ`), so a stand-in must
+  support whatever that function does with it;
+- with `reset_jumps = true`, the affect calls `reset_aggregated_jumps!` on it, which needs
+  an integrator.
+"""
+function without_parameter_hooks(fa::FunctionalAffect)
+    return FunctionalAffect(
+        fa.user_affect, fa.ctx, fa.reset_jumps, fa.mod_og_val_fun, fa.obs_fun,
+        fa.mod_names, fa.obs_sym_tuple, map(unwrap_parameter_hook, fa.upd_funs)
+    )
+end
+
+unwrap_parameter_hook(setter::SymbolicIndexingInterface.ParameterHookWrapper) = setter.setter
+# a grouped modification (`modified = (; xs = [a, b])`) has one setter per element; a tuple
+# rather than the vector SII builds, so that the stripped affect can be `isbits`
+function unwrap_parameter_hook(setter::SymbolicIndexingInterface.MultipleSetters)
+    return SymbolicIndexingInterface.MultipleSetters(
+        Tuple(map(unwrap_parameter_hook, setter.setters))
+    )
+end
+unwrap_parameter_hook(setter) = setter
+
+unval(::Val{x}) where {x} = x
+
+"""
+    $(TYPEDSIGNATURES)
+
+The parts of the compiled `ImperativeAffect` `fa`, as a `NamedTuple`, for packages that
+check whether it can run somewhere other than the integrator it was compiled for:
+
+- `user_affect`, `ctx`: the function passed to `ImperativeAffect` and its context.
+- `modified_names`, `observed_names`: the names in the `NamedTuple`s it is called with.
+- `modified_values`, `observed_values`: generated functions `(u, p, t) -> Tuple` giving
+  the values of the modified variables and of the observed expressions.
+- `setters`: a `NamedTuple` of the setters writing back the values it returns, without the
+  hooks `without_parameter_hooks` strips.
+- `reset_jumps`: whether it resets the jump aggregators of the integrator.
+"""
+function functional_affect_parts(fa::FunctionalAffect)
+    return (;
+        fa.user_affect, fa.ctx, modified_names = unval(fa.mod_names),
+        observed_names = unval(fa.obs_sym_tuple), modified_values = fa.mod_og_val_fun,
+        observed_values = fa.obs_fun, setters = map(unwrap_parameter_hook, fa.upd_funs),
+        fa.reset_jumps,
+    )
 end
 
 """
@@ -377,7 +447,7 @@ function compile_functional_affect(
 
     return FunctionalAffect(
         func(affect), context(affect), reset_jumps,
-        mod_og_val_fun, obs_fun, mod_names, obs_sym_tuple, upd_funs
+        mod_og_val_fun, obs_fun, Val(mod_names), Val(obs_sym_tuple), upd_funs
     )
 end
 

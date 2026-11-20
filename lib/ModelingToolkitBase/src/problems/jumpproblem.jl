@@ -14,7 +14,8 @@ coupled to an ODE, and the others run much slower. Passing a specialization othe
         sys::System, op, tspan::Union{Tuple, Nothing};
         check_compatibility = true, eval_expression = false, eval_module = @__MODULE__,
         checkbounds = false, aggregator = JumpProcesses.NullAggregator(),
-        callback = nothing, rng = nothing, save_positions = (true, true), kwargs...
+        callback = nothing, rng = nothing, save_positions = (true, true),
+        affect_transform = nothing, kwargs...
     ) where {iip, spec}
     check_complete(sys, JumpProblem)
     check_compatibility && check_compatible_system(JumpProblem, sys)
@@ -146,7 +147,9 @@ coupled to an ODE, and the others run much slower. Passing a specialization othe
     op_processed = operating_point_preprocess(sys, op)
     cbs = process_events(
         sys; callback, eval_expression, eval_module, op = op_processed, reset_jumps = true,
-        tspan, mtk_verbosity = _problem_verbosity(kwargs), checkbounds,
+        tspan, mtk_verbosity = _problem_verbosity(kwargs), checkbounds, affect_transform,
+        # `save_discretes` also stays in `kwargs`, which forward it to the solve
+        save_discretes = something(get(kwargs, :save_discretes, nothing), true),
         event_codegen_kwargs(kwargs)...
     )
 
