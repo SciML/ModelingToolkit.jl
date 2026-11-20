@@ -206,6 +206,7 @@ in the model. They compile to standard callbacks from `DiffEqCallbacks.jl`.
 
 ```@docs
 ModelingToolkit.SymbolicContinuousCallback
+ModelingToolkitBase.ZeroCrossing
 ModelingToolkit.SymbolicDiscreteCallback
 ModelingToolkit.AssignmentAffect
 ```
