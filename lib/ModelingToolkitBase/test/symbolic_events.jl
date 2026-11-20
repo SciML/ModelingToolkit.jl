@@ -2040,10 +2040,11 @@ if !@isdefined(ModelingToolkit)
                         end
                         filter(<(tspan[2]), calls)
                     end
-                    @test ticks[1] == ticks[2] == ticks[3]
+                    # the complete schedule, as `PeriodicCallback` computes it
+                    expected = filter(<(tspan[2]), [(t0 + phase) + k * 0.005 for k in 0:20])
+                    @test length(expected) >= 9
+                    @test ticks[1] == ticks[2] == ticks[3] == expected
                     @test count(==(t0), ticks[1]) == nticks_at_t0
-                    @test first(ticks[1]) ≈ t0 + (iszero(phase) ? 0.0 : phase)
-                    @test all(≈(0.005), diff(ticks[1]))
                 end
             end
         end
