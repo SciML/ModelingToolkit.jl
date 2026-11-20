@@ -115,9 +115,11 @@ struct ShiftIndex
     ShiftIndex(::Num, steps::Int) = new(IntegerSequence(), steps)
 end
 
-function (xn::Num)(k::ShiftIndex)
+(xn::Num)(k::ShiftIndex) = wrap(unwrap(xn)(k))
+
+function (xn::SymbolicT)(k::ShiftIndex)
     @unpack clock, steps = k
-    x = unwrap(xn)
+    x = xn
     # Verify that the independent variables of k and x match and that the expression doesn't have multiple variables
     vars = Set{SymbolicT}()
     SU.search_variables!(vars, x)
