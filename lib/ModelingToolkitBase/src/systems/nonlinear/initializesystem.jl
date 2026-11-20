@@ -859,24 +859,14 @@ function promote_u0_p(u0, p, t0)
     return u0, p
 end
 
-# `u0_eltype = Int` builds an integer `u0` for a `DiscreteProblem` (e.g. the problem a
-# pure-jump `JumpProblem` wraps), but `remake` gives the new `u0` the promoted type of its
-# values, so an unknown filled in from a default that refers to a floating-point parameter
-# (`@variables Y(t) = Y0`) makes it a float. Keep the integer type when the caller passed
-# `u0` as a symbolic map whose values are all integers or symbolic. A filled-in value that
-# isn't a whole number throws an `InexactError`, as `u0_eltype = Int` does at construction.
-# Other problem types (including the ODE and SDE problems a `JumpProblem` can wrap) need a
-# floating-point `u0`, so they are left alone.
-function keep_integer_u0_eltype(prob, u0, newu0)
-    prob isa DiscreteProblem || return newu0
+# `remake` gives `u0` the promoted type of its values, so the integer `u0` of a
+# `DiscreteProblem` (e.g. a pure-jump `JumpProblem`'s) becomes a float when a default
+# depends on a float parameter. Keep the problem's integer type.
+keep_integer_u0_eltype(prob, u0, newu0) = newu0
+function keep_integer_u0_eltype(prob::DiscreteProblem, u0, newu0::AbstractArray{<:AbstractFloat})
     eltype(u0) <: Pair || return newu0
-    (newu0 isa AbstractArray && eltype(newu0) <: AbstractFloat) || return newu0
     T = eltype(state_values(prob))
     T <: Integer || return newu0
-    for (_, v) in u0
-        (v === nothing || v isa Integer || v isa AbstractArray{<:Integer}) && continue
-        (symbolic_type(v) == NotSymbolic() && !is_array_of_symbolics(v)) && return newu0
-    end
     return promote_with_nothing(T, newu0)
 end
 

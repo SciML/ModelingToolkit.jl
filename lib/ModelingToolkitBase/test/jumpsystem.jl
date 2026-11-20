@@ -604,9 +604,13 @@ end
     sol = solve(remake(jprob; u0 = [X => 5]), SSAStepper())
     @test sol.u[end] isa Vector{Int}
 
-    # A float value or a numeric `u0` gives a float `u0`, as does a float problem.
-    @test eltype(remake(jprob; u0 = [X => 5.5]).prob.u0) == Float64
-    @test eltype(remake(jprob; u0 = [X => 5.0]).prob.u0) == Float64
+    # A float value in the map is converted to the integer type (and must be a whole number).
+    jprob2 = remake(jprob; u0 = [X => 5.0])
+    @test jprob2.prob.u0 isa Vector{Int}
+    @test jprob2[X] == 5
+    @test_throws InexactError remake(jprob; u0 = [X => 5.5])
+
+    # A numeric `u0` gives a float `u0`, as does a float problem.
     @test eltype(remake(jprob; u0 = [5.0, 10.0]).prob.u0) == Float64
     fprob = JumpProblem(js, [X => 15; ps], (0.0, 10.0); aggregator = Direct())
     @test eltype(remake(fprob; u0 = [X => 5]).prob.u0) == Float64
