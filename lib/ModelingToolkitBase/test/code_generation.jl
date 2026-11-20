@@ -457,3 +457,69 @@ end
     @test SciMLBase.successful_retcode(sol)
     @test sol[x[1]][end] ≈ exp(-1) / 2
 end
+
+@testset "Array-literal compression preserves an explicit allocator" begin
+    # `u[1]` and `u[4]` are observed, so code generation compresses `array_literal`s
+    # into buffer `view`s; a literal under `with_allocator` keeps its allocator.
+    @variables u(t)[1:4]
+    @named sys = System([D(u[2]) ~ -u[2], D(u[3]) ~ -u[3], u[1] ~ 0.0, u[4] ~ 0.0], t, collect(u), [])
+    ssys = mtkcompile(sys)
+    @test ModelingToolkitBase.has_array_literal_observed(ssys)
+
+    nalloc = Ref(0)
+    allocator = function (dims)
+        nalloc[] += 1
+        return zeros(Float32, dims)
+    end
+    scal_args = Symbolics.SArgsT()
+    push!(scal_args, Symbolics.SConst((4,)))
+    for i in 1:4
+        push!(scal_args, unwrap(u[i]))
+    end
+    lit = Symbolics.STerm(
+        SymbolicUtils.array_literal, scal_args;
+        type = Vector{Real}, shape = SymbolicUtils.ShapeVecT((1:4,))
+    )
+    expr = SymbolicUtils.Code.with_allocator(allocator, lit)
+    # Values are assigned by variable, so the test holds for any unknown ordering.
+    uvals = Dict(unwrap(u[2]) => 2 / 3, unwrap(u[3]) => 1 / 7)
+    u0 = [uvals[unwrap(v)] for v in unknowns(ssys)]
+    fn_oop, _ = generate_custom_function(ssys, Symbolics.wrap(expr); expression = Val(false))
+    out = fn_oop(u0, MTKParameters(ssys, []), 0.0)
+    @test out isa Vector{Float32}
+    @test out == Float32[0, 2 / 3, 1 / 7, 0]
+    @test nalloc[] == 1
+
+    # The same literal without an allocator still compresses to buffer `view`s.
+    plain_oop, _ = generate_custom_function(ssys, Symbolics.wrap(lit); expression = Val(false))
+    @test plain_oop(u0, MTKParameters(ssys, []), 0.0) == [0.0, 2 / 3, 1 / 7, 0.0]
+    @test nalloc[] == 1
+
+    # A literal under an allocator nested inside another allocator's operand keeps its
+    # allocator, including when the same literal also appears outside any allocator.
+    ninner = Ref(0)
+    inner_allocator = function (dims)
+        ninner[] += 1
+        return zeros(Float32, dims)
+    end
+    inner = SymbolicUtils.Code.with_allocator(inner_allocator, lit)
+    outer_args = Symbolics.SArgsT()
+    push!(outer_args, Symbolics.SConst((2,)))
+    push!(outer_args, unwrap(sum(inner)))
+    push!(outer_args, unwrap(u[2]))
+    outer_lit = Symbolics.STerm(
+        SymbolicUtils.array_literal, outer_args;
+        type = Vector{Real}, shape = SymbolicUtils.ShapeVecT((1:2,))
+    )
+    outer = SymbolicUtils.Code.with_allocator(allocator, outer_lit)
+    nested_oop, _ = generate_custom_function(
+        ssys, [Symbolics.wrap(outer), Symbolics.wrap(lit)]; expression = Val(false)
+    )
+    nalloc[] = 0
+    nested_out = nested_oop(u0, MTKParameters(ssys, []), 0.0)
+    @test nested_out[1] isa Vector{Float32}
+    @test nested_out[1] ≈ Float32[2 / 3 + 1 / 7, 2 / 3]
+    @test nested_out[2] ≈ [0, 2 / 3, 1 / 7, 0]
+    @test nalloc[] == 1
+    @test ninner[] == 1
+end
