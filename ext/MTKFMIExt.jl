@@ -160,10 +160,19 @@ function MTK.FMIComponent(
     # since they aren't included in CS FMUs
     der_observed = Equation[]
 
-    # parse states
+    # parse states, in the order of the model description (`ModelStructure/Derivatives`
+    # in FMI 2, `ContinuousStateDerivative` in FMI 3): the FMU's continuous-state functions
+    # are positional, and `__mtk_internal_u` below is passed to them in this order.
+    # A state the FMU also lists as an output is tagged as an output here rather than
+    # declared again when the outputs are parsed.
+    state_value_references = fmu.modelDescription.stateValueReferences
+    output_value_reference_set = Set(keys(FMI.getOutputValueReferencesAndNames(fmu)))
+    state_names = FMI.getStateValueReferencesAndNames(fmu)
     fmi_variables_to_mtk_variables!(
-        fmu, FMI.getStateValueReferencesAndNames(fmu),
-        value_references, diffvars, states, observed
+        fmu, [vr => state_names[vr] for vr in state_value_references],
+        value_references, diffvars, states, observed;
+        postprocess_variable = (v, vr) -> vr in output_value_reference_set ?
+            MTKBase.setoutput(v, true) : v
     )
     # create a symbolic variable __mtk_internal_u to pass to the relevant registered
     # functions as the state vector
@@ -190,7 +199,7 @@ function MTK.FMIComponent(
     # should match one variable in states. That's the one this is the derivative of, and we
     # keep track of this ordering
     derivative_order = []
-    function derivative_order_postprocess(var)
+    function derivative_order_postprocess(var, _)
         idx = findfirst(isequal(var), states)
         idx === nothing || push!(derivative_order, states[idx])
         return var
@@ -205,7 +214,7 @@ function MTK.FMIComponent(
     inputs = []
     fmi_variables_to_mtk_variables!(
         fmu, FMI.getInputValueReferencesAndNames(fmu),
-        value_references, inputs, states, observed; postprocess_variable = v -> MTKBase.setinput(
+        value_references, inputs, states, observed; postprocess_variable = (v, _) -> MTKBase.setinput(
             v, true
         )
     )
@@ -218,8 +227,8 @@ function MTK.FMIComponent(
     # parse the outputs of the FMU
     outputs = []
     fmi_variables_to_mtk_variables!(
-        fmu, FMI.getOutputValueReferencesAndNames(fmu),
-        value_references, outputs, states, observed; postprocess_variable = v -> MTKBase.setoutput(
+        fmu, filter(p -> !(first(p) in state_value_references), FMI.getOutputValueReferencesAndNames(fmu)),
+        value_references, outputs, states, observed; postprocess_variable = (v, _) -> MTKBase.setoutput(
             v, true
         )
     )
@@ -374,13 +383,13 @@ defaults.
 # Keyword Arguments
 - `parameters`: A boolean indicating whether to use `@parameters` for the symbolic
   variables instead of `@variables`.
-- `postprocess_variable`: A function applied to each created variable that should
+- `postprocess_variable`: A function of the created variable and its value reference, applied to each created variable that should
   return the updated variable. This is useful to add metadata to variables.
 """
 function fmi_variables_to_mtk_variables!(
-        fmu::Union{FMI.FMU2, FMI.FMU3}, varmap::AbstractDict,
+        fmu::Union{FMI.FMU2, FMI.FMU3}, varmap,
         value_references::AbstractDict, truevars, allvars,
-        obseqs, defs = Dict(); parameters = false, postprocess_variable = identity
+        obseqs, defs = Dict(); parameters = false, postprocess_variable = (v, _) -> v
     )
     for (valRef, varnames) in varmap
         stateT = FMI.dataTypeForValueReference(fmu, valRef)
@@ -393,12 +402,12 @@ function fmi_variables_to_mtk_variables!(
         end
         if parameters
             vars = [
-                postprocess_variable(SymbolicUtils.unwrap(only(@parameters $sname::stateT)))
+                postprocess_variable(SymbolicUtils.unwrap(only(@parameters $sname::stateT)), valRef)
                     for sname in snames
             ]
         else
             vars = [
-                postprocess_variable(SymbolicUtils.unwrap(only(@variables $sname(t)::stateT)))
+                postprocess_variable(SymbolicUtils.unwrap(only(@variables $sname(t)::stateT)), valRef)
                     for sname in snames
             ]
         end
