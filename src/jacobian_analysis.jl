@@ -77,6 +77,9 @@ resolve the mode into contributions of individual unknowns; its participation is
   - `sol`: an `ODESolution` of an `ODEProblem` (including mass-matrix DAEs), typically
     built from a `System`.
 
+The states must be real-valued; solutions with complex states are rejected with an
+`ArgumentError`.
+
 # Keywords
 
   - `ts`: the time points to analyze. Defaults to the saved time points `sol.t` (using
@@ -93,9 +96,9 @@ resolve the mode into contributions of individual unknowns; its participation is
     analytic Jacobian and automatic differentiation are taken to be accurate to the
     working precision `ϵ`, a finite-difference backend to `√ϵ`; this accuracy determines
     which eigenvalues are resolved (see below).
-  - `check_state`: check that the first saved state is consistent with the right-hand side
-    (`M u' ≈ f(u, p, t)`), which detects solutions saved with `save_idxs` that reorder the
-    unknowns. Set to `false` for solutions whose parameters were modified by callbacks.
+  - `check_state`: for a solution with dense output, check that the first saved state is
+    consistent with the right-hand side (`M u' ≈ f(u, p, t)`). See the note below on
+    `save_idxs`. Set to `false` for solutions whose parameters were modified by callbacks.
 
 # Returns
 
@@ -150,16 +153,19 @@ res.least_damped           # the least-damped oscillatory mode and its unknowns
 
 To first order, a perturbation `E` of the Jacobian moves an eigenvalue `λ` by at most
 `κ ‖E‖`, where `κ` is its condition number. With Jacobian entries of relative accuracy `δ`
-(see `autodiff`), the error bound of `λ` is taken as `100 min(δ ‖J‖ κ, √δ ‖J‖)`; the
-second term limits the bound for defective eigenvalues, whose first-order bound is not
-valid (`√δ ‖J‖` is the perturbation of a double eigenvalue). An eigenvalue within its
-bound of the origin is reported as a zero eigenvalue (integrator, conservation law), and a
-real part within its bound of zero is treated as zero. Zero eigenvalues are excluded from
-the stiffness ratio, the count of unstable modes and `least_damped`. Consequently,
-well-conditioned eigenvalues are resolved down to about `100δ ‖J‖`, while the split
-eigenvalues of a double integrator expressed in a non-modal basis, of order `√δ ‖J‖`, are
-recognized as zero eigenvalues by their large condition numbers. A zero eigenvalue of
-multiplicity three or more that is perturbed beyond `100 √δ ‖J‖` is not recognized.
+(see `autodiff`), `‖E‖ ≈ δ S`, where `S` is `‖J‖` for an ODE and, for a mass-matrix DAE,
+the scale of the terms entering the Schur complement (so that a reduced Jacobian that is
+small because of cancellation is not resolved beyond the accuracy of those terms). The
+error bound of `λ` is taken as `100 δ S κ`. For a defective cluster perturbed into split
+eigenvalues, `κ` is large and this bound has the order of the splitting, so that, e.g.,
+the split eigenvalues of a double or quadruple integrator expressed in a non-modal basis
+are recognized as zero eigenvalues. When the computed eigenvectors are numerically
+parallel (`κ ≥ 0.01 / δ`), the condition number is meaningless and `100 √δ S` is used. An
+eigenvalue within its bound of the origin is reported as a zero eigenvalue (integrator,
+conservation law), and a real part within its bound of zero is treated as zero; the sign
+of such a real part is not resolved, and the mode is neither counted as unstable nor
+included in the stiffness ratio. Zero eigenvalues are also excluded from `least_damped`.
+Well-conditioned eigenvalues are resolved down to about `100 δ S`.
 
 !!! note
     The analysis is local: eigenvalues of the Jacobian along a nonlinear (or
@@ -168,7 +174,12 @@ multiplicity three or more that is perturbed beyond `100 √δ ‖J‖` is not r
     not necessarily the global behaviour. Parameters are taken from `sol.prob`, so
     parameter changes made by callbacks during the solve are not reflected. The solution
     must contain the complete state vector in problem order, i.e. it must not be solved
-    with `save_idxs`.
+    with `save_idxs`. For a problem with a symbolic system (e.g. built from a `System`),
+    the solution records `save_idxs`, and such solutions are rejected. Without a symbolic
+    system, a `save_idxs` that permutes all unknowns is not recorded; it is detected only
+    by the consistency check of `check_state`, which requires dense output and does not
+    detect a permutation that leaves the first saved state consistent (e.g. equal initial
+    values of the permuted unknowns).
 """
 function analyze_solution_jacobian(
         sol::SciMLBase.AbstractODESolution; ts = nothing, threshold = 0.05,
@@ -229,9 +240,9 @@ function analyze_solution_jacobian(
                 "The Jacobian at t = $t has size $(size(J)), expected ($n, $n)."
             )
         )
-        Jr, δr = _reduced_jacobian(J, M, diffidxs, t, δ)
-        λ, P, κ = _modes(Jr, δr)
-        radius = _eigenvalue_error_bounds(Jr, κ, δr)
+        Jr, S = _reduced_jacobian(J, M, diffidxs, t, δ)
+        λ, P, κ = _modes(Jr, δ)
+        radius = _eigenvalue_error_bounds(κ, δ, S)
         zm = BitVector(abs.(λ) .<= radius)
         σ = [zm[k] || abs(real(λ[k])) <= radius[k] ? 0.0 : real(λ[k]) for k in eachindex(λ)]
         push!(jacobians, Jr)
@@ -427,16 +438,21 @@ function _differential_indices(M, n)
     return findall(!iszero, LinearAlgebra.diag(Md))
 end
 
-# The Jacobian of the underlying ODE on the differential unknowns, and its relative
-# accuracy given the relative accuracy `δ` of `J`: `M⁻¹ J` for an identity/nonsingular mass
-# matrix, or the Schur complement eliminating the algebraic unknowns for a singular diagonal
-# mass matrix. The entries of `J` have the absolute error `δ ‖J‖`; the algebraic block
-# `J_aa` is treated as singular when its smallest singular value is not well above this
-# error, and its inverse amplifies the relative error by `‖J‖ / σ_min(J_aa)`.
+# The Jacobian `Jr` of the underlying ODE on the differential unknowns, and the scale `S` of
+# its absolute error: if the entries of each row of `J` have the relative accuracy `δ`, the
+# entries of `Jr` are accurate to about `δ S`. `Jr` is `M⁻¹ J` for an identity/nonsingular
+# mass matrix, or the Schur complement `J_dd - J_da J_aa⁻¹ J_ad` (scaled by the inverse of
+# the nonzero diagonal of `M`) for a singular diagonal mass matrix. For the Schur
+# complement, the error scale is derived from the terms entering it rather than from the
+# result, which may be small because of cancellation. The algebraic rows are scaled to
+# unit norm, so that the rank test and the error scale do not depend on the scaling of the
+# algebraic equations; the algebraic block is rejected when its smallest singular value is
+# not resolved by the accuracy of the scaled rows.
 function _reduced_jacobian(J, M, diffidxs, t, δ)
     n = size(J, 1)
+    norm = LinearAlgebra.norm
     if M isa UniformScaling
-        return J ./ M.λ, δ
+        return J ./ M.λ, norm(J) / abs(M.λ)
     end
     Md = Matrix{Float64}(M)
     if !LinearAlgebra.isdiag(Md)
@@ -446,21 +462,28 @@ function _reduced_jacobian(J, M, diffidxs, t, δ)
                 "`analyze_solution_jacobian` supports singular mass matrices only when they are diagonal."
             )
         )
-        return Md \ J, δ + c * eps(Float64)
+        Jr = Md \ J
+        S = LinearAlgebra.opnorm(inv(Md)) * norm(J) * max(1.0, c * eps(Float64) / δ)
+        return Jr, max(S, norm(Jr))
     end
     m = LinearAlgebra.diag(Md)
     d = diffidxs
-    length(d) == n && return J ./ m, δ
+    length(d) == n && return J ./ m, norm(J ./ m)
     a = setdiff(1:n, d)
-    Jaa = J[a, a]
-    normJ = LinearAlgebra.norm(J)
-    σmin = minimum(LinearAlgebra.svdvals(Jaa))
-    σmin > 100 * δ * normJ || throw(
+    rownorms = [norm(@view J[i, :]) for i in a]
+    σmin = any(iszero, rownorms) ? 0.0 :
+        minimum(LinearAlgebra.svdvals(J[a, a] ./ rownorms))
+    σmin > 100 * δ * sqrt(length(a)) || throw(
         ArgumentError(
-            "The Jacobian of the algebraic equations with respect to the algebraic unknowns is singular to the accuracy of the Jacobian at t = $t (smallest singular value $(round(σmin, sigdigits = 3)), Jacobian norm $(round(normJ, sigdigits = 3))), so the algebraic unknowns cannot be eliminated (the DAE is of index > 1 there)."
+            "The Jacobian of the algebraic equations with respect to the algebraic unknowns is singular to the accuracy of the Jacobian at t = $t (smallest singular value $(round(σmin, sigdigits = 3)) after scaling the algebraic equations to unit norm), so the algebraic unknowns cannot be eliminated. The DAE may be of index greater than one there."
         )
     )
-    return (J[d, d] .- J[d, a] * (Jaa \ J[a, d])) ./ m[d], δ * max(1.0, normJ / σmin)
+    Ã = J[a, a] ./ rownorms
+    X = Ã \ (J[a, d] ./ rownorms)
+    Y = J[d, a] / Ã
+    Jr = (J[d, d] .- J[d, a] * X) ./ m[d]
+    S = (1 + norm(X)) * (norm(J[d, :]) + norm(Y) * sqrt(length(a))) / minimum(abs, m[d])
+    return Jr, max(S, norm(Jr))
 end
 
 # Eigenvalues of `J`, sorted from fastest to slowest (decreasing `|real(λ)|`, ties broken
@@ -510,19 +533,20 @@ function _modes(J, δ)
     return λ[perm], P[:, perm], κ[perm]
 end
 
-# Bounds on the error of the computed eigenvalues of `J` whose entries have relative
-# accuracy `δ`, with eigenvalue condition numbers `κ`. To first order, a perturbation `E` of
-# `J` moves the eigenvalue `λ_k` by at most `κ_k ‖E‖`, with `‖E‖ ≈ δ ‖J‖` (including the
-# rounding of the eigenvalue computation). The first-order bound is not valid for a
-# defective eigenvalue, whose condition number is infinite or meaningless; there, the
-# perturbation of a double eigenvalue, `√(δ ‖J‖ ‖J‖)`, is used as an upper limit. A safety
-# factor of 100 is applied. An eigenvalue within its bound of the origin is a zero
-# eigenvalue; a real part within its bound of zero is not resolved.
-function _eigenvalue_error_bounds(J, κ, δ)
-    isempty(κ) && return Float64[]
-    normJ = LinearAlgebra.norm(J)
+# Bounds on the error of the computed eigenvalues of a matrix whose entries have the
+# absolute error `δ S`, with eigenvalue condition numbers `κ`. To first order, a
+# perturbation `E` moves the eigenvalue `λ_k` by at most `κ_k ‖E‖`. For an eigenvalue of a
+# defective cluster of order `m` that is perturbed by `‖E‖`, the computed condition number
+# is of order `(‖E‖ / S)^(-(m - 1) / m)`, so the first-order bound has the correct order
+# `‖E‖^(1/m) S^(1 - 1/m)` of the perturbation. When the computed eigenvectors are
+# numerically parallel (`κ_k ≥ 0.01 / δ`, e.g. an exactly defective eigenvalue computed
+# without splitting), the condition number is meaningless, and the perturbation of a double
+# eigenvalue, `√δ S`, is used instead. A safety factor of 100 is applied. An eigenvalue
+# within its bound of the origin is a zero eigenvalue; a real part within its bound of zero
+# is not resolved.
+function _eigenvalue_error_bounds(κ, δ, S)
     δ = max(δ, eps(Float64))
-    return [100 * min(δ * normJ * κk, sqrt(δ) * normJ) for κk in κ]
+    return [κk < 1.0e-2 / δ ? 100 * δ * S * κk : 100 * sqrt(δ) * S for κk in κ]
 end
 
 # `max |σ| / min |σ|` over the negative (resolved) real parts `σ`.

@@ -28,8 +28,8 @@ res = analyze_solution_jacobian(sol; verbose = false)
 @test all(P -> all(s -> isapprox(s, 1; atol = 1.0e-10), sum(P; dims = 1)), res.participation)
 @test isequal(sort(res.unknowns; by = string), sort([x, y]; by = string))
 
-# Analysis at user-selected times interpolates the solution, and the analytic Jacobian,
-# finite differences and AD agree.
+# Analysis at user-selected times interpolates the solution, and the analytic Jacobian
+# agrees with the default ForwardDiff Jacobian and an explicitly passed AD backend.
 using ADTypes: AutoForwardDiff
 res_ts = analyze_solution_jacobian(sol; ts = [0.0, 0.5], verbose = false)
 @test res_ts.t == [0.0, 0.5]
@@ -142,7 +142,7 @@ report = ModelingToolkit._solution_jacobian_report(
 # Classification of the eigenvalues of a matrix with entries accurate to `ϵ`.
 function classify(J)
     λ, P, κ = ModelingToolkit._modes(J, eps())
-    r = ModelingToolkit._eigenvalue_error_bounds(J, κ, eps())
+    r = ModelingToolkit._eigenvalue_error_bounds(κ, eps(), norm(J))
     zm = abs.(λ) .<= r
     σ = [zm[k] || abs(real(λ[k])) <= r[k] ? 0.0 : real(λ[k]) for k in eachindex(λ)]
     return (; λ, P, κ, zm, σ)
@@ -191,6 +191,18 @@ cdi = classify(Qdi * [0 1 0 0; 0 0 0 0; 0 0 -1.0e3 0; 0 0 0 -1] / Qdi)
 Qmix = [1.0 2 0 1 0; 0 1 3 0 1; 1 0 1 2 0; 2 1 0 1 1; 0 1 1 0 2]
 cmix = classify(Qmix * [0 1 0 0 0; 0 0 0 0 0; 0 0 0 0 0; 0 0 0 -1 0; 0 0 0 0 -10] / Qmix)
 @test count(cmix.zm) == 3
+
+# Nilpotent matrices of order four (A^4 = 0, A^3 ≠ 0) and three in non-modal bases: the
+# eigenvalues are split by about ϵ^(1/4) and ϵ^(1/3) and must all be zero eigenvalues, not
+# resolved growing modes.
+A4 = [-3.0 6 -4 1; -1 1 0 0; 0 -1 1 0; 0 0 -1 1]
+@test iszero(A4^4) && !iszero(A4^3)
+c4 = classify(A4)
+@test all(c4.zm)
+@test count(>(0), c4.σ) == 0
+Q3 = [1.0 2 0; 0 1 3; 1 0 1]
+c3 = classify(Q3 * [0 1 0; 0 0 1; 0 0 0] / Q3)
+@test all(c3.zm)
 
 # A defective eigenvalue away from the origin is neither a zero eigenvalue nor resolved
 # into participations of individual unknowns.
@@ -246,13 +258,47 @@ end
 Jred, _ = ModelingToolkit._reduced_jacobian([-1.0 1; 1 -2], Diagonal([1.0, 0]), [1], 0.0, eps())
 @test only(Jred) ≈ -0.5
 
+# Cancellation in the Schur complement: both residuals are u[1] + 49u[2], so the reduced
+# Jacobian is 1 - 49 / 49 = 0 exactly, and is computed as a rounding error. The error scale
+# of the terms entering the complement classifies it as a zero eigenvalue rather than a
+# growing mode, with the analytic Jacobian and with ForwardDiff.
+fcancel(du, u, p, t) = (du[1] = u[1] + 49u[2]; du[2] = u[1] + 49u[2]; nothing)
+for jac in (nothing, (J, u, p, t) -> (J .= [1.0 49; 1 49]))
+    fc = ODEFunction(fcancel; mass_matrix = Diagonal([1.0, 0.0]), jac)
+    solcancel = solve(ODEProblem(fc, [49.0, -1.0], (0.0, 1.0)), Rodas5P())
+    @test SciMLBase.successful_retcode(solcancel)
+    rescancel = analyze_solution_jacobian(solcancel; verbose = false)
+    @test rescancel.max_unstable == 0
+    @test all(only, rescancel.zero_eigenvalues)
+end
+
+# Scaling an algebraic equation does not change the reduced Jacobian or the rank test:
+# x' = -x + y, 0 = s (x - 2y) has the reduced rate -0.5 for any s ≠ 0, also in Float32
+# with an analytic Jacobian.
+for s in (1.0f0, 2.0f0^-20)
+    fs(du, u, p, t) = (du[1] = -u[1] + u[2]; du[2] = s * (u[1] - 2u[2]); nothing)
+    js(J, u, p, t) = (J .= [-1 1; s -2s]; nothing)
+    ffs = ODEFunction(fs; mass_matrix = Diagonal(Float32[1, 0]), jac = js)
+    sols = solve(ODEProblem(ffs, Float32[1, 0.5], (0.0f0, 1.0f0)), Rodas5P())
+    @test SciMLBase.successful_retcode(sols)
+    ress = analyze_solution_jacobian(sols; verbose = false)
+    @test all(l -> only(l) ≈ -0.5, ress.eigenvalues)
+end
+
 # A defective Jacobian: no participation and no fast/slow unknowns are reported.
 soldef = solve(ODEProblem((u, p, t) -> [-u[1] + u[2], -u[2]], [1.0, 1.0], (0.0, 1.0)), Rodas5P())
 resdef = analyze_solution_jacobian(soldef; verbose = false)
 @test all(P -> all(isnan, P), resdef.participation)
 @test isempty(resdef.fast_unknowns) && isempty(resdef.slow_unknowns)
 
-# A solution saved with `save_idxs` permuting all unknowns is detected.
+# For a problem with a symbolic system, any `save_idxs` is recorded in the solution and
+# rejected, including a permutation of all unknowns.
+@test_throws ArgumentError analyze_solution_jacobian(
+    solve(prob, Rodas5P(); save_idxs = [2, 1]); verbose = false
+)
+
+# Without a symbolic system, a solution saved with `save_idxs` permuting all unknowns is
+# detected by the consistency check of the first saved state.
 probperm = ODEProblem((u, p, t) -> [-u[1]^3, -2u[2]^3], [1.0, 10.0], (0.0, 0.01))
 @test_throws ArgumentError analyze_solution_jacobian(
     solve(probperm, Rodas5P(); save_idxs = [2, 1]); verbose = false
