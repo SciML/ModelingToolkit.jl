@@ -151,6 +151,7 @@ end
         @safetestset "Despecialized MTKParameters AD Test" include("extensions/despecialized_parameters_ad.jl")
         @safetestset "Initialization maps AD" include("extensions/initialization_maps_ad.jl")
         @safetestset "Auto Differentiation Test" include("extensions/ad.jl")
+        @safetestset "Enzyme shadow zeroing of MTKParameters" include("extensions/enzyme_zero_mtkparameters.jl")
     end
 
     if GROUP == "All" || GROUP == "Optimization"
