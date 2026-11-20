@@ -533,6 +533,15 @@ function MTK.FMIComponent(
         for (var, dervar) in zip(derivative_order, dervars)
             push!(diffeqs, D(var) ~ dervar)
         end
+        # The event functions below need a continuous callback, which ModelingToolkit
+        # cannot compile for a system with no unknowns. An FMU with no continuous states
+        # gets one placeholder state that never changes, so it can run on its own. It is
+        # marked irreducible because `mtkcompile` otherwise removes a constant state.
+        if isempty(diffvars)
+            placeholder = only(@variables __mtk_internal_placeholder(t) = 0.0 [irreducible = true])
+            push!(diffeqs, D(placeholder) ~ 0)
+            push!(states, placeholder)
+        end
 
         # the discrete outputs take their first values from the FMU during initialization
         offset = length(dervars) + length(outputs)
