@@ -517,6 +517,12 @@ end
     )
     literal_fn = generate_custom_function(sys, x[1]; optimize = [literal_rule], expression = Val(false))
     @test literal_fn(prob.u0, prob.p, 0.0) == 10.0
+    const_rule = OptimizationRule(
+        "const", (ir, expr) -> expr isa Symbolics.SymbolicT ? true : nothing,
+        (ir, expr, _) -> (populate_ir!(ir, whole); (ir, Symbolics.SConst(MakeTuple((whole, unwrap(x[2])))))), 1
+    )
+    const_fn = generate_custom_function(sys, x[1]; optimize = [const_rule], expression = Val(false))
+    @test const_fn(prob.u0, prob.p, 0.0) == (10.0, 2.0)
     wrapped_rule = OptimizationRule(
         "wrapped", detector, (ir, expr, _) -> (populate_ir!(ir, whole); (ir, Symbolics.Num[Symbolics.Num(whole); Symbolics.Num.(expr[2:end])])), 1
     )

@@ -662,6 +662,8 @@ rule_output_leaves!(leaves, x::Symbolics.Arr) = rule_output_leaves!(leaves, unwr
 rule_output_leaves!(leaves, x::Expr) = rule_output_leaves!(leaves, x.args)
 rule_output_leaves!(leaves, x) = (y = unwrap(x); y === x ? leaves : rule_output_leaves!(leaves, y))
 
+holds_code(x::SymbolicT) = (v = unwrap_const(x); v !== x && !(v isa Number))
+
 # An atomic term can hold a non-constant index (`x[k]`, `Pre(x[k])`, `y(t - τ[k])`),
 # and codegen needs the indexed array, so only elements with constant indices stop the search
 function find_arrvars_recurse(ex::SymbolicT)
@@ -1155,7 +1157,16 @@ Base.@nospecializeinfer function build_function_wrapper(
             if all_assignments[] === nothing
                 out_ir, out_expr = rule_output[]
                 read_arrvars = Set{SymbolicT}()
-                SU.search_variables!(SU.IRStructureSearchBuffer(out_ir, read_arrvars), rule_output_leaves!(Any[], out_expr); is_atomic = find_arrvars_is_atomic, recurse = find_arrvars_recurse)
+                leaves = rule_output_leaves!(Any[], out_expr)
+                seen_consts = Set{SymbolicT}()
+                while !isempty(leaves)
+                    SU.search_variables!(SU.IRStructureSearchBuffer(out_ir, read_arrvars), leaves; is_atomic = find_arrvars_is_atomic, recurse = find_arrvars_recurse)
+                    consts = Set{SymbolicT}()
+                    SU.search_variables!(SU.IRStructureSearchBuffer(out_ir, consts), leaves; is_atomic = holds_code)
+                    setdiff!(consts, seen_consts)
+                    union!(seen_consts, consts)
+                    leaves = foldl((acc, c) -> rule_output_leaves!(acc, unwrap_const(c)), consts; init = Any[])
+                end
                 setdiff!(read_arrvars, required_arrvars)
                 all_assignments[] = isempty(read_arrvars) ? assignments : [array_assignments(read_arrvars); assignments]
             end
