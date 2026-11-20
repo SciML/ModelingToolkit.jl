@@ -1128,6 +1128,17 @@ end
 """
     $(TYPEDSIGNATURES)
 
+The record literal equivalent to `x`, built from its own fields: `s` becomes
+`St(s.p, s.h)`, recursing through nested records and array-valued fields.
+"""
+function record_as_literal(x::SymbolicT)
+    leaves = record_leaves(x)
+    return record_node_value(x, x, Any[leaf for leaf in leaves])::SymbolicT
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
 Replace every record equation of `sys` with one equation per leaf, each inheriting the
 provenance of the equation it was split from.
 
