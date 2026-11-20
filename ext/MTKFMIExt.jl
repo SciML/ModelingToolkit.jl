@@ -246,6 +246,15 @@ end
 """
     $(TYPEDSIGNATURES)
 
+How many event functions a Model Exchange wrapper returns after the derivatives and
+outputs: one per event indicator of the FMU, then one whose zero is the FMU's next time
+event.
+"""
+number_of_events(fmu) = Int(something(FMI.getNumberOfEventIndicators(fmu), 0)) + 1
+
+"""
+    $(TYPEDSIGNATURES)
+
 Write `values` (in the order of `refs.all`) to `wrapper.instance`, one typed FMI call per
 group.
 """
@@ -469,7 +478,7 @@ function MTK.FMIComponent(
 
     # create a parameter for the instance wrapper
     # this manages the creation and deallocation of FMU instances
-    buffer_length = length(diffvars) + length(outputs)
+    buffer_length = length(diffvars) + length(outputs) + number_of_events(fmu)
     if Ver == 2
         @parameters (wrapper::FMI2InstanceWrapper)(..)[1:buffer_length] = FMI2InstanceWrapper(
             fmu, derivative_value_references, state_value_references, output_value_references,
@@ -484,6 +493,7 @@ function MTK.FMIComponent(
 
     # any additional initialization equations for the system
     initialization_eqs = Equation[]
+    continuous_events = []
 
     if type == :ME
         # the wrapper is a callable struct which returns the state derivative and
@@ -499,6 +509,28 @@ function MTK.FMIComponent(
         for (var, dervar) in zip(derivative_order, dervars)
             push!(diffeqs, D(var) ~ dervar)
         end
+
+        # event functions: the FMU's event indicators, then one that crosses zero at its
+        # next time event. A zero crossing of any runs the FMU's event iteration.
+        offset = length(dervars) + length(outputs)
+        event_vars = [
+            only(@variables $(Symbol(:__mtk_internal_event_, k))(t))
+                for k in 1:number_of_events(fmu)
+        ]
+        for (k, var) in enumerate(event_vars)
+            push!(diffeqs, var ~ call_expr[offset + k])
+            push!(states, var)
+        end
+        event_affect = MTKBase.ImperativeAffect(
+            fmiMEEvent!; observed = (; wrapper),
+            modified = isempty(diffvars) ? (;) : (; states = diffvars)
+        )
+        # the FMI standard has the environment step past the zero crossing, so the FMU sees
+        # the indicator's new sign when it enters Event Mode
+        push!(continuous_events, MTKBase.SymbolicContinuousCallback(
+            [var ~ 0 for var in event_vars], event_affect;
+            rootfind = SciMLBase.RightRootFind
+        ))
 
         # instance management callback which deallocates the instance when
         # necessary and notifies the FMU of completed integrator steps
@@ -569,7 +601,8 @@ function MTK.FMIComponent(
     bindings = [eq.lhs => eq.rhs for eq in parameter_dependencies]
     return System(
         eqs, t, states, params; bindings, initial_conditions = defs,
-        discrete_events = [instance_management_callback], name, initialization_eqs
+        discrete_events = [instance_management_callback], continuous_events, name,
+        initialization_eqs
     )
 end
 
@@ -745,6 +778,15 @@ mutable struct FMI2InstanceWrapper
     const params::TypedValueReferences{FMI.fmi2ValueReference}
     const inputs::TypedValueReferences{FMI.fmi2ValueReference}
     const input_split::InputSplit{FMI.fmi2ValueReference}
+    """
+    Buffer for the FMU's event indicators (Model Exchange).
+    """
+    const event_indicators::Vector{FMI.fmi2Real}
+    """
+    The time of the FMU's next time event, or `NaN` if it has none scheduled (Model
+    Exchange).
+    """
+    next_event_time::Float64
 end
 
 """
@@ -756,9 +798,10 @@ function FMI2InstanceWrapper(fmu, ders, states, outputs, params, inputs, toleran
     return FMI2InstanceWrapper(
         fmu, ders, states, outputs, params, inputs, tolerance, nothing,
         zeros(FMI.fmi2Real, length(states)), zeros(FMI.fmi2Real, length(outputs)),
-        zeros(FMI.fmi2Real, length(states) + length(outputs)),
+        zeros(FMI.fmi2Real, length(states) + length(outputs) + number_of_events(fmu)),
         TypedValueReferences(fmu, outputs), TypedValueReferences(fmu, params),
-        TypedValueReferences(fmu, inputs), InputSplit(fmu, inputs)
+        TypedValueReferences(fmu, inputs), InputSplit(fmu, inputs),
+        zeros(FMI.fmi2Real, number_of_events(fmu) - 1), NaN
     )
 end
 
@@ -800,10 +843,8 @@ function get_instance_ME!(wrapper::FMI2InstanceWrapper, inputs, params, t)
     if wrapper.instance === nothing
         get_instance_common!(wrapper, inputs, params, t)
         @statuscheck FMI.fmi2ExitInitializationMode(wrapper.instance)
-        eventInfo = FMI.fmi2NewDiscreteStates(wrapper.instance)
-        @assert eventInfo.newDiscreteStatesNeeded == FMI.fmi2False
-        # TODO: Support FMU events
-        @statuscheck FMI.fmi2EnterContinuousTimeMode(wrapper.instance)
+        # the instance is now in Event Mode
+        leave_event_mode!(wrapper)
     end
 
     return wrapper.instance
@@ -828,12 +869,9 @@ function get_instance_CS!(wrapper::FMI2InstanceWrapper, states, inputs, params, 
         end
         @statuscheck FMI.fmi2ExitInitializationMode(wrapper.instance)
     else
-        if !isempty(states)
-            @statuscheck FMI.fmi2SetReal(
-                wrapper.instance, wrapper.state_value_references,
-                Csize_t(length(wrapper.state_value_references)), states
-            )
-        end
+        # A Co-Simulation FMU integrates its own states: they are written only to start it.
+        # Between steps the FMI standard lets the caller write inputs (and tunable
+        # parameters), not states, and FMUs such as BouncingBall reject the write.
         set_values!(wrapper, wrapper.inputs, inputs)
     end
     return wrapper.instance
@@ -920,6 +958,15 @@ mutable struct FMI3InstanceWrapper
     const params::TypedValueReferences{FMI.fmi3ValueReference}
     const inputs::TypedValueReferences{FMI.fmi3ValueReference}
     const input_split::InputSplit{FMI.fmi3ValueReference}
+    """
+    Buffer for the FMU's event indicators (Model Exchange).
+    """
+    const event_indicators::Vector{FMI.fmi3Float64}
+    """
+    The time of the FMU's next time event, or `NaN` if it has none scheduled (Model
+    Exchange).
+    """
+    next_event_time::Float64
 end
 
 """
@@ -931,9 +978,10 @@ function FMI3InstanceWrapper(fmu, ders, states, outputs, params, inputs)
     return FMI3InstanceWrapper(
         fmu, ders, states, outputs, params, inputs, nothing,
         zeros(FMI.fmi3Float64, length(states)), zeros(FMI.fmi3Float64, length(outputs)),
-        zeros(FMI.fmi3Float64, length(states) + length(outputs)),
+        zeros(FMI.fmi3Float64, length(states) + length(outputs) + number_of_events(fmu)),
         TypedValueReferences(fmu, outputs), TypedValueReferences(fmu, params),
-        TypedValueReferences(fmu, inputs), InputSplit(fmu, inputs)
+        TypedValueReferences(fmu, inputs), InputSplit(fmu, inputs),
+        zeros(FMI.fmi3Float64, number_of_events(fmu) - 1), NaN
     )
 end
 
@@ -975,10 +1023,8 @@ function get_instance_ME!(wrapper::FMI3InstanceWrapper, inputs, params, t)
         wrapper.instance = FMI.fmi3InstantiateModelExchange!(wrapper.fmu)::FMI.FMU3Instance
         get_instance_common!(wrapper, inputs, params, t)
         @statuscheck FMI.fmi3ExitInitializationMode(wrapper.instance)
-        eventInfo = FMI.fmi3UpdateDiscreteStates(wrapper.instance)
-        @assert eventInfo[1] == FMI.fmi2False
-        # TODO: Support FMU events
-        @statuscheck FMI.fmi3EnterContinuousTimeMode(wrapper.instance)
+        # the instance is now in Event Mode
+        leave_event_mode!(wrapper)
     end
 
     return wrapper.instance
@@ -1005,12 +1051,8 @@ function get_instance_CS!(wrapper::FMI3InstanceWrapper, states, inputs, params, 
         end
         @statuscheck FMI.fmi3ExitInitializationMode(wrapper.instance)
     else
+        # see the FMI 2 method: states are written only to start the FMU
         set_values!(wrapper, wrapper.inputs, inputs)
-        if !isempty(states)
-            @statuscheck FMI.fmi3SetFloat64(
-                wrapper.instance, wrapper.state_value_references, states
-            )
-        end
     end
     return wrapper.instance
 end
@@ -1041,7 +1083,7 @@ end
 @register_array_symbolic (fn::FMI2InstanceWrapper)(
     states::Vector{<:Real}, inputs::Vector{<:Real}, params::Vector{<:Real}, t::Real
 ) begin
-    size = (length(states) + length(fn.output_value_references),)
+    size = (length(fn.res_buffer),)
     eltype = eltype(states)
     ndims = 1
 end
@@ -1050,7 +1092,7 @@ end
     wrapper::FMI3InstanceWrapper, states::Vector{<:Real},
     inputs::Vector{<:Real}, params::Vector{<:Real}, t::Real
 ) begin
-    size = (length(states) + length(fn.output_value_references),)
+    size = (length(fn.res_buffer),)
     eltype = eltype(states)
     ndims = 1
 end
@@ -1085,6 +1127,7 @@ function leave_event_mode!(wrapper::FMI2InstanceWrapper)
         info.terminateSimulation == FMI.fmi2True && error("The FMU asked to terminate the simulation.")
         changed |= info.valuesOfContinuousStatesChanged == FMI.fmi2True
     end
+    wrapper.next_event_time = info.nextEventTimeDefined == FMI.fmi2True ? info.nextEventTime : NaN
     @statuscheck FMI.fmi2EnterContinuousTimeMode(wrapper.instance)
     return changed
 end
@@ -1103,6 +1146,7 @@ function leave_event_mode!(wrapper::FMI3InstanceWrapper)
         terminate[] == FMI.fmi3True && error("The FMU asked to terminate the simulation.")
         changed |= values[] == FMI.fmi3True
     end
+    wrapper.next_event_time = next_defined[] == FMI.fmi3True ? next_time[] : NaN
     @statuscheck FMI.fmi3EnterContinuousTimeMode(wrapper.instance)
     return changed
 end
@@ -1123,6 +1167,52 @@ function update_discrete_inputs!(wrapper, inputs)
     split.last .= inputs
     return
 end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Read the FMU's event indicators into `wrapper.event_indicators`.
+"""
+function get_event_indicators!(wrapper::FMI2InstanceWrapper)
+    n = length(wrapper.event_indicators)
+    n == 0 && return
+    @statuscheck FMI.fmi2GetEventIndicators!(wrapper.instance, wrapper.event_indicators, Csize_t(n))
+end
+function get_event_indicators!(wrapper::FMI3InstanceWrapper)
+    n = length(wrapper.event_indicators)
+    n == 0 && return
+    @statuscheck FMI.fmi3GetEventIndicators!(wrapper.instance, wrapper.event_indicators, Csize_t(n))
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+An affect function for use inside an `ImperativeAffect`, triggered when one of a Model
+Exchange FMU's event functions (an event indicator or the next time event) crosses zero.
+Brings the FMU to the event's time and states, runs its event iteration, and writes back
+any state the FMU reset (BouncingBall reverses its velocity here). `o` must contain the
+`wrapper`; `m` contains the `states` if the FMU has any.
+"""
+function fmiMEEvent!(m, o, ctx, integrator)
+    wrapper = o.wrapper
+    wrapper.instance === nothing && return m
+    states = isdefined(m, :states) ? collect(Float64, m.states) : Float64[]
+    wrapper.instance(; x = states, t = Float64(integrator.t))
+    enter_event_mode!(wrapper)
+    changed = leave_event_mode!(wrapper)
+    if changed && isdefined(m, :states)
+        get_states!(wrapper, states)
+        return (; m..., states)
+    end
+    return m
+end
+
+get_states!(wrapper::FMI2InstanceWrapper, out) = @statuscheck FMI.fmi2GetReal!(
+    wrapper.instance, wrapper.state_value_references, Csize_t(length(out)), out
+)
+get_states!(wrapper::FMI3InstanceWrapper, out) = @statuscheck FMI.fmi3GetFloat64!(
+    wrapper.instance, wrapper.state_value_references, Csize_t(length(out)), out, Csize_t(length(out))
+)
 
 """
     $(TYPEDSIGNATURES)
@@ -1173,8 +1263,13 @@ function (wrapper::Union{FMI2InstanceWrapper, FMI3InstanceWrapper})(
             y = outputs_buffer, y_refs = wrapper.output_value_references
         )
     end
-    wrapper.res_buffer[1:length(states_buffer)] .= states_buffer
-    wrapper.res_buffer[(length(states_buffer) + 1):end] .= outputs_buffer
+    get_event_indicators!(wrapper)
+    ns, no, ne = length(states_buffer), length(outputs_buffer), length(wrapper.event_indicators)
+    wrapper.res_buffer[1:ns] .= states_buffer
+    wrapper.res_buffer[(ns + 1):(ns + no)] .= outputs_buffer
+    wrapper.res_buffer[(ns + no + 1):(ns + no + ne)] .= wrapper.event_indicators
+    # crosses zero at the next time event; stays negative while none is scheduled
+    wrapper.res_buffer[end] = isnan(wrapper.next_event_time) ? -1.0 : t - wrapper.next_event_time
     return wrapper.res_buffer
 end
 
