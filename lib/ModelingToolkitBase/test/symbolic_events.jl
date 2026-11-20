@@ -1998,6 +1998,71 @@ if !@isdefined(ModelingToolkit)
             @test sol.discretes[1].t ≈ 0.05:0.1:1.0
             @test sol[d] ≈ 1:10
         end
+        @testset "Nonzero initial time" begin
+            # The ticks are relative to the initial time of the simulation.
+            for (phase, ticks) in ((0.0, 0.05:0.1:0.96), (0.05, 0.1:0.1:1.0), (0.1, 0.15:0.1:1.0))
+                devt = SymbolicDiscreteCallback(
+                    SciMLBase.Clock(0.1; phase), [d ~ Pre(d) + 1]; discrete_parameters = [d],
+                )
+                @mtkcompile sys = System([D(x) ~ t], t, [x, d], []; discrete_events = [devt])
+                prob = ODEProblem(sys, [x => 0.0, d => 0.0], (0.05, 1.05))
+                sol = solve(prob, Tsit5())
+                @test sol.discretes[1].t ≈ ticks
+                @test sol[d] ≈ 1:length(ticks)
+                @test SciMLBase.canonicalize_indexed_clock(SciMLBase.Clock(0.1; phase)[1:length(ticks)], sol) ==
+                    sol.discretes[1].t
+            end
+        end
+        @testset "Issue #5334: ticks independent of the construction of the problem" begin
+            # A fresh problem, `remake` and `reinit!` give the same ticks, at
+            # `t0 + phase + k * dt`, also when `t0` is not a multiple of `dt`.
+            for (phase, nticks_at_t0) in ((0.0, 1), (0.005, 0), (0.002, 0))
+                calls = Float64[]
+                cb = SymbolicDiscreteCallback(
+                    SciMLBase.Clock(0.005; phase),
+                    ModelingToolkitBase.ImperativeAffect((m, o, c, i) -> (push!(calls, i.t); nothing))
+                )
+                @mtkcompile sys = System([D(x) ~ -x], t, [x], []; discrete_events = [cb])
+                prob0 = ODEProblem(sys, [x => 1.0], (0.0, 1.0))
+                for t0 in (0.2, 0.203)
+                    tspan = (t0, t0 + 0.05)
+                    ticks = map((:fresh, :remake, :reinit)) do path
+                        empty!(calls)
+                        if path == :reinit
+                            integ = init(prob0, Tsit5())
+                            empty!(calls)
+                            reinit!(integ; t0 = tspan[1], tf = tspan[2])
+                            solve!(integ)
+                        else
+                            prob = path == :fresh ? ODEProblem(sys, [x => 1.0], tspan) :
+                                remake(prob0; tspan)
+                            solve(prob, Tsit5())
+                        end
+                        filter(<(tspan[2]), calls)
+                    end
+                    # the complete schedule, as `PeriodicCallback` computes it
+                    expected = filter(<(tspan[2]), [(t0 + phase) + k * 0.005 for k in 0:20])
+                    @test length(expected) >= 9
+                    @test ticks[1] == ticks[2] == ticks[3] == expected
+                    @test count(==(t0), ticks[1]) == nticks_at_t0
+                end
+            end
+        end
+        @testset "Coincident ticks of rational clocks" begin
+            @discretes d2(t)
+            devt1 = SymbolicDiscreteCallback(
+                SciMLBase.Clock(1 // 200), [d ~ Pre(d) + 1]; discrete_parameters = [d],
+            )
+            devt2 = SymbolicDiscreteCallback(
+                SciMLBase.Clock(1 // 30; phase = 1 // 60), [d2 ~ Pre(d2) + 1]; discrete_parameters = [d2],
+            )
+            @mtkcompile sys = System([D(x) ~ t], t, [x, d, d2], []; discrete_events = [devt1, devt2])
+            prob = ODEProblem(sys, [x => 0.0, d => 0.0, d2 => 0.0], (0.0, 2.0))
+            sol = solve(prob, Tsit5())
+            @test 1.35 in sol.discretes[1].t
+            @test 1.35 in sol.discretes[2].t
+            @test all(Δ -> iszero(Δ) || Δ > 1.0e-6, diff(sol.t))
+        end
     end
 
     vlk(v, i) = v[clamp(round(Int, i), 1, length(v))]
