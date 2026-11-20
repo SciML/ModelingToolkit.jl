@@ -651,6 +651,7 @@ rule_output_leaves!(leaves, x::SymbolicT) = push!(leaves, x)
 rule_output_leaves!(leaves, x::AbstractSparseArray) = rule_output_leaves!(leaves, nonzeros(x))
 function rule_output_leaves!(leaves, x::AbstractArray)
     eltype(x) <: SymbolicT && return push!(leaves, x)
+    numeric_array(x) && return leaves
     foreach(el -> rule_output_leaves!(leaves, el), x)
     return leaves
 end
@@ -662,7 +663,8 @@ rule_output_leaves!(leaves, x::Symbolics.Arr) = rule_output_leaves!(leaves, unwr
 rule_output_leaves!(leaves, x::Expr) = rule_output_leaves!(leaves, x.args)
 rule_output_leaves!(leaves, x) = (y = unwrap(x); y === x ? leaves : rule_output_leaves!(leaves, y))
 
-holds_code(x::SymbolicT) = (v = unwrap_const(x); v !== x && !(v isa Number))
+numeric_array(x::AbstractArray) = eltype(x) <: Number || all(el -> el isa Number, x)
+holds_code(x::SymbolicT) = (v = unwrap_const(x); v !== x && !(v isa Number) && !(v isa AbstractArray && numeric_array(v)))
 
 # An atomic term can hold a non-constant index (`x[k]`, `Pre(x[k])`, `y(t - τ[k])`),
 # and codegen needs the indexed array, so only elements with constant indices stop the search
