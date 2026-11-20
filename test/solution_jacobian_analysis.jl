@@ -210,6 +210,15 @@ cnear = classify([-1.0 1; 2.0e-28 -1])
 @test !any(cnear.zm)
 @test all(≈(-1), cnear.σ)
 
+# An exactly defective pair next to well-separated modes: the first-order bound of the pair
+# covers the whole spectrum, but the cluster consists of the pair only, so all modes are
+# resolved as decaying.
+Jsep = Matrix(Diagonal([-1.0, -1, -2, -3, -4, -5]))
+Jsep[1, 2] = 1
+csep = classify(Jsep)
+@test !any(csep.zm)
+@test sort(csep.σ) ≈ [-5, -4, -3, -2, -1, -1]
+
 # A defective eigenvalue away from the origin is neither a zero eigenvalue nor resolved
 # into participations of individual unknowns.
 cdef = classify([-1.0 1; 0 -1])

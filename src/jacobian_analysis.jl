@@ -542,9 +542,12 @@ end
 # absolute error `δ S`, with eigenvalue condition numbers `κ`. To first order, a
 # perturbation `E` moves the eigenvalue `λ_k` by at most `κ_k ‖E‖`, and a safety factor of
 # 100 is applied. The first-order bound is valid only while it does not reach another
-# eigenvalue. Otherwise, the eigenvalues within the bound form a (nearly) defective cluster
-# of size `m`, whose perturbation is of order `δ^(1/m) S`, and the bound is limited to
-# `100 δ^(1/m) S`. For a split defective cluster, the computed condition numbers are of order
+# eigenvalue. Otherwise, `λ_k` belongs to a (nearly) defective cluster of size `m`, whose
+# perturbation is of order `δ^(1/m) S`, and the bound is limited to `100 δ^(1/m) S`. The
+# first-order bound may cover unrelated, well-separated eigenvalues, so the cluster is
+# determined with its own radius: `m` is the smallest size `≥ 2` for which exactly `m`
+# eigenvalues lie within `100 δ^(1/m) S` of `λ_k` (at most the number within the
+# first-order bound, which is used if no smaller size is consistent). For a split defective cluster, the computed condition numbers are of order
 # `δ^(-(m - 1) / m)`, so both bounds have the order of the splitting; for an exactly or
 # nearly defective cluster computed without splitting, the condition numbers are
 # meaningless and the limit applies. An eigenvalue within its bound of the origin is a zero
@@ -554,8 +557,19 @@ function _eigenvalue_error_bounds(λ, κ, δ, S)
     bounds = similar(κ)
     for k in eachindex(λ)
         first_order = 100 * δ * S * κ[k]
-        m = count(l -> abs(l - λ[k]) <= first_order, λ)
-        bounds[k] = m == 1 ? first_order : min(first_order, 100 * δ^(1 / m) * S)
+        m_first_order = count(l -> abs(l - λ[k]) <= first_order, λ)
+        if m_first_order == 1
+            bounds[k] = first_order
+            continue
+        end
+        m = something(
+            findfirst(
+                i -> count(l -> abs(l - λ[k]) <= 100 * δ^(1 / i) * S, λ) == i,
+                2:m_first_order
+            ),
+            m_first_order - 1
+        ) + 1
+        bounds[k] = min(first_order, 100 * δ^(1 / m) * S)
     end
     return bounds
 end
