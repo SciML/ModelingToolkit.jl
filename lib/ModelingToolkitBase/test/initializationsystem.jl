@@ -242,6 +242,34 @@ end
     ) === nothing
 end
 
+@testset "Underdetermined init message names parameters with missing value" begin
+    @parameters pm
+    msg = ModelingToolkitBase.initialization_structure_error_message(
+        :ExtraVariablesSystemException, "The system is unbalanced.", (1, 2), [pm]
+    )
+    @test occursin("`pm` has a value of `missing`", msg)
+
+    msg = ModelingToolkitBase.initialization_structure_error_message(
+        :ExtraVariablesSystemException, "The system is unbalanced.", (1, 2)
+    )
+    @test !occursin("`missing`", msg)
+end
+
+@testset "Issue #5405" begin
+    @variables x(t) = 0
+    @parameters p = missing [guess = 0.0]
+    @named sys = System([D(x) ~ ifelse(p > 0.5, 1.0, 0.0)], t)
+    ssys = mtkcompile(sys)
+    err = try
+        ODEProblem(ssys, [], (0.0, 1.0); fully_determined = true)
+        nothing
+    catch e
+        e
+    end
+    @test err isa ERRMOD.ExtraVariablesSystemException
+    @test occursin("`p` has a value of `missing`", sprint(showerror, err))
+end
+
 @connector function Port(; name, p = nothing, dm = 0)
     vars = @variables begin
         p(t) = p
