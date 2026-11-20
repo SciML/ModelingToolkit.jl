@@ -232,6 +232,11 @@ struct InputSplit{V}
     The full input vector as last written to the FMU, to tell when a discrete input changed.
     """
     last::Vector{Float64}
+    """
+    The full input vector as it was when the discrete outputs were last read, to tell when
+    they must be read again.
+    """
+    reported::Vector{Float64}
 end
 
 function InputSplit(fmu, vrs::Vector{V}) where {V}
@@ -239,7 +244,7 @@ function InputSplit(fmu, vrs::Vector{V}) where {V}
     cpos, dpos = findall(!, discrete), findall(discrete)
     return InputSplit{V}(
         cpos, TypedValueReferences(fmu, vrs[cpos]), dpos, TypedValueReferences(fmu, vrs[dpos]),
-        fill(NaN, length(vrs))
+        fill(NaN, length(vrs)), fill(NaN, length(vrs))
     )
 end
 
@@ -445,6 +450,20 @@ function MTK.FMIComponent(
             v, true
         )
     )
+    # A Model Exchange FMU's discrete outputs change only at events, which can depend on
+    # discrete state inside the FMU that the system cannot see. They are kept as discrete
+    # variables, set when the system starts and after every FMU event, so a solution
+    # reports what the FMU said during the solve rather than asking a fresh instance.
+    discrete_outputs = []
+    if type == :ME
+        discrete_outputs = filter(v -> is_discrete(fmu, value_references[v]), outputs)
+        outputs = filter(v -> !is_discrete(fmu, value_references[v]), outputs)
+        if !isempty(discrete_outputs)
+            @discretes __mtk_internal_do(t)[1:length(discrete_outputs)] = missing [guess = zeros(length(discrete_outputs))]
+            push!(observed, __mtk_internal_do ~ discrete_outputs)
+        end
+    end
+
     # create the output buffer. This is only required for CoSimulation to pass it to
     # the callback affect
     if type == :CS
@@ -473,27 +492,32 @@ function MTK.FMIComponent(
     derivative_value_references = UInt32[value_references[var] for var in dervars]
     state_value_references = UInt32[value_references[var] for var in diffvars]
     output_value_references = UInt32[value_references[var] for var in outputs]
+    discrete_output_value_references = UInt32[value_references[var] for var in discrete_outputs]
     input_value_references = UInt32[value_references[var] for var in inputs]
     param_value_references = UInt32[value_references[var] for var in params]
 
     # create a parameter for the instance wrapper
     # this manages the creation and deallocation of FMU instances
-    buffer_length = length(diffvars) + length(outputs) + number_of_events(fmu)
+    buffer_length = length(diffvars) + length(outputs) + length(discrete_outputs) +
+        number_of_events(fmu)
     if Ver == 2
         @parameters (wrapper::FMI2InstanceWrapper)(..)[1:buffer_length] = FMI2InstanceWrapper(
             fmu, derivative_value_references, state_value_references, output_value_references,
-            param_value_references, input_value_references, tolerance
+            param_value_references, input_value_references, tolerance,
+            discrete_output_value_references
         )
     else
         @parameters (wrapper::FMI3InstanceWrapper)(..)[1:buffer_length] = FMI3InstanceWrapper(
             fmu, derivative_value_references, state_value_references,
-            output_value_references, param_value_references, input_value_references
+            output_value_references, param_value_references, input_value_references,
+            discrete_output_value_references
         )
     end
 
     # any additional initialization equations for the system
     initialization_eqs = Equation[]
     continuous_events = []
+    discrete_events = []
 
     if type == :ME
         # the wrapper is a callable struct which returns the state derivative and
@@ -510,9 +534,17 @@ function MTK.FMIComponent(
             push!(diffeqs, D(var) ~ dervar)
         end
 
+        # the discrete outputs take their first values from the FMU during initialization
+        offset = length(dervars) + length(outputs)
+        for i in eachindex(discrete_outputs)
+            push!(initialization_eqs, __mtk_internal_do[i] ~ call_expr[offset + i])
+        end
+        discrete_modified = isempty(discrete_outputs) ? (;) :
+            (; discrete_outputs = __mtk_internal_do)
+
         # event functions: the FMU's event indicators, then one that crosses zero at its
         # next time event. A zero crossing of any runs the FMU's event iteration.
-        offset = length(dervars) + length(outputs)
+        offset += length(discrete_outputs)
         event_vars = [
             only(@variables $(Symbol(:__mtk_internal_event_, k))(t))
                 for k in 1:number_of_events(fmu)
@@ -523,7 +555,9 @@ function MTK.FMIComponent(
         end
         event_affect = MTKBase.ImperativeAffect(
             fmiMEEvent!; observed = (; wrapper),
-            modified = isempty(diffvars) ? (;) : (; states = diffvars)
+            modified = (;
+                (isempty(diffvars) ? (;) : (; states = diffvars))..., discrete_modified...,
+            )
         )
         # the FMI standard has the environment step past the zero crossing, so the FMU sees
         # the indicator's new sign when it enters Event Mode
@@ -531,6 +565,20 @@ function MTK.FMIComponent(
             [var ~ 0 for var in event_vars], event_affect;
             rootfind = SciMLBase.RightRootFind
         ))
+        # a changed discrete input can change the discrete outputs with no FMU event; this
+        # reads them again at the end of the step where the input changed
+        if !isempty(discrete_outputs) && any(vr -> is_discrete(fmu, vr), input_value_references)
+            @parameters (input_check::DiscreteInputCheck)(..) = DiscreteInputCheck()
+            push!(params, input_check)
+            push!(discrete_events, MTKBase.SymbolicDiscreteCallback(
+                input_check(wrapper, __mtk_internal_x) > 0.5,
+                MTKBase.ImperativeAffect(
+                    fmiMEInputEvent!; observed = (; wrapper, inputs = __mtk_internal_x),
+                    modified = discrete_modified
+                )
+            ))
+        end
+        isempty(discrete_outputs) || push!(params, __mtk_internal_do)
 
         # instance management callback which deallocates the instance when
         # necessary and notifies the FMU of completed integrator steps
@@ -601,7 +649,7 @@ function MTK.FMIComponent(
     bindings = [eq.lhs => eq.rhs for eq in parameter_dependencies]
     return System(
         eqs, t, states, params; bindings, initial_conditions = defs,
-        discrete_events = [instance_management_callback], continuous_events, name,
+        discrete_events = [instance_management_callback; discrete_events], continuous_events, name,
         initialization_eqs
     )
 end
@@ -783,6 +831,13 @@ mutable struct FMI2InstanceWrapper
     """
     const event_indicators::Vector{FMI.fmi2Real}
     """
+    The discrete outputs of a Model Exchange FMU, grouped by FMI type, and a buffer for
+    their values. They change only at events and are kept by the system as discrete
+    variables, so that a solution reports the values the FMU had during the solve.
+    """
+    const discrete_outputs::TypedValueReferences{FMI.fmi2ValueReference}
+    const discrete_outputs_buffer::Vector{Float64}
+    """
     The time of the FMU's next time event, or `NaN` if it has none scheduled (Model
     Exchange).
     """
@@ -794,14 +849,19 @@ end
 
 Create an `FMI2InstanceWrapper` with no instance.
 """
-function FMI2InstanceWrapper(fmu, ders, states, outputs, params, inputs, tolerance)
+function FMI2InstanceWrapper(
+        fmu, ders, states, outputs, params, inputs, tolerance,
+        discrete_outputs = FMI.fmi2ValueReference[]
+    )
+    n = length(states) + length(outputs) + length(discrete_outputs) + number_of_events(fmu)
     return FMI2InstanceWrapper(
         fmu, ders, states, outputs, params, inputs, tolerance, nothing,
         zeros(FMI.fmi2Real, length(states)), zeros(FMI.fmi2Real, length(outputs)),
-        zeros(FMI.fmi2Real, length(states) + length(outputs) + number_of_events(fmu)),
+        zeros(FMI.fmi2Real, n),
         TypedValueReferences(fmu, outputs), TypedValueReferences(fmu, params),
         TypedValueReferences(fmu, inputs), InputSplit(fmu, inputs),
-        zeros(FMI.fmi2Real, number_of_events(fmu) - 1), NaN
+        zeros(FMI.fmi2Real, number_of_events(fmu) - 1),
+        TypedValueReferences(fmu, discrete_outputs), zeros(length(discrete_outputs)), NaN
     )
 end
 
@@ -821,6 +881,7 @@ function get_instance_common!(wrapper::FMI2InstanceWrapper, inputs, params, t, t
     wrapper.instance = FMI.fmi2Instantiate!(wrapper.fmu)::FMI.FMU2Component
     set_values!(wrapper, wrapper.inputs, inputs)
     wrapper.input_split.last .= inputs
+    wrapper.input_split.reported .= inputs
     set_values!(wrapper, wrapper.params, params)
     stop_time_defined = t_end === nothing ? FMI.fmi2False : FMI.fmi2True
     stop_time = something(t_end, t)
@@ -963,6 +1024,13 @@ mutable struct FMI3InstanceWrapper
     """
     const event_indicators::Vector{FMI.fmi3Float64}
     """
+    The discrete outputs of a Model Exchange FMU, grouped by FMI type, and a buffer for
+    their values. They change only at events and are kept by the system as discrete
+    variables, so that a solution reports the values the FMU had during the solve.
+    """
+    const discrete_outputs::TypedValueReferences{FMI.fmi3ValueReference}
+    const discrete_outputs_buffer::Vector{Float64}
+    """
     The time of the FMU's next time event, or `NaN` if it has none scheduled (Model
     Exchange).
     """
@@ -974,14 +1042,18 @@ end
 
 Create an `FMI3InstanceWrapper` with no instance.
 """
-function FMI3InstanceWrapper(fmu, ders, states, outputs, params, inputs)
+function FMI3InstanceWrapper(
+        fmu, ders, states, outputs, params, inputs, discrete_outputs = FMI.fmi3ValueReference[]
+    )
+    n = length(states) + length(outputs) + length(discrete_outputs) + number_of_events(fmu)
     return FMI3InstanceWrapper(
         fmu, ders, states, outputs, params, inputs, nothing,
         zeros(FMI.fmi3Float64, length(states)), zeros(FMI.fmi3Float64, length(outputs)),
-        zeros(FMI.fmi3Float64, length(states) + length(outputs) + number_of_events(fmu)),
+        zeros(FMI.fmi3Float64, n),
         TypedValueReferences(fmu, outputs), TypedValueReferences(fmu, params),
         TypedValueReferences(fmu, inputs), InputSplit(fmu, inputs),
-        zeros(FMI.fmi3Float64, number_of_events(fmu) - 1), NaN
+        zeros(FMI.fmi3Float64, number_of_events(fmu) - 1),
+        TypedValueReferences(fmu, discrete_outputs), zeros(length(discrete_outputs)), NaN
     )
 end
 
@@ -1006,6 +1078,7 @@ function get_instance_common!(wrapper::FMI3InstanceWrapper, inputs, params, t, t
     )
     set_values!(wrapper, wrapper.inputs, inputs)
     wrapper.input_split.last .= inputs
+    wrapper.input_split.reported .= inputs
 
     return wrapper.instance
 end
@@ -1202,9 +1275,51 @@ function fmiMEEvent!(m, o, ctx, integrator)
     changed = leave_event_mode!(wrapper)
     if changed && isdefined(m, :states)
         get_states!(wrapper, states)
-        return (; m..., states)
+        m = (; m..., states)
     end
-    return m
+    return with_discrete_outputs(m, wrapper)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+`m` with its `discrete_outputs`, if it has them, read afresh from the FMU.
+"""
+function with_discrete_outputs(m, wrapper)
+    isdefined(m, :discrete_outputs) || return m
+    values = get_values!(zeros(length(m.discrete_outputs)), wrapper, wrapper.discrete_outputs)
+    wrapper.input_split.reported .= wrapper.input_split.last
+    return (; m..., discrete_outputs = values)
+end
+
+"""
+    $(TYPEDEF)
+
+A callable struct, used as a callable parameter so that it can take the instance wrapper:
+returns `1.0` if a discrete input of a Model Exchange FMU differs from its value when the
+FMU's discrete outputs were last read (so they must be read again), and `0.0` otherwise.
+"""
+struct DiscreteInputCheck end
+
+function (::DiscreteInputCheck)(wrapper, inputs)
+    split = wrapper.input_split
+    changed = any(i -> !isequal(inputs[i], split.reported[i]), split.discrete_positions)
+    return changed ? 1.0 : 0.0
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+An affect function for use inside an `ImperativeAffect`, triggered when a discrete input of
+a Model Exchange FMU has changed. Writes it to the FMU (in Event Mode) if the derivative
+evaluation has not already, then reads the discrete outputs. `o` must contain the
+`wrapper` and the `inputs`; `m` contains the `discrete_outputs`.
+"""
+function fmiMEInputEvent!(m, o, ctx, integrator)
+    wrapper = o.wrapper
+    wrapper.instance === nothing && return m
+    update_discrete_inputs!(wrapper, collect(Float64, o.inputs))
+    return with_discrete_outputs(m, wrapper)
 end
 
 get_states!(wrapper::FMI2InstanceWrapper, out) = @statuscheck FMI.fmi2GetReal!(
@@ -1263,11 +1378,14 @@ function (wrapper::Union{FMI2InstanceWrapper, FMI3InstanceWrapper})(
             y = outputs_buffer, y_refs = wrapper.output_value_references
         )
     end
+    get_values!(wrapper.discrete_outputs_buffer, wrapper, wrapper.discrete_outputs)
     get_event_indicators!(wrapper)
-    ns, no, ne = length(states_buffer), length(outputs_buffer), length(wrapper.event_indicators)
+    ns, no = length(states_buffer), length(outputs_buffer)
+    nd, ne = length(wrapper.discrete_outputs_buffer), length(wrapper.event_indicators)
     wrapper.res_buffer[1:ns] .= states_buffer
     wrapper.res_buffer[(ns + 1):(ns + no)] .= outputs_buffer
-    wrapper.res_buffer[(ns + no + 1):(ns + no + ne)] .= wrapper.event_indicators
+    wrapper.res_buffer[(ns + no + 1):(ns + no + nd)] .= wrapper.discrete_outputs_buffer
+    wrapper.res_buffer[(ns + no + nd + 1):(ns + no + nd + ne)] .= wrapper.event_indicators
     # crosses zero at the next time event; stays negative while none is scheduled
     wrapper.res_buffer[end] = isnan(wrapper.next_event_time) ? -1.0 : t - wrapper.next_event_time
     return wrapper.res_buffer
