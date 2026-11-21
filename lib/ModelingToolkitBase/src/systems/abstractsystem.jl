@@ -662,6 +662,9 @@ function complete(
         newsys = expand_connections(sys)
         newsys = ModelingToolkitBase.flatten(newsys)
         newsys = discrete_unknowns_to_parameters(newsys)
+        if split
+            @set! newsys.ps = gather_array_param_elements(get_ps(newsys))
+        end
         @set! newsys.parameter_bindings_graph = ParameterBindingsGraph(newsys)
         newsys = remove_bound_parameters_from_ps(newsys)
         check_no_bound_initial_conditions(newsys)
@@ -857,6 +860,23 @@ end
 """
     $(TYPEDSIGNATURES)
 
+Replace each element of a sized array parameter in `ps` with the array itself, placed at
+its first element. With `split = true` the parameter buffers, initialization and code
+generation address a sized array parameter through its parent, so the system holds the
+whole array even when only some elements are listed or used.
+"""
+function gather_array_param_elements(ps::Vector{SymbolicT})
+    gathered = OrderedSet{SymbolicT}()
+    for p in ps
+        arr, isarr = split_indexed_var(p)
+        push!(gathered, isarr && symbolic_has_known_size(arr) ? arr : p)
+    end
+    return collect(gathered)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
 Given a flattened array of parameters `params` and a collection of all (unscalarized)
 parameters in the system `all_ps`, unscalarize the elements in `params` and append
 to `buffer` in the same order as they are present in `params`. Effectively, if
@@ -876,17 +896,13 @@ function unflatten_parameters!(buffer::Vector{SymbolicT}, params::Vector{Symboli
             continue
         end
 
-        # `IndexCache` gives an array one block only when all of its elements are
-        # present. Elements of a partially present array stay scalarized.
-        block = i:(i + length(arrsym) - 1)
-        is_block = last(block) <= length(params) && all(block) do j
-            arr, isarr = split_indexed_var(params[j])
-            isarr && isequal(arr, arrsym)
-        end
-        if !is_block
-            push!(buffer, sym)
-            i += 1
-            continue
+        # the next `length(sym)` symbols should be scalarized versions of the same
+        # array symbolic
+        for j in (i + 1):(i + length(sym) - 1)
+            p = params[j]
+            if !(iscall(p) && operation(p) === getindex && isequal(arguments(p)[1], arrsym))
+                error("This should not be possible. Please open an issue in ModelingToolkitBase.jl with an MWE and stacktrace.")
+            end
         end
         push!(buffer, arrsym)
         i += length(arrsym)

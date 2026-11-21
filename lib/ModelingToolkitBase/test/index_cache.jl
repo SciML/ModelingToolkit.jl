@@ -74,7 +74,7 @@ ic = ModelingToolkitBase.get_index_cache(sys)
     end
 end
 
-@testset "scalarized tunable arrays take contiguous blocks" begin
+@testset "`complete` gathers array parameter elements into the array" begin
     @parameters p[1:2, 1:2] q r[1:3]
     P = collect(p)
     R = collect(r)
@@ -82,10 +82,12 @@ end
             "row-major" => [vec(permutedims(P)); q; R],
             "reversed" => [reverse(vec(P)); q; reverse(R)],
             "interleaved" => [P[1, 1], q, R[3], P[2, 1], R[1], P[1, 2], P[2, 2], R[2]],
+            "partial" => [P[1, 1], q, R[3], P[2, 1]],
         ]
         @named sys = System(Equation[], t, [], ps)
         sys = complete(sys)
-        @test issetequal(parameters(sys), [p, q, r])
+        @test isequal(parameters(sys), [p, q, r])
+        @test isequal(tunable_parameters(sys), [p, q, r])
         offset = 1
         for par in tunable_parameters(sys)
             idx = parameter_index(sys, par)
@@ -102,12 +104,25 @@ end
         @test all(parameter_index(sys2, par) == parameter_index(sys, par) for par in [p, q, r])
     end
 
-    @testset "partially present array stays scalarized" begin
-        @named sys = System(Equation[], t, [], [P[1, 1], q, R[3], P[2, 1], R[1], R[2]])
+    @variables x(t)
+    @parameters a[1:3] b
+    eqs = [D(x) ~ a[1] + 10a[3] + b]
+    @testset "$name" for (name, sys) in [
+            "discovered" => System(eqs, t; name = :sys),
+            "listed" => System(eqs, t, [x], [a[3], b, a[1]]; name = :sys),
+        ]
+        @test isequal(parameters(sys), [a[3], b, a[1]])
+        @test isequal(parameters(complete(sys; split = false)), [a[3], b, a[1]])
         sys = complete(sys)
-        @test issetequal(parameters(sys), [P[1, 1], P[2, 1], q, r])
-        @test vec(parameter_index(sys, r).idx) == 3:5
-        @test !is_parameter(sys, p)
+        @test isequal(parameters(sys), [a, b])
+        @test vec(parameter_index(sys, a).idx) == 1:3
+        @test parameter_index(sys, a[2]).idx == 2
+        prob = ODEProblem(sys, [x => 0.0, b => 4.0, a => [1.0, 2.0, 3.0]], (0.0, 1.0))
+        @test prob.f(prob.u0, prob.p, 0.0) == [35.0]
+        @test prob.ps[a[2]] == 2.0
+        @test_throws ["Could not evaluate", "a[2]"] ODEProblem(
+            sys, [x => 0.0, b => 4.0, a[1] => 1.0, a[3] => 3.0], (0.0, 1.0)
+        )
     end
 end
 
