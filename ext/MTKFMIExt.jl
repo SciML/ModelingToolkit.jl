@@ -419,8 +419,9 @@ function MTK.FMIComponent(
         push!(observed, __mtk_internal_u ~ copy(diffvars))
     end
 
-    # parse derivatives of states
-    # the variables passed to `postprocess_variable` haven't been differentiated yet, so they
+    # parse derivatives of states, in the order of the model description: the FMU returns
+    # all derivatives at once, in that order, whatever order their references are given in.
+    # The variables passed to `postprocess_variable` haven't been differentiated yet, so they
     # should match one variable in states. That's the one this is the derivative of, and we
     # keep track of this ordering
     derivative_order = []
@@ -429,9 +430,11 @@ function MTK.FMIComponent(
         idx === nothing || push!(derivative_order, states[idx])
         return var
     end
+    derivative_names = FMI.getDerivateValueReferencesAndNames(fmu)
     fmi_variables_to_mtk_variables!(
-        fmu, FMI.getDerivateValueReferencesAndNames(fmu), value_references, dervars,
-        states, der_observed; postprocess_variable = derivative_order_postprocess
+        fmu, [vr => derivative_names[vr] for vr in fmu.modelDescription.derivativeValueReferences],
+        value_references, dervars, states, der_observed;
+        postprocess_variable = derivative_order_postprocess
     )
     @assert length(derivative_order) == length(dervars)
 
