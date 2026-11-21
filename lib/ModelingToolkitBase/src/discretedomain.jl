@@ -312,6 +312,10 @@ Construct a [`SymbolicContinuousCallback`](@ref) that detects when `expr` crosse
 Include the callback in the `continuous_events` vector of a [`System`](@ref).
 By default, a crossing leaves the model state unchanged.
 
+!!! warning "Internal API"
+
+    `ZeroCrossing` is an internal helper and is not part of the public API.
+
 # Arguments
 
 - `expr` is the scalar symbolic expression whose sign determines the crossing direction.
@@ -319,9 +323,11 @@ By default, a crossing leaves the model state unchanged.
 # Keyword Arguments
 
 - `name::Symbol` identifies the callback for `SciMLBase.Clocks.EventClock(callback)`.
-  It defaults to a freshly generated symbol.
+  It defaults to a freshly generated symbol and overrides any `zero_crossing_id`
+  supplied in `kwargs...`.
 - `up::Bool = true` installs the affect for crossings from negative to positive.
-- `down::Bool = true` installs the affect for crossings from positive to negative.
+- `down::Bool = true` sets the default affect for crossings from positive to negative.
+  An explicit `affect_neg` in `kwargs...` overrides this default, even when `down = false`.
 - `kwargs...` are forwarded to [`SymbolicContinuousCallback`](@ref).
 
 The solver can still save a time point at a crossing with its affect disabled.
