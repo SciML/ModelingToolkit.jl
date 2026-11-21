@@ -153,9 +153,12 @@ coupled to an ODE, and the others run much slower. Passing a specialization othe
     if tstops !== nothing
         kwargs = (; kwargs..., tstops)
     end
+    # The maps are built for this problem only, so it can take them over (`alias = true`).
+    dependencies = JumpDependencies(;
+        vartojumps_map = vtoj, jumptovars_map = jtov, dep_graph = jtoj, alias = true
+    )
     return JumpProblem(
-        prob, aggregator, jset; dep_graph = jtoj, vartojumps_map = vtoj,
-        jumptovars_map = jtov, nocopy = true,
+        prob, aggregator, jset; dependencies, nocopy = true,
         callback = cbs, save_positions, _solver_kwargs(JumpProblem, kwargs)...
     )
 end
