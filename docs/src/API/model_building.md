@@ -206,7 +206,6 @@ in the model. They compile to standard callbacks from `DiffEqCallbacks.jl`.
 
 ```@docs
 ModelingToolkit.SymbolicContinuousCallback
-ModelingToolkitBase.ZeroCrossing
 ModelingToolkit.SymbolicDiscreteCallback
 ModelingToolkit.AssignmentAffect
 ```
@@ -217,6 +216,12 @@ section of the documentation. User-defined functions can be used via `Imperative
 
 ```@docs
 ModelingToolkit.ImperativeAffect
+```
+
+### Internal event helper
+
+```@docs
+ModelingToolkitBase.ZeroCrossing
 ```
 
 ## Jump processes
