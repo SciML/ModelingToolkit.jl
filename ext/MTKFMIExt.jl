@@ -515,6 +515,18 @@ function MTK.FMIComponent(
         )
     end
 
+    # Each state starts, unless the caller gives a value, at what the FMU itself computes
+    # when it is initialized with the system's parameters and inputs: its `start` value
+    # where it has one, and otherwise (`initial = "calculated"`) the value its own
+    # initialization produces, which can depend on the parameters.
+    if !isempty(diffvars)
+        @parameters (initial_states::FMUInitialStates)(..)[1:length(diffvars)] = FMUInitialStates(type)
+        initial_states_expr = initial_states(wrapper, __mtk_internal_x, __mtk_internal_p, t)
+        for (i, var) in enumerate(diffvars)
+            defs[var] = initial_states_expr[i]
+        end
+    end
+
     # any additional initialization equations for the system
     initialization_eqs = Equation[]
     continuous_events = []
@@ -666,6 +678,8 @@ function MTK.FMIComponent(
         push!(params, wrapper, functor)
     end
 
+    # added last: the branches above copy `params` as the FMU's own parameter values
+    isempty(diffvars) || push!(params, initial_states)
     eqs = [observed; diffeqs]
     bindings = [eq.lhs => eq.rhs for eq in parameter_dependencies]
     return System(
@@ -955,10 +969,11 @@ See `get_instance_common!` for a description of the arguments.
 function get_instance_CS!(wrapper::FMI2InstanceWrapper, states, inputs, params, t, t_end)
     if wrapper.instance === nothing
         get_instance_common!(wrapper, inputs, params, t, t_end)
-        if !isempty(states)
+        settable = settable_states(wrapper)
+        if !isempty(states) && !isempty(settable)
             @statuscheck FMI.fmi2SetReal(
-                wrapper.instance, wrapper.state_value_references,
-                Csize_t(length(wrapper.state_value_references)), states
+                wrapper.instance, wrapper.state_value_references[settable],
+                Csize_t(length(settable)), collect(Float64, states[settable])
             )
         end
         @statuscheck FMI.fmi2ExitInitializationMode(wrapper.instance)
@@ -1162,9 +1177,11 @@ function get_instance_CS!(wrapper::FMI3InstanceWrapper, states, inputs, params, 
             wrapper.fmu; eventModeUsed = false
         )::FMI.FMU3Instance
         get_instance_common!(wrapper, inputs, params, t, t_end)
-        if !isempty(states)
+        settable = settable_states(wrapper)
+        if !isempty(states) && !isempty(settable)
             @statuscheck FMI.fmi3SetFloat64(
-                wrapper.instance, wrapper.state_value_references, states
+                wrapper.instance, wrapper.state_value_references[settable],
+                collect(Float64, states[settable])
             )
         end
         @statuscheck FMI.fmi3ExitInitializationMode(wrapper.instance)
@@ -1365,6 +1382,51 @@ function fmiMEInputEvent!(m, o, ctx, integrator)
     wrapper.instance === nothing && return m
     update_discrete_inputs!(wrapper, as_fmi_vector(o.inputs))
     return with_discrete_outputs(m, wrapper)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+The positions of the states the FMI standard lets the caller set before a CoSimulation FMU
+is initialized: those with a `start` value (`initial` exact or approx). The others are
+calculated by the FMU (`initial = "calculated"`) and must not be written.
+"""
+settable_states(wrapper) = findall(
+    vr -> FMI.getStartValue(wrapper.fmu, vr) !== nothing, wrapper.state_value_references
+)
+
+"""
+    $(TYPEDEF)
+
+A callable parameter giving the FMU's own initial continuous states: initializes a fresh
+instance with the given inputs and parameters and reads its states back. `FMIComponent`
+uses it as the default initial value of each state, so a state with no `start` value gets
+the value the FMU calculates, and one whose start depends on parameters follows them.
+"""
+struct FMUInitialStates
+    """
+    `:ME` or `:CS`, which decides how the instance is created.
+    """
+    type::Symbol
+end
+
+function (fn::FMUInitialStates)(wrapper, inputs, params, t)
+    inputs, params = as_fmi_vector(inputs), as_fmi_vector(params)
+    out = zeros(length(wrapper.state_value_references))
+    if fn.type == :ME
+        # a running solve owns the instance; between solves start from a fresh one
+        wrapper.in_solve || reset_instance!(wrapper)
+        get_instance_ME!(wrapper, inputs, params, Float64(t))
+        get_states!(wrapper, out)
+    else
+        # the CoSimulation instance is created again, with these values, when the solve
+        # starts; this one only reports the initial states
+        reset_instance!(wrapper)
+        get_instance_CS!(wrapper, Float64[], inputs, params, Float64(t), nothing)
+        get_states!(wrapper, out)
+        reset_instance!(wrapper)
+    end
+    return out
 end
 
 get_states!(wrapper::FMI2InstanceWrapper, out) = @statuscheck FMI.fmi2GetReal!(
