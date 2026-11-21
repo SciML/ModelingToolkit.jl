@@ -646,6 +646,15 @@ function MTK.FMIComponent(
             communication_step_size, step_affect; initialize = initialize_affect,
             finalize = finalize_affect, reinitializealg
         )
+        # the periodic callback does not fire at the final time; this takes the last step
+        @parameters (final_step_due::CSFinalStepDue)(..) = CSFinalStepDue()
+        push!(params, final_step_due)
+        push!(discrete_events, MTKBase.SymbolicDiscreteCallback(
+            final_step_due(functor, t) > 0.5,
+            MTKBase.ImperativeAffect(
+                fmiCSFinalStep!; observed = cb_observed, modified = cb_modified, ctx = _functor
+            )
+        ))
 
         # guarded in case there are no outputs/states and the variable is `[]`.
         symbolic_type(__mtk_internal_o) == NotSymbolic() || push!(params, __mtk_internal_o)
@@ -1428,6 +1437,35 @@ end
 """
     $(TYPEDEF)
 
+The condition of a CoSimulation FMU's last step, as a callable parameter: 1.0 once the solve
+has reached its final time and the FMU has not been stepped there. The periodic callback
+that steps the FMU does not fire at the final time, so without this the solution's last
+values would be one communication step behind (or short of a final time that is not a
+multiple of the step).
+"""
+struct CSFinalStepDue end
+
+function (::CSFinalStepDue)(functor, t)
+    from = functor.t_last[]
+    tol = sqrt(eps(Float64)) * max(1.0, abs(t))
+    return (!isnan(from) && t >= functor.t_end[] - tol && t - from > tol) ? 1.0 : 0.0
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+An affect function for use inside an `ImperativeAffect`, triggered by
+[`CSFinalStepDue`](@ref): steps the CoSimulation FMU from where it was last stepped to the
+final time. Has the same requirements for `m` and `o` as `fmiCSStep!`.
+"""
+function fmiCSFinalStep!(m, o, ctx, integrator)
+    from = ctx.t_last[]
+    return cs_step!(m, o, ctx, integrator, from, integrator.t - from)
+end
+
+"""
+    $(TYPEDEF)
+
 A callable struct useful for initializing v2 CoSimulation FMUs. When called, updates the
 internal state of the FMU and gets updated values for output variables.
 
@@ -1448,7 +1486,20 @@ struct FMI2CSFunctor
     `tspan[2]`, set during callback initialization
     """
     t_end::Base.RefValue{FMI.fmi2Real}
+    """
+    The time the FMU has been stepped to, so the step to the end of the solve can be
+    taken when the periodic callback does not fire there.
+    """
+    t_last::Base.RefValue{FMI.fmi2Real}
+    """
+    The `stop_time` given to `FMIComponent`, or `NaN` to use the end of each solve's `tspan`.
+    """
+    stop_time::FMI.fmi2Real
 end
+
+FMI2CSFunctor(states, outputs, t_end) = FMI2CSFunctor(
+    states, outputs, t_end, Base.Ref{FMI.fmi2Real}(NaN), t_end[]
+)
 
 function (fn::FMI2CSFunctor)(wrapper::FMI2InstanceWrapper, states, inputs, params, t)
     states = states isa SubArray ? copy(states) : states
@@ -1488,14 +1539,15 @@ function fmiCSInitialize!(m, o, ctx::FMI2CSFunctor, integrator)
     params = o.params
     t = o.t
     wrapper = o.wrapper
-    if isnan(ctx.t_end[])
-        ctx.t_end[] = integrator.sol.prob.tspan[2]
-    end
+    # every solve tells the FMU its own end time, unless one was fixed when the system
+    # was built; a remade problem can have a different `tspan`
+    ctx.t_end[] = isnan(ctx.stop_time) ? integrator.sol.prob.tspan[2] : ctx.stop_time
     if wrapper.instance !== nothing
         reset_instance!(wrapper)
     end
 
     instance = get_instance_CS!(wrapper, states, inputs, params, t, ctx.t_end[])
+    ctx.t_last[] = t
     if isdefined(m, :states)
         @statuscheck FMI.fmi2GetReal!(instance, ctx.state_value_references, m.states)
     end
@@ -1515,16 +1567,24 @@ periodically to communicte with the CoSimulation FMU. Has the same requirements 
 `:dt` with the value being the communication step size.
 """
 function fmiCSStep!(m, o, ctx::FMI2CSFunctor, integrator)
+    return cs_step!(m, o, ctx, integrator, integrator.t - o.dt, o.dt)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Step the CoSimulation FMU from `from` by `h` and read its states and outputs into `m`.
+"""
+function cs_step!(m, o, ctx::FMI2CSFunctor, integrator, from, h)
     wrapper = o.wrapper
     states = isdefined(m, :states) ? m.states : ()
     inputs = o.inputs
     params = o.params
-    t = o.t
-    dt = o.dt
 
     instance = get_instance_CS!(wrapper, states, inputs, params, integrator.t, ctx.t_end[])
     set_values!(wrapper, wrapper.inputs, inputs)
-    @statuscheck FMI.fmi2DoStep(instance, integrator.t - dt, dt, FMI.fmi2True)
+    @statuscheck FMI.fmi2DoStep(instance, from, h, FMI.fmi2True)
+    ctx.t_last[] = from + h
 
     if isdefined(m, :states)
         @statuscheck FMI.fmi2GetReal!(instance, ctx.state_value_references, m.states)
@@ -1559,7 +1619,20 @@ struct FMI3CSFunctor
     `tspan[2]`, set during callback initialization
     """
     t_end::Base.RefValue{FMI.fmi3Float64}
+    """
+    The time the FMU has been stepped to, so the step to the end of the solve can be
+    taken when the periodic callback does not fire there.
+    """
+    t_last::Base.RefValue{FMI.fmi3Float64}
+    """
+    The `stop_time` given to `FMIComponent`, or `NaN` to use the end of each solve's `tspan`.
+    """
+    stop_time::FMI.fmi3Float64
 end
+
+FMI3CSFunctor(states, outputs, t_end) = FMI3CSFunctor(
+    states, outputs, t_end, Base.Ref{FMI.fmi3Float64}(NaN), t_end[]
+)
 
 function (fn::FMI3CSFunctor)(wrapper::FMI3InstanceWrapper, states, inputs, params, t)
     states = states isa SubArray ? copy(states) : states
@@ -1592,13 +1665,14 @@ function fmiCSInitialize!(m, o, ctx::FMI3CSFunctor, integrator)
     params = o.params
     t = o.t
     wrapper = o.wrapper
-    if isnan(ctx.t_end[])
-        ctx.t_end[] = integrator.sol.prob.tspan[2]
-    end
+    # every solve tells the FMU its own end time, unless one was fixed when the system
+    # was built; a remade problem can have a different `tspan`
+    ctx.t_end[] = isnan(ctx.stop_time) ? integrator.sol.prob.tspan[2] : ctx.stop_time
     if wrapper.instance !== nothing
         reset_instance!(wrapper)
     end
     instance = get_instance_CS!(wrapper, states, inputs, params, t, ctx.t_end[])
+    ctx.t_last[] = t
     if isdefined(m, :states)
         @statuscheck FMI.fmi3GetFloat64!(instance, ctx.state_value_references, m.states)
     end
@@ -1613,12 +1687,19 @@ end
     $(TYPEDSIGNATURES)
 """
 function fmiCSStep!(m, o, ctx::FMI3CSFunctor, integrator)
+    return cs_step!(m, o, ctx, integrator, integrator.t - o.dt, o.dt)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Step the CoSimulation FMU from `from` by `h` and read its states and outputs into `m`.
+"""
+function cs_step!(m, o, ctx::FMI3CSFunctor, integrator, from, h)
     wrapper = o.wrapper
     states = isdefined(m, :states) ? m.states : ()
     inputs = o.inputs
     params = o.params
-    t = o.t
-    dt = o.dt
 
     instance = get_instance_CS!(wrapper, states, inputs, params, integrator.t, ctx.t_end[])
     set_values!(wrapper, wrapper.inputs, inputs)
@@ -1627,9 +1708,10 @@ function fmiCSStep!(m, o, ctx::FMI3CSFunctor, integrator)
     earlyReturn = Ref(FMI.fmi3False)
     lastSuccessfulTime = Ref(zero(FMI.fmi3Float64))
     @statuscheck FMI.fmi3DoStep!(
-        instance, integrator.t - dt, dt, FMI.fmi3True, eventEncountered,
+        instance, from, h, FMI.fmi3True, eventEncountered,
         terminateSimulation, earlyReturn, lastSuccessfulTime
     )
+    ctx.t_last[] = from + h
     @assert eventEncountered[] == FMI.fmi3False
     @assert terminateSimulation[] == FMI.fmi3False
     @assert earlyReturn[] == FMI.fmi3False
