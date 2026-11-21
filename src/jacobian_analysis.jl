@@ -72,8 +72,8 @@ well-defined individual eigenvector. Such eigenvalues are grouped with their nea
 eigenvalues into the smallest cluster whose spectral projector `Π` is well-conditioned, and
 the participation of unknown `i` in each mode of the cluster is `|Π[i, i]|` (normalized),
 the participation in the invariant subspace of the cluster. The same applies to coincident
-eigenvalues (a repeated eigenvalue, e.g. of two identical subsystems), whose individual
-eigenvectors are not unique; their eigenvalues and damping remain accurate. `cluster_sizes`
+eigenvalues (closer than `10 ϵ ‖J‖`, e.g. a repeated eigenvalue of two identical subsystems),
+whose individual eigenvectors are not determined; their eigenvalues and damping remain accurate. `cluster_sizes`
 reports the size of the cluster of each mode.
 
 # Numerical resolution
@@ -90,7 +90,7 @@ nevertheless be long.
 # Arguments
 
   - `sol`: an `ODESolution` of an `ODEProblem` (including mass-matrix DAEs, but not a
-    `DiscreteProblem`), typically
+    `DiscreteProblem` or `ImplicitDiscreteProblem`), typically
     built from a `System`.
 
 # Keywords
@@ -168,7 +168,7 @@ function analyze_solution_jacobian(
     )
     verbose = MTKVerbosity(verbose)
     prob = sol.prob
-    (prob isa SciMLBase.AbstractODEProblem && !(prob isa SciMLBase.DiscreteProblem)) || throw(
+    (prob isa SciMLBase.AbstractODEProblem && !(prob isa SciMLBase.AbstractDiscreteProblem)) || throw(
         ArgumentError(
             "`analyze_solution_jacobian` requires the solution of an `ODEProblem`, got a solution of a `$(nameof(typeof(prob)))`."
         )
@@ -371,9 +371,9 @@ end
 # The Jacobian of the underlying ODE on the differential unknowns: `M⁻¹ J` for an
 # identity/nonsingular mass matrix, or the Schur complement `J_dd - J_da J_aa⁻¹ J_ad` (each
 # differential row scaled by the inverse of its mass entry) for a singular diagonal mass
-# matrix. The algebraic block `J_aa` is rejected when, after scaling its rows and columns to
-# unit norm (so that the test depends neither on the scaling of the algebraic equations nor
-# on that of the algebraic unknowns), its smallest singular value is not resolved by the
+# matrix. The algebraic block `J_aa` is rejected when, after scaling its rows and then the
+# columns of the row-scaled block to unit norm (so that the test does not depend on the
+# scaling of the algebraic equations), its smallest singular value is not resolved by the
 # relative accuracy `δ` of the Jacobian.
 function _reduced_jacobian(J, M, diffidxs, t, δ)
     n = size(J, 1)
@@ -394,10 +394,15 @@ function _reduced_jacobian(J, M, diffidxs, t, δ)
     length(d) == n && return J ./ m
     a = setdiff(1:n, d)
     Jaa = J[a, a]
+    # Equilibrate the rows, then the columns of the row-scaled block.
     rownorms = [LinearAlgebra.norm(@view Jaa[i, :]) for i in axes(Jaa, 1)]
-    colnorms = [LinearAlgebra.norm(@view Jaa[:, j]) for j in axes(Jaa, 2)]
-    σmin = any(iszero, rownorms) || any(iszero, colnorms) ? 0.0 :
-        minimum(LinearAlgebra.svdvals(Jaa ./ rownorms ./ transpose(colnorms)))
+    σmin = 0.0
+    if !any(iszero, rownorms)
+        Jr = Jaa ./ rownorms
+        colnorms = [LinearAlgebra.norm(@view Jr[:, j]) for j in axes(Jr, 2)]
+        any(iszero, colnorms) ||
+            (σmin = minimum(LinearAlgebra.svdvals(Jr ./ transpose(colnorms))))
+    end
     σmin > 100 * δ * sqrt(length(a)) || throw(
         ArgumentError(
             "The Jacobian of the algebraic equations with respect to the algebraic unknowns is singular to the accuracy of the Jacobian at t = $t (smallest singular value $(round(σmin, sigdigits = 3)) after scaling the algebraic equations to unit norm), so the algebraic unknowns cannot be eliminated. The DAE may be of index greater than one there."
@@ -438,20 +443,39 @@ function _modes(J)
     λ = ComplexF64.(E.values)
     V = Matrix{ComplexF64}(E.vectors)
     condV = LinearAlgebra.cond(V)
-    W = Matrix{ComplexF64}(
-        isfinite(condV) && condV * eps(Float64) < 1.0e-2 ? inv(V) :
-            _left_eigenvectors(B, λ, V)
-    )
+    wellconditioned = isfinite(condV) && condV * eps(Float64) < 1.0e-2
+    W = Matrix{ComplexF64}(wellconditioned ? inv(V) : _left_eigenvectors(B, λ, V))
     κmax = 1.0e-2 / sqrt(eps(Float64))
     P = abs.(V .* transpose(W))
     # `Σ_i |v[i] w[i]|` (with `w' v = 1`) is the minimum of `‖D⁻¹ v‖ ‖D w‖` over diagonal `D`,
     # i.e. the eigenvalue condition number in the most favourable units of the unknowns.
     κ = [(c = sum(@view P[:, k]); isfinite(c) ? c : Inf) for k in 1:n]
-    # Coincident eigenvalues (equal to rounding errors) have no unique individual
-    # eigenvectors, so they are always treated as a cluster.
-    tolc = 1.0e3 * eps(Float64) * maximum(abs, λ)
+    if !wellconditioned
+        # A left eigenvector from `J'` matched to the wrong right eigenvector (e.g. of the
+        # other one of two identical subsystems with split eigenvalues) is not orthogonal to
+        # the right eigenvectors of the other eigenvalues. `W V` does not depend on the
+        # scaling of the unknowns. Only row `k` is tested for mode `k`: a large entry in
+        # column `k` may stem from the inaccurate left eigenvector of another, defective mode.
+        S = W * V
+        for k in 1:n
+            any(j -> j != k && abs(S[k, j]) > 1.0e-3, 1:n) && (κ[k] = Inf)
+        end
+    end
+    # Eigenvalues closer than the eigenvector perturbation bound `ϵ ‖J‖ / gap` permits do not
+    # determine their individual eigenvectors (e.g. a repeated eigenvalue of two identical
+    # subsystems, split by rounding errors), so they are always treated as a cluster.
+    tolc = 10 * eps(Float64) * LinearAlgebra.norm(B)
     for k in 1:n
         count(l -> abs(l - λ[k]) <= tolc, λ) > 1 && (κ[k] = Inf)
+    end
+    # The conjugate of each eigenvalue (itself if real); clusters are formed consistently
+    # for both eigenvalues of a pair.
+    partner = collect(1:n)
+    for g in _conjugate_groups(λ)
+        length(g) == 2 && (partner[g[1]] = g[2]; partner[g[2]] = g[1])
+    end
+    for k in 1:n
+        isinf(κ[k]) && (κ[partner[k]] = Inf)
     end
     csize = ones(Int, n)
     cluster = zeros(Int, n) # cluster id of each mode, 0 if not clustered
@@ -467,17 +491,22 @@ function _modes(J)
             # A candidate that touches an existing cluster absorbs that cluster entirely.
             touched = setdiff(unique(cluster[c]), 0)
             c = union(c, findall(in(touched), cluster))
+            # A cluster that contains one eigenvalue of a conjugate pair but not the other
+            # is merged with its conjugate cluster; otherwise the conjugate cluster, whose
+            # projector is `conj(Π)`, is formed together with it.
+            cb = partner[c]
+            isempty(intersect(c, cb)) || (c = union(c, cb); cb = c)
             m = length(c)
             Π = _spectral_projector(B, λ[c])
             Π === nothing && continue
             # The analogue of `Σ_i |v[i] w[i]|` for the projector of the cluster.
             κΠ = sum(abs, LinearAlgebra.diag(Π)) / m
             (κΠ <= κmax || m == n) || continue
-            for j in c
+            for (id, cc) in ((k, c), (partner[k], cb)), j in cc
                 P[:, j] .= abs.(LinearAlgebra.diag(Π))
                 κ[j] = κΠ
                 csize[j] = m
-                cluster[j] = k
+                cluster[j] = id
             end
             break
         end

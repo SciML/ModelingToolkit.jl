@@ -194,6 +194,41 @@ reshf = analyze_solution_jacobian(
 probdisc = DiscreteProblem((u, p, t) -> 0.5 .* u, [1.0], (0.0, 3.0))
 soldisc = SciMLBase.build_solution(probdisc, nothing, [0.0], [[1.0]])
 @test_throws ArgumentError analyze_solution_jacobian(soldisc; verbose = false)
+probidisc = SciMLBase.ImplicitDiscreteProblem(
+    (resid, unext, u, p, t) -> (resid .= unext .- 0.5 .* u; nothing), [1.0], (0.0, 3.0)
+)
+solidisc = SciMLBase.build_solution(probidisc, nothing, [0.0], [[1.0]])
+@test_throws ArgumentError analyze_solution_jacobian(solidisc; verbose = false)
+
+# Distinct slow eigenvalues of a stiff system are resolved individually and are not
+# merged as coincident because of the large norm of the Jacobian.
+for Jst in (Diagonal([-1.0e13, -1, -1.1, -3]), Diagonal([-1.0e12, -0.01, -0.1]))
+    λst, Pst, κst, cst, rst = ModelingToolkit._modes(Matrix(Jst))
+    @test all(==(1), cst)
+    @test Pst ≈ I(size(Jst, 1))[:, sortperm(abs.(LinearAlgebra.diag(Jst)); rev = true)]
+end
+
+# Two identical subsystems with a nearly defective complex eigenvalue (split by rounding
+# errors), permuted and scaled: every mode is attributed to the subsystems that have its
+# eigenvalue, never to an unrelated unknown, and both eigenvalues of each conjugate pair have
+# the same participation and cluster size.
+oscm(σ, ω) = [σ ω; -ω σ]
+cjm(σ, ω) = [oscm(σ, ω) I(2); zeros(2, 2) oscm(σ, ω)]
+Jcj = zeros(11, 11)
+Jcj[1:4, 1:4] = cjm(-1.1, 2.3); Jcj[5:8, 5:8] = cjm(-1.1, 2.3)
+Jcj[9:10, 9:10] = oscm(-0.3, 0.71); Jcj[11, 11] = -5.0
+pcj = [5, 11, 7, 10, 4, 6, 2, 1, 3, 8, 9]
+dcj = [1000.0, 10.0, 100.0, 0.001, 1000.0, 0.001, 10.0, 1.0, 0.001, 100.0, 10.0]
+λcj, Pcj, κcj, ccj, rcj = ModelingToolkit._modes((Jcj .* dcj' ./ dcj)[pcj, pcj])
+poscj = invperm(pcj)
+for k in eachindex(λcj)
+    own = abs(λcj[k] - (-1.1 + 2.3im * sign(imag(λcj[k])))) < 1.0e-3 ? poscj[1:8] :
+        abs(real(λcj[k]) + 0.3) < 1.0e-3 ? poscj[9:10] : poscj[11:11]
+    @test sum(Pcj[own, k]) > 0.99
+    j = findfirst(l -> l == conj(λcj[k]), λcj)
+    @test Pcj[:, j] ≈ Pcj[:, k]
+    @test ccj[j] == ccj[k]
+end
 
 # The attribution does not depend on the units of the unknowns: a strong one-way coupling
 # and a diagonal change of units leave the participation factors and condition numbers
@@ -302,6 +337,14 @@ resdi = analyze_solution_jacobian(soldi; verbose = false)
 # An algebraic equation dominated by a differential unknown is not mistaken for a singular
 # algebraic block.
 @test only(ModelingToolkit._reduced_jacobian([-1.0 1; 1.0e7 -2], Diagonal([1.0, 0]), [1], 0.0, sqrt(eps()))) ≈ -1 + 5.0e6
+# A large scaling of an algebraic equation, or of an algebraic unknown, is not mistaken
+# for a singular algebraic block: `x' = -x + u2, 0 = u2 + a u3 - x, 0 = u3 - 2x` reduces to
+# `x' = -2a x`.
+@test only(ModelingToolkit._reduced_jacobian([-1.0 1; 1.0e14 -2.0e14], Diagonal([1.0, 0]), [1], 0.0, eps())) ≈ -0.5
+for (a, δ) in ((1.0e14, eps()), (1.0e6, sqrt(eps())))
+    Jd = [-1.0 1 0; -1 1 a; -2 0 1]
+    @test only(ModelingToolkit._reduced_jacobian(Jd, Diagonal([1.0, 0, 0]), [1], 0.0, δ)) ≈ -2a
+end
 for s in (1.0f0, 2.0f0^-20)
     Js = Matrix(Diagonal(Float32[-1, s, -1]))
     fms = ODEFunction(
