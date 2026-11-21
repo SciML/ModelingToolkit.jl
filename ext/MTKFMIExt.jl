@@ -327,11 +327,17 @@ provided as a `Val` to the function. Supports Model Exchange and CoSimulation FM
 Continuous states must be `FMI.fmi2Real` or `FMI.fmi3Float64`. Inputs, outputs and
 parameters of any numeric FMI type (integers, enumerations and booleans included) are carried
 as `Float64` variables and converted when they are passed to or read from the FMU; string,
-binary and clock variables are left out with a warning. Does not support events in the FMU. Does not support automatic
-differentiation. Parameters of the FMU will have defaults corresponding to their initial
-values in the FMU specification. All other variables will not have a default. Hierarchical
-names in the FMU of the form `namespace.variable` are transformed into symbolic variables
-with the name `namespace__variable`.
+binary and clock variables are left out with a warning. A Model Exchange FMU reports its
+state and time events to the solver, and its discrete outputs are discrete variables updated
+at those events; one with no continuous states gets a placeholder state. Solvers that
+differentiate with ForwardDiff can be used: derivatives through the FMU are computed by
+finite differences (with respect to parameters only when all of the FMU's parameters are
+real). Parameters of the FMU will have defaults corresponding to their initial values in
+the FMU specification. Each continuous state defaults to the value the FMU computes when it
+is initialized with the system's parameters and inputs; a value given to the problem
+overrides it. All other variables will not have a default. Hierarchical names in the FMU
+of the form `namespace.variable` are transformed into symbolic variables with the name
+`namespace__variable`.
 
 # Keyword Arguments
 
