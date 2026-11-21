@@ -605,19 +605,15 @@ end
         )
         @test generate_custom_function(zsys, z[1]; optimize = [set_rule], expression = Val(false))(zprob.u0, zprob.p, 0.0) == [10.0]
     end
-    for elems in (Iterators.filter(Returns(true), [AtIndex(1, zsum)]), Iterators.flatten(([AtIndex(1, zsum)],)), Iterators.take([AtIndex(1, zsum)], 1), Set([AtIndex(1, zsum)]))
-        lazy_rule = OptimizationRule(
-            "lazy", (ir, expr) -> true,
-            (ir, expr, _) -> (populate_ir!(ir, zsum); (ir, Let([Assignment(:buf, LiteralExpr(:(zeros(1))))], SetArray(false, :buf, elems, true), false))), 1
-        )
-        @test generate_custom_function(zsys, z[1]; optimize = [lazy_rule], expression = Val(false))(zprob.u0, zprob.p, 0.0) == [10.0]
+    set_buf(elems) = (ir, expr, _) -> (populate_ir!(ir, zsum); (ir, Let([Assignment(:buf, LiteralExpr(:(zeros(1))))], SetArray(false, :buf, elems, true), false)))
+    set_rule = OptimizationRule("set", (ir, expr) -> true, set_buf(Set([AtIndex(1, zsum)])), 1)
+    @test generate_custom_function(zsys, z[1]; optimize = [set_rule], expression = Val(false))(zprob.u0, zprob.p, 0.0) == [10.0]
+    for elems in (Iterators.Stateful([AtIndex(1, zsum)]), Iterators.take((i == 1 ? AtIndex(1, zsum) : error("unused element") for i in 1:4), 1))
+        lazy_rule = OptimizationRule("lazy", (ir, expr) -> true, set_buf(elems), 1)
+        @test generate_custom_function(zsys, sum(z) + 1; optimize = [lazy_rule], expression = Val(false))(zprob.u0, zprob.p, 0.0) == [10.0]
     end
-    bounded = Iterators.take((i == 1 ? AtIndex(1, zsum) : error("unused element") for i in 1:4), 1)
-    bounded_rule = OptimizationRule(
-        "bounded", (ir, expr) -> true,
-        (ir, expr, _) -> (populate_ir!(ir, zsum); (ir, Let([Assignment(:buf, LiteralExpr(:(zeros(1))))], SetArray(false, :buf, bounded, true), false))), 1
-    )
-    @test generate_custom_function(zsys, z[1]; optimize = [bounded_rule], expression = Val(false))(zprob.u0, zprob.p, 0.0) == [10.0]
+    named = OptimizationRule("named", (ir, expr) -> true, (ir, expr, _) -> (populate_ir!(ir, zsum); (ir, MakeTuple((value = zsum,)))), 1)
+    @test generate_custom_function(zsys, z[1]; optimize = [named], expression = Val(false))(zprob.u0, zprob.p, 0.0) == (10.0,)
     set_tuple = OptimizationRule("set tuple", (ir, expr) -> true, (ir, expr, _) -> (populate_ir!(ir, zsum); (ir, MakeTuple(Set([zsum])))), 1)
     @test generate_custom_function(zsys, z[1]; optimize = [set_tuple], expression = Val(false))(zprob.u0, zprob.p, 0.0) == (10.0,)
     for priority in (typemin(Int), typemax(Int))

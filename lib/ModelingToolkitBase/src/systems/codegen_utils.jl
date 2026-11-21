@@ -656,14 +656,14 @@ function rule_output_leaves!(leaves, x::AbstractArray)
 end
 is_codegen_container(x) = parentmodule(typeof(x)) === Code
 rule_output_fields!(leaves, x) = (foreach(i -> rule_output_leaves!(leaves, getfield(x, i)), 1:nfields(x)); leaves)
-rule_output_leaves!(leaves, x::Tuple) = rule_output_fields!(leaves, x)
+rule_output_leaves!(leaves, x::Union{Tuple, NamedTuple}) = rule_output_fields!(leaves, x)
 rule_output_elements!(leaves, x) = (foreach(el -> rule_output_leaves!(leaves, el), x); leaves)
-rule_output_leaves!(leaves, x::Union{Base.Generator, AbstractSet}) = rule_output_elements!(leaves, x)
+rule_output_leaves!(leaves, x::AbstractSet) = rule_output_elements!(leaves, x)
+rule_output_leaves!(leaves, x::Base.Generator) = x.iter isa Union{AbstractArray, Tuple} ? rule_output_elements!(leaves, x) : leaves
 rule_output_leaves!(leaves, x::Symbolics.Arr) = rule_output_leaves!(leaves, unwrap(x))
 rule_output_leaves!(leaves, x::Expr) = rule_output_leaves!(leaves, x.args)
 function rule_output_leaves!(leaves, x)
     is_codegen_container(x) && return rule_output_fields!(leaves, x)
-    parentmodule(typeof(x)) === Iterators && return rule_output_elements!(leaves, x)
     y = unwrap(x)
     return y === x ? leaves : rule_output_leaves!(leaves, y)
 end
@@ -1166,10 +1166,9 @@ Base.@nospecializeinfer function build_function_wrapper(
                 leaves = rule_output_leaves!(Any[], out_expr)
                 seen_consts = Set{SymbolicT}()
                 while !isempty(leaves)
-                    nodes = SymbolicT[]
-                    foreach(l -> l isa AbstractArray ? append!(nodes, l) : push!(nodes, l), leaves)
+                    nodes = convert(Vector{SymbolicT}, leaves)
                     joined = SU.Const{VartypeT}(nodes)
-                    SU.search_variables!(read_arrvars, out_ir, joined; is_atomic = find_arrvars_is_atomic, recurse = x -> iscall(x) && find_arrvars_recurse(x))
+                    SU.search_variables!(read_arrvars, out_ir, joined; is_atomic = find_arrvars_is_atomic, recurse = find_arrvars_recurse)
                     consts = Set{SymbolicT}()
                     SU.search_variables!(consts, out_ir, joined; is_atomic = holds_code)
                     setdiff!(consts, seen_consts)
@@ -1177,7 +1176,7 @@ Base.@nospecializeinfer function build_function_wrapper(
                     leaves = foldl((acc, c) -> rule_output_leaves!(acc, unwrap_const(c)), consts; init = Any[])
                 end
                 setdiff!(read_arrvars, required_arrvars)
-                all_assignments[] = isempty(read_arrvars) ? assignments : [array_assignments(read_arrvars); assignments]
+                all_assignments[] = [array_assignments(read_arrvars); assignments]
             end
             return Func(f.args, [], Let(all_assignments[], f.body, false))
         end
