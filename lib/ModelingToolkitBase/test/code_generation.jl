@@ -3,7 +3,7 @@ using SciMLBase
 using SciMLStructures
 using SparseArrays
 using SymbolicUtils: unwrap, iscall, operation, populate_ir!, IRStructure
-using SymbolicUtils.Code: OptimizationRule, Assignment, MakeTuple, MakeArray, MakeSparseArray, Let, LiteralExpr, SetArray, AtIndex
+using SymbolicUtils.Code: OptimizationRule, Assignment, MakeTuple, MakeArray, MakeSparseArray, Let, LiteralExpr, SetArray, AtIndex, ForLoop
 using ModelingToolkitBase: t_nounits as t, D_nounits as D
 using Test
 import Symbolics, SymbolicUtils
@@ -614,6 +614,9 @@ end
         lazy_rule = OptimizationRule("lazy", (ir, expr) -> true, set_buf(elems), 1)
         @test generate_custom_function(zsys, sum(z) + 1; optimize = [lazy_rule], expression = Val(false))(zprob.u0, zprob.p, 0.0) == [10.0]
     end
+    looped = Let([Assignment(:buf, LiteralExpr(:(zeros(1))))], LiteralExpr(Expr(:block, ForLoop(:i, 1:1, SetArray(false, :buf, [AtIndex(1, zsum)], true)), :buf)), false)
+    loop_rule = OptimizationRule("loop", (ir, expr) -> true, (ir, expr, _) -> (populate_ir!(ir, zsum); (ir, looped)), 1)
+    @test generate_custom_function(zsys, z[1]; optimize = [loop_rule], expression = Val(false))(zprob.u0, zprob.p, 0.0) == [10.0]
     named = OptimizationRule("named", (ir, expr) -> true, (ir, expr, _) -> (populate_ir!(ir, zsum); (ir, MakeTuple((value = zsum,)))), 1)
     @test generate_custom_function(zsys, z[1]; optimize = [named], expression = Val(false))(zprob.u0, zprob.p, 0.0) == (10.0,)
     set_tuple = OptimizationRule("set tuple", (ir, expr) -> true, (ir, expr, _) -> (populate_ir!(ir, zsum); (ir, MakeTuple(Set([zsum])))), 1)
