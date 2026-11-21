@@ -80,3 +80,9 @@ end
     @test length(alg.calls) == 1
     @test length(unknowns(torn)) == length(unknowns(mtkcompile(sys; max_linear_scc_tearing = typemax(Int))))
 end
+
+@testset "Default tearing with an empty equation row" begin
+    @variables x y
+    @named sys = System([0 ~ sin(x), x ~ 0, 0 ~ y^2 - 1], nothing)
+    @test length(unknowns(mtkcompile(sys))) == 1
+end
