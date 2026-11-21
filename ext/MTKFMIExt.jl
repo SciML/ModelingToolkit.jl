@@ -589,22 +589,26 @@ function MTK.FMIComponent(
         )
         # the FMI standard has the environment step past the zero crossing, so the FMU sees
         # the indicator's new sign when it enters Event Mode
-        push!(continuous_events, MTKBase.SymbolicContinuousCallback(
-            [var ~ 0 for var in event_vars], event_affect;
-            rootfind = SciMLBase.RightRootFind
-        ))
+        push!(
+            continuous_events, MTKBase.SymbolicContinuousCallback(
+                [var ~ 0 for var in event_vars], event_affect;
+                rootfind = SciMLBase.RightRootFind
+            )
+        )
         # a changed discrete input can change the discrete outputs with no FMU event; this
         # reads them again at the end of the step where the input changed
         if !isempty(discrete_outputs) && any(vr -> is_discrete(fmu, vr), input_value_references)
             @parameters (input_check::DiscreteInputCheck)(..) = DiscreteInputCheck()
             push!(params, input_check)
-            push!(discrete_events, MTKBase.SymbolicDiscreteCallback(
-                input_check(wrapper, __mtk_internal_x) > 0.5,
-                MTKBase.ImperativeAffect(
-                    fmiMEInputEvent!; observed = (; wrapper, inputs = __mtk_internal_x),
-                    modified = discrete_modified
+            push!(
+                discrete_events, MTKBase.SymbolicDiscreteCallback(
+                    input_check(wrapper, __mtk_internal_x) > 0.5,
+                    MTKBase.ImperativeAffect(
+                        fmiMEInputEvent!; observed = (; wrapper, inputs = __mtk_internal_x),
+                        modified = discrete_modified
+                    )
                 )
-            ))
+            )
         end
         isempty(discrete_outputs) || push!(params, __mtk_internal_do)
 
@@ -670,12 +674,14 @@ function MTK.FMIComponent(
         # the periodic callback does not fire at the final time; this takes the last step
         @parameters (final_step_due::CSFinalStepDue)(..) = CSFinalStepDue()
         push!(params, final_step_due)
-        push!(discrete_events, MTKBase.SymbolicDiscreteCallback(
-            final_step_due(functor, t) > 0.5,
-            MTKBase.ImperativeAffect(
-                fmiCSFinalStep!; observed = cb_observed, modified = cb_modified, ctx = _functor
-            ); reinitializealg
-        ))
+        push!(
+            discrete_events, MTKBase.SymbolicDiscreteCallback(
+                final_step_due(functor, t) > 0.5,
+                MTKBase.ImperativeAffect(
+                    fmiCSFinalStep!; observed = cb_observed, modified = cb_modified, ctx = _functor
+                ); reinitializealg
+            )
+        )
 
         # guarded in case there are no outputs/states and the variable is `[]`.
         symbolic_type(__mtk_internal_o) == NotSymbolic() || push!(params, __mtk_internal_o)
@@ -1244,10 +1250,10 @@ end
 Move a Model Exchange instance from Continuous-Time Mode into Event Mode.
 """
 function enter_event_mode!(wrapper::FMI2InstanceWrapper)
-    @statuscheck FMI.fmi2EnterEventMode(wrapper.instance)
+    return @statuscheck FMI.fmi2EnterEventMode(wrapper.instance)
 end
 function enter_event_mode!(wrapper::FMI3InstanceWrapper)
-    @statuscheck FMI.fmi3EnterEventMode(
+    return @statuscheck FMI.fmi3EnterEventMode(
         wrapper.instance, FMI.fmi3False, FMI.fmi3False, FMI.fmi3Int32[], Csize_t(0), FMI.fmi3False
     )
 end
@@ -1317,12 +1323,12 @@ Read the FMU's event indicators into `wrapper.event_indicators`.
 function get_event_indicators!(wrapper::FMI2InstanceWrapper)
     n = length(wrapper.event_indicators)
     n == 0 && return
-    @statuscheck FMI.fmi2GetEventIndicators!(wrapper.instance, wrapper.event_indicators, Csize_t(n))
+    return @statuscheck FMI.fmi2GetEventIndicators!(wrapper.instance, wrapper.event_indicators, Csize_t(n))
 end
 function get_event_indicators!(wrapper::FMI3InstanceWrapper)
     n = length(wrapper.event_indicators)
     n == 0 && return
-    @statuscheck FMI.fmi3GetEventIndicators!(wrapper.instance, wrapper.event_indicators, Csize_t(n))
+    return @statuscheck FMI.fmi3GetEventIndicators!(wrapper.instance, wrapper.event_indicators, Csize_t(n))
 end
 
 """
@@ -1512,8 +1518,10 @@ function dual_eval(wrapper, states, inputs, params, t)
     for k in 1:N
         ds, di, dp = part.(states, k), part.(inputs, k), part.(params, k)
         dt = part(t, k)
-        dirnorm = sqrt(sum(abs2, ds; init = 0.0) + sum(abs2, di; init = 0.0) +
-            sum(abs2, dp; init = 0.0) + dt^2)
+        dirnorm = sqrt(
+            sum(abs2, ds; init = 0.0) + sum(abs2, di; init = 0.0) +
+                sum(abs2, dp; init = 0.0) + dt^2
+        )
         iszero(dirnorm) && continue
         h = sqrt(eps(Float64)) * max(1.0, base) / dirnorm
         f1 = wrapper(s0 .+ h .* ds, i0 .+ h .* di, p0 .+ h .* dp, t0 + h * dt)
@@ -1521,8 +1529,10 @@ function dual_eval(wrapper, states, inputs, params, t)
     end
     # leave the FMU at the unperturbed point
     wrapper(s0, i0, p0, t0)
-    return [ForwardDiff.Dual{T}(f0[i], ForwardDiff.Partials(ntuple(k -> J[i, k], Val(N))))
-        for i in eachindex(f0)]
+    return [
+        ForwardDiff.Dual{T}(f0[i], ForwardDiff.Partials(ntuple(k -> J[i, k], Val(N))))
+            for i in eachindex(f0)
+    ]
 end
 
 """
