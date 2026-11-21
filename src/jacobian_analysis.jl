@@ -41,66 +41,69 @@ function _weighted_pairs(names, w, threshold)
 end
 
 """
-    analyze_solution_jacobian(sol; ts = nothing, threshold = 0.05, nmodes = 3, verbose = true, autodiff = nothing, check_state = true)
+    analyze_solution_jacobian(sol; ts = nothing, threshold = 0.05, nmodes = 3, verbose = true, autodiff = nothing)
 
-Analyze the local linearized dynamics along an ODE solution: at each analyzed time point,
-evaluate the Jacobian `∂f/∂u` of the right-hand side at `(sol(t), p, t)`, compute its
-eigenvalues (the local *modes*), their time constants, and the **participation factors**
-that attribute each mode to the unknowns of the system. This answers questions like
-
-  - *which unknowns are responsible for the stiffness of my model?* — the unknowns that
-    participate in the fastest modes;
-  - *what are the fast and slow time constants of the system, and how do they change
-    along the trajectory?*
-  - *is the model locally unstable somewhere?* — modes with a positive real part.
-  - *which oscillatory modes are lightly damped, and which unknowns do they involve?* —
-    the relative damping of the complex eigenvalue pairs.
+Determine which unknowns (state variables) contribute to the fast, slow and poorly damped
+modes along an ODE solution. At each analyzed time point, the Jacobian `∂f/∂u` of the
+right-hand side is evaluated at `(sol(t), p, t)`; its eigenvalues are the local *modes*,
+with time constants `1 / |real(λ)|`, natural frequencies `|λ|` and relative damping
+`ζ = -real(λ) / |λ|`, and **participation factors** attribute each mode to the unknowns.
 
 For a mass-matrix DAE `M u' = f(u, p, t)` with a diagonal mass matrix, the algebraic
 unknowns are eliminated by a Schur complement, so the modes are those of the underlying
-ODE on the differential unknowns, `J_dd - J_da J_aa⁻¹ J_ad` (scaled by the inverse of the
-nonzero diagonal of `M`). A nonsingular non-diagonal mass matrix is handled as `M⁻¹ J`.
+ODE on the differential unknowns, `J_dd - J_da J_aa⁻¹ J_ad` (each row scaled by the inverse
+of its mass entry). A nonsingular non-diagonal mass matrix is handled as `M⁻¹ J`. The states
+must be real-valued; solutions with complex states are rejected with an `ArgumentError`.
 
 # Participation factors
 
-With the eigendecomposition `J = V Λ V⁻¹`, the participation of unknown `i` in mode `k` is
-`|V[i, k] (V⁻¹)[k, i]|`, normalized so that the participations of each mode sum to one.
-Unlike the eigenvector entries themselves, participation factors are independent of the
-scaling of the unknowns and of the eigenvectors. A participation close to one means the
-mode is (locally) essentially the dynamics of that single unknown. For a defective or
-nearly defective eigenvalue (eigenvalue condition number above `0.01 / √δ`, with `δ` the
-relative accuracy of the Jacobian), the eigenvectors are nearly parallel and do not
-resolve the mode into contributions of individual unknowns; its participation is `NaN`.
+With right and left eigenvectors `v_k` and `w_k` of the mode `λ_k`, normalized such that
+`w_k' v_k = 1`, the participation of unknown `i` is `|v_k[i] w_k[i]|`, normalized so that the
+participations of each mode sum to one. Participation factors do not depend on the scaling
+of the unknowns (their units) or of the eigenvectors. A participation close to one means
+that the mode is (locally) essentially the dynamics of that single unknown. The two
+eigenvalues of a complex-conjugate pair describe one oscillatory mode in a two-dimensional
+real subspace; their participations are identical and typically distributed over at least
+two unknowns (e.g. a position and a velocity).
+
+A defective or nearly defective eigenvalue (e.g. the double zero eigenvalue of a double
+integrator, or the double eigenvalue of two identical first-order lags in series) has no
+well-defined individual eigenvector. Such eigenvalues are grouped with their nearest
+eigenvalues into the smallest cluster whose spectral projector `Π` is well-conditioned, and
+the participation of unknown `i` in each mode of the cluster is `|Π[i, i]|` (normalized),
+the participation in the invariant subspace of the cluster. The same applies to a repeated
+eigenvalue with several independent eigenvectors, whose individual eigenvectors are not
+unique. `cluster_sizes` reports the size of the cluster of each mode.
+
+# Numerical resolution
+
+The eigenvalues are computed to an accuracy of about `κ ϵ ‖J‖` (in balanced coordinates),
+where `κ` is the condition number in `eigenvalue_conditions`. Integrators and conservation
+laws appear as eigenvalues close to zero, i.e. as the slowest modes; the sign of a real part
+below this accuracy is not meaningful. The computed eigenvalues of a cluster of size greater
+than one are split by rounding errors, so their individual time constants and damping are
+not meaningful either.
 
 # Arguments
 
   - `sol`: an `ODESolution` of an `ODEProblem` (including mass-matrix DAEs), typically
     built from a `System`.
 
-The states must be real-valued; solutions with complex states are rejected with an
-`ArgumentError`.
-
 # Keywords
 
   - `ts`: the time points to analyze. Defaults to the saved time points `sol.t` (using
     the saved states `sol.u`); otherwise `sol` is interpolated at `ts`.
   - `threshold`: only unknowns whose participation in a mode exceeds this value are
-    reported in `fast_unknowns`/`slow_unknowns` and in the printed report.
+    reported in `fast_unknowns`, `slow_unknowns`, `least_damped` and the printed report.
   - `nmodes`: the number of fastest and slowest modes listed in the printed report.
   - `verbose`: print a human-readable report. Accepts a `Bool`, a `SciMLLogging` preset,
     or an [`MTKVerbosity`](@ref); the report is controlled by its
     `solution_jacobian_analysis` toggle.
   - `autodiff`: `nothing` (default) uses the analytic Jacobian of the problem if one was
     generated (`ODEProblem(sys, ...; jac = true)`) and `AutoForwardDiff()` otherwise.
-    Alternatively an ADTypes backend evaluated through `DifferentiationInterface`. The
-    analytic Jacobian and automatic differentiation are taken to be accurate to the
-    working precision `ϵ`, a finite-difference backend to `√ϵ`; this accuracy determines
-    which eigenvalues are resolved (see below).
-  - `check_state`: check that the saved states are consistent with the problem: for an ODE
-    without initialization, the first saved state must equal the initial state, and with
-    dense output, `M u' ≈ f(u, p, t)` must hold at up to five saved points. See the note
-    below on `save_idxs`. Set to `false` for solutions whose state or parameters were
-    modified by callbacks.
+    Alternatively an ADTypes backend evaluated through `DifferentiationInterface`. With a
+    finite-difference backend, the Jacobian is accurate only to about `√ϵ`; in particular, a
+    singular algebraic block of a DAE may then not be detected.
 
 # Returns
 
@@ -111,84 +114,52 @@ A `NamedTuple` with fields
     mass-matrix DAE), in the order of the rows of `participation`.
   - `jacobians`: the (reduced) Jacobian at each time point.
   - `eigenvalues`: the eigenvalues at each time point, sorted from fastest to slowest
-    (by decreasing `|real(λ)|`).
-  - `time_constants`: `1 / |real(λ)|` for each eigenvalue (`Inf` for zero eigenvalues and
-    for modes whose real part is zero to the accuracy of the computed spectrum, e.g.
-    undamped oscillatory modes).
+    (by decreasing `|real(λ)|`, conjugate pairs adjacent).
+  - `eigenvalue_conditions`: the condition number of each eigenvalue (of its cluster for a
+    cluster of size greater than one), computed in balanced coordinates.
+  - `cluster_sizes`: the size of the cluster of each mode (one for a simple, well-conditioned
+    eigenvalue).
+  - `time_constants`: `1 / |real(λ)|` for each eigenvalue (`Inf` for a zero real part).
   - `natural_frequencies`: `|λ|` for each eigenvalue.
-  - `damping`: the relative damping `ζ = -real(λ) / |λ|` of each eigenvalue (`1` for a
-    decaying real mode, `-1` for a growing real mode, `NaN` for a zero eigenvalue).
-  - `zero_eigenvalues`: at each time point, a mask of the eigenvalues that are zero to the
-    accuracy of the computed spectrum, e.g. integrators and conservation laws (see below).
-  - `eigenvalue_conditions`: the condition number `κ = ‖v‖ ‖w‖ / |w' v|` of each
-    eigenvalue, with right and left eigenvectors `v` and `w`.
+  - `damping`: the relative damping `ζ = -real(λ) / |λ|` of each eigenvalue (`NaN` for
+    `λ = 0`).
   - `participation`: at each time point, a matrix whose column `k` holds the participation
-    of every unknown in mode `k` (columns ordered as `eigenvalues`). The two eigenvalues of
-    a complex-conjugate pair describe one oscillatory mode in a two-dimensional real
-    subspace; their participation columns are identical and are typically distributed over
-    at least two unknowns (e.g. a position and a velocity). The printed report lists such a
-    pair once, as `real(λ) ± imag(λ)im`.
-  - `stiffness_ratio`: at each time point, `max |real(λ)| / min |real(λ)|` over the
-    decaying modes (`real(λ) < 0`), or `NaN` if there are none.
-  - `stiffest_index`: the index of the time point with the largest stiffness ratio.
-  - `fast_unknowns` / `slow_unknowns`: `unknown => participation` pairs of the fastest /
-    slowest decaying mode at the stiffest time point, sorted by decreasing participation.
-  - `max_unstable`: the largest number of modes with a positive real part at any analyzed
-    time point.
-  - `least_damped`: the oscillatory mode (`imag(λ) ≠ 0`) with the smallest relative damping
-    over all analyzed time points, as a `NamedTuple` `(; index, t, eigenvalue, damping,
-    natural_frequency, unknowns)`, where `index` is the time-point index and `unknowns`
-    holds the `unknown => participation` pairs of that mode, or `nothing` if no analyzed
-    time point has an oscillatory mode.
+    of every unknown in mode `k` (columns ordered as `eigenvalues`).
+  - `fast_unknowns` / `slow_unknowns`: at each time point, the `unknown => participation`
+    pairs of the fastest / slowest mode, sorted by decreasing participation.
+  - `least_damped`: the oscillatory mode (`imag(λ) ≠ 0`, cluster size one) with the
+    smallest relative damping over all analyzed time points, as a `NamedTuple`
+    `(; index, t, eigenvalue, damping, natural_frequency, unknowns)`, where `index` is the
+    time-point index and `unknowns` holds the `unknown => participation` pairs, or `nothing`
+    if no analyzed time point has an oscillatory mode.
+
+The printed report lists the fastest and slowest modes at the time point with the fastest
+mode, and the least-damped oscillatory mode.
 
 # Examples
 
 ```julia
 sol = solve(prob, Rodas5P())
 res = analyze_solution_jacobian(sol)
-res.fast_unknowns          # which unknowns make the model stiff
-extrema(res.stiffness_ratio)
+res.fast_unknowns[end]     # unknowns of the fastest mode at the final time
+res.slow_unknowns[end]     # unknowns of the slowest mode at the final time
 res.least_damped           # the least-damped oscillatory mode and its unknowns
 ```
 
-# Zero eigenvalues and numerical resolution
-
-To first order, a perturbation `E` of the Jacobian moves an eigenvalue `λ` by at most
-`κ ‖E‖`, where `κ` is its condition number. With Jacobian entries of relative accuracy `δ`
-(see `autodiff`), `‖E‖ ≈ δ S`, where `S` is `‖J‖` for an ODE and, for a mass-matrix DAE,
-the scale of the terms entering the Schur complement (so that a reduced Jacobian that is
-small because of cancellation is not resolved beyond the accuracy of those terms). The
-error bound of `λ` is taken as `100 δ S κ`. This first-order bound is valid only while it
-does not reach another eigenvalue; otherwise, the `m` eigenvalues within it form a (nearly)
-defective cluster (identified by nearly parallel eigenvectors), and the bound is limited to
-`100 δ^(1/m) S`. For a defective cluster
-perturbed into split eigenvalues, `κ` is large and the bound has the order of the
-splitting, so that, e.g., the split eigenvalues of a double or quadruple integrator
-expressed in a non-modal basis are recognized as zero eigenvalues, while a nearly defective
-pair of eigenvalues near `-1` is resolved. An
-eigenvalue within its bound of the origin is reported as a zero eigenvalue (integrator,
-conservation law), and a real part within its bound of zero is treated as zero; the sign
-of such a real part is not resolved, and the mode is neither counted as unstable nor
-included in the stiffness ratio. Zero eigenvalues are also excluded from `least_damped`.
-Well-conditioned eigenvalues are resolved down to about `100 δ S`.
-
 !!! note
     The analysis is local: eigenvalues of the Jacobian along a nonlinear (or
-    time-varying) trajectory describe the linearized dynamics at each point, which is
-    what determines stiffness and step-size restrictions of explicit integrators, but
-    not necessarily the global behaviour. Parameters are taken from `sol.prob`, so
-    parameter changes made by callbacks during the solve are not reflected. The solution
-    must contain the complete state vector in problem order, i.e. it must not be solved
-    with `save_idxs`. For a problem with a symbolic system (e.g. built from a `System`),
-    the solution records `save_idxs`, and such solutions are rejected. Without a symbolic
-    system, a `save_idxs` that permutes all unknowns is not recorded; it is detected only
-    heuristically by the consistency checks of `check_state`, which do not detect a
-    permutation of unknowns with equal values whose dynamics agree at the checked points,
-    nor, without dense output, a permutation in a DAE or a problem with initialization.
+    time-varying) trajectory describe the linearized dynamics at each point. Parameters
+    are taken from `sol.prob`, so parameter changes made by callbacks during the solve are
+    not reflected. The solution must contain the complete state vector in problem order,
+    i.e. it must not be solved with `save_idxs`. For a problem with a symbolic system
+    (e.g. built from a `System`), the solution records `save_idxs`, and such solutions are
+    rejected, as are solutions that save a subset of the unknowns. A `save_idxs` that
+    permutes all unknowns of a problem without a symbolic system is not recorded by the
+    solution and cannot be detected.
 """
 function analyze_solution_jacobian(
         sol::SciMLBase.AbstractODESolution; ts = nothing, threshold = 0.05,
-        nmodes = 3, verbose = true, autodiff = nothing, check_state = true
+        nmodes = 3, verbose = true, autodiff = nothing
     )
     verbose = MTKVerbosity(verbose)
     prob = sol.prob
@@ -214,7 +185,6 @@ function analyze_solution_jacobian(
             )
         )
     end
-    us = ts === nothing ? sol.u : [sol(t) for t in ts_]
     if !isempty(sol.u) && length(first(sol.u)) != n
         throw(
             ArgumentError(
@@ -222,137 +192,69 @@ function analyze_solution_jacobian(
             )
         )
     end
+    us = ts === nothing ? sol.u : [sol(t) for t in ts_]
     M = f.mass_matrix
-    check_state && _check_saved_state(sol, f, u0, p, M, prob)
     syms = _state_names(sol, n)
     diffidxs = _differential_indices(M, n)
+    names = syms[diffidxs]
 
     jacobians = Matrix{Float64}[]
     eigenvalues = Vector{ComplexF64}[]
     eigenvalue_conditions = Vector{Float64}[]
+    cluster_sizes = Vector{Int}[]
     time_constants = Vector{Float64}[]
     natural_frequencies = Vector{Float64}[]
     damping = Vector{Float64}[]
     participation = Matrix{Float64}[]
-    stiffness_ratio = Float64[]
-    zero_eigenvalues = BitVector[]
-    real_parts = Vector{Float64}[]
-    nunstable = Int[]
+    fast_unknowns = Vector{Pair}[]
+    slow_unknowns = Vector{Pair}[]
     for (u, t) in zip(us, ts_)
-        J, δ, exact = _rhs_jacobian(f, u0, u, p, t, autodiff)
+        J, δ = _rhs_jacobian(f, u0, u, p, t, autodiff)
         size(J) == (n, n) || throw(
             DimensionMismatch(
                 "The Jacobian at t = $t has size $(size(J)), expected ($n, $n)."
             )
         )
-        Jr, S = _reduced_jacobian(J, M, diffidxs, t, δ, exact)
-        λ, P, κ, V = _modes(Jr, δ)
-        radius = _eigenvalue_error_bounds(λ, κ, V, δ, S)
-        zm = BitVector(abs.(λ) .<= radius)
-        σ = [zm[k] || abs(real(λ[k])) <= radius[k] ? 0.0 : real(λ[k]) for k in eachindex(λ)]
+        Jr = _reduced_jacobian(J, M, diffidxs, t, δ)
+        λ, P, κ, csize = _modes(Jr)
         push!(jacobians, Jr)
         push!(eigenvalues, λ)
         push!(eigenvalue_conditions, κ)
-        push!(zero_eigenvalues, zm)
-        push!(real_parts, σ)
-        push!(time_constants, [iszero(s) ? Inf : 1 / abs(s) for s in σ])
+        push!(cluster_sizes, csize)
+        push!(time_constants, [iszero(real(l)) ? Inf : 1 / abs(real(l)) for l in λ])
         push!(natural_frequencies, abs.(λ))
-        push!(damping, [zm[k] ? NaN : -σ[k] / abs(λ[k]) for k in eachindex(λ)])
+        push!(damping, [iszero(l) ? NaN : -real(l) / abs(l) for l in λ])
         push!(participation, P)
-        push!(stiffness_ratio, _stiffness_ratio(σ))
-        push!(nunstable, count(>(0), σ))
+        push!(fast_unknowns, isempty(λ) ? Pair[] : _weighted_pairs(names, P[:, 1], threshold))
+        push!(slow_unknowns, isempty(λ) ? Pair[] : _weighted_pairs(names, P[:, end], threshold))
     end
-
-    names = syms[diffidxs]
-    stiffest_index = isempty(stiffness_ratio) ? 0 :
-        something(_argmax_skipnan(stiffness_ratio), 1)
-    fast_unknowns = Pair[]
-    slow_unknowns = Pair[]
-    if stiffest_index > 0
-        P = participation[stiffest_index]
-        decaying = findall(<(0), real_parts[stiffest_index])
-        if !isempty(decaying)
-            fast_unknowns = _weighted_pairs(names, P[:, first(decaying)], threshold)
-            slow_unknowns = _weighted_pairs(names, P[:, last(decaying)], threshold)
-        end
-    end
-    max_unstable = isempty(nunstable) ? 0 : maximum(nunstable)
     least_damped = _least_damped_mode(
-        ts_, names, eigenvalues, zero_eigenvalues, damping, participation, threshold
+        ts_, names, eigenvalues, cluster_sizes, damping, participation, threshold
     )
 
     @SciMLMessage(verbose, :solution_jacobian_analysis) do
         _solution_jacobian_report(
-            ts_, names, eigenvalues, time_constants, damping, participation,
-            stiffness_ratio, stiffest_index, nunstable, least_damped, threshold, nmodes
+            ts_, names, eigenvalues, cluster_sizes, time_constants, damping, participation,
+            least_damped, threshold, nmodes
         )
     end
     return (;
         t = ts_, unknowns = names, jacobians, eigenvalues, eigenvalue_conditions,
-        time_constants, natural_frequencies, damping, zero_eigenvalues, participation,
-        stiffness_ratio, stiffest_index, fast_unknowns, slow_unknowns, max_unstable,
-        least_damped,
+        cluster_sizes, time_constants, natural_frequencies, damping, participation,
+        fast_unknowns, slow_unknowns, least_damped,
     )
 end
 
-# Check that the saved states of `sol` are the complete state vector in problem order.
-# Neither the solution nor its interpolation records a numeric `save_idxs` for a problem
-# without a symbolic system, so a permutation of all unknowns can only be detected
-# heuristically: (1) for an ODE without initialization, the first saved state at the
-# initial time must equal the initial state of the problem; (2) with dense output, `M u'`
-# from the interpolation must agree with `f(u, p, t)` at up to five saved points (with a
-# loose tolerance, since the interpolated derivative has the accuracy of the solver; points
-# at events, which are saved twice, are skipped). Without dense output, the interpolated
-# derivative is a secant slope and (2) is skipped.
-function _check_saved_state(sol, f, u0, p, M, prob)
-    isempty(sol.t) && return nothing
-    inconsistent(t, what) = ArgumentError(
-        "The saved state at t = $t is inconsistent with the problem ($what). This occurs when the solution was computed with `save_idxs` that reorder the unknowns, or when callbacks modified the state or the parameters. Solve without `save_idxs`, or pass `check_state = false` to skip this check."
-    )
-    flat(x) = x isa Number ? [float(x)] : collect(float.(vec(x)))
-    has_init = hasproperty(f, :initialization_data) && f.initialization_data !== nothing
-    if M isa UniformScaling && !has_init && first(sol.t) == first(prob.tspan)
-        isapprox(flat(first(sol.u)), flat(u0); rtol = sqrt(eps(Float64))) ||
-            throw(inconsistent(first(sol.t), "it differs from the initial state of the problem"))
-    end
-    (hasproperty(sol, :dense) && sol.dense) || return nothing
-    nt = length(sol.t)
-    for i in unique(round.(Int, range(1, nt; length = min(nt, 5))))
-        t = sol.t[i]
-        ((i > 1 && sol.t[i - 1] == t) || (i < nt && sol.t[i + 1] == t)) && continue
-        du = try
-            sol(t, Val{1})
-        catch
-            return nothing
-        end
-        x = flat(sol.u[i])
-        fx = _rhs_function(f, u0, p, t)(x)
-        dv = flat(du)
-        Mdu = M isa UniformScaling ? M.λ .* dv : Matrix(M) * dv
-        mismatch = LinearAlgebra.norm(Mdu .- fx)
-        scale = LinearAlgebra.norm(fx) + LinearAlgebra.norm(Mdu)
-        if mismatch > 0.1 * scale + sqrt(eps(Float64)) * (1 + LinearAlgebra.norm(x))
-            throw(
-                inconsistent(
-                    t,
-                    "relative mismatch $(round(mismatch / scale, sigdigits = 3)) between `M u'` and `f(u, p, t)`"
-                )
-            )
-        end
-    end
-    return nothing
-end
-
-# The oscillatory mode with the smallest relative damping over all time points, or
-# `nothing` if there is no oscillatory mode.
+# The oscillatory mode of a cluster of size one with the smallest relative damping over all
+# time points, or `nothing` if there is no such mode.
 function _least_damped_mode(
-        ts, names, eigenvalues, zero_eigenvalues, damping, participation, threshold
+        ts, names, eigenvalues, cluster_sizes, damping, participation, threshold
     )
     best = nothing
     for i in eachindex(eigenvalues)
         λ = eigenvalues[i]
         for k in eachindex(λ)
-            (iszero(imag(λ[k])) || zero_eigenvalues[i][k]) && continue
+            (iszero(imag(λ[k])) || cluster_sizes[i][k] > 1) && continue
             if best === nothing || damping[i][k] < damping[best[1]][best[2]]
                 best = (i, k)
             end
@@ -411,13 +313,11 @@ function _rhs_function(f, u0, p, t)
     end
 end
 
-# Jacobian of the ODE right-hand side `f(u, p, t)` with respect to `u`, an estimate of its
-# relative accuracy `δ`, and whether it is exact to that relative accuracy row by row
-# (analytic or automatic differentiation) rather than accurate only relative to the overall
-# scale of the right-hand side (finite differences). Without an explicit `autodiff` backend, the analytic Jacobian
-# of the problem is used if it has one (except for a `SplitFunction`, whose analytic
-# Jacobian covers only `f1`), and ForwardDiff otherwise; both are accurate to the working
-# precision. A finite-difference backend is accurate only to about `√ϵ`.
+# Jacobian of the ODE right-hand side `f(u, p, t)` with respect to `u`, and an estimate of
+# its relative accuracy `δ`. Without an explicit `autodiff` backend, the analytic Jacobian of
+# the problem is used if it has one (except for a `SplitFunction`, whose analytic Jacobian
+# covers only `f1`), and ForwardDiff otherwise; both are accurate to the working precision.
+# A finite-difference backend is accurate only to about `√ϵ`.
 function _rhs_jacobian(f, u0, u, p, t, autodiff)
     T = float(real(eltype(u0)))
     x0 = u isa Number ? [float(u)] : collect(float.(vec(u)))
@@ -426,18 +326,19 @@ function _rhs_jacobian(f, u0, u, p, t, autodiff)
             !(u0 isa Number)
         J = if SciMLBase.isinplace(f)
             Jbuf = f.jac_prototype === nothing ? zeros(eltype(u), length(u), length(u)) :
-                similar(f.jac_prototype, eltype(u))
+                fill!(similar(f.jac_prototype, eltype(u)), 0)
             f.jac(Jbuf, u, p, t)
             Jbuf
         else
             f.jac(u, p, t)
         end
-        return Matrix{Float64}(J), precision, true
+        return Matrix{Float64}(J), precision
     end
     backend = autodiff === nothing ? ADTypes.AutoForwardDiff() : autodiff
     J = DI.jacobian(_rhs_function(f, u0, p, t), backend, x0)
-    fd = backend isa Union{ADTypes.AutoFiniteDiff, ADTypes.AutoFiniteDifferences}
-    return Matrix{Float64}(J), fd ? sqrt(precision) : precision, !fd
+    dense = backend isa ADTypes.AutoSparse ? ADTypes.dense_ad(backend) : backend
+    fd = dense isa Union{ADTypes.AutoFiniteDiff, ADTypes.AutoFiniteDifferences}
+    return Matrix{Float64}(J), fd ? sqrt(precision) : precision
 end
 
 # `x` in the array type and shape of `template`, with the element type of `x`.
@@ -459,116 +360,116 @@ function _differential_indices(M, n)
     return findall(!iszero, LinearAlgebra.diag(Md))
 end
 
-# The Jacobian `Jr` of the underlying ODE on the differential unknowns, and the scale `S` of
-# its absolute error: if the entries of each row of `J` have the relative accuracy `δ`, the
-# entries of `Jr` are accurate to about `δ S`. `Jr` is `M⁻¹ J` for an identity/nonsingular
-# mass matrix, or the Schur complement `J_dd - J_da J_aa⁻¹ J_ad` (scaled by the inverse of
-# the nonzero diagonal of `M`) for a singular diagonal mass matrix. For the Schur
-# complement, the error scale is derived from the terms entering it rather than from the
-# result, which may be small because of cancellation. Each differential row is scaled by
-# its own inverse mass entry, so that the scaling of one differential equation does not
-# affect the others. For an `exact` Jacobian (analytic or automatic differentiation), the
-# algebraic rows are scaled to unit norm, so that the rank test and the error scale do not
-# depend on the scaling of the algebraic equations. A finite-difference Jacobian is accurate
-# only relative to the overall scale of the right-hand side, so a small algebraic row may
-# consist of truncation and rounding errors; its algebraic rows are therefore scaled by the
-# norm of the whole Jacobian. The algebraic block is rejected when its smallest singular
-# value is not resolved by the accuracy of the scaled rows.
-function _reduced_jacobian(J, M, diffidxs, t, δ, exact = true)
+# The Jacobian of the underlying ODE on the differential unknowns: `M⁻¹ J` for an
+# identity/nonsingular mass matrix, or the Schur complement `J_dd - J_da J_aa⁻¹ J_ad` (each
+# differential row scaled by the inverse of its mass entry) for a singular diagonal mass
+# matrix. The algebraic rows are scaled to unit norm, so that the rank test does not depend
+# on the scaling of the algebraic equations; the algebraic block is rejected when its
+# smallest singular value is not resolved by the relative accuracy `δ` of the Jacobian.
+function _reduced_jacobian(J, M, diffidxs, t, δ)
     n = size(J, 1)
-    norm = LinearAlgebra.norm
     if M isa UniformScaling
-        return J ./ M.λ, norm(J) / abs(M.λ)
+        return J ./ M.λ
     end
     Md = Matrix{Float64}(M)
     if !LinearAlgebra.isdiag(Md)
-        c = LinearAlgebra.cond(Md)
-        c * eps(Float64) < 1.0e-2 || throw(
+        LinearAlgebra.cond(Md) * eps(Float64) < 1.0e-2 || throw(
             ArgumentError(
                 "`analyze_solution_jacobian` supports singular mass matrices only when they are diagonal."
             )
         )
-        Jr = Md \ J
-        # The uncertainty of `J` propagates through `M⁻¹`; the rounding of the solve adds
-        # an error of about `cond(M) ϵ ‖Jr‖`, expressed relative to `δ`.
-        S = LinearAlgebra.opnorm(inv(Md)) * norm(J) + c * (eps(Float64) / δ) * norm(Jr)
-        return Jr, max(S, norm(Jr))
+        return Md \ J
     end
     m = LinearAlgebra.diag(Md)
     d = diffidxs
-    length(d) == n && return J ./ m, norm(J ./ m)
+    length(d) == n && return J ./ m
     a = setdiff(1:n, d)
-    rownorms = exact ? [norm(@view J[i, :]) for i in a] : fill(norm(J), length(a))
+    rownorms = [LinearAlgebra.norm(@view J[i, :]) for i in a]
     σmin = any(iszero, rownorms) ? 0.0 :
         minimum(LinearAlgebra.svdvals(J[a, a] ./ rownorms))
     σmin > 100 * δ * sqrt(length(a)) || throw(
         ArgumentError(
-            "The Jacobian of the algebraic equations with respect to the algebraic unknowns is singular to the accuracy of the Jacobian at t = $t (smallest singular value $(round(σmin, sigdigits = 3)) after scaling the algebraic equations), so the algebraic unknowns cannot be eliminated. The DAE may be of index greater than one there."
+            "The Jacobian of the algebraic equations with respect to the algebraic unknowns is singular to the accuracy of the Jacobian at t = $t (smallest singular value $(round(σmin, sigdigits = 3)) after scaling the algebraic equations to unit norm), so the algebraic unknowns cannot be eliminated. The DAE may be of index greater than one there."
         )
     )
-    isempty(d) && return zeros(0, 0), 0.0
-    Ã = J[a, a] ./ rownorms
-    X = Ã \ (J[a, d] ./ rownorms)
-    Jdd = J[d, d] ./ m[d]
-    Jda = J[d, a] ./ m[d]
-    Y = Jda / Ã
-    Jr = Jdd .- Jda * X
-    S = (1 + norm(X)) * (norm(hcat(Jdd, Jda)) + norm(Y) * sqrt(length(a)))
-    return Jr, max(S, norm(Jr))
+    isempty(d) && return zeros(0, 0)
+    Jaa = J[a, a] ./ rownorms
+    return (J[d, d] .- J[d, a] * (Jaa \ (J[a, d] ./ rownorms))) ./ m[d]
 end
 
-# Eigenvalues of `J`, sorted from fastest to slowest (decreasing `|real(λ)|`, ties broken
-# by decreasing `|λ|`), the matrix of normalized participation factors (column `k` for
-# mode `k`), the eigenvalue condition numbers `κ` and the right eigenvectors. The two eigenvalues of a
-# complex-conjugate pair are kept adjacent, the one with positive imaginary part first. The
-# participation of a mode whose eigenvalue condition number exceeds `0.01 / √δ` is `NaN`:
-# its eigenvector is nearly parallel to others (a defective or nearly defective
-# eigenvalue), so the eigenbasis does not resolve that mode into contributions of
-# individual unknowns.
-function _modes(J, δ)
+# Modes of `J`: the eigenvalues sorted from fastest to slowest (decreasing `|real(λ)|`, ties
+# broken by decreasing `|λ|`, conjugate pairs adjacent with positive imaginary part first),
+# the matrix of normalized participation factors (column `k` for mode `k`), the condition
+# numbers and the cluster sizes. The analysis is carried out on the balanced matrix
+# `D⁻¹ J D` (diagonal `D`), which has the same eigenvalues and participation factors, so
+# that the condition numbers do not depend on the units of the unknowns.
+#
+# Modes whose eigenvalue condition number is at most `0.01 / √ϵ` get the participation
+# `|v[i] w[i]|` from their right and left eigenvectors. The left eigenvectors are the rows
+# of `V⁻¹` when the eigenbasis is well-conditioned, and are otherwise computed from `J'`
+# (a defective eigenvalue makes `V` singular, which would corrupt `V⁻¹` for all modes). The
+# remaining, ill-conditioned modes are grouped with their nearest eigenvalues into the
+# smallest cluster whose spectral projector `Π` has a norm of at most `0.01 / √ϵ`; the
+# participation of each mode of the cluster is then `|Π[i, i]|` and its condition number is
+# `‖Π‖`, which for a single eigenvalue equals its condition number.
+function _modes(J)
     n = size(J, 1)
-    n == 0 && return ComplexF64[], zeros(0, 0), Float64[], zeros(ComplexF64, 0, 0)
+    n == 0 && return ComplexF64[], zeros(0, 0), Float64[], Int[]
+    B = Matrix{Float64}(J)
+    LinearAlgebra.LAPACK.gebal!('S', B)
     # Unsorted, LAPACK returns each conjugate pair of a real matrix consecutively, as exact
     # conjugates with conjugate eigenvectors. Julia's default sorting by (real, imag) would
     # separate repeated pairs, e.g. [a - bi, a - bi, a + bi, a + bi].
-    E = LinearAlgebra.eigen(J; sortby = nothing)
+    E = LinearAlgebra.eigen(B; sortby = nothing)
     λ = ComplexF64.(E.values)
     V = ComplexF64.(E.vectors)
-    # With a well-conditioned eigenbasis, the left eigenvectors are the rows of `V⁻¹`. A
-    # (nearly) defective eigenvalue makes `V` (numerically) singular, and `V⁻¹` would then
-    # corrupt the left eigenvectors of all other eigenvalues as well; the left eigenvectors
-    # are then computed separately, so that isolated eigenvalues keep their conditioning.
     condV = LinearAlgebra.cond(V)
     W = isfinite(condV) && condV * eps(Float64) < 1.0e-2 ? inv(V) :
-        _left_eigenvectors(J, λ, V)
+        _left_eigenvectors(B, λ, V)
+    κmax = 1.0e-2 / sqrt(eps(Float64))
     κ = Float64[]
     for k in 1:n
-        v = @view V[:, k]
-        w = @view W[k, :]
-        κk = LinearAlgebra.norm(v) * LinearAlgebra.norm(w) / abs(LinearAlgebra.dot(conj(w), v))
+        κk = LinearAlgebra.norm(@view V[:, k]) * LinearAlgebra.norm(@view W[k, :])
         push!(κ, isfinite(κk) ? κk : Inf)
     end
     P = abs.(V .* transpose(W))
+    csize = ones(Int, n)
+    clustered = falses(n)
     for k in 1:n
-        if κ[k] > 1.0e-2 / sqrt(δ)
-            P[:, k] .= NaN
-        else
-            s = sum(@view P[:, k])
-            s > 0 && (P[:, k] ./= s)
+        (κ[k] <= κmax || clustered[k]) && continue
+        candidates = sortperm(abs.(λ .- λ[k]))
+        for m in 2:n
+            c = candidates[1:m]
+            Π = _spectral_projector(B, λ[c])
+            Π === nothing && continue
+            normΠ = LinearAlgebra.opnorm(Π)
+            (normΠ <= κmax || m == n) || continue
+            for j in c
+                P[:, j] .= abs.(LinearAlgebra.diag(Π))
+                κ[j] = normΠ
+                csize[j] = m
+                clustered[j] = true
+            end
+            break
         end
+    end
+    for k in 1:n
+        s = sum(@view P[:, k])
+        s > 0 && (P[:, k] ./= s)
     end
     groups = _conjugate_groups(λ)
     order = sortperm(
         [(abs(real(λ[first(g)])), abs(λ[first(g)])) for g in groups]; rev = true
     )
     perm = reduce(vcat, groups[order])
-    return λ[perm], P[:, perm], κ[perm], V[:, perm]
+    return λ[perm], P[:, perm], κ[perm], csize[perm]
 end
 
 # Left eigenvectors of `J` for the eigenvalues `λ` with right eigenvectors `V`, as the rows
-# of `W` normalized such that `W[k, :]` times `V[:, k]` is one (infinite for a defective
-# eigenvalue, whose left and right eigenvectors are orthogonal). Each eigenvalue is matched
-# with the closest unmatched eigenvalue of `J'`.
+# of `W` normalized such that `W[k, :]` times `V[:, k]` is one. Each eigenvalue is matched
+# with the closest unmatched eigenvalue of `J'`. For a defective or repeated eigenvalue the
+# match may be arbitrary and the normalization ill-conditioned; such modes have a large
+# condition number and are treated as clusters by `_modes`.
 function _left_eigenvectors(J, λ, V)
     n = length(λ)
     E = LinearAlgebra.eigen(Matrix(J'); sortby = nothing)
@@ -585,81 +486,59 @@ function _left_eigenvectors(J, λ, V)
     return W
 end
 
-# Bounds on the error of the computed eigenvalues `λ` (right eigenvectors `V`) of a matrix
-# whose entries have the absolute error `δ S`, with eigenvalue condition numbers `κ`. To
-# first order, a perturbation `E` moves the eigenvalue `λ_k` by at most `κ_k ‖E‖`, and a
-# safety factor of 100 is applied. The first-order bound is not valid for an eigenvalue of
-# a (nearly) defective cluster: there, the computed eigenvalues of the cluster are split by
-# an amount of order `δ^(1/m) S`, `m` being the size of the cluster, and their computed
-# eigenvectors are nearly parallel. The cluster of `λ_k` is therefore taken to consist of
-# the eigenvalues within its first-order bound whose eigenvectors are nearly parallel to
-# that of `λ_k`; this excludes well-separated modes and the coincident eigenvalues of other,
-# identical blocks, which the first-order bound of an exactly defective eigenvalue may
-# cover. For a cluster of size `m > 1`, the bound is limited to `100 δ^(1/m) S`. For a split
-# defective cluster, the computed condition numbers are of order `δ^(-(m - 1) / m)`, so both
-# bounds have the order of the splitting. An eigenvalue within its bound of the origin is a
-# zero eigenvalue; a real part within its bound of zero is not resolved.
-function _eigenvalue_error_bounds(λ, κ, V, δ, S)
-    δ = max(δ, eps(Float64))
-    bounds = similar(κ)
-    for k in eachindex(λ)
-        first_order = 100 * δ * S * κ[k]
-        vk = @view V[:, k]
-        m = count(eachindex(λ)) do j
-            abs(λ[j] - λ[k]) <= first_order && _nearly_parallel(@view(V[:, j]), vk)
-        end
-        bounds[k] = m == 1 ? first_order : min(first_order, 100 * δ^(1 / m) * S)
+# Spectral projector of `J` onto the invariant subspace of the eigenvalues `λc`,
+# `Π = X (Y' X)⁻¹ Y'`, where the columns of `X` and `Y` are orthonormal bases of the right
+# and left invariant subspaces, obtained from reordered complex Schur decompositions of `J`
+# and `J'`. Unlike eigenvectors, invariant subspaces are well defined for defective and
+# repeated eigenvalues. If the selected eigenvalues split a defective cluster, the right
+# and left invariant subspaces are not complementary, `Y' X` is singular, and `nothing` is
+# returned.
+function _spectral_projector(J, λc)
+    X = _invariant_subspace(complex(J), λc)
+    Y = _invariant_subspace(complex(Matrix(J')), conj.(λc))
+    G = Y' * X
+    LinearAlgebra.cond(G) * eps(Float64) < 1 || return nothing
+    return X * (G \ Y')
+end
+
+# Orthonormal basis of the invariant subspace of `A` for the eigenvalues closest to `λc`.
+function _invariant_subspace(A, λc)
+    F = LinearAlgebra.schur(A)
+    select = falses(length(F.values))
+    for l in λc
+        j = argmin(i -> select[i] ? Inf : abs(F.values[i] - l), eachindex(F.values))
+        select[j] = true
     end
-    return bounds
+    F = LinearAlgebra.ordschur(F, select)
+    return F.Z[:, 1:length(λc)]
 end
 
-# Whether the vectors `v` and `w` enclose an angle of less than about 8 degrees.
-function _nearly_parallel(v, w)
-    nv, nw = LinearAlgebra.norm(v), LinearAlgebra.norm(w)
-    (iszero(nv) || iszero(nw)) && return false
-    return 1 - abs(LinearAlgebra.dot(v, w)) / (nv * nw) <= 1.0e-2
-end
-
-# `max |σ| / min |σ|` over the negative (resolved) real parts `σ`.
-function _stiffness_ratio(σ)
-    rates = [-s for s in σ if s < 0]
-    isempty(rates) && return NaN
-    return maximum(rates) / minimum(rates)
-end
-
-function _argmax_skipnan(x)
-    best = nothing
-    for i in eachindex(x)
-        isnan(x[i]) && continue
-        (best === nothing || x[i] > x[best]) && (best = i)
-    end
-    return best
-end
-
-# The human-readable report of `analyze_solution_jacobian`.
+# The human-readable report of `analyze_solution_jacobian`: the fastest and slowest modes at
+# the time point with the fastest mode, and the least-damped oscillatory mode.
 function _solution_jacobian_report(
-        ts, names, eigenvalues, time_constants, damping, participation,
-        stiffness_ratio, stiffest_index, nunstable, least_damped, threshold, nmodes
+        ts, names, eigenvalues, cluster_sizes, time_constants, damping, participation,
+        least_damped, threshold, nmodes
     )
     io = IOBuffer()
     println(io, "Solution Jacobian mode analysis")
     print(io, "  state dimension $(length(names)), $(length(ts)) time point(s)")
     isempty(ts) || print(io, " in [$(first(ts)), $(last(ts))]")
-    println(io)
-    finite = filter(!isnan, stiffness_ratio)
-    if isempty(finite)
-        print(io, "  No decaying modes found.")
-    else
-        lo, hi = extrema(finite)
-        print(
-            io, "  stiffness ratio ∈ [", round(lo, sigdigits = 3), ", ",
-            round(hi, sigdigits = 3), "], largest at t = ", ts[stiffest_index]
-        )
-    end
-    nu = isempty(nunstable) ? 0 : maximum(nunstable)
-    if nu > 0
-        i = findfirst(>(0), nunstable)
-        print(io, "\n", "  Up to $nu locally unstable mode(s) (real(λ) > 0), first at t = $(ts[i]).")
+    nonempty = findall(!isempty, eigenvalues)
+    if !isempty(nonempty)
+        i = nonempty[argmax([abs(real(first(eigenvalues[j]))) for j in nonempty])]
+        λ = eigenvalues[i]
+        groups = _conjugate_groups(λ)
+        ng = length(groups)
+        args = (λ, cluster_sizes[i], time_constants[i], damping[i], participation[i], names, threshold)
+        if ng <= 2nmodes
+            print(io, "\n  Modes at t = $(ts[i]) (the time point with the fastest mode), fastest first:")
+            _print_modes(io, groups, args...)
+        else
+            print(io, "\n  Fastest $nmodes mode(s) at t = $(ts[i]) (the time point with the fastest mode):")
+            _print_modes(io, groups[1:nmodes], args...)
+            print(io, "\n  Slowest $nmodes mode(s) at t = $(ts[i]):")
+            _print_modes(io, groups[(ng - nmodes + 1):ng], args...)
+        end
     end
     if least_damped !== nothing
         ld = least_damped
@@ -670,23 +549,6 @@ function _solution_jacobian_report(
         for (s, w) in ld.unknowns
             print(io, "\n      ", lpad(string(round(w, digits = 3)), 6), "  ", s)
         end
-    end
-    stiffest_index > 0 || return String(take!(io))
-    λ = eigenvalues[stiffest_index]
-    τ = time_constants[stiffest_index]
-    ζ = damping[stiffest_index]
-    P = participation[stiffest_index]
-    groups = _conjugate_groups(λ)
-    ng = length(groups)
-    tstr = ts[stiffest_index]
-    if ng <= 2nmodes
-        print(io, "\n  Modes at t = $tstr, fastest first:")
-        _print_modes(io, groups, λ, τ, ζ, P, names, threshold)
-    else
-        print(io, "\n  Fastest $nmodes mode(s) at t = $tstr:")
-        _print_modes(io, groups[1:nmodes], λ, τ, ζ, P, names, threshold)
-        print(io, "\n  Slowest $nmodes mode(s) at t = $tstr:")
-        _print_modes(io, groups[(ng - nmodes + 1):ng], λ, τ, ζ, P, names, threshold)
     end
     return String(take!(io))
 end
@@ -712,7 +574,7 @@ function _conjugate_groups(λ)
     return groups
 end
 
-function _print_modes(io, groups, λ, τ, ζ, P, names, threshold)
+function _print_modes(io, groups, λ, csize, τ, ζ, P, names, threshold)
     for g in groups
         j = first(g)
         l = λ[j]
@@ -723,6 +585,7 @@ function _print_modes(io, groups, λ, τ, ζ, P, names, threshold)
         iszero(imag(l)) || print(
             io, ", ωn = ", round(abs(l), sigdigits = 4), ", ζ = ", round(ζ[j], sigdigits = 3)
         )
+        csize[j] > 1 && print(io, " (cluster of $(csize[j]) eigenvalues)")
         for (s, w) in _weighted_pairs(names, view(P, :, j), threshold)
             print(io, "\n      ", lpad(string(round(w, digits = 3)), 6), "  ", s)
         end
