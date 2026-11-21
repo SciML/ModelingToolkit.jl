@@ -17,6 +17,7 @@ coupled to an ODE, and the others run much slower. Passing a specialization othe
         callback = nothing, rng = nothing, save_positions = (true, true), kwargs...
     ) where {iip, spec}
     check_complete(sys, JumpProblem)
+    check_no_array_unknowns(sys)
     check_compatibility && check_compatible_system(JumpProblem, sys)
     if spec !== SciMLBase.FullSpecialize
         Base.depwarn(
@@ -160,6 +161,22 @@ coupled to an ODE, and the others run much slower. Passing a specialization othe
     )
 end
 
+# The jump dependency maps and the compiled affects and event conditions index the state by
+# position in `unknowns(sys)`, which is wrong for the flat state of an unscalarized array
+# unknown and gave silently incorrect results, so such systems are rejected, as they were
+# before ModelingToolkitBase 1.72. See SciML/ModelingToolkit.jl#5428.
+function check_no_array_unknowns(sys::System)
+    arrays = filter(Symbolics.isarraysymbolic, unknowns(sys))
+    isempty(arrays) && return nothing
+    throw(
+        ArgumentError(
+            "`JumpProblem` does not support array unknowns, and the system has " *
+                "$(join(arrays, ", ")). Scalarize them when building the system, for example " *
+                "by passing `[A; collect(X)]` instead of `[A, X]` as its unknowns."
+        )
+    )
+end
+
 function check_compatible_system(T::Union{Type{JumpProblem}}, sys::System)
     check_time_dependent(sys, T)
     check_not_dde(sys)
@@ -234,7 +251,9 @@ _get_variables!(dep, expr, variables) = get_variables!(dep, expr, variables)
 
 function _get_variables!(dep, jump::Union{ConstantRateJump, VariableRateJump}, variables)
     jr = unwrap(jump.rate)
-    (jr isa SymbolicT) && get_variables!(dep, jr, variables)
+    # scalarized, so that a rate using an array as a whole, e.g. `sum(X)`, depends on the
+    # array's elements, the scalarized unknowns
+    (jr isa SymbolicT) && get_variables!(dep, scalarize(jr), variables)
     return dep
 end
 
