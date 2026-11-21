@@ -283,11 +283,11 @@ end
     @variables V(t) A(t) X(t)[1:2] B(t)
     @parameters k
     # both mass action jumps consume the single X[2], after which their rates and the rate of
-    # the constant rate jump, which uses all of `X`, must be zero
+    # the constant rate jump, which uses both elements of `X`, must be zero
     jumps = [
         SymbolicMassActionJump(k, [X[2] => 1], [X[2] => -1, A => 1]),
         SymbolicMassActionJump(k, [X[2] => 1], [X[2] => -1]),
-        ConstantRateJump(k * sum(X), [B ~ Pre(B) + 1]),
+        ConstantRateJump(k * (X[1] + X[2]), [B ~ Pre(B) + 1]),
     ]
     op = [A => 0, X => [0, 1], B => 0, k => 1.0]
     tspan = (0.0, 50.0)

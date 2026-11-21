@@ -251,9 +251,7 @@ _get_variables!(dep, expr, variables) = get_variables!(dep, expr, variables)
 
 function _get_variables!(dep, jump::Union{ConstantRateJump, VariableRateJump}, variables)
     jr = unwrap(jump.rate)
-    # scalarized, so that a rate using an array as a whole, e.g. `sum(X)`, depends on the
-    # array's elements, the scalarized unknowns
-    (jr isa SymbolicT) && get_variables!(dep, scalarize(jr), variables)
+    (jr isa SymbolicT) && get_variables!(dep, jr, variables)
     return dep
 end
 
