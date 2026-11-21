@@ -373,6 +373,8 @@ function initialization_structure_error_message(
     missing_msg === nothing || println(io, missing_msg)
     println(io, remedy)
     if show_api_guidance()
+        missing_api = initialization_missing_value_api_message(missing_valued)
+        missing_api === nothing || println(io, missing_api)
         api_remedy === nothing || println(io, api_remedy)
         println(io, "See $INITIALIZATION_DOCS_URL for more information.")
     end
@@ -426,10 +428,18 @@ function initialization_missing_value_message(missing_valued::AbstractVector)
     return """
     $names $(n == 1 ? "has a value" : "have values") of `missing` in the model, so \
     initialization solves for $(n == 1 ? "it" : "them") like $(n == 1 ? "an unknown" : "unknowns"). \
-    If $(n == 1 ? "it was" : "they were") not given a value in the problem constructor, \
-    this is a likely cause of the imbalance. Give $(n == 1 ? "it" : "each") a value, as in \
-    `ODEProblem(sys, [$(first(missing_valued)) => 1.0], tspan)`, or add an equation for \
-    $(n == 1 ? "it" : "them") via `initialization_eqs`. A guess alone does not supply one.
+    $(n == 1 ? "If no other initial value or equation determines it, this is" : "Any of them that no other initial value or equation determines is") \
+    a likely cause of the imbalance.
+    """
+end
+
+function initialization_missing_value_api_message(missing_valued::AbstractVector)
+    isempty(missing_valued) && return nothing
+    return """
+    A value can be given in the problem constructor, as in \
+    `ODEProblem(sys, [$(first(missing_valued)) => value], tspan)` (an array, for an array \
+    parameter), or an equation relating it to other initial values added via \
+    `initialization_eqs`. A guess alone does not supply one.
     """
 end
 
