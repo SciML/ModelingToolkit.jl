@@ -9,6 +9,7 @@ import ModelingToolkitBase as MTKBase
 import SciMLBase
 import SymbolicUtils
 import FMIImport as FMI
+using ModelingToolkitBase: ForwardDiff
 
 # Spelled as `const` rather than `t_nounits as t`, because ExplicitImports reports a
 # renaming import as stale (it tracks the pre-rename name, which never appears in use).
@@ -1417,6 +1418,45 @@ function fmiMEFinalize!(m, o, ctx, integrator)
     return (;)
 end
 
+isdual(x) = x isa ForwardDiff.Dual
+
+"""
+    $(TYPEDSIGNATURES)
+
+Evaluate a Model Exchange FMU at arguments that carry ForwardDiff dual numbers, as solvers
+do when they differentiate the system automatically (the default solver's stiff methods,
+for one). The FMU is compiled code, so the derivatives are taken by forward finite
+differences in each dual direction: one extra evaluation per direction. Parameter
+directions only take effect when FMIBase sets the parameters on every evaluation (all
+parameters real).
+"""
+function dual_eval(wrapper, states, inputs, params, t)
+    d = isdual(t) ? t : first(x for x in Iterators.flatten((states, inputs, params)) if isdual(x))
+    D = typeof(d)
+    T = ForwardDiff.tagtype(D)
+    N = ForwardDiff.npartials(D)
+    val(x) = isdual(x) ? Float64(ForwardDiff.value(x)) : Float64(x)
+    part(x, k) = isdual(x) ? Float64(ForwardDiff.partials(x, k)) : 0.0
+    s0, i0, p0, t0 = map(val, states), map(val, inputs), map(val, params), val(t)
+    f0 = copy(wrapper(s0, i0, p0, t0))
+    J = zeros(length(f0), N)
+    base = sqrt(sum(abs2, s0; init = 0.0) + sum(abs2, i0; init = 0.0) + t0^2)
+    for k in 1:N
+        ds, di, dp = part.(states, k), part.(inputs, k), part.(params, k)
+        dt = part(t, k)
+        dirnorm = sqrt(sum(abs2, ds; init = 0.0) + sum(abs2, di; init = 0.0) +
+            sum(abs2, dp; init = 0.0) + dt^2)
+        iszero(dirnorm) && continue
+        h = sqrt(eps(Float64)) * max(1.0, base) / dirnorm
+        f1 = wrapper(s0 .+ h .* ds, i0 .+ h .* di, p0 .+ h .* dp, t0 + h * dt)
+        J[:, k] .= (f1 .- f0) ./ h
+    end
+    # leave the FMU at the unperturbed point
+    wrapper(s0, i0, p0, t0)
+    return [ForwardDiff.Dual{T}(f0[i], ForwardDiff.Partials(ntuple(k -> J[i, k], Val(N))))
+        for i in eachindex(f0)]
+end
+
 """
     $(TYPEDSIGNATURES)
 
@@ -1437,6 +1477,9 @@ callable struct to enable symbolic registration with an inferred return size.
 function (wrapper::Union{FMI2InstanceWrapper, FMI3InstanceWrapper})(
         states, inputs, params, t
     )
+    if isdual(t) || any(isdual, states) || any(isdual, inputs) || any(isdual, params)
+        return dual_eval(wrapper, states, inputs, params, t)
+    end
     states, inputs, params = as_fmi_vector(states), as_fmi_vector(inputs), as_fmi_vector(params)
     instance = get_instance_ME!(wrapper, inputs, params, t)
 
