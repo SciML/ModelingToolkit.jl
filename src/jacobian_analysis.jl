@@ -96,9 +96,11 @@ The states must be real-valued; solutions with complex states are rejected with 
     analytic Jacobian and automatic differentiation are taken to be accurate to the
     working precision `ϵ`, a finite-difference backend to `√ϵ`; this accuracy determines
     which eigenvalues are resolved (see below).
-  - `check_state`: for a solution with dense output, check that the first saved state is
-    consistent with the right-hand side (`M u' ≈ f(u, p, t)`). See the note below on
-    `save_idxs`. Set to `false` for solutions whose parameters were modified by callbacks.
+  - `check_state`: check that the saved states are consistent with the problem: for an ODE
+    without initialization, the first saved state must equal the initial state, and with
+    dense output, `M u' ≈ f(u, p, t)` must hold at up to five saved points. See the note
+    below on `save_idxs`. Set to `false` for solutions whose state or parameters were
+    modified by callbacks.
 
 # Returns
 
@@ -180,9 +182,9 @@ Well-conditioned eigenvalues are resolved down to about `100 δ S`.
     with `save_idxs`. For a problem with a symbolic system (e.g. built from a `System`),
     the solution records `save_idxs`, and such solutions are rejected. Without a symbolic
     system, a `save_idxs` that permutes all unknowns is not recorded; it is detected only
-    by the consistency check of `check_state`, which requires dense output and does not
-    detect a permutation that leaves the first saved state consistent (e.g. equal initial
-    values of the permuted unknowns).
+    heuristically by the consistency checks of `check_state`, which do not detect a
+    permutation of unknowns with equal values whose dynamics agree at the checked points,
+    nor, without dense output, a permutation in a DAE or a problem with initialization.
 """
 function analyze_solution_jacobian(
         sol::SciMLBase.AbstractODESolution; ts = nothing, threshold = 0.05,
@@ -221,7 +223,7 @@ function analyze_solution_jacobian(
         )
     end
     M = f.mass_matrix
-    check_state && _check_saved_state(sol, f, u0, p, M)
+    check_state && _check_saved_state(sol, f, u0, p, M, prob)
     syms = _state_names(sol, n)
     diffidxs = _differential_indices(M, n)
 
@@ -237,13 +239,13 @@ function analyze_solution_jacobian(
     real_parts = Vector{Float64}[]
     nunstable = Int[]
     for (u, t) in zip(us, ts_)
-        J, δ = _rhs_jacobian(f, u0, u, p, t, autodiff)
+        J, δ, exact = _rhs_jacobian(f, u0, u, p, t, autodiff)
         size(J) == (n, n) || throw(
             DimensionMismatch(
                 "The Jacobian at t = $t has size $(size(J)), expected ($n, $n)."
             )
         )
-        Jr, S = _reduced_jacobian(J, M, diffidxs, t, δ)
+        Jr, S = _reduced_jacobian(J, M, diffidxs, t, δ, exact)
         λ, P, κ, V = _modes(Jr, δ)
         radius = _eigenvalue_error_bounds(λ, κ, V, δ, S)
         zm = BitVector(abs.(λ) .<= radius)
@@ -293,35 +295,50 @@ function analyze_solution_jacobian(
     )
 end
 
-# Check that the first saved state of `sol` is consistent with the right-hand side, i.e.
-# that `M u'` from the interpolation agrees with `f(u, p, t)`. Neither the solution nor its
-# interpolation records a numeric `save_idxs`, so a permutation of all unknowns can only be
-# detected this way. The tolerance is loose, since the interpolated derivative has the
-# accuracy of the solver. The check requires dense output: without it (e.g. with `saveat`),
-# the interpolated derivative is a secant slope and is skipped.
-function _check_saved_state(sol, f, u0, p, M)
+# Check that the saved states of `sol` are the complete state vector in problem order.
+# Neither the solution nor its interpolation records a numeric `save_idxs` for a problem
+# without a symbolic system, so a permutation of all unknowns can only be detected
+# heuristically: (1) for an ODE without initialization, the first saved state at the
+# initial time must equal the initial state of the problem; (2) with dense output, `M u'`
+# from the interpolation must agree with `f(u, p, t)` at up to five saved points (with a
+# loose tolerance, since the interpolated derivative has the accuracy of the solver; points
+# at events, which are saved twice, are skipped). Without dense output, the interpolated
+# derivative is a secant slope and (2) is skipped.
+function _check_saved_state(sol, f, u0, p, M, prob)
     isempty(sol.t) && return nothing
-    (hasproperty(sol, :dense) && sol.dense) || return nothing
-    t = first(sol.t)
-    u = first(sol.u)
-    du = try
-        sol(t, Val{1})
-    catch
-        return nothing
+    inconsistent(t, what) = ArgumentError(
+        "The saved state at t = $t is inconsistent with the problem ($what). This occurs when the solution was computed with `save_idxs` that reorder the unknowns, or when callbacks modified the state or the parameters. Solve without `save_idxs`, or pass `check_state = false` to skip this check."
+    )
+    flat(x) = x isa Number ? [float(x)] : collect(float.(vec(x)))
+    has_init = hasproperty(f, :initialization_data) && f.initialization_data !== nothing
+    if M isa UniformScaling && !has_init && first(sol.t) == first(prob.tspan)
+        isapprox(flat(first(sol.u)), flat(u0); rtol = sqrt(eps(Float64))) ||
+            throw(inconsistent(first(sol.t), "it differs from the initial state of the problem"))
     end
-    rhs = _rhs_function(f, u0, p, t)
-    x = u isa Number ? [float(u)] : collect(float.(vec(u)))
-    fx = rhs(x)
-    dv = du isa Number ? [du] : vec(du)
-    Mdu = M isa UniformScaling ? M.λ .* dv : Matrix(M) * dv
-    mismatch = LinearAlgebra.norm(Mdu .- fx)
-    scale = LinearAlgebra.norm(fx) + LinearAlgebra.norm(Mdu)
-    if mismatch > 0.1 * scale + sqrt(eps(Float64)) * (1 + LinearAlgebra.norm(x))
-        throw(
-            ArgumentError(
-                "The saved state at t = $t is inconsistent with the right-hand side of the problem (relative mismatch $(round(mismatch / scale, sigdigits = 3)) between `M u'` and `f(u, p, t)`). This occurs when the solution was computed with `save_idxs` that reorder the unknowns, or when callbacks modified the parameters. Solve without `save_idxs`, or pass `check_state = false` to skip this check."
+    (hasproperty(sol, :dense) && sol.dense) || return nothing
+    nt = length(sol.t)
+    for i in unique(round.(Int, range(1, nt; length = min(nt, 5))))
+        t = sol.t[i]
+        ((i > 1 && sol.t[i - 1] == t) || (i < nt && sol.t[i + 1] == t)) && continue
+        du = try
+            sol(t, Val{1})
+        catch
+            return nothing
+        end
+        x = flat(sol.u[i])
+        fx = _rhs_function(f, u0, p, t)(x)
+        dv = flat(du)
+        Mdu = M isa UniformScaling ? M.λ .* dv : Matrix(M) * dv
+        mismatch = LinearAlgebra.norm(Mdu .- fx)
+        scale = LinearAlgebra.norm(fx) + LinearAlgebra.norm(Mdu)
+        if mismatch > 0.1 * scale + sqrt(eps(Float64)) * (1 + LinearAlgebra.norm(x))
+            throw(
+                inconsistent(
+                    t,
+                    "relative mismatch $(round(mismatch / scale, sigdigits = 3)) between `M u'` and `f(u, p, t)`"
+                )
             )
-        )
+        end
     end
     return nothing
 end
@@ -394,8 +411,10 @@ function _rhs_function(f, u0, p, t)
     end
 end
 
-# Jacobian of the ODE right-hand side `f(u, p, t)` with respect to `u`, and an estimate of
-# its relative accuracy `δ`. Without an explicit `autodiff` backend, the analytic Jacobian
+# Jacobian of the ODE right-hand side `f(u, p, t)` with respect to `u`, an estimate of its
+# relative accuracy `δ`, and whether it is exact to that relative accuracy row by row
+# (analytic or automatic differentiation) rather than accurate only relative to the overall
+# scale of the right-hand side (finite differences). Without an explicit `autodiff` backend, the analytic Jacobian
 # of the problem is used if it has one (except for a `SplitFunction`, whose analytic
 # Jacobian covers only `f1`), and ForwardDiff otherwise; both are accurate to the working
 # precision. A finite-difference backend is accurate only to about `√ϵ`.
@@ -413,13 +432,12 @@ function _rhs_jacobian(f, u0, u, p, t, autodiff)
         else
             f.jac(u, p, t)
         end
-        return Matrix{Float64}(J), precision
+        return Matrix{Float64}(J), precision, true
     end
     backend = autodiff === nothing ? ADTypes.AutoForwardDiff() : autodiff
     J = DI.jacobian(_rhs_function(f, u0, p, t), backend, x0)
     fd = backend isa Union{ADTypes.AutoFiniteDiff, ADTypes.AutoFiniteDifferences}
-    δ = fd ? sqrt(precision) : precision
-    return Matrix{Float64}(J), δ
+    return Matrix{Float64}(J), fd ? sqrt(precision) : precision, !fd
 end
 
 # `x` in the array type and shape of `template`, with the element type of `x`.
@@ -447,11 +465,16 @@ end
 # mass matrix, or the Schur complement `J_dd - J_da J_aa⁻¹ J_ad` (scaled by the inverse of
 # the nonzero diagonal of `M`) for a singular diagonal mass matrix. For the Schur
 # complement, the error scale is derived from the terms entering it rather than from the
-# result, which may be small because of cancellation. The algebraic rows are scaled to
-# unit norm, so that the rank test and the error scale do not depend on the scaling of the
-# algebraic equations; the algebraic block is rejected when its smallest singular value is
-# not resolved by the accuracy of the scaled rows.
-function _reduced_jacobian(J, M, diffidxs, t, δ)
+# result, which may be small because of cancellation. Each differential row is scaled by
+# its own inverse mass entry, so that the scaling of one differential equation does not
+# affect the others. For an `exact` Jacobian (analytic or automatic differentiation), the
+# algebraic rows are scaled to unit norm, so that the rank test and the error scale do not
+# depend on the scaling of the algebraic equations. A finite-difference Jacobian is accurate
+# only relative to the overall scale of the right-hand side, so a small algebraic row may
+# consist of truncation and rounding errors; its algebraic rows are therefore scaled by the
+# norm of the whole Jacobian. The algebraic block is rejected when its smallest singular
+# value is not resolved by the accuracy of the scaled rows.
+function _reduced_jacobian(J, M, diffidxs, t, δ, exact = true)
     n = size(J, 1)
     norm = LinearAlgebra.norm
     if M isa UniformScaling
@@ -475,20 +498,22 @@ function _reduced_jacobian(J, M, diffidxs, t, δ)
     d = diffidxs
     length(d) == n && return J ./ m, norm(J ./ m)
     a = setdiff(1:n, d)
-    rownorms = [norm(@view J[i, :]) for i in a]
+    rownorms = exact ? [norm(@view J[i, :]) for i in a] : fill(norm(J), length(a))
     σmin = any(iszero, rownorms) ? 0.0 :
         minimum(LinearAlgebra.svdvals(J[a, a] ./ rownorms))
     σmin > 100 * δ * sqrt(length(a)) || throw(
         ArgumentError(
-            "The Jacobian of the algebraic equations with respect to the algebraic unknowns is singular to the accuracy of the Jacobian at t = $t (smallest singular value $(round(σmin, sigdigits = 3)) after scaling the algebraic equations to unit norm), so the algebraic unknowns cannot be eliminated. The DAE may be of index greater than one there."
+            "The Jacobian of the algebraic equations with respect to the algebraic unknowns is singular to the accuracy of the Jacobian at t = $t (smallest singular value $(round(σmin, sigdigits = 3)) after scaling the algebraic equations), so the algebraic unknowns cannot be eliminated. The DAE may be of index greater than one there."
         )
     )
     isempty(d) && return zeros(0, 0), 0.0
     Ã = J[a, a] ./ rownorms
     X = Ã \ (J[a, d] ./ rownorms)
-    Y = J[d, a] / Ã
-    Jr = (J[d, d] .- J[d, a] * X) ./ m[d]
-    S = (1 + norm(X)) * (norm(J[d, :]) + norm(Y) * sqrt(length(a))) / minimum(abs, m[d])
+    Jdd = J[d, d] ./ m[d]
+    Jda = J[d, a] ./ m[d]
+    Y = Jda / Ã
+    Jr = Jdd .- Jda * X
+    S = (1 + norm(X)) * (norm(hcat(Jdd, Jda)) + norm(Y) * sqrt(length(a)))
     return Jr, max(S, norm(Jr))
 end
 
@@ -509,12 +534,13 @@ function _modes(J, δ)
     E = LinearAlgebra.eigen(J; sortby = nothing)
     λ = ComplexF64.(E.values)
     V = ComplexF64.(E.vectors)
-    W = try
-        inv(V)
-    catch err
-        err isa LinearAlgebra.SingularException || rethrow()
-        fill(complex(NaN), n, n)
-    end
+    # With a well-conditioned eigenbasis, the left eigenvectors are the rows of `V⁻¹`. A
+    # (nearly) defective eigenvalue makes `V` (numerically) singular, and `V⁻¹` would then
+    # corrupt the left eigenvectors of all other eigenvalues as well; the left eigenvectors
+    # are then computed separately, so that isolated eigenvalues keep their conditioning.
+    condV = LinearAlgebra.cond(V)
+    W = isfinite(condV) && condV * eps(Float64) < 1.0e-2 ? inv(V) :
+        _left_eigenvectors(J, λ, V)
     κ = Float64[]
     for k in 1:n
         v = @view V[:, k]
@@ -537,6 +563,26 @@ function _modes(J, δ)
     )
     perm = reduce(vcat, groups[order])
     return λ[perm], P[:, perm], κ[perm], V[:, perm]
+end
+
+# Left eigenvectors of `J` for the eigenvalues `λ` with right eigenvectors `V`, as the rows
+# of `W` normalized such that `W[k, :]` times `V[:, k]` is one (infinite for a defective
+# eigenvalue, whose left and right eigenvectors are orthogonal). Each eigenvalue is matched
+# with the closest unmatched eigenvalue of `J'`.
+function _left_eigenvectors(J, λ, V)
+    n = length(λ)
+    E = LinearAlgebra.eigen(Matrix(J'); sortby = nothing)
+    μ = ComplexF64.(E.values)
+    Y = ComplexF64.(E.vectors)
+    W = similar(V)
+    used = falses(n)
+    for k in 1:n
+        j = argmin(i -> used[i] ? Inf : abs(μ[i] - conj(λ[k])), 1:n)
+        used[j] = true
+        y = @view Y[:, j]
+        W[k, :] .= conj.(y) ./ LinearAlgebra.dot(y, @view V[:, k])
+    end
+    return W
 end
 
 # Bounds on the error of the computed eigenvalues `λ` (right eigenvectors `V`) of a matrix

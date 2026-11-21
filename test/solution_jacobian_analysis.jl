@@ -316,6 +316,44 @@ Jnd, Snd = ModelingToolkit._reduced_jacobian(-Mnd, Mnd, [1, 2], 0.0, eps())
 Jempty, _ = ModelingToolkit._reduced_jacobian(ones(1, 1), zeros(1, 1), Int[], 0.0, eps())
 @test size(Jempty) == (0, 0)
 
+# A finite-difference Jacobian is accurate only relative to the overall scale: an algebraic
+# row of the size of rounding errors (0 = y^3 - 8x^3 at the origin) is not normalized into a
+# valid pivot. A genuinely small algebraic row of an exact Jacobian is accepted.
+@test_throws ArgumentError ModelingToolkit._reduced_jacobian(
+    [-3.0 1; -8eps() eps()], Diagonal([1.0, 0]), [1], 0.0, sqrt(eps()), false
+)
+Jsmall, _ = ModelingToolkit._reduced_jacobian(
+    [-1.0 1; 2.0^-40 -2.0^-39], Diagonal([1.0, 0]), [1], 0.0, eps(), true
+)
+@test only(Jsmall) ≈ -0.5
+
+# A defective block does not hide isolated modes: the eigenbasis is singular, but the
+# growing mode and the decaying mode with time constant 0.5 are resolved.
+Adef = diagm([0.0, 0, 0, -2, 1])
+Adef[1, 2] = Adef[2, 3] = 1
+fdef = ODEFunction((u, p, t) -> Adef * u; jac = (u, p, t) -> Adef)
+soldef3 = solve(ODEProblem(fdef, [0.0, 0, 0, 1, 1.0e-3], (0.0, 1.0)), Rodas5P())
+resdef3 = analyze_solution_jacobian(soldef3; verbose = false)
+@test resdef3.max_unstable == 1
+@test all(m -> count(m) == 3, resdef3.zero_eigenvalues)
+@test all(τ -> any(≈(0.5), τ) && any(≈(1), τ), resdef3.time_constants)
+
+# Scaling a differential equation does not affect the resolution of the other modes:
+# M = diag(1, s, 0), J = diag(-1, s, -1) has the modes -1 and +1 for any s ≠ 0.
+for s in (1.0f0, 2.0f0^-20)
+    Js = Matrix(Diagonal(Float32[-1, s, -1]))
+    fms = ODEFunction(
+        (du, u, p, t) -> (du .= Js * u; nothing);
+        mass_matrix = Diagonal(Float32[1, s, 0]), jac = (J, u, p, t) -> (J .= Js; nothing)
+    )
+    solms = solve(ODEProblem(fms, Float32[1, 1.0f-3, 0], (0.0f0, 1.0f0)), Rodas5P())
+    @test SciMLBase.successful_retcode(solms)
+    resms = analyze_solution_jacobian(solms; verbose = false)
+    @test resms.max_unstable == 1
+    @test all(l -> sort(real.(l)) ≈ [-1, 1], resms.eigenvalues)
+    @test all(τ -> all(isfinite, τ), resms.time_constants)
+end
+
 # A defective Jacobian: no participation and no fast/slow unknowns are reported.
 soldef = solve(ODEProblem((u, p, t) -> [-u[1] + u[2], -u[2]], [1.0, 1.0], (0.0, 1.0)), Rodas5P())
 resdef = analyze_solution_jacobian(soldef; verbose = false)
@@ -335,6 +373,19 @@ probperm = ODEProblem((u, p, t) -> [-u[1]^3, -2u[2]^3], [1.0, 10.0], (0.0, 0.01)
     solve(probperm, Rodas5P(); save_idxs = [2, 1]); verbose = false
 )
 @test analyze_solution_jacobian(solve(probperm, Rodas5P()); verbose = false).max_unstable == 0
+
+# Without dense output (`saveat`), the permutation is detected by comparing the first saved
+# state with the initial state of the problem.
+@test_throws ArgumentError analyze_solution_jacobian(
+    solve(probperm, Rodas5P(); save_idxs = [2, 1], saveat = 0.001); verbose = false
+)
+# With equal initial values, the permutation agrees with the right-hand side at the first
+# point and is detected at later saved points.
+probperm2 = ODEProblem((u, p, t) -> [-u[1]^3, -(1 + 100t) * u[2]^3], [1.0, 1.0], (0.0, 0.1))
+@test_throws ArgumentError analyze_solution_jacobian(
+    solve(probperm2, Rodas5P(); save_idxs = [2, 1]); verbose = false
+)
+@test analyze_solution_jacobian(solve(probperm2, Rodas5P()); verbose = false).max_unstable == 0
 
 # In-place right-hand side under the default `AutoSpecialize` (function wrappers).
 probiip = ODEProblem((du, u, p, t) -> (du .= -2 .* u), [1.0, 2.0], (0.0, 1.0))
