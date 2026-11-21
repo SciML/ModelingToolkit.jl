@@ -612,6 +612,12 @@ end
         )
         @test generate_custom_function(zsys, z[1]; optimize = [lazy_rule], expression = Val(false))(zprob.u0, zprob.p, 0.0) == [10.0]
     end
+    bounded = Iterators.take((i == 1 ? AtIndex(1, zsum) : error("unused element") for i in 1:4), 1)
+    bounded_rule = OptimizationRule(
+        "bounded", (ir, expr) -> true,
+        (ir, expr, _) -> (populate_ir!(ir, zsum); (ir, Let([Assignment(:buf, LiteralExpr(:(zeros(1))))], SetArray(false, :buf, bounded, true), false))), 1
+    )
+    @test generate_custom_function(zsys, z[1]; optimize = [bounded_rule], expression = Val(false))(zprob.u0, zprob.p, 0.0) == [10.0]
     set_tuple = OptimizationRule("set tuple", (ir, expr) -> true, (ir, expr, _) -> (populate_ir!(ir, zsum); (ir, MakeTuple(Set([zsum])))), 1)
     @test generate_custom_function(zsys, z[1]; optimize = [set_tuple], expression = Val(false))(zprob.u0, zprob.p, 0.0) == (10.0,)
     for priority in (typemin(Int), typemax(Int))

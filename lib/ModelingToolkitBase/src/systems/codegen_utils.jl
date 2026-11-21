@@ -654,14 +654,16 @@ function rule_output_leaves!(leaves, x::AbstractArray)
     foreach(el -> rule_output_leaves!(leaves, el), x)
     return leaves
 end
-is_codegen_container(x) = parentmodule(typeof(x)) in (Code, Iterators)
+is_codegen_container(x) = parentmodule(typeof(x)) === Code
 rule_output_fields!(leaves, x) = (foreach(i -> rule_output_leaves!(leaves, getfield(x, i)), 1:nfields(x)); leaves)
 rule_output_leaves!(leaves, x::Tuple) = rule_output_fields!(leaves, x)
-rule_output_leaves!(leaves, x::Union{Base.Generator, AbstractSet}) = (foreach(el -> rule_output_leaves!(leaves, el), x); leaves)
+rule_output_elements!(leaves, x) = (foreach(el -> rule_output_leaves!(leaves, el), x); leaves)
+rule_output_leaves!(leaves, x::Union{Base.Generator, AbstractSet}) = rule_output_elements!(leaves, x)
 rule_output_leaves!(leaves, x::Symbolics.Arr) = rule_output_leaves!(leaves, unwrap(x))
 rule_output_leaves!(leaves, x::Expr) = rule_output_leaves!(leaves, x.args)
 function rule_output_leaves!(leaves, x)
     is_codegen_container(x) && return rule_output_fields!(leaves, x)
+    parentmodule(typeof(x)) === Iterators && return rule_output_elements!(leaves, x)
     y = unwrap(x)
     return y === x ? leaves : rule_output_leaves!(leaves, y)
 end
