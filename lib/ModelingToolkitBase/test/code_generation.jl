@@ -605,4 +605,25 @@ end
         )
         @test generate_custom_function(zsys, z[1]; optimize = [set_rule], expression = Val(false))(zprob.u0, zprob.p, 0.0) == [10.0]
     end
+    for elems in (Iterators.filter(Returns(true), [AtIndex(1, zsum)]), Iterators.flatten(([AtIndex(1, zsum)],)), Iterators.take([AtIndex(1, zsum)], 1), Set([AtIndex(1, zsum)]))
+        lazy_rule = OptimizationRule(
+            "lazy", (ir, expr) -> true,
+            (ir, expr, _) -> (populate_ir!(ir, zsum); (ir, Let([Assignment(:buf, LiteralExpr(:(zeros(1))))], SetArray(false, :buf, elems, true), false))), 1
+        )
+        @test generate_custom_function(zsys, z[1]; optimize = [lazy_rule], expression = Val(false))(zprob.u0, zprob.p, 0.0) == [10.0]
+    end
+    set_tuple = OptimizationRule("set tuple", (ir, expr) -> true, (ir, expr, _) -> (populate_ir!(ir, zsum); (ir, MakeTuple(Set([zsum])))), 1)
+    @test generate_custom_function(zsys, z[1]; optimize = [set_tuple], expression = Val(false))(zprob.u0, zprob.p, 0.0) == (10.0,)
+    for priority in (typemin(Int), typemax(Int))
+        edge_rule = OptimizationRule("edge", (ir, expr) -> true, (ir, expr, _) -> (populate_ir!(ir, zsum); (ir, zsum)), priority)
+        @test generate_custom_function(zsys, z[1]; optimize = [edge_rule], expression = Val(false))(zprob.u0, zprob.p, 0.0) == 10.0
+    end
+    nested_literal = OptimizationRule("nested literal", (ir, expr) -> true, (ir, expr, _) -> (populate_ir!(ir, zsum); (ir, LiteralExpr(:(let a = $zsum; a; end)))), 1)
+    @test generate_custom_function(zsys, z[1]; optimize = [nested_literal], expression = Val(false))(zprob.u0, zprob.p, 0.0) == 10.0
+    held = SymbolicUtils.Const{SymbolicUtils.SymReal}(Let(Assignment[], whole, false))
+    held_node = OptimizationRule(
+        "held node", detector, (ir, expr, _) -> (new_ir = copy(ir); populate_ir!(new_ir, held); SymbolicUtils.replace_node!(new_ir, unwrap(sin(x[1])), held); (new_ir, expr)), 1
+    )
+    hprob = ODEProblem(sys, [x => [1.0, 2.0, 3.0, 4.0]], (0.0, 1.0); optimize = [held_node])
+    @test hprob.f(hprob.u0, hprob.p, 0.0)[i1] == 11.0
 end
