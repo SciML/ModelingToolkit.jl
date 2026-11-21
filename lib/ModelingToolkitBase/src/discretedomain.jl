@@ -115,9 +115,19 @@ struct ShiftIndex
     ShiftIndex(::Num, steps::Int) = new(IntegerSequence(), steps)
 end
 
-function (xn::Num)(k::ShiftIndex)
+(xn::Num)(k::ShiftIndex) = Num(unwrap(xn)(k))
+function (xn::Symbolics.SymStruct{T})(k::ShiftIndex) where {T}
+    return Symbolics.SymStruct{T}(unwrap(xn)(k))
+end
+
+function (xn::SymbolicT)(k::ShiftIndex)
+    # A function-valued symbolic, such as the `f` of `@variables f(..)`, is applied to `k`
+    # as to any other argument
+    if SU.symtype(xn) <: SU.FnType
+        return invoke(xn, Tuple{Vararg{Any}}, k)
+    end
     @unpack clock, steps = k
-    x = unwrap(xn)
+    x = xn
     # Verify that the independent variables of k and x match and that the expression doesn't have multiple variables
     vars = Set{SymbolicT}()
     SU.search_variables!(vars, x)

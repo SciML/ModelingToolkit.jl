@@ -13,6 +13,33 @@ else
     MissingGuessValue.Constant(1.0)
 end
 
+@enum ShiftedPhase rising falling
+
+@testset "A shift index applied to a symbolic" begin
+    kc = ShiftIndex(Clock(0.25))
+
+    # a function-valued symbolic takes the index as an ordinary argument
+    @variables f(..)
+    applied = Symbolics.unwrap(f(kc))
+    @test nameof(operation(applied)) == :f
+    @test isequal(Symbolics.unwrap_const(only(arguments(applied))), kc)
+    declared = Symbolics.unwrap(only(@variables u(kc)))
+    @test nameof(operation(declared)) == :u
+    @test isequal(Symbolics.unwrap_const(only(arguments(declared))), kc)
+
+    # a variable that is not a number is shifted as a number is
+    @variables p(t)::ShiftedPhase
+    @test Symbolics.symtype(p(kc)) === ShiftedPhase
+    @test Symbolics.getmetadata(p(kc), ModelingToolkitBase.VariableTimeDomain) == kc.clock
+    for steps in (-1, 1)
+        shifted = p(kc + steps)
+        @test Symbolics.symtype(shifted) === ShiftedPhase
+        @test operation(shifted) isa Shift
+        @test operation(shifted).steps == steps
+        @test Symbolics.getmetadata(only(arguments(shifted)), ModelingToolkitBase.VariableTimeDomain) == kc.clock
+    end
+end
+
 # Make sure positive shifts error
 @variables x(t)
 k = ShiftIndex(t)
