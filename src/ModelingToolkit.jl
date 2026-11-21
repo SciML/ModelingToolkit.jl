@@ -68,13 +68,16 @@ import Symbolics: rename, islinear,
     tosymbol, build_function
 const derivative = Symbolics.derivative
 import ModelingToolkitBase as MTKBase
+using ModelingToolkitBase: MTKVerbosity, MTKVerbosityCtx
+using SciMLLogging: SciMLLogging, @SciMLMessage, AbstractVerbosityPreset
+export SciMLLogging
 import SimpleNonlinearSolve
 
 using UnPack: @unpack
 RuntimeGeneratedFunctions.init(@__MODULE__)
 
 import DifferentiationInterface as DI
-using ADTypes: AutoForwardDiff
+using ADTypes: AutoForwardDiff, AutoFiniteDiff
 import SciMLPublic: @public
 import PreallocationTools
 import PreallocationTools: DiffCache
@@ -135,6 +138,7 @@ using ModelingToolkitBase: build_function_wrapper, BuildFunctionWrapperOptions,
 # hides these files from static analyzers and resolves the relative paths against the
 # caller's source directory rather than `src/`. Keep the includes at real top level.
 include("linearization.jl")
+include("linearization_hybrid.jl")
 include("systems/analysis_points.jl")
 include("systems/solver_nlprob.jl")
 
@@ -171,6 +175,7 @@ export analyze_initialization_jacobian
 export alias_elimination
 export linearize, linearization_function,
     LinearizationProblem, LinearizationOpPoint, linearization_ap_transform
+export linearize_hybrid, HybridLinearization, ClockPartitionLinearization, clock_boundary
 export solve
 export map_variables_to_equations, substitute_component
 

@@ -156,7 +156,7 @@ using Test
             name = :despecialized_jump_parameters
         )
     )
-    hybrid_prob = JumpProblem(hybrid_sys, [], (0.0, 0.1); rng = Xoshiro(1))
+    hybrid_prob = JumpProblem(hybrid_sys, [], (0.0, 0.1))
     @test hybrid_prob.prob.p isa MTKParameters
-    @test SciMLBase.successful_retcode(solve(hybrid_prob, Tsit5()))
+    @test SciMLBase.successful_retcode(solve(hybrid_prob, Tsit5(); rng = Xoshiro(1)))
 end

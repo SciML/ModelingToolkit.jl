@@ -98,6 +98,7 @@ const REEXPORTED_API = (
     :discrete_events, :discrete_events_toplevel, :DiscreteSystem, :domain_connect,
     :DynamicOptSolution, :eqeq_dependencies, :eqtype_supports_collect_vars, :Equality,
     :equation_dependencies, :equations, :equations_toplevel, :EvalAt, :expand_connections,
+    :expand_record_equations,
     :extend, :flatten, :Flow, :fractional_to_ordinary, :full_equations,
     :generate_control_function, :generate_control_jacobian, :generate_cost,
     :generate_cost_gradient,
@@ -145,7 +146,8 @@ const REEXPORTED_API = (
     :liouville_transform, :LocalScope,
     :maybe_zeros, :MiscSystemData, :MissingGuessValue, :ModelingToolkitBase,
     :modelingtoolkitize, :modified_unknowns!, :mtkcompile, :MTKParameters,
-    :MTKVariableTypeCtx, :namespace_equations, :noise_to_brownians, :NonlinearSystem,
+    :MTKVariableTypeCtx, :MTKVerbosity, :MTKVerbosityCtx, :namespace_equations,
+    :noise_to_brownians, :NonlinearSystem,
     :observables, :observed, :ODESystem, :open_loop, :OptimizationSystem, :outputs,
     :parameters, :parameters_toplevel, :ParentScope, :PDESystem, :Pre, :ProblemTypeCtx,
     :PyomoCollocation, :PyomoDynamicOptProblem, :renamespace, :reorder_dimension_by_tunables,
@@ -205,6 +207,8 @@ const REEXPORTED_API = (
     :SDEProblem, :SolverStepClock, :SteadyStateProblem, :TimeDomain,
     # CommonSolve: `solve` is the entry point of every documented workflow.
     :solve,
+    # SciMLLogging: the module, so that `SciMLLogging.Silent` etc. work for `MTKVerbosity`.
+    :SciMLLogging,
     # JumpProcesses: `JumpProblem` is constructed from a `System` with jumps.
     :JumpProblem,
     # BipartiteGraphs: `BipartiteGraph` is re-exported by ModelingToolkitBase for the
@@ -310,13 +314,16 @@ const NONPUBLIC_QUALIFIED_ACCESSES = (
     :default_missing_guess_value, :discover_maybe_zeros, :EXPERIMENTAL_WARNING,
     :function_docstring, :generate_DAENLStepData, :generate_homotopy_residual,
     :generate_ODENLStepData,
-    :GENERATE_X_KWARGS, :get_initialization_problem_type, :get_nonlinear_problem_type,
-    :has_any_homotopy, :indp_to_system, :invalidate_cache!, :LimitedCtx, :lower_homotopy,
+    :GENERATE_X_KWARGS, :get_initialization_problem_type,
+    :get_linear_expander_for!, :get_nonlinear_problem_type,
+    :has_any_homotopy, :indp_to_system, :invalidate_cache!, :is_variable_floatingpoint,
+    :LimitedCtx, :lower_homotopy,
     :__mtkcompile,
     :ParameterArrayAssignments, :problem_docstring, :ReorderedDefaultParameters,
     :reverse_all_default_reversible_transformations, :simplify_sde_system, :simplify_shifts,
     :singular_check, :steady_state_sccprob, :topsort_equations,
     :torn_system_jacobian_sparsity, :Type, :UNBALANCED_SYSTEM_EXCEPTIONS,
+    :getunshifted, :process_SciMLProblem, :scalarized_vars, :split_indexed_var, :unwrap_vars,
     :wrap_symbolic_linear_interface,
     # ModelingToolkitTearing
     :backshift_expr, :ClockInference, :DefaultReassembleAlgorithm, :get_time_domain,
@@ -326,7 +333,7 @@ const NONPUBLIC_QUALIFIED_ACCESSES = (
     :StateMachineOperator,
     # StateSelection
     :check_consistency, :complete!, :dummy_derivative_graph!, :find_solvables!,
-    :find_var_sccs, :get_new_mm, :is_only_discrete, :is_present, :isalgvar, :isdervar,
+    :find_var_sccs, :get_mm, :get_new_mm, :is_only_discrete, :is_present, :isalgvar, :isdervar,
     :pantelides!, :rm_eqs_vars!, :structural_singularity_removal!, :trivial_tearing!,
     :var_derivative!,
     # Symbolics

@@ -1,8 +1,11 @@
 using ModelingToolkit
+import SciMLLogging
 using ModelingToolkit: homotopy, t_nounits as t, D_nounits as D
 using SciMLBase
 using NonlinearSolve   # continuation solvers for the HomotopyProblem blocks
 using Test
+
+const QUIET_INIT = MTKVerbosity(initialization = SciMLLogging.Silent)
 
 # Modelica `homotopy(actual, simplified)` nodes are handled PER SCC: the initialization
 # system still tears into `SCCNonlinearProblem` blocks, but a block whose equations carry
@@ -24,7 +27,7 @@ using Test
     @test ModelingToolkit.is_split(sys)
 
     iprob = ModelingToolkit.InitializationProblem(
-        sys, 0.0, [x => 1.0]; warn_initialize_determined = false
+        sys, 0.0, [x => 1.0]; verbose = QUIET_INIT
     )
     # the init system is still torn into SCC blocks ...
     @test iprob isa SciMLBase.SCCNonlinearProblem
@@ -65,7 +68,7 @@ end
         t; guesses = [a => 1.5, b => 1.2, c => 1.1]
     )
     iprob = ModelingToolkit.InitializationProblem(
-        sys, 0.0, [x => 1.0]; warn_initialize_determined = false
+        sys, 0.0, [x => 1.0]; verbose = QUIET_INIT
     )
     @test iprob isa SciMLBase.SCCNonlinearProblem
     @test !any(p -> p isa SciMLBase.HomotopyProblem, iprob.probs)
@@ -80,7 +83,7 @@ end
         [D(x) ~ -x, 0 ~ homotopy(atan(y - 3), y)], t; guesses = [y => 12.0]
     )
     iprob = ModelingToolkit.InitializationProblem(
-        sys, 0.0, [x => 1.0]; warn_initialize_determined = false
+        sys, 0.0, [x => 1.0]; verbose = QUIET_INIT
     )
     @test iprob isa SciMLBase.HomotopyProblem
     @test !(iprob isa SciMLBase.SCCNonlinearProblem)
@@ -95,7 +98,7 @@ end
         [D(x) ~ -x, 0 ~ atan(y - 3)], t; guesses = [y => 0.5]
     )
     iprob = ModelingToolkit.InitializationProblem(
-        sys, 0.0, [x => 1.0]; warn_initialize_determined = false
+        sys, 0.0, [x => 1.0]; verbose = QUIET_INIT
     )
     @test iprob isa SciMLBase.NonlinearProblem
     @test !(iprob isa SciMLBase.HomotopyProblem)
@@ -110,7 +113,7 @@ end
         t; guesses = [a => 1.5, b => 1.2, c => 1.1]
     )
     iprob = ModelingToolkit.InitializationProblem(
-        sys, 0.0, [x => 1.0]; warn_initialize_determined = false, use_scc = false
+        sys, 0.0, [x => 1.0]; verbose = QUIET_INIT, use_scc = false
     )
     @test iprob isa SciMLBase.HomotopyProblem
     sol = solve(iprob; abstol = 1.0e-12, reltol = 1.0e-12)
@@ -128,7 +131,7 @@ end
     @test !ModelingToolkit.homotopy_enabled(sys)
     @test !ModelingToolkit.has_any_homotopy(sys)
     iprob = ModelingToolkit.InitializationProblem(
-        sys, 0.0, [x => 1.0]; warn_initialize_determined = false
+        sys, 0.0, [x => 1.0]; verbose = QUIET_INIT
     )
     @test iprob isa SciMLBase.SCCNonlinearProblem
     @test !any(p -> p isa SciMLBase.HomotopyProblem, iprob.probs)

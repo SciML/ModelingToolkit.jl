@@ -162,6 +162,13 @@ observed equations.
 """
 function has_any_limited(sys::AbstractSystem)
     ir = get_irstructure(sys)
+    # As in `has_any_homotopy`: with no `limited` node in `ir`, the per-equation queries,
+    # which each allocate a visited set the size of `ir`, cannot find one.
+    for eqs in (equations(sys), observed(sys)), eq in eqs
+        SU.populate_ir!(ir, eq.lhs)
+        SU.populate_ir!(ir, eq.rhs)
+    end
+    any(__has_limited_predicate, ir.symbols) || return false
     return has_limited_in_equations(ir, equations(sys)) ||
         has_limited_in_equations(ir, observed(sys))
 end
@@ -368,7 +375,8 @@ end
 Variant for compilation pipelines that track per-equation
 [`EquationSourceInformation`](@ref): returns `(sys, source_info)` with the source
 information padded for the consistency equations [`lower_limited`](@ref) appends
-(unknown-source entries, not connection equations).
+(unknown-source entries, not connection equations). Initialization equations are not
+modified, so their source information is passed through unchanged.
 """
 function apply_limited_lowering(sys::AbstractSystem, source_info)
     n_before = length(equations(sys))
@@ -378,7 +386,8 @@ function apply_limited_lowering(sys::AbstractSystem, source_info)
         if n_added > 0
             source_info = EquationSourceInformation(
                 vcat(source_info.eqs_source, [Symbol[] for _ in 1:n_added]),
-                vcat(source_info.is_connection_equation, falses(n_added))
+                vcat(source_info.is_connection_equation, falses(n_added)),
+                source_info.init_eqs_source
             )
         end
     end

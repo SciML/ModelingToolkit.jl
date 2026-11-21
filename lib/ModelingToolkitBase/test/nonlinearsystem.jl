@@ -564,6 +564,41 @@ end
     @test !haskey(ModelingToolkitBase.bindings(nlsys), z)
 end
 
+@testset "NonlinearSystem conversion: array-element derivatives are zeroed" begin
+    @independent_variables t
+    D = Differential(t)
+    @variables x(t)[1:2] y(t)
+    eqs = [D(x[1]) ~ -x[1] + y, D(x[2]) ~ -2x[2] + x[1], 0 ~ y - 1.0 + x[2]]
+    sys = complete(System(eqs, t, [x, y], []; name = :A))
+    nlsys = NonlinearSystem(sys)
+    @test length(equations(nlsys)) == 3
+    for eq in equations(nlsys)
+        @test isempty(ModelingToolkitBase.collect_applied_operators(eq, Differential))
+    end
+    compiled = mtkcompile(nlsys)
+    @test !is_time_dependent(compiled)
+    # Steady state from D≡0: y = x[1] = 2x[2] and y + x[2] = 1 ⇒ x[2]=1/3.
+    prob = NonlinearProblem(compiled, [x[1] => 0.0, x[2] => 0.0, y => 0.0])
+    sol = solve(prob)
+    @test SciMLBase.successful_retcode(sol)
+    @test sol[x[1]] ≈ 2 / 3 atol = 1.0e-10
+    @test sol[x[2]] ≈ 1 / 3 atol = 1.0e-10
+    @test sol[y] ≈ 2 / 3 atol = 1.0e-10
+end
+
+@testset "NonlinearSystem conversion: unknown-shape array unknown" begin
+    @independent_variables t
+    D = Differential(t)
+    @variables q(t) z(t)::Vector{Real}
+    sys = System([D(q) ~ 1 - q, z[1] ~ q, z[2] ~ 2q], t, [q, z], []; name = :mixed)
+    nlsys = NonlinearSystem(sys)
+    @test !is_time_dependent(nlsys)
+    @test length(equations(nlsys)) == 3
+    for eq in equations(nlsys)
+        @test isempty(ModelingToolkitBase.collect_applied_operators(eq, Differential))
+    end
+end
+
 @testset "NonlinearSystem conversion: connectors" begin
     @independent_variables t
     D = Differential(t)
@@ -628,6 +663,69 @@ end
     # Connections are expanded after the conversion; without connector types the outer
     # connectors are not recognized and the system is unbalanced.
     @test mtkcompile(nlrc) isa System
+end
+
+abstract type AbstractNonlinearMedium end
+struct NonlinearMedium <: AbstractNonlinearMedium
+    k::Float64
+end
+medium_gain(m::AbstractNonlinearMedium, x) = m.k * x
+@register_symbolic medium_gain(m::AbstractNonlinearMedium, x)
+
+@testset "NonlinearSystem conversion: nonnumeric bound parameters" begin
+    # https://github.com/SciML/ModelingToolkit.jl/issues/5066
+    # Subsystem parameters bound to a parent-level nonnumeric parameter must
+    # stay bound through conversion so `NonlinearProblem` can evaluate them.
+    @independent_variables t
+    D = Differential(t)
+    function Source5066(; name, medium)
+        @parameters med::AbstractNonlinearMedium = medium
+        @variables u(t)
+        System([D(u) ~ 4.0 - medium_gain(med, u)], t, [u], [med]; name)
+    end
+    function Load5066(; name, medium)
+        @parameters med::AbstractNonlinearMedium = medium
+        @variables v(t) w(t)
+        System([D(v) ~ w - medium_gain(med, v)], t, [v, w], [med]; name)
+    end
+    @parameters mC::AbstractNonlinearMedium = NonlinearMedium(2.0)
+    @named src = Source5066(medium = mC)
+    @named ld = Load5066(medium = mC)
+    sys = mtkcompile(
+        System([ld.w ~ src.u^2], t, [], [mC]; systems = [src, ld], name = :top)
+    )
+    nlsys = NonlinearSystem(sys)
+    prob = NonlinearProblem(nlsys, [src.u => 1.0, ld.v => 1.0])
+    sol = solve(prob)
+    @test SciMLBase.successful_retcode(sol)
+    @test sol[src.u] ≈ 2.0
+    @test sol[ld.v] ≈ 2.0
+    @test sol.ps[mC] == NonlinearMedium(2.0)
+end
+
+@testset "bound parameters with guesses" begin
+    # Bound non-floating-point parameters keep their binding in the
+    # initialization system; a guess for them must not become a conflicting
+    # initial condition.
+    @variables x
+    @parameters p::Int = 2 q::Int
+    sys = complete(
+        System(
+            [x^2 ~ q], [x], [p, q]; name = :int_guess,
+            bindings = [q => 2p], guesses = [q => 999]
+        )
+    )
+    sol = solve(NonlinearProblem(sys, [x => 0.75]))
+    @test SciMLBase.successful_retcode(sol)
+    @test sol[x] ≈ 2.0
+    @test sol.ps[p] == 2
+    @test sol.ps[q] == 4
+
+    sol2 = solve(NonlinearProblem(sys, [x => 0.75]; guesses = [q => 999]))
+    @test SciMLBase.successful_retcode(sol2)
+    @test sol2[x] ≈ 2.0
+    @test sol2.ps[p] == 2
+    @test sol2.ps[q] == 4
 end
 
 @testset "oop `NonlinearLeastSquaresProblem` with `u0 === nothing`" begin
@@ -707,6 +805,23 @@ end
     uprob = NonlinearProblem(sys, [x => 1.5]; lb = [-10.0], ub = [10.0])
     @test uprob.lb == [-10.0]
     @test uprob.ub == [10.0]
+
+    # Symbolic bounds are resolved through the operating point, whose values for unknowns
+    # are initial guesses: they must not become the bound of an unbounded side.
+    @parameters lo = -1.0
+    @variables sc [bounds = (lo, 1.0)] sd se [bounds = (0.0, Inf)]
+    for (v, vbounds) in [(sd, (-Inf, Inf)), (se, (0.0, Inf))]
+        @mtkcompile ssys = System([0 ~ sc^2 + v^2 - 1, 0 ~ sc^2 - v^2 - 0.5])
+        sprob = NonlinearProblem(ssys, [sc => 0.8, v => 0.4])
+        sdvs = unknowns(ssys)
+        sci = findfirst(isequal(sc), sdvs)
+        vi = findfirst(isequal(v), sdvs)
+        @test sprob.lb[sci] == -1.0 && sprob.ub[sci] == 1.0
+        @test (sprob.lb[vi], sprob.ub[vi]) == vbounds
+        ssol = solve(sprob)
+        @test SciMLBase.successful_retcode(ssol)
+        @test !any(isnan, ssol.u)
+    end
 end
 
 @testset "Array unknowns on a `complete`d system" begin

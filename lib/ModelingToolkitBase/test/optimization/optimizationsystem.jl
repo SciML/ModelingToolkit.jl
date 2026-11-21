@@ -5,6 +5,12 @@ using OptimizationOptimJL: Optim
 using Ipopt: Ipopt_jll
 using Symbolics: Symbolics, value
 
+use_literal_pow_kws = if pkgversion(Symbolics) >= v"7.48"
+    (; use_literal_pow = false)
+else
+    (;)
+end
+
 @testset "basic" begin
     @variables x y
     @parameters a b
@@ -59,8 +65,8 @@ using Symbolics: Symbolics, value
     ]
 
     prob = OptimizationProblem(
-        combinedsys, [u0; p], grad = true, hess = true, cons_j = true,
-        cons_h = true
+        combinedsys, [u0; p]; grad = true, hess = true, cons_j = true,
+        cons_h = true, use_literal_pow_kws...
     )
     @test prob.f.sys === combinedsys
     sol = solve(prob, Ipopt.Optimizer(); print_level = 0)
@@ -77,8 +83,9 @@ end
     @named sys = OptimizationSystem(loss, [x, y], [a, b], constraints = cons)
     sys = complete(sys)
     prob = OptimizationProblem(
-        sys, [x => 0.0, y => 0.0, a => 1.0, b => 1.0],
-        grad = true, hess = true, cons_j = true, cons_h = true
+        sys, [x => 0.0, y => 0.0, a => 1.0, b => 1.0];
+        grad = true, hess = true, cons_j = true, cons_h = true,
+        use_literal_pow_kws...
     )
     @test prob.f.cons_expr isa AbstractVector{Expr}
     @test prob.f.expr isa Expr
@@ -89,8 +96,9 @@ end
     @test sol.objective < 1.0
 
     prob = OptimizationProblem(
-        sys, [x => 0.0, y => 0.0, a => 1.0, b => 1.0],
-        grad = false, hess = false, cons_j = false, cons_h = false
+        sys, [x => 0.0, y => 0.0, a => 1.0, b => 1.0];
+        grad = false, hess = false, cons_j = false, cons_h = false,
+        use_literal_pow_kws...
     )
     sol = solve(prob, AmplNLWriter.Optimizer(Ipopt_jll.amplexe))
     @test sol.objective < 1.0
@@ -108,8 +116,9 @@ end
     @named sys = OptimizationSystem(loss, [x, y, z], [a, b], constraints = cons)
     sys = mtkcompile(sys)
     prob = OptimizationProblem(
-        sys, [x => 0.0, y => 0.0, z => 0.0, a => 1.0, b => 1.0],
-        grad = true, hess = true, cons_j = true, cons_h = true
+        sys, [x => 0.0, y => 0.0, z => 0.0, a => 1.0, b => 1.0];
+        grad = true, hess = true, cons_j = true, cons_h = true,
+        use_literal_pow_kws...
     )
     sol = solve(prob, Optim.IPNewton())
     @test sol.objective < 1.0
@@ -121,8 +130,9 @@ end
     @test sol[x]^2 + sol[y]^2 ≈ 1.0
 
     prob = OptimizationProblem(
-        sys, [x => 0.0, y => 0.0, z => 0.0, a => 1.0, b => 1.0],
-        grad = false, hess = false, cons_j = false, cons_h = false
+        sys, [x => 0.0, y => 0.0, z => 0.0, a => 1.0, b => 1.0];
+        grad = false, hess = false, cons_j = false, cons_h = false,
+        use_literal_pow_kws...
     )
     sol = solve(prob, AmplNLWriter.Optimizer(Ipopt_jll.amplexe))
     @test sol.objective < 1.0
@@ -247,8 +257,8 @@ end
     ]
 
     prob = OptimizationProblem(
-        combinedsys, [u0; p], grad = true, hess = true, cons_j = true,
-        cons_h = true
+        combinedsys, [u0; p]; grad = true, hess = true, cons_j = true,
+        cons_h = true, use_literal_pow_kws...
     )
     @test prob.f.sys === combinedsys
     @test_broken SciMLBase.successful_retcode(
@@ -282,8 +292,8 @@ end
     )
 
     prob = OptimizationProblem(
-        complete(sys), [x[1] => 2.0, x[2] => 0.0], grad = true,
-        hess = true, cons_j = true, cons_h = true
+        complete(sys), [x[1] => 2.0, x[2] => 0.0]; grad = true,
+        hess = true, cons_j = true, cons_h = true, use_literal_pow_kws...
     )
     sol = Optimization.solve(prob, Ipopt.Optimizer(); print_level = 0)
     @test sol.u ≈ [1, 0]
@@ -320,14 +330,16 @@ end
     )
 
     prob1 = OptimizationProblem(
-        sys1, [x₁ => 0.0, x₂ => 0.0, α₁ => 1.0, α₂ => 100.0],
-        grad = true, hess = true, cons_j = true, cons_h = true
+        sys1, [x₁ => 0.0, x₂ => 0.0, α₁ => 1.0, α₂ => 100.0];
+        grad = true, hess = true, cons_j = true, cons_h = true,
+        use_literal_pow_kws...
     )
 
     sys2 = complete(modelingtoolkitize(prob1))
     prob2 = OptimizationProblem(
-        sys2, [x₁ => 0.0, x₂ => 0.0, α₁ => 1.0, α₂ => 100.0],
-        grad = true, hess = true, cons_j = true, cons_h = true
+        sys2, [x₁ => 0.0, x₂ => 0.0, α₁ => 1.0, α₂ => 100.0];
+        grad = true, hess = true, cons_j = true, cons_h = true,
+        use_literal_pow_kws...
     )
 
     sol1 = Optimization.solve(prob1, Ipopt.Optimizer())
@@ -811,6 +823,50 @@ end
         @test length(sprob.f.cons_expr) == 3
     end
 
+    @testset "`dims` beyond `ndims` and `init`" begin
+        @variables X[1:2, 1:3]
+        xv = [1.0 2.0 3.0; 4.0 5.0 6.0]
+        # Julia reduces `dims > ndims` over a trailing singleton axis
+        ref(u) = (
+            Y = reshape(u, 2, 3);
+            init = 3 * oneunit(eltype(Y));
+            [
+                vec(sum(abs2, Y; dims = 3)) .- 1.0;
+                vec(mapreduce(abs2, +, Y; dims = 3, init)) .- 20.0;
+                vec(mapreduce(abs2, +, Y; dims = 1, init)) .- 20.0
+            ]
+        )
+        xsys = complete(
+            System(
+                Equation[], [X], []; costs = [sum(abs2, X)], name = :xsys,
+                constraints = [
+                    Inequality(sum(abs2, X; dims = 3), 1.0, Symbolics.leq),
+                    Inequality(mapreduce(abs2, +, X; dims = 3, init = 3.0), 20.0, Symbolics.leq),
+                    Inequality(mapreduce(abs2, +, X; dims = 1, init = 3.0), 20.0, Symbolics.leq),
+                ]
+            )
+        )
+        xprob = OptimizationProblem(xsys, [X => xv]; cons_j = true, cons_h = true)
+        u = vec(xv)
+        @test xprob.u0 == u
+        @test xprob.f.cons(xprob.u0, xprob.p) ≈ ref(u)
+        rows = [
+            Core.eval(
+                Main, :(
+                    let X = $xv
+                        $e
+                    end
+                )
+            ) for e in xprob.f.cons_expr
+        ]
+        @test rows ≈ ref(u)
+        @test xprob.f.cons_j(xprob.u0, xprob.p) ≈ ForwardDiff.jacobian(ref, u)
+        @test all(
+            xprob.f.cons_h(xprob.u0, xprob.p) .≈
+                [ForwardDiff.hessian(v -> ref(v)[k], u) for k in 1:15]
+        )
+    end
+
     @testset "expression graph through AmplNLWriter" begin
         @variables u v w
         @parameters M[1:2, 1:3] c
@@ -828,7 +884,7 @@ end
                 System(Equation[], dvs, [M, c]; costs = [cost], constraints = cstrs, name = :gsys)
             )
             gop = [dvs .=> 0.5; M => [1.0 0.0 1.0; 1.0 2.0 0.0]; c => 2.0]
-            gprob = OptimizationProblem(gsys, gop)
+            gprob = OptimizationProblem(gsys, gop; use_literal_pow_kws...)
             @test length(gprob.f.cons_expr) == length(gprob.lcons)
             gsol = solve(gprob, AmplNLWriter.Optimizer(Ipopt_jll.amplexe))
             @test gprob.f.cons_expr.exprs !== nothing
@@ -866,7 +922,7 @@ end
                 Inequality(sum(abs2, M .* z'; dims = 1), c, Symbolics.leq),
             ]
         )
-        iprob = OptimizationProblem(complete(isys), [u0; pvals]; adtype = AutoForwardDiff())
+        iprob = OptimizationProblem(complete(isys), [u0; pvals]; adtype = AutoForwardDiff(), use_literal_pow_kws...)
         @test length(iprob.lcons) == 7
         isol = solve(iprob, Ipopt.Optimizer(); print_level = 0)
         check_optimum(isol)
@@ -881,13 +937,15 @@ end
             constraints = ModelingToolkitBase.get_constraints(isys)
         )
         sprob = OptimizationProblem(
-            complete(ssys), [u0; pvals]; grad = true, hess = true, cons_j = true, cons_h = true
+            complete(ssys), [u0; pvals]; grad = true, hess = true, cons_j = true, cons_h = true,
+            use_literal_pow_kws...
         )
         ssol = solve(sprob, Ipopt.Optimizer(); print_level = 0)
         check_optimum(ssol)
+        @test sprob.f.cons_expr.exprs === nothing
 
         msys = mtkcompile(isys)
-        mprob = OptimizationProblem(msys, [u0; pvals]; adtype = AutoForwardDiff())
+        mprob = OptimizationProblem(msys, [u0; pvals]; adtype = AutoForwardDiff(), use_literal_pow_kws...)
         msol = solve(mprob, Ipopt.Optimizer(); print_level = 0)
         check_optimum(msol)
     end

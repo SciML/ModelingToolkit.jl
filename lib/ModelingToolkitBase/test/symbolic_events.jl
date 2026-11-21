@@ -1,4 +1,5 @@
 using ModelingToolkitBase, OrdinaryDiffEq, StochasticDiffEq, JumpProcesses, Test
+import SciMLLogging
 using OrdinaryDiffEqRosenbrock
 using SciMLStructures: canonicalize, Discrete
 using ModelingToolkitBase: SymbolicContinuousCallback,
@@ -624,11 +625,11 @@ end
 @testset "JumpSystem Discrete Callbacks" begin
     function testsol(
             jsys, u0, p, tspan; tstops = Float64[], paramtotest = nothing,
-            N = 40000, kwargs...
+            N = 40000, rng, kwargs...
         )
         jsys = complete(jsys)
         jprob = JumpProblem(jsys, [u0; p], tspan; aggregator = Direct(), kwargs...)
-        sol = solve(jprob, SSAStepper(); tstops = tstops)
+        sol = solve(jprob, SSAStepper(); tstops = tstops, rng)
         @test SciMLBase.successful_retcode(sol)
         @test (sol(1.000000000001)[1] - sol(0.99999999999)[1]) == 1
         paramtotest === nothing || (@test sol.ps[paramtotest] == [0.0, 1.0])
@@ -1096,7 +1097,7 @@ end
     ss = mtkcompile(sys)
     @test_logs (
         :warn,
-        "The symbols Any[:furnace_on] are declared as both observed and modified; this is a code smell because it becomes easy to confuse them and assign/not assign a value.",
+        r"The symbols Any\[:furnace_on\] are declared as both observed and modified; this is a code smell because it becomes easy to confuse them and assign/not assign a value.",
     ) prob = ODEProblem(
         ss, [temp => 0.0, furnace_on => true], (0.0, 100.0)
     )
@@ -1545,7 +1546,10 @@ if @isdefined(ModelingToolkit)
             discrete_parameters = [g], iv = t
         )
         @mtkcompile sys = System(eqs, t, [x, y, w], [g]; continuous_events = c_evt)
-        prob = ODEProblem(sys, [], (0.0, 1.0); warn_initialize_determined = false)
+        prob = ODEProblem(
+            sys, [], (0.0, 1.0);
+            verbose = MTKVerbosity(initialization = SciMLLogging.Silent)
+        )
 
         sol = solve(prob, FBDF())
         @test SciMLBase.successful_retcode(sol)
@@ -2232,5 +2236,83 @@ end
         # the kick decays like the homogeneous solution: the events depend only on time
         @test sol(1.0; idxs = x) - ref(1.0; idxs = x) ≈ exp(-0.5) rtol = 1.0e-6
         @test sol.ps[d] == ref.ps[d]
+    end
+end
+
+@testset "ODEProblems built from the same system have the same type" begin
+    @variables x(t)
+    @parameters a t1
+    @mtkcompile sys1 = System(
+        [D(x) ~ -a * x], t; discrete_events = [[1.0] => [x ~ Pre(x) + 1]],
+        continuous_events = [[x ~ 0.5] => [x ~ Pre(x) + 1]]
+    )
+    # symbolic tstops are also compiled into a generated function
+    @mtkcompile sys2 = System(
+        [D(x) ~ -a * x], t, [x], [a, t1];
+        discrete_events = [(t == t1) => [x ~ Pre(x) + 1]], tstops = [[t1]]
+    )
+    # a new type for each build makes the solver recompile for each new problem
+    for (sys, op) in ((sys1, [x => 1.0, a => 1.0]), (sys2, [x => 1.0, a => 1.0, t1 => 2.0]))
+        prob1 = ODEProblem(sys, op, (0.0, 5.0))
+        prob2 = ODEProblem(sys, op, (0.0, 5.0))
+        @test typeof(prob1) == typeof(prob2)
+    end
+end
+
+@testset "Code-generation options of the problem reach the event code" begin
+    @variables x(t) = 1.0
+    @discretes c(t) = 0.0
+    # `sqrt` of a negative number is `NaN` with the default `nanmath = true`, and a
+    # `DomainError` with `nanmath = false`
+    affect = [c ~ sqrt(Pre(x) - 5)]
+    imperative = ModelingToolkitBase.ImperativeAffect(
+        modified = (; c), observed = (; root = sqrt(x - 5))
+    ) do m, o, ctx, integ
+        (; c = o.root)
+    end
+    tick = SymbolicDiscreteCallback(0.5, affect; discrete_parameters = [c])
+    cross = SymbolicContinuousCallback([x ~ 0.5], affect; discrete_parameters = [c])
+    tock = SymbolicDiscreteCallback(0.5, imperative; discrete_parameters = [c])
+    for events in (
+            (; discrete_events = [tick]), (; continuous_events = [cross]),
+            (; discrete_events = [tock]),
+        )
+        @mtkcompile sys = System([D(x) ~ -x], t, [x], [c]; events...)
+        sol = solve(ODEProblem(sys, [], (0.0, 1.0)), Tsit5())
+        @test isnan(sol.ps[c][end])
+        @test_throws DomainError solve(ODEProblem(sys, [], (0.0, 1.0); nanmath = false), Tsit5())
+    end
+    # `JumpProblem` compiles the events itself
+    @variables n(t) = 10.0
+    @parameters k = 0.1
+    @mtkcompile sys = System(
+        [D(x) ~ -x], t, [x, n], [k, c];
+        jumps = [SymbolicMassActionJump(k, [n => 1], [n => -1])], discrete_events = [tick]
+    )
+    sol = solve(JumpProblem(sys, [], (0.0, 1.0)), Tsit5())
+    @test isnan(sol.ps[c][end])
+    @test_throws DomainError solve(JumpProblem(sys, [], (0.0, 1.0); nanmath = false), Tsit5())
+    # `iip_config` and `skipzeros` describe the problem's function, not the event code
+    below = SymbolicDiscreteCallback(x < 0.5, [c ~ Pre(c) + 1]; discrete_parameters = [c])
+    @mtkcompile sys = System([D(x) ~ -x], t, [x], [c]; discrete_events = [below])
+    sol = solve(ODEProblem{true}(sys, [], (0.0, 1.0); iip_config = (false, true)), Tsit5())
+    @test SciMLBase.successful_retcode(sol)
+    reset = SymbolicDiscreteCallback(0.5, [c ~ 0]; discrete_parameters = [c])
+    @mtkcompile sys = System([D(x) ~ -x], t, [x], [c]; discrete_events = [reset])
+    sol = solve(ODEProblem(sys, [x => 1.0, c => 5.0], (0.0, 1.0); skipzeros = true), Tsit5())
+    @test sol.ps[c][end] == 0
+end
+
+@testset "`reinitializealg` takes part in the hash of an event" begin
+    @variables x(t)
+    for cb in (
+            SymbolicContinuousCallback([x ~ 0], [x ~ Pre(x) + 1]; reinitializealg = SciMLBase.NoInit()),
+            SymbolicDiscreteCallback(1.0, [x ~ Pre(x) + 1]; reinitializealg = SciMLBase.NoInit()),
+        )
+        # affects and zero-crossing ids compare by identity, so only change `reinitializealg`
+        other = @set cb.reinitializealg = SciMLBase.CheckInit()
+        @test cb != other
+        @test hash(cb) != hash(other)
+        @test hash(cb) == hash(@set cb.reinitializealg = SciMLBase.NoInit())
     end
 end
