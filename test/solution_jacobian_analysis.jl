@@ -144,32 +144,75 @@ fpart = ODEFunction(
 respart = analyze_solution_jacobian(solve(ODEProblem(fpart, [1.0, 1.0], (0.0, 1.0)), Rodas5P()); verbose = false)
 @test all(J -> J == [-1.0 0; 0 -2], respart.jacobians)
 
-# Repeated conjugate pairs (two identical uncoupled oscillators) form two oscillatory
-# modes, each with the participation of its own position and velocity.
-λrep, Prep, κrep, crep = ModelingToolkit._modes([0 1 0 0; -4 -0.1 0 0; 0 0 0 1; 0 0 -4 -0.1])
+# Repeated conjugate pairs (two identical uncoupled oscillators): the coincident eigenvalues
+# have no unique individual eigenvectors and form clusters involving both oscillators; their
+# eigenvalues remain resolved.
+λrep, Prep, κrep, crep, rrep = ModelingToolkit._modes([0 1 0 0; -4 -0.1 0 0; 0 0 0 1; 0 0 -4 -0.1])
 @test length(ModelingToolkit._conjugate_groups(λrep)) == 2
-@test all(k -> λrep[2k] == conj(λrep[2k - 1]) && imag(λrep[2k - 1]) > 0, 1:2)
-@test all(k -> Prep[:, 2k] ≈ Prep[:, 2k - 1], 1:2)
-@test sort([participants(Prep, 1), participants(Prep, 3)]) == [[1, 2], [3, 4]]
+@test all(==(2), crep) && all(rrep)
+@test all(k -> participants(Prep, k) == [1, 2, 3, 4], 1:4)
+
+# Two identical lightly damped oscillators coupled to a double integrator (whose defective
+# eigenvalue makes the eigenbasis singular) and a better damped oscillator: the least-damped
+# mode is that of the identical oscillators.
+Jld = zeros(8, 8)
+Jld[1:2, 1:2] = Jld[3:4, 3:4] = [0 1; -4 -0.1]
+Jld[5:6, 5:6] = [0 1; -9 -3.0]
+Jld[7:8, 7:8] = [0 1; 0 0.0]
+Jld[8, 1] = 0.5
+Jld[8, 3] = -0.5
+fld = ODEFunction((u, p, t) -> Jld * u; jac = (u, p, t) -> Jld)
+resld = analyze_solution_jacobian(
+    solve(ODEProblem(fld, ones(8), (0.0, 0.1)), Rodas5P()); ts = [0.0], verbose = false
+)
+@test resld.least_damped.damping ≈ 0.025
+@test sort(first.(resld.least_damped.unknowns)) == [1, 2, 3, 4]
+
+# Nearly defective one-way coupling: the modes are individual in any units of the unknowns.
+# An exactly defective pair forms a cluster in any units of the unknowns.
+for c in (1.0, 1.0e-4)
+    _, Pn, _, cn, _ = ModelingToolkit._modes([-1 c; 0 -1 - 1.0e-8])
+    @test cn == [1, 1]
+    @test sort([participants(Pn, 1), participants(Pn, 2)]) == [[1], [2]]
+end
+for c in (1.0, 1.0e-11)
+    _, Pj, _, cj, rj = ModelingToolkit._modes([-1 c; 0 -1])
+    @test cj == [2, 2] && all(rj)
+    @test all(k -> participants(Pj, k) == [1, 2], 1:2)
+end
+
+# Modes are ranked by natural frequency: an undamped high-frequency oscillator is the
+# fastest mode, a slow lag the slowest.
+fhf = ODEFunction((u, p, t) -> [u[2], -1.0e8 * u[1], -0.01 * u[3]])
+reshf = analyze_solution_jacobian(
+    solve(ODEProblem(fhf, [0.0, 0.0, 1.0], (0.0, 1.0)), Rodas5P()); ts = [0.0], verbose = false
+)
+@test sort(first.(only(reshf.fast_unknowns))) == [1, 2]
+@test first(only(only(reshf.slow_unknowns))) == 3
+
+# Discrete-time problems are rejected.
+probdisc = DiscreteProblem((u, p, t) -> 0.5 .* u, [1.0], (0.0, 3.0))
+soldisc = SciMLBase.build_solution(probdisc, nothing, [0.0], [[1.0]])
+@test_throws ArgumentError analyze_solution_jacobian(soldisc; verbose = false)
 
 # The attribution does not depend on the units of the unknowns: a strong one-way coupling
 # and a diagonal change of units leave the participation factors and condition numbers
 # unchanged, with every mode attributed to its own unknown.
-λA, PA, κA, cA = ModelingToolkit._modes([-1 1.0e7; 0 -2])
+λA, PA, κA, cA, _ = ModelingToolkit._modes([-1 1.0e7; 0 -2])
 @test real(λA) ≈ [-2, -1]
 @test participants(PA, 1) == [2] && participants(PA, 2) == [1]
 @test all(<(10), κA) && all(==(1), cA)
 Dsc = Diagonal([1, 1.0e9])
 A0 = [-1000 1; 1 -0.01]
-λ0, P0, κ0, _ = ModelingToolkit._modes(A0)
-λ1, P1, κ1, _ = ModelingToolkit._modes(Dsc * A0 / Dsc)
+λ0, P0, κ0, _, _ = ModelingToolkit._modes(A0)
+λ1, P1, κ1, _, _ = ModelingToolkit._modes(Dsc * A0 / Dsc)
 @test λ1 ≈ λ0
 @test P1 ≈ P0 rtol = 1.0e-6
 @test κ1 ≈ κ0 rtol = 1.0e-3
 
 # A defective pair (two identical lags in series, with a strong coupling): the pair forms
 # a cluster of size two whose invariant subspace involves both unknowns.
-λdef, Pdef, κdef, cdef = ModelingToolkit._modes([-1 1.0e6; 0 -1])
+λdef, Pdef, κdef, cdef, _ = ModelingToolkit._modes([-1 1.0e6; 0 -1])
 @test all(≈(-1), real(λdef))
 @test all(==(2), cdef)
 @test all(isfinite, Pdef) && all(k -> participants(Pdef, k) == [1, 2], 1:2)
@@ -177,16 +220,33 @@ A0 = [-1000 1; 1 -0.01]
 # A double integrator in a non-modal basis: the split, ill-conditioned double zero
 # eigenvalue forms a cluster of size two; the other modes are resolved individually.
 Qdi = [1.0 2 0 1; 0 1 3 0; 1 0 1 2; 2 1 0 1]
-λdi, Pdi, κdi, cdi = ModelingToolkit._modes(Qdi * [0 1 0 0; 0 0 0 0; 0 0 -1.0e3 0; 0 0 0 -1] / Qdi)
+λdi, Pdi, κdi, cdi, rdi = ModelingToolkit._modes(Qdi * [0 1 0 0; 0 0 0 0; 0 0 -1.0e3 0; 0 0 0 -1] / Qdi)
 @test real(λdi[1]) ≈ -1000 && real(λdi[2]) ≈ -1
-@test cdi == [1, 1, 2, 2]
+@test cdi == [1, 1, 2, 2] && rdi == [true, true, false, false]
 @test all(isfinite, Pdi)
+
+# Two identical defective blocks: the coincident eigenvalues form one cluster whose
+# invariant subspace involves the unknowns of both blocks; every mode is clustered.
+_, P22, _, c22, _ = ModelingToolkit._modes(kron(Matrix{Float64}(I, 2, 2), [-1.0 1; 0 -1]))
+@test all(==(4), c22) && all(isfinite, P22)
+@test all(k -> participants(P22, k) == [1, 2, 3, 4], 1:4)
+
+# Ill-conditioned similarity transforms of well-separated eigenvalues produce several
+# overlapping candidate clusters; clusters are merged entirely, so the cluster sizes are
+# consistent (the number of modes with cluster size `s` is a multiple of `s`).
+using Random: Xoshiro
+for seed in 1:20
+    Qov = ones(5, 5) .+ 1.0e-8 .* randn(Xoshiro(seed), 5, 5)
+    _, Pov, _, cov, _ = ModelingToolkit._modes(Qov * Diagonal(-1.0:-1.0:-5.0) / Qov)
+    @test all(s -> count(==(s), cov) % s == 0, unique(cov))
+    @test all(isfinite, Pov)
+end
 
 # A defective block with exactly parallel eigenvectors does not affect the attribution of
 # the isolated modes, which are attributed to their own unknowns.
 Adef = diagm([0.0, 0, 0, -2, 1])
 Adef[1, 2] = Adef[2, 3] = 1
-λad, Pad, κad, cad = ModelingToolkit._modes(Adef)
+λad, Pad, κad, cad, _ = ModelingToolkit._modes(Adef)
 @test real(λad[1]) ≈ -2 && real(λad[2]) ≈ 1
 @test participants(Pad, 1) == [4] && participants(Pad, 2) == [5]
 @test cad[1:2] == [1, 1] && all(==(3), cad[3:5])
@@ -197,7 +257,7 @@ Adef[1, 2] = Adef[2, 3] = 1
 Arep = zeros(5, 5)
 Arep[1:2, 1:2] = [-1 1; 0 -1]
 Arep[3:5, 3:5] = [-2 1 0; 0 -3 0; 0 1 -2]
-λr, Pr, κr, cr = ModelingToolkit._modes(Arep)
+λr, Pr, κr, cr, _ = ModelingToolkit._modes(Arep)
 for k in findall(l -> real(l) ≈ -2, λr)
     @test all(isfinite, Pr[:, k])
     @test issubset(participants(Pr, k), [3, 4, 5])
@@ -210,9 +270,9 @@ end
 # the split eigenvalues of each block form a cluster with finite participation.
 A4 = [-3.0 6 -4 1; -1 1 0 0; 0 -1 1 0; 0 0 -1 1]
 @test iszero(A4^4) && !iszero(A4^3)
-_, P4, _, c4 = ModelingToolkit._modes(A4)
+_, P4, _, c4, _ = ModelingToolkit._modes(A4)
 @test all(==(4), c4) && all(isfinite, P4)
-_, P44, _, c44 = ModelingToolkit._modes(kron(Matrix{Float64}(I, 2, 2), A4))
+_, P44, _, c44, _ = ModelingToolkit._modes(kron(Matrix{Float64}(I, 2, 2), A4))
 @test all(>(1), c44) && all(isfinite, P44)
 
 # End to end: a double integrator coupled to a fast and a slow decaying state. The slowest
@@ -239,6 +299,9 @@ resdi = analyze_solution_jacobian(soldi; verbose = false)
 )
 @test only(ModelingToolkit._reduced_jacobian([-1.0 1; 1 -2], Diagonal([1.0, 0]), [1], 0.0, eps())) ≈ -0.5
 @test only(ModelingToolkit._reduced_jacobian([-1.0 1; 2.0^-40 -2.0^-39], Diagonal([1.0, 0]), [1], 0.0, eps())) ≈ -0.5
+# An algebraic equation dominated by a differential unknown is not mistaken for a singular
+# algebraic block.
+@test only(ModelingToolkit._reduced_jacobian([-1.0 1; 1.0e7 -2], Diagonal([1.0, 0]), [1], 0.0, sqrt(eps()))) ≈ -1 + 5.0e6
 for s in (1.0f0, 2.0f0^-20)
     Js = Matrix(Diagonal(Float32[-1, s, -1]))
     fms = ODEFunction(
