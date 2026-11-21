@@ -163,8 +163,8 @@ end
 
 # The jump dependency maps and the compiled affects and event conditions index the state by
 # position in `unknowns(sys)`, which is wrong for the flat state of an unscalarized array
-# unknown and gave silently incorrect results, so such systems are rejected, as they were
-# before ModelingToolkitBase 1.72. See SciML/ModelingToolkit.jl#5428.
+# unknown and gave silently incorrect results, so such systems are rejected. See
+# SciML/ModelingToolkit.jl#5428.
 function check_no_array_unknowns(sys::System)
     arrays = filter(Symbolics.isarraysymbolic, unknowns(sys))
     isempty(arrays) && return nothing
