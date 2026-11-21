@@ -255,9 +255,11 @@ function with_initialization_context(
     # `InvalidSystemException` also reports problems which have nothing to do with the
     # balance of the system, and for which the guidance below would be wrong.
     kind === :InvalidSystemException && !occursin("singular", msg) && return err
+    missing_valued = kind === :ExtraVariablesSystemException ?
+        missing_valued_symbols(sys) : Any[]
     return T(
         initialization_structure_error_message(
-            kind, msg, initialization_system_size(isys, sys; kwargs...)
+            kind, msg, initialization_system_size(isys, sys; kwargs...), missing_valued
         )
     )
 end
@@ -345,7 +347,8 @@ of the exception type thrown by structural analysis, `msg` its original message,
 the `(neqs, nunknowns)` of the initialization system, if known.
 """
 function initialization_structure_error_message(
-        kind::Symbol, msg::AbstractString, size::Union{Nothing, Tuple{Int, Int}}
+        kind::Symbol, msg::AbstractString, size::Union{Nothing, Tuple{Int, Int}},
+        missing_valued::AbstractVector = Any[]
     )
     io = IOBuffer()
     if kind === :ExtraVariablesSystemException
@@ -366,8 +369,12 @@ function initialization_structure_error_message(
     println(io, msg, '\n')
     deficit = initialization_deficit_message(kind, size)
     deficit === nothing || println(io, deficit)
+    missing_msg = initialization_missing_value_message(missing_valued)
+    missing_msg === nothing || println(io, missing_msg)
     println(io, remedy)
     if show_api_guidance()
+        missing_api = initialization_missing_value_api_message(missing_valued)
+        missing_api === nothing || println(io, missing_api)
         api_remedy === nothing || println(io, api_remedy)
         println(io, "See $INITIALIZATION_DOCS_URL for more information.")
     end
@@ -401,6 +408,41 @@ function initialization_deficit_message(kind::Symbol, size::Union{Nothing, Tuple
 end
 
 pluralize(n::Integer, word::AbstractString) = n == 1 ? word : word * "s"
+
+"""
+    $TYPEDSIGNATURES
+
+Return the variables and parameters of `sys` whose binding is `missing`. Initialization
+solves for these like unknowns, so they are the usual culprit when it is underdetermined.
+"""
+function missing_valued_symbols(sys::AbstractSystem)
+    syms = [k for (k, v) in bindings(sys) if v === COMMON_MISSING]
+    sort!(syms; by = string)
+    return syms
+end
+
+function initialization_missing_value_message(missing_valued::AbstractVector)
+    isempty(missing_valued) && return nothing
+    n = length(missing_valued)
+    names = join(("`$k`" for k in missing_valued), ", ")
+    return """
+    $names $(n == 1 ? "has a value" : "have values") of `missing` in the model, so \
+    initialization solves for $(n == 1 ? "it" : "them") like $(n == 1 ? "an unknown" : "unknowns"). \
+    $(n == 1 ? "If no other initial value or equation determines it, this is" : "Any of them that no other initial value or equation determines is") \
+    a likely cause of the imbalance.
+    """
+end
+
+function initialization_missing_value_api_message(missing_valued::AbstractVector)
+    isempty(missing_valued) && return nothing
+    example = length(missing_valued) == 1 ? string(only(missing_valued)) : "name"
+    return """
+    For a binding that still needs a value, one can be given in the problem constructor, as in \
+    `ODEProblem(sys, [$example => value], tspan)` (an array, for an array \
+    parameter), or an equation relating it to other initial values added via \
+    `initialization_eqs`. A guess alone does not supply one.
+    """
+end
 
 @fallback_iip_specialize function InitializationProblem{iip, specialize}(
         sys::AbstractSystem,
