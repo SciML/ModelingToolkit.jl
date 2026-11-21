@@ -598,6 +598,11 @@ end
     @test count_views(generate_custom_function(zsys, z[1]; expression = Val(true))[1]) == 0
     @test count_views(generate_custom_function(zsys, sum(z) + 1; optimize = [noop], expression = Val(true))[1]) == 1
     @test count_views(generate_custom_function(zsys, z[1]; optimize = [noop], expression = Val(true))[1]) == 0
+    nopts = ModelingToolkitBase.BuildFunctionWrapperOptions(;
+        non_standard_param_layout = true, wrap_mtkparameters = false,
+        codegen_function_options = Symbolics.CodegenFunctionOptions(; optimize = [noop])
+    )
+    @test count_views(ModelingToolkitBase.build_function_wrapper(qsys, unwrap(z[1]), Any[unwrap.(collect(z)), unwrap.(collect(q)), t], nopts)[1]) == 0
     for (elems, wrap) in (([AtIndex(1, zsum)], identity), ([AtIndex(1, zsum)], SymbolicUtils.Const{SymbolicUtils.SymReal}))
         set_rule = OptimizationRule(
             "set", (ir, expr) -> true,
@@ -606,8 +611,10 @@ end
         @test generate_custom_function(zsys, z[1]; optimize = [set_rule], expression = Val(false))(zprob.u0, zprob.p, 0.0) == [10.0]
     end
     set_buf(elems) = (ir, expr, _) -> (populate_ir!(ir, zsum); (ir, Let([Assignment(:buf, LiteralExpr(:(zeros(1))))], SetArray(false, :buf, elems, true), false)))
-    set_rule = OptimizationRule("set", (ir, expr) -> true, set_buf(Set([AtIndex(1, zsum)])), 1)
-    @test generate_custom_function(zsys, z[1]; optimize = [set_rule], expression = Val(false))(zprob.u0, zprob.p, 0.0) == [10.0]
+    for elems in (Set([AtIndex(1, zsum)]), (AtIndex(1, zsum),))
+        set_rule = OptimizationRule("set", (ir, expr) -> true, set_buf(elems), 1)
+        @test generate_custom_function(zsys, z[1]; optimize = [set_rule], expression = Val(false))(zprob.u0, zprob.p, 0.0) == [10.0]
+    end
     calls = Ref(0)
     counted = (AtIndex(1, zsum + 100 * (calls[] += 1) - 100) for _ in 1:1)
     for elems in (Iterators.Stateful([AtIndex(1, zsum)]), Iterators.take((i == 1 ? AtIndex(1, zsum) : error("unused element") for i in 1:4), 1), (AtIndex(1, zsum) for _ in Iterators.Stateful([1])), counted)
