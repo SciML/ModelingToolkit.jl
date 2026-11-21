@@ -618,7 +618,19 @@ end
         edge_rule = OptimizationRule("edge", (ir, expr) -> true, (ir, expr, _) -> (populate_ir!(ir, zsum); (ir, zsum)), priority)
         @test generate_custom_function(zsys, z[1]; optimize = [edge_rule], expression = Val(false))(zprob.u0, zprob.p, 0.0) == 10.0
     end
-    nested_literal = OptimizationRule("nested literal", (ir, expr) -> true, (ir, expr, _) -> (populate_ir!(ir, zsum); (ir, LiteralExpr(:(let a = $zsum; a; end)))), 1)
+    nested_literal = OptimizationRule(
+        "nested literal", (ir, expr) -> true, (ir, expr, _) -> (
+            populate_ir!(ir, zsum); (
+                ir, LiteralExpr(
+                    :(
+                        let a = $zsum
+                            a
+                        end
+                    )
+                ),
+            )
+        ), 1
+    )
     @test generate_custom_function(zsys, z[1]; optimize = [nested_literal], expression = Val(false))(zprob.u0, zprob.p, 0.0) == 10.0
     held = SymbolicUtils.Const{SymbolicUtils.SymReal}(Let(Assignment[], whole, false))
     held_node = OptimizationRule(
@@ -626,4 +638,12 @@ end
     )
     hprob = ODEProblem(sys, [x => [1.0, 2.0, 3.0, 4.0]], (0.0, 1.0); optimize = [held_node])
     @test hprob.f(hprob.u0, hprob.p, 0.0)[i1] == 11.0
+    @parameters kidx::Int = 2
+    @mtkcompile ksys = System([D(z[i]) ~ -z[i] for i in 1:4], t, [z], [kidx])
+    zk = unwrap(z[kidx])
+    k_rule = OptimizationRule("zk", detector, (ir, expr, _) -> (populate_ir!(ir, zk); (ir, [zk; expr[2:end]])), 1)
+    kprob = ODEProblem(ksys, [z => [1.0, 5.0, 7.0, 9.0]], (0.0, 1.0); optimize = [k_rule])
+    du = zeros(4)
+    kprob.f(du, kprob.u0, kprob.p, 0.0)
+    @test du[1] == kprob.u0[findfirst(isequal(unwrap(z[2])), unwrap.(unknowns(ksys)))] == 5.0
 end
