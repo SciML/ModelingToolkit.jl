@@ -1278,7 +1278,7 @@ any state the FMU reset (BouncingBall reverses its velocity here). `o` must cont
 function fmiMEEvent!(m, o, ctx, integrator)
     wrapper = o.wrapper
     wrapper.instance === nothing && return m
-    states = isdefined(m, :states) ? collect(Float64, m.states) : Float64[]
+    states = isdefined(m, :states) ? as_fmi_vector(m.states) : Float64[]
     wrapper.instance(; x = states, t = Float64(integrator.t))
     enter_event_mode!(wrapper)
     changed = leave_event_mode!(wrapper)
@@ -1327,7 +1327,7 @@ evaluation has not already, then reads the discrete outputs. `o` must contain th
 function fmiMEInputEvent!(m, o, ctx, integrator)
     wrapper = o.wrapper
     wrapper.instance === nothing && return m
-    update_discrete_inputs!(wrapper, collect(Float64, o.inputs))
+    update_discrete_inputs!(wrapper, as_fmi_vector(o.inputs))
     return with_discrete_outputs(m, wrapper)
 end
 
@@ -1341,6 +1341,16 @@ get_states!(wrapper::FMI3InstanceWrapper, out) = @statuscheck FMI.fmi3GetFloat64
 """
     $(TYPEDSIGNATURES)
 
+`v` as the `Vector{Float64}` FMIBase requires of the values it writes to an FMU. Solvers
+can hand other vectors to the registered functions, such as the fixed-size `SVector`s used
+for small systems, which FMIBase refuses.
+"""
+as_fmi_vector(v::Vector{Float64}) = v
+as_fmi_vector(v) = Vector{Float64}(v)
+
+"""
+    $(TYPEDSIGNATURES)
+
 Update the internal state of the ME FMU and return a vector of updated values
 for continuous state derivatives and output variables respectively. Needs to be a
 callable struct to enable symbolic registration with an inferred return size.
@@ -1348,6 +1358,7 @@ callable struct to enable symbolic registration with an inferred return size.
 function (wrapper::Union{FMI2InstanceWrapper, FMI3InstanceWrapper})(
         states, inputs, params, t
     )
+    states, inputs, params = as_fmi_vector(states), as_fmi_vector(inputs), as_fmi_vector(params)
     instance = get_instance_ME!(wrapper, inputs, params, t)
 
     states_buffer = wrapper.states_buffer
