@@ -172,7 +172,9 @@ function check_no_array_unknowns(sys::System)
         ArgumentError(
             "`JumpProblem` does not support array unknowns, and the system has " *
                 "$(join(arrays, ", ")). Scalarize them when building the system, for example " *
-                "by passing `[A; collect(X)]` instead of `[A, X]` as its unknowns."
+                "by passing `[A; collect(X)]` instead of `[A, X]` as its unknowns. If a jump " *
+                "rate or affect uses a whole array, also write it in terms of the elements, " *
+                "for example `X[1] + X[2]` for a two-element `sum(X)`."
         )
     )
 end
