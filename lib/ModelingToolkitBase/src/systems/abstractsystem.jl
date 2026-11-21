@@ -662,6 +662,9 @@ function complete(
         newsys = expand_connections(sys)
         newsys = ModelingToolkitBase.flatten(newsys)
         newsys = discrete_unknowns_to_parameters(newsys)
+        if split
+            @set! newsys.ps = gather_array_param_elements(get_ps(newsys))
+        end
         @set! newsys.parameter_bindings_graph = ParameterBindingsGraph(newsys)
         newsys = remove_bound_parameters_from_ps(newsys)
         check_no_bound_initial_conditions(newsys)
@@ -852,6 +855,23 @@ function toggle_namespacing(sys::AbstractSystem, value::Bool; safe = false)
         throw(ArgumentError("The system must define the `namespacing` flag to toggle namespacing"))
     end
     return @set sys.namespacing = value
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Replace each element of a sized array parameter in `ps` with the array itself, placed at
+its first element. With `split = true` the parameter buffers, initialization and code
+generation address a sized array parameter through its parent, so the system holds the
+whole array even when only some elements are listed or used.
+"""
+function gather_array_param_elements(ps::Vector{SymbolicT})
+    gathered = OrderedSet{SymbolicT}()
+    for p in ps
+        arr, isarr = split_indexed_var(p)
+        push!(gathered, isarr && symbolic_has_known_size(arr) ? arr : p)
+    end
+    return collect(gathered)
 end
 
 """
