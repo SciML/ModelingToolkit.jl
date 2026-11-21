@@ -276,6 +276,37 @@ end
     @test jtoj == [[1, 2, 4], [1, 2, 4], [1, 2, 3, 4], [1, 2, 3, 4]]
 end
 
+# The same maps with array unknowns scalarized by hand: elements of a vector and of a matrix,
+# before and after a scalar unknown. The maps index variables by position in the state.
+@testset "Dependency graphs with scalarized array unknowns" begin
+    @variables A(t) X(t)[1:2] Y(t)[1:2, 1:2]
+    @parameters k
+    # mass action jumps first, as the aggregators number them
+    jumps = [
+        SymbolicMassActionJump(k, [X[1] => 1], [X[1] => -1, X[2] => 1]),
+        SymbolicMassActionJump(k, [X[2] => 1, A => 1], [X[2] => -1, A => -1, Y[2, 1] => 1]),
+        ConstantRateJump(k * (X[1] + X[2]), [A ~ Pre(A) + 1]),
+        ConstantRateJump(k * Y[1, 2] * A, [A ~ Pre(A) - 1]),
+    ]
+    @named js = JumpSystem(jumps, t, [collect(X); A; vec(collect(Y))], [k])
+    js = complete(js)
+    @test isequal(unknowns(js), MT.flat_unknowns(js))
+
+    # the variables each jump's rate depends on and the variables each jump changes
+    depends = [[X[1]], [X[2], A], [X[1], X[2]], [Y[1, 2], A]]
+    changes = [[X[1], X[2]], [X[2], A, Y[2, 1]], [A], [A]]
+    idxs(vars) = sort!([variable_index(js, v) for v in vars])
+    vtoj = [findall(vars -> i in idxs(vars), depends) for i in 1:length(unknowns(js))]
+    jtov = [idxs(vars) for vars in changes]
+    jtoj = [findall(vars -> !isdisjoint(idxs(vars), idxs(c)), depends) for c in changes]
+
+    jdeps = asgraph(js; eqs = MT.jumps(js))
+    vdeps = variable_dependencies(js; eqs = MT.jumps(js))
+    @test jdeps.badjlist == vtoj
+    @test vdeps.badjlist == jtov
+    @test eqeq_dependencies(jdeps, vdeps).fadjlist == jtoj
+end
+
 # `JumpProblem` rejects unscalarized array unknowns, whose flat state the jump and event code
 # doesn't index correctly. With the unknowns scalarized, the aggregators that use dependency
 # maps must update every rate a jump changes.
