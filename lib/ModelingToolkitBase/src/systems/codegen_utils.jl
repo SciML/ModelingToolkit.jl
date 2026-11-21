@@ -659,7 +659,6 @@ rule_output_fields!(leaves, x) = (foreach(i -> rule_output_leaves!(leaves, getfi
 rule_output_leaves!(leaves, x::Union{Tuple, NamedTuple}) = rule_output_fields!(leaves, x)
 rule_output_elements!(leaves, x) = (foreach(el -> rule_output_leaves!(leaves, el), x); leaves)
 rule_output_leaves!(leaves, x::AbstractSet) = rule_output_elements!(leaves, x)
-rule_output_leaves!(leaves, x::Base.Generator) = x.iter isa Union{AbstractArray, Tuple} ? rule_output_elements!(leaves, x) : leaves
 rule_output_leaves!(leaves, x::Symbolics.Arr) = rule_output_leaves!(leaves, unwrap(x))
 rule_output_leaves!(leaves, x::Expr) = rule_output_leaves!(leaves, x.args)
 function rule_output_leaves!(leaves, x)
