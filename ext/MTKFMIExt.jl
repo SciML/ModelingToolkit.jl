@@ -591,10 +591,12 @@ function MTK.FMIComponent(
 
         # instance management callback which deallocates the instance when
         # necessary and notifies the FMU of completed integrator steps
-        finalize_affect = MTKBase.ImperativeAffect(fmiFinalize!; observed = (; wrapper))
+        initialize_affect = MTKBase.ImperativeAffect(fmiMEInitialize!; observed = (; wrapper))
+        finalize_affect = MTKBase.ImperativeAffect(fmiMEFinalize!; observed = (; wrapper))
         step_affect = MTKBase.ImperativeAffect(Returns((;)))
         instance_management_callback = MTKBase.SymbolicDiscreteCallback(
-            (t == t - 1), step_affect; finalize = finalize_affect, reinitializealg = SciMLBase.NoInit()
+            (t == t - 1), step_affect; initialize = initialize_affect,
+            finalize = finalize_affect, reinitializealg = SciMLBase.NoInit()
         )
 
         push!(params, wrapper)
@@ -860,6 +862,15 @@ mutable struct FMI2InstanceWrapper
     Exchange).
     """
     next_event_time::Float64
+    """
+    The parameter values the current instance was created with.
+    """
+    const instance_params::Vector{Float64}
+    """
+    Whether a solve is running (Model Exchange): between solves, an instance whose
+    parameters differ from the ones asked for is replaced rather than reused.
+    """
+    in_solve::Bool
 end
 
 """
@@ -879,7 +890,8 @@ function FMI2InstanceWrapper(
         TypedValueReferences(fmu, outputs), TypedValueReferences(fmu, params),
         TypedValueReferences(fmu, inputs), InputSplit(fmu, inputs),
         zeros(FMI.fmi2Real, number_of_events(fmu) - 1),
-        TypedValueReferences(fmu, discrete_outputs), zeros(length(discrete_outputs)), NaN
+        TypedValueReferences(fmu, discrete_outputs), zeros(length(discrete_outputs)), NaN,
+        zeros(length(params)), false
     )
 end
 
@@ -897,6 +909,7 @@ time. Returns the created instance, which is also stored in `wrapper.instance`.
 """
 function get_instance_common!(wrapper::FMI2InstanceWrapper, inputs, params, t, t_end = nothing)
     wrapper.instance = FMI.fmi2Instantiate!(wrapper.fmu)::FMI.FMU2Component
+    wrapper.instance_params .= params
     set_values!(wrapper, wrapper.inputs, inputs)
     wrapper.input_split.last .= inputs
     wrapper.input_split.reported .= inputs
@@ -919,6 +932,7 @@ present and create a new one otherwise. Return the instance.
 See `get_instance_common!` for a description of the arguments.
 """
 function get_instance_ME!(wrapper::FMI2InstanceWrapper, inputs, params, t)
+    replace_stale_instance!(wrapper, params)
     if wrapper.instance === nothing
         get_instance_common!(wrapper, inputs, params, t)
         @statuscheck FMI.fmi2ExitInitializationMode(wrapper.instance)
@@ -1053,6 +1067,15 @@ mutable struct FMI3InstanceWrapper
     Exchange).
     """
     next_event_time::Float64
+    """
+    The parameter values the current instance was created with.
+    """
+    const instance_params::Vector{Float64}
+    """
+    Whether a solve is running (Model Exchange): between solves, an instance whose
+    parameters differ from the ones asked for is replaced rather than reused.
+    """
+    in_solve::Bool
 end
 
 """
@@ -1071,7 +1094,8 @@ function FMI3InstanceWrapper(
         TypedValueReferences(fmu, outputs), TypedValueReferences(fmu, params),
         TypedValueReferences(fmu, inputs), InputSplit(fmu, inputs),
         zeros(FMI.fmi3Float64, number_of_events(fmu) - 1),
-        TypedValueReferences(fmu, discrete_outputs), zeros(length(discrete_outputs)), NaN
+        TypedValueReferences(fmu, discrete_outputs), zeros(length(discrete_outputs)), NaN,
+        zeros(length(params)), false
     )
 end
 
@@ -1088,6 +1112,7 @@ of `wrapper.input_value_references`. `params` should be in the order of
 `wrapper.param_value_references`. `t` is the current time. Returns `wrapper.instance`.
 """
 function get_instance_common!(wrapper::FMI3InstanceWrapper, inputs, params, t, t_end = nothing)
+    wrapper.instance_params .= params
     set_values!(wrapper, wrapper.params, params)
     stop_time_defined = t_end === nothing ? FMI.fmi3False : FMI.fmi3True
     stop_time = something(t_end, t)
@@ -1110,6 +1135,7 @@ present and create a new one otherwise. Return the instance.
 See `get_instance_common!` for a description of the arguments.
 """
 function get_instance_ME!(wrapper::FMI3InstanceWrapper, inputs, params, t)
+    replace_stale_instance!(wrapper, params)
     if wrapper.instance === nothing
         wrapper.instance = FMI.fmi3InstantiateModelExchange!(wrapper.fmu)::FMI.FMU3Instance
         get_instance_common!(wrapper, inputs, params, t)
@@ -1346,6 +1372,50 @@ get_states!(wrapper::FMI2InstanceWrapper, out) = @statuscheck FMI.fmi2GetReal!(
 get_states!(wrapper::FMI3InstanceWrapper, out) = @statuscheck FMI.fmi3GetFloat64!(
     wrapper.instance, wrapper.state_value_references, Csize_t(length(out)), out, Csize_t(length(out))
 )
+
+"""
+    $(TYPEDSIGNATURES)
+
+Between solves, free a Model Exchange instance created with other parameter values than
+`params`. Reading a solution after a solve evaluates the FMU, which creates an instance
+with that solution's parameters; a later solve of a remade problem would otherwise reuse
+it and silently run with the old values. During a solve the instance is kept: a parameter
+the solve changes must not discard the FMU's internal state.
+"""
+function replace_stale_instance!(wrapper, params)
+    if wrapper.instance !== nothing && !wrapper.in_solve &&
+            !isequal(wrapper.instance_params, params)
+        reset_instance!(wrapper)
+    end
+    return nothing
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+An affect function for use inside an `ImperativeAffect`, run when a solve of a Model
+Exchange FMU starts: frees any instance left from earlier evaluations (such as reading a
+previous solution), so the solve starts from a freshly initialized FMU, and marks the
+solve as running. `o` must contain the `wrapper`.
+"""
+function fmiMEInitialize!(m, o, ctx, integrator)
+    wrapper = o.wrapper
+    reset_instance!(wrapper)
+    wrapper.in_solve = true
+    return (;)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+The Model Exchange finalizer: marks the solve as over and frees the instance.
+"""
+function fmiMEFinalize!(m, o, ctx, integrator)
+    wrapper = o.wrapper
+    wrapper.in_solve = false
+    reset_instance!(wrapper)
+    return (;)
+end
 
 """
     $(TYPEDSIGNATURES)
