@@ -435,9 +435,10 @@ end
 
 function initialization_missing_value_api_message(missing_valued::AbstractVector)
     isempty(missing_valued) && return nothing
+    example = length(missing_valued) == 1 ? string(only(missing_valued)) : "name"
     return """
     A value can be given in the problem constructor, as in \
-    `ODEProblem(sys, [$(first(missing_valued)) => value], tspan)` (an array, for an array \
+    `ODEProblem(sys, [$example => value], tspan)` (an array, for an array \
     parameter), or an equation relating it to other initial values added via \
     `initialization_eqs`. A guess alone does not supply one.
     """

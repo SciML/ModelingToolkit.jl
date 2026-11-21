@@ -286,6 +286,36 @@ end
     @test occursin("`p` has a value of `missing`", sprint(showerror, err))
 end
 
+@testset "Hint does not single out a parameter already set by initialization_eqs" begin
+    @variables x(t) = 0
+    @parameters p = missing [guess = 0.0] q = missing [guess = 0.0]
+    @named sys = System([D(x) ~ p + q], t)
+    ssys = mtkcompile(sys)
+    err = try
+        ODEProblem(
+            ssys, [], (0.0, 1.0);
+            initialization_eqs = [p ~ 4.0], fully_determined = true
+        )
+        nothing
+    catch e
+        e
+    end
+    @test err isa ERRMOD.ExtraVariablesSystemException
+    msg = sprint(showerror, err)
+    # Both bindings are listed, but the example doesn't name one of them
+    @test occursin("`p`", msg)
+    @test occursin("`q`", msg)
+    @test occursin("name => value", msg)
+    @test !occursin("p => value", msg)
+    # Supplying only the undetermined one is enough
+    prob = ODEProblem(
+        ssys, [q => 2.0], (0.0, 1.0);
+        initialization_eqs = [p ~ 4.0], fully_determined = true
+    )
+    @test prob.ps[p] == 4.0
+    @test prob.ps[q] == 2.0
+end
+
 @connector function Port(; name, p = nothing, dm = 0)
     vars = @variables begin
         p(t) = p
