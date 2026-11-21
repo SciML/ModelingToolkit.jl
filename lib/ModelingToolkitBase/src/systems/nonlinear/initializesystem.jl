@@ -860,8 +860,8 @@ function promote_u0_p(u0, p, t0)
 end
 
 # `remake` gives `u0` the promoted type of its values, so the integer `u0` of a
-# `DiscreteProblem` (e.g. a pure-jump `JumpProblem`'s) becomes a float when a default
-# depends on a float parameter. Keep the problem's integer type.
+# `DiscreteProblem` without initialization data (e.g. a pure-jump `JumpProblem`'s) becomes a
+# float when a default depends on a float parameter. Keep the problem's integer type.
 keep_integer_u0_eltype(prob, u0, newu0) = newu0
 function keep_integer_u0_eltype(prob::DiscreteProblem, u0, newu0::AbstractArray{<:AbstractFloat})
     eltype(u0) <: Pair || return newu0
@@ -899,11 +899,10 @@ function _late_binding_update_u0_p_impl(
     prob isa IntervalNonlinearProblem && return newu0, newp
     prob isa LinearProblem && return newu0, newp
 
-    newu0 = keep_integer_u0_eltype(prob, u0, newu0)
     initdata = prob.f.initialization_data
     # Also catches the JumpProblem case
     if initdata === nothing && prob isa Union{ODEProblem, SDEProblem, DiscreteProblem}
-        return newu0, newp
+        return keep_integer_u0_eltype(prob, u0, newu0), newp
     end
 
     meta = initdata === nothing ? nothing : initdata.metadata
