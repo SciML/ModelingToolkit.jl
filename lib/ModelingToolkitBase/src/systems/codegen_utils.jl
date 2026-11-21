@@ -647,6 +647,28 @@ const DEFAULT_CHUNK_SIZE = 500
 # of the whole function's IR, i.e. if they would recompute too many shared subexpressions.
 const DEFAULT_MAX_CHUNK_DUPLICATION = 1.25
 
+rule_output_leaves!(leaves, x::SymbolicT) = push!(leaves, x)
+rule_output_leaves!(leaves, x::AbstractSparseArray) = rule_output_leaves!(leaves, nonzeros(x))
+function rule_output_leaves!(leaves, x::AbstractArray)
+    eltype(x) <: SymbolicT && return push!(leaves, x)
+    foreach(el -> rule_output_leaves!(leaves, el), x)
+    return leaves
+end
+is_codegen_container(x) = parentmodule(typeof(x)) === Code
+rule_output_fields!(leaves, x) = (foreach(i -> rule_output_leaves!(leaves, getfield(x, i)), 1:nfields(x)); leaves)
+rule_output_leaves!(leaves, x::Union{Tuple, NamedTuple}) = rule_output_fields!(leaves, x)
+rule_output_elements!(leaves, x) = (foreach(el -> rule_output_leaves!(leaves, el), x); leaves)
+rule_output_leaves!(leaves, x::AbstractSet) = rule_output_elements!(leaves, x)
+rule_output_leaves!(leaves, x::Symbolics.Arr) = rule_output_leaves!(leaves, unwrap(x))
+rule_output_leaves!(leaves, x::Expr) = rule_output_leaves!(leaves, x.args)
+function rule_output_leaves!(leaves, x)
+    is_codegen_container(x) && return rule_output_fields!(leaves, x)
+    y = unwrap(x)
+    return y === x ? leaves : rule_output_leaves!(leaves, y)
+end
+
+holds_code(x::SymbolicT) = is_codegen_container(unwrap_const(x))
+
 # An atomic term can hold a non-constant index (`x[k]`, `Pre(x[k])`, `y(t - τ[k])`),
 # and codegen needs the indexed array, so only elements with constant indices stop the search
 function find_arrvars_recurse(ex::SymbolicT)
@@ -1050,9 +1072,8 @@ Base.@nospecializeinfer function build_function_wrapper(
     SU.search_variables!(search_buffer, expr; is_atomic = find_arrvars_is_atomic, recurse = find_arrvars_recurse)
 
     # assignments for reconstructing scalarized array symbolics
-    if non_standard_param_layout
-        append!(assignments, array_variable_assignments(args...; filter_vars = required_arrvars, argument_name = u_argument_name))
-    else
+    param_var_to_arridxs = Dict{SymbolicT, Vector{Tuple{Int, Int}}}()
+    if !non_standard_param_layout
         # `n_param_buffers` marks the boundary between the `reorder_parameters` buffers and
         # any `cachesyms` the caller appended to the parameter slice (cachesyms are always a
         # suffix). When it is `-1` (unspecified) the whole slice is parameters (no cachesym
@@ -1081,14 +1102,16 @@ Base.@nospecializeinfer function build_function_wrapper(
             end
             param_var_to_arridxs = merged
         end
-        append!(
-            assignments, array_variable_buffer_idxs_to_assignments(
-                param_var_to_arridxs; buffer_offset = p_start - 1, filter_vars = required_arrvars
-            )
-        )
-        other_assigns = array_variable_assignments(args...; ignore_vars = keys(param_var_to_arridxs), filter_vars = required_arrvars, argument_name = u_argument_name, ignore_arg_idxs = p_start:p_end)
-        append!(assignments, other_assigns)
     end
+    arrvar_args = copy(args)
+    function array_assignments(filter_vars)
+        non_standard_param_layout && return array_variable_assignments(arrvar_args...; filter_vars, argument_name = u_argument_name)
+        return [
+            array_variable_buffer_idxs_to_assignments(param_var_to_arridxs; buffer_offset = p_start - 1, filter_vars);
+            array_variable_assignments(arrvar_args...; ignore_vars = keys(param_var_to_arridxs), filter_vars, argument_name = u_argument_name, ignore_arg_idxs = p_start:p_end)
+        ]
+    end
+    append!(assignments, array_assignments(required_arrvars))
     append!(assignments, extra_assignments)
 
     for (i, arg) in enumerate(args)
@@ -1126,7 +1149,38 @@ Base.@nospecializeinfer function build_function_wrapper(
         append!(assignments, pref)
     end
 
-    wrap_code = opts.codegen.wrap_code .∘ wrap_assignments(false, assignments)
+    optimize = resolve_optimize_option(opts.codegen.optimize)
+    wrap_code = if optimize === nothing || isempty(optimize)
+        opts.codegen.wrap_code .∘ wrap_assignments(false, assignments)
+    else
+        rule_output = Ref{Any}()
+        record_output(out_ir, out_expr) = (rule_output[] = (out_ir, out_expr); nothing)
+        recorder(priority) = Code.OptimizationRule("record_output", record_output, Returns(nothing), priority)
+        optimize = [collect(Code.OptimizationRule, optimize); recorder(typemin(Int)); recorder(typemax(Int))]
+        all_assignments = Ref{Any}(nothing)
+        function bind_rule_arrvars(f)
+            if all_assignments[] === nothing
+                out_ir, out_expr = rule_output[]
+                read_arrvars = Set{SymbolicT}()
+                leaves = rule_output_leaves!(Any[], out_expr)
+                seen_consts = Set{SymbolicT}()
+                while !isempty(leaves)
+                    nodes = convert(Vector{SymbolicT}, leaves)
+                    joined = SU.Const{VartypeT}(nodes)
+                    SU.search_variables!(read_arrvars, out_ir, joined; is_atomic = find_arrvars_is_atomic, recurse = find_arrvars_recurse)
+                    consts = Set{SymbolicT}()
+                    SU.search_variables!(consts, out_ir, joined; is_atomic = holds_code)
+                    setdiff!(consts, seen_consts)
+                    union!(seen_consts, consts)
+                    leaves = foldl((acc, c) -> rule_output_leaves!(acc, unwrap_const(c)), consts; init = Any[])
+                end
+                setdiff!(read_arrvars, required_arrvars)
+                all_assignments[] = [array_assignments(read_arrvars); assignments]
+            end
+            return Func(f.args, [], Let(all_assignments[], f.body, false))
+        end
+        opts.codegen.wrap_code .∘ (bind_rule_arrvars, bind_rule_arrvars)
+    end
 
     # handling of `output_type` and `mkarray`. A `similarto` already present on
     # `opts.codegen` (set directly via `codegen_function_options` by callers such as
@@ -1142,7 +1196,6 @@ Base.@nospecializeinfer function build_function_wrapper(
         expr = mkarray(expr, output_type)
     end
 
-    optimize = resolve_optimize_option(opts.codegen.optimize)
     # Write the wrapper-derived code-generation options (the composed `wrap_code`, the
     # `output_type`-derived `similarto`, and the resolved `optimize`) into the nested
     # `CodegenFunctionOptions`. `setproperties` overrides only these fields and preserves the
