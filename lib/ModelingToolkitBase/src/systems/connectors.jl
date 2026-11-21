@@ -932,8 +932,7 @@ end
 
 Push the connection equation `lhs ~ rhs` onto `eqs`, expanding it into one equation per
 leaf if the connected variable is a symbolic struct. A record has no arithmetic, so the
-whole-record equation would fail to canonicalize into residual form downstream. This is
-the same reason the `Flow` branch below emits scalar equations rather than array ones.
+whole-record equation would fail to canonicalize into residual form downstream.
 """
 function push_connection_equation!(eqs::Vector{Equation}, lhs::SymbolicT, rhs::SymbolicT)
     if Symbolics.issymstruct(lhs)

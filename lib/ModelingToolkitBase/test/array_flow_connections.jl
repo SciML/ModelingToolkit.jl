@@ -58,3 +58,28 @@ end
     @test allequal(counts)
     @test allequal(sizes)
 end
+
+@testset "Signed array flow conservation" begin
+    @named a = ArrayFlowPort(; rows = 2, columns = 2)
+    @named b = ArrayFlowPort(; rows = 2, columns = 2)
+    @named c = ArrayFlowPort(; rows = 2, columns = 2)
+    @named outer = ArrayFlowPort(; rows = 2, columns = 2)
+    @named inner = System(Equation[], t; systems = [a, b, c])
+    @named all_inner = System([connect(inner.a, inner.b, inner.c)], t; systems = [inner])
+    @named mixed = System([connect(inner.a, inner.b, outer)], t; systems = [inner, outer])
+
+    a_flow = collect(inner.a.flow)
+    b_flow = collect(inner.b.flow)
+    c_flow = collect(inner.c.flow)
+    outer_flow = collect(outer.flow)
+    for (network, expected) in (
+            (all_inner, a_flow .+ b_flow .+ c_flow),
+            (mixed, a_flow .+ b_flow .- outer_flow),
+        )
+        eqs = equations(expand_connections(network))
+        scalar_eqs = reduce(vcat, Symbolics.scalarize.(eqs))
+        for term in expected
+            @test (0 ~ term) in scalar_eqs
+        end
+    end
+end
