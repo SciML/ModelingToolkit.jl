@@ -653,7 +653,7 @@ function MTK.FMIComponent(
             final_step_due(functor, t) > 0.5,
             MTKBase.ImperativeAffect(
                 fmiCSFinalStep!; observed = cb_observed, modified = cb_modified, ctx = _functor
-            )
+            ); reinitializealg
         ))
 
         # guarded in case there are no outputs/states and the variable is `[]`.
