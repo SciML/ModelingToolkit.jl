@@ -77,6 +77,7 @@ using UnPack: @unpack
 RuntimeGeneratedFunctions.init(@__MODULE__)
 
 import DifferentiationInterface as DI
+import ADTypes
 using ADTypes: AutoForwardDiff, AutoFiniteDiff
 import SciMLPublic: @public
 import PreallocationTools
@@ -150,6 +151,7 @@ include("problems/sccnonlinearproblem.jl")
 
 include("discretedomain.jl")
 include("systems/systemstructure.jl")
+include("jacobian_analysis.jl")
 include("initialization.jl")
 include("systems/systems.jl")
 include("systems/clock_inference.jl")
@@ -171,7 +173,7 @@ export tearing, dae_index_lowering, dummy_derivative,
 export StructuralTransformations
 
 export SemilinearODEFunction, SemilinearODEProblem
-export analyze_initialization_jacobian
+export analyze_initialization_jacobian, analyze_solution_jacobian
 export alias_elimination
 export linearize, linearization_function,
     LinearizationProblem, LinearizationOpPoint, linearization_ap_transform

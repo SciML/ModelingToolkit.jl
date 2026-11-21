@@ -140,6 +140,12 @@ ModelingToolkit.analyze_initialization_jacobian
 ModelingToolkitBase.MissingGuessValue
 ```
 
+## Solution analysis
+
+```@docs
+ModelingToolkit.analyze_solution_jacobian
+```
+
 ## Linear analysis
 
 ```@docs

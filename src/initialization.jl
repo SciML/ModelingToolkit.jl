@@ -172,8 +172,7 @@ function analyze_initialization_jacobian(
     else
         u -> f(u, p)
     end
-    J = autodiff === nothing ? _central_difference_jacobian(residual, u0) :
-        DI.jacobian(residual, autodiff, u0)
+    J = _dense_jacobian(residual, u0, autodiff)
     nrows, ncols = size(J)
     fact = svd(J; full = true)
     S = fact.S
@@ -196,14 +195,8 @@ function analyze_initialization_jacobian(
         vec(sum(abs2, @view(fact.U[:, row_isnull]); dims = 2))
     syms = variable_symbols(iprob)
     eqs = _initialization_equations(iprob)
-    underdetermined_unknowns = sort(
-        [syms[i] => col_w[i] for i in 1:ncols if col_w[i] > threshold];
-        by = last, rev = true
-    )
-    redundant_equations = sort(
-        [(eqs === nothing ? i : eqs[i]) => row_w[i] for i in 1:nrows if row_w[i] > threshold];
-        by = last, rev = true
-    )
+    underdetermined_unknowns = _weighted_pairs(syms, col_w, threshold)
+    redundant_equations = _weighted_pairs(eqs === nothing ? (1:nrows) : eqs, row_w, threshold)
     @SciMLMessage(verbose, :initialization_analysis) do
         _initialization_analysis_report(
             nrows, ncols, rank, nullity, redundancy, S,
@@ -263,29 +256,6 @@ end
 # Return the initialization `NonlinearProblem`/`NonlinearLeastSquaresProblem` carried by
 # `prob`, or `prob` itself if it is already a nonlinear problem, or `nothing` if there is
 # no initialization problem to analyze.
-# Dense Jacobian by central finite differences. Reuses the residual function already
-# compiled for the element type of `u0`; `ForwardDiff.jacobian` instead triggers a
-# dual-number recompilation of the generated residual, which dominates the runtime on
-# large systems. The O(h^2) truncation error (h = cbrt(eps)) is far below the default
-# singular-value tolerance of the rank analysis.
-function _central_difference_jacobian(residual, u0)
-    T = eltype(u0)
-    up = copy(u0)
-    um = copy(u0)
-    J = nothing
-    for i in eachindex(u0)
-        h = cbrt(eps(T)) * max(one(T), abs(u0[i]))
-        up[i] = u0[i] + h
-        um[i] = u0[i] - h
-        col = (residual(up) .- residual(um)) ./ (2h)
-        J === nothing && (J = similar(col, length(col), length(u0)))
-        J[:, i] = col
-        up[i] = u0[i]
-        um[i] = u0[i]
-    end
-    return J === nothing ? zeros(T, 0, length(u0)) : J
-end
-
 function _initialization_problem(prob)
     prob isa SciMLBase.AbstractNonlinearProblem && return prob
     f = prob.f
