@@ -550,9 +550,9 @@ The value `k` projects out of whichever ancestor of it `dd` holds, or `default` 
 none. Records are stored atomically, so a field is found under the record it belongs to.
 """
 function record_ancestor_value(dd::AtomicArrayDict, k::SymbolicT, default)
-    anc = nearest_present_ancestor(dd, k)
-    anc === nothing && return default
-    return record_leaf_entry(k, anc, dd[anc])
+    ancestor = nearest_present_ancestor(dd, k)
+    ancestor === nothing && return default
+    return record_leaf_entry(k, ancestor, dd[ancestor])
 end
 
 

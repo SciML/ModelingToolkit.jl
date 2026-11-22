@@ -49,8 +49,10 @@ end
 
 A function which returns `NaN` if `condition` fails, and `0.0` otherwise.
 """
-function _nan_condition(condition::Bool)
-    return condition ? 0.0 : NaN
+function _nan_condition(condition)
+    # Sparsity tracers represent comparisons without a Boolean value. Their `ifelse`
+    # overloads can combine the constant branches without introducing dependencies.
+    return ifelse(condition, 0.0, NaN)
 end
 
 @register_symbolic _nan_condition(condition::Bool)
