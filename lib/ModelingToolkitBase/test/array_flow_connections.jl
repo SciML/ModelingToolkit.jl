@@ -1,10 +1,11 @@
 using ModelingToolkitBase, Symbolics, SciMLBase, Test
-using FillArrays: Zeros
+using FillArrays: Fill, Zeros
 using LinearAlgebra: rank
 using ModelingToolkitBase: t_nounits as t, D_nounits as D
 
-@connector function ArrayFlowPort(; name, rows = 1, columns = 1, dynamic = false)
-    vars = @variables potential(t)[1:rows, 1:columns] flow(t)[1:rows, 1:columns] [connect = Flow]
+@connector function ArrayFlowPort(; name, rows = 1, columns = 1, dynamic = false, flow_axes = (1:rows, 1:columns))
+    row_axis, column_axis = flow_axes
+    vars = @variables potential(t)[1:rows, 1:columns] flow(t)[row_axis, column_axis] [connect = Flow]
     eqs = dynamic ? [D(potential) ~ (flow .- potential)] : Equation[]
     return System(eqs, t, vars, []; name)
 end
@@ -13,7 +14,7 @@ function connection_block_size(x)
     x = Symbolics.value(x)
     if Symbolics.iscall(x)
         return 1 + sum(connection_block_size, Symbolics.arguments(x); init = 0)
-    elseif x isa Zeros
+    elseif x isa Union{Fill, Zeros}
         return 1 + ndims(x)
     elseif x isa AbstractArray
         return 1 + sum(connection_block_size, x; init = 0)
@@ -109,4 +110,13 @@ end
         prob = ODEProblem(mtkcompile(network), [x => 3.0], (0.0, 1.0))
         @test prob.f(prob.u0, prob.p, 0.0) == [-3.0]
     end
+end
+
+@testset "Offset flow axes survive scalarization" begin
+    flow_axes = (0:1, -1:1)
+    @named a = ArrayFlowPort(; rows = 2, columns = 3, flow_axes)
+    @named network = System(Equation[], t; systems = [a])
+    balance = only(equations(expand_connections(network)))
+    @test axes(balance.lhs) == axes(balance.rhs) == flow_axes
+    @test Set(Symbolics.scalarize(balance)) == Set(0 .~ Symbolics.scalarize(a.flow))
 end

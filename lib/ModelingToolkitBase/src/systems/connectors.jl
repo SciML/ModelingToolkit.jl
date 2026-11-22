@@ -888,7 +888,8 @@ function _flow_equations_from_idxs!(sys::AbstractSystem, eqs::Vector{Equation}, 
             cvert.isouter ? .-v : v
         end
         rhs = reduce((a, b) -> a .+ b, terms)
-        lhs = FillArrays.Zeros{Int}(axes(representative))
+        # A generic fill supports broadcasting symbolic constructors during scalarization.
+        lhs = FillArrays.Fill(0, axes(representative))
         push!(eqs, lhs ~ rhs)
         return
     end

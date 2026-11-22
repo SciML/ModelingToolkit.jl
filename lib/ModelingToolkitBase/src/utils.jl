@@ -204,7 +204,11 @@ one scalar equation per element.
 """
 is_array_equation(eq::Equation) = SU.is_array_shape(SU.shape(eq.lhs))
 
-is_zero_lhs(eq::Equation) = _iszero(eq.lhs) || unwrap_const(eq.lhs) isa FillArrays.Zeros
+function is_zero_lhs(eq::Equation)
+    _iszero(eq.lhs) && return true
+    lhs = unwrap_const(eq.lhs)
+    return lhs isa FillArrays.Zeros || (lhs isa FillArrays.Fill{<:Number} && all(iszero, lhs))
+end
 
 """
     $(TYPEDSIGNATURES)
