@@ -41,7 +41,11 @@ D = Differential(t)
     @test_throws ArgumentError shaped_parameter(:K, BlockOp, 0, 3)
     @test_throws ArgumentError shaped_parameter(:K, BlockOp, 3, -1)
     @test_throws ArgumentError shaped_parameter(:K, BlockOp, 3, 1:0)
-    @test size(shaped_parameter(:K, BlockOp, 2:5, 3)) == (4, 3)
+    @test size(shaped_parameter(:K, BlockOp, 1:4, 3)) == (4, 3)
+    @test_throws "offset" shaped_parameter(:K, BlockOp, 2:5, 3)
+    @test_throws "offset" shaped_parameter(:A, Matrix{Float64}, 2:5, 3)
+    @test_throws "needs 2 dimensions" shaped_parameter(:A, Matrix{Float64}, 4)
+    @test_throws "needs 2 dimensions" shaped_parameter(:A, SparseMatrixCSC{Float64, Int}, 4, 3, 2)
 end
 
 @testset "rectangular registered operator" begin

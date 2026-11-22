@@ -132,8 +132,8 @@ Kop = shaped_parameter(:Kop, FEMOp, 4, 6)   # maps R^6 -> R^4
 end
 ```
 
-`T` must be a concrete type and every dimension must be positive (a nonempty range is
-allowed). The parameter is a constant, not tunable (`tunable = true` throws). Values are
+`T` must be a concrete type, every dimension must be positive, a range must start at 1, and
+the number of dimensions must match the rank of an array `T`. The parameter is a constant, not tunable (`tunable = true` throws). Values are
 supplied through the problem `op` map, not through `bindings`, which reject shaped opaque
 parameters.
 """
@@ -154,6 +154,11 @@ function shaped_parameter(
     )
     all(d -> d isa Int ? d > 0 : !isempty(d), dims) ||
         throw(ArgumentError("`shaped_parameter` dimensions must be positive, got $dims."))
+    all(d -> d isa Int || first(d) == 1, dims) ||
+        throw(ArgumentError("`shaped_parameter` does not support offset (non-1-based) axes, got $dims; use sizes or `1:n`."))
+    T <: AbstractArray && ndims(T) != length(dims) && throw(
+        ArgumentError("`shaped_parameter` of the $(ndims(T))-dimensional type `$T` needs $(ndims(T)) dimensions, got $(length(dims)).")
+    )
     shape = SymbolicUtils.ShapeVecT(map(d -> d isa Int ? (1:d) : UnitRange{Int}(d), dims))
     sym = SymbolicUtils.Sym{SymReal}(name; type = T, shape)
     sym = setmetadata(sym, VariableTunable, false)
