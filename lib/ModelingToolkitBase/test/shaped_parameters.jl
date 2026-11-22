@@ -28,6 +28,8 @@ D = Differential(t)
     @test SymbolicUtils.symtype(unwrap(K)) == SparseMatrixCSC{Float64, Int}
     @test ModelingToolkitBase.isparameter(K)
     @test !ModelingToolkitBase.istunable(K)
+    @test_throws "scalar type" shaped_parameter(:a, Float64, 4, 6)
+    @test size(shaped_parameter(:A, Matrix{Float64}, 4, 6)) == (4, 6)
     for T in (Matrix{Float64}, SparseMatrixCSC{Float64, Int}, BlockOp)
         @test_throws "not tunable" shaped_parameter(:K2, T, 4, 6; tunable = true)
     end
@@ -148,13 +150,27 @@ end
     eqs = [zeros(6) ~ D(u) + u]
     cases = (
         (Kop, BlockOp(sprand(4, 6, 0.5))), (Nop, NoSizeOp(1.0)),
-        (Sop, spzeros(4, 6)), (Uop, 1.0I),
+        (Sop, spzeros(4, 6)), (Uop, 1.0I), (Sop, missing),
     )
     for (p, val) in cases
         @test_throws r"bindings of shaped opaque parameters are not supported" System(
             eqs, t, [u], [p]; bindings = [p => val], name = :bad
         )
     end
+end
+
+struct VecFn end
+(::VecFn)(x) = [x, 2x]
+Base.size(::VecFn) = (5,)
+
+@testset "array-returning callable parameters are not size-checked against the callable" begin
+    @parameters (f::VecFn)(..)[1:2]
+    @variables u(t)[1:2]
+    @named sys = System([D(u) ~ f(t)], t, [u], [f])
+    csys = complete(sys)
+    ps = MTKParameters(csys, Dict(f => VecFn()))
+    @test getp(csys, f)(ps) isa VecFn
+    @test_nowarn System([D(u) ~ f(t)], t, [u], [f]; bindings = [f => VecFn()], name = :bound)
 end
 
 @testset "declared shape is validated for sparse matrix parameters" begin

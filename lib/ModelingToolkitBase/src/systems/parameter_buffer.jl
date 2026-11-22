@@ -669,7 +669,8 @@ function validate_parameter_type(ic::IndexCache, p, idx::ParameterIndex, val)
 end
 
 function has_declared_opaque_shape(p)
-    symtype(p) <: Number && return false
+    # A callable's shape is that of its return value, not of the callable.
+    symtype(p) <: Union{Number, FnType} && return false
     declared = SU.shape(p)
     return !(declared isa SU.Unknown || isempty(declared))
 end

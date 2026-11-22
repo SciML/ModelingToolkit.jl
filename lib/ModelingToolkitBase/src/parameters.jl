@@ -143,6 +143,9 @@ function shaped_parameter(
     )
     isconcretetype(T) || throw(ArgumentError("`shaped_parameter` requires a concrete type, got `$T`."))
     isempty(dims) && throw(ArgumentError("`shaped_parameter` requires at least one dimension."))
+    T <: Number && throw(
+        ArgumentError("`shaped_parameter` is for array or opaque types, got the scalar type `$T`.")
+    )
     tunable && throw(
         ArgumentError(
             "shaped opaque/array parameters are not tunable; they are stored as constants " *
