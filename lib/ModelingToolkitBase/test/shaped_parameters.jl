@@ -137,6 +137,17 @@ end
     @test getp(csys, Nop)(ps) == NoSizeOp(2.0)
 end
 
+@testset "bindings of shaped opaque parameters are size-checked" begin
+    @variables u(t)[1:6]
+    Kop = shaped_parameter(:Kop, BlockOp, 4, 6)
+    eqs = [zeros(6) ~ D(u) + u]
+    @named sys = System(eqs, t, [u], [Kop]; bindings = [Kop => BlockOp(sprand(4, 6, 0.5))])
+    @test sys isa System
+    @test_throws ArgumentError System(
+        eqs, t, [u], [Kop]; bindings = [Kop => BlockOp(sprand(5, 6, 0.5))], name = :bad
+    )
+end
+
 @testset "declared shape is validated for sparse matrix parameters" begin
     T = SparseMatrixCSC{Float64, Int}
     @variables u(t)[1:6]
