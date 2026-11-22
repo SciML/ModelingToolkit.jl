@@ -133,7 +133,7 @@ end
 ```
 
 `T` must be a concrete type and every dimension must be positive (a nonempty range is
-allowed). The parameter is not tunable unless `tunable = true`. Values are supplied through
+allowed). The parameter is not tunable unless `tunable = true`, which requires a dense `Array` type. Values are supplied through
 the problem `op` map, not through `bindings`, which reject shaped opaque parameters.
 """
 function shaped_parameter(
@@ -142,6 +142,12 @@ function shaped_parameter(
     )
     isconcretetype(T) || throw(ArgumentError("`shaped_parameter` requires a concrete type, got `$T`."))
     isempty(dims) && throw(ArgumentError("`shaped_parameter` requires at least one dimension."))
+    tunable && !(T <: Array) && throw(
+        ArgumentError(
+            "`shaped_parameter` can only be `tunable` for dense `Array` types, got `$T`; " *
+                "tunable values are stored in a flat buffer and lose the declared type."
+        )
+    )
     all(d -> d isa Int ? d > 0 : !isempty(d), dims) ||
         throw(ArgumentError("`shaped_parameter` dimensions must be positive, got $dims."))
     shape = SymbolicUtils.ShapeVecT(map(d -> d isa Int ? (1:d) : UnitRange{Int}(d), dims))

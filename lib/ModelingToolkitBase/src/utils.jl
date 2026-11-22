@@ -399,18 +399,20 @@ function check_bindings(atomic_ps::AtomicArraySet{Dict{SymbolicT, Nothing}}, bin
             # Known sizes must match; later symbolic substitution errors do not name the
             # parameter. For a callable parameter the shape is that of the return value,
             # while the binding is the function itself, so the sizes are not comparable.
+            # A dense `Array` keeps its shape when substituted; any other declared-shape
+            # (`shaped_parameter`) value does not, so it is rejected whatever its shape.
+            if has_declared_opaque_shape(p) && !(symtype(p) <: Union{Array, FnType})
+                throw(
+                    ArgumentError(
+                        "binding for $p: bindings of shaped opaque parameters are not supported " *
+                            "because the declared shape is lost when the value is substituted into " *
+                            "an operator application; supply the value through the problem `op` map instead."
+                    )
+                )
+            end
             psh = SU.shape(p)
             vsh = SU.shape(val)
             if psh isa SU.ShapeVecT && vsh isa SU.ShapeVecT && !(symtype(p) <: FnType)
-                if isempty(vsh) && has_declared_opaque_shape(p)
-                    throw(
-                        ArgumentError(
-                            "binding for $p: bindings of shaped opaque parameters are not supported " *
-                                "because the declared shape is lost when the value is substituted into " *
-                                "an operator application; supply the value through the problem `op` map instead."
-                        )
-                    )
-                end
                 if length(psh) != length(vsh) ||
                         any(i -> length(psh[i]) != length(vsh[i]), eachindex(psh))
                     psz = Tuple(map(length, psh))

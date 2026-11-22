@@ -28,7 +28,9 @@ D = Differential(t)
     @test SymbolicUtils.symtype(unwrap(K)) == SparseMatrixCSC{Float64, Int}
     @test ModelingToolkitBase.isparameter(K)
     @test !ModelingToolkitBase.istunable(K)
-    @test ModelingToolkitBase.istunable(shaped_parameter(:K2, SparseMatrixCSC{Float64, Int}, 4, 6; tunable = true))
+    @test ModelingToolkitBase.istunable(shaped_parameter(:K2, Matrix{Float64}, 4, 6; tunable = true))
+    @test_throws ArgumentError shaped_parameter(:K2, SparseMatrixCSC{Float64, Int}, 4, 6; tunable = true)
+    @test_throws ArgumentError shaped_parameter(:K2, BlockOp, 4, 6; tunable = true)
     @variables u(t)[1:6] w(t)[1:4]
     @test size(K * u) == (4,)
     @test (w ~ K * u) isa Equation
@@ -141,8 +143,14 @@ end
     @variables u(t)[1:6]
     Kop = shaped_parameter(:Kop, BlockOp, 4, 6)
     Nop = shaped_parameter(:Nop, NoSizeOp, 4, 6)
+    Sop = shaped_parameter(:Sop, SparseMatrixCSC{Float64, Int}, 4, 6)
+    Uop = shaped_parameter(:Uop, UniformScaling{Float64}, 4, 6)
     eqs = [zeros(6) ~ D(u) + u]
-    for (p, val) in ((Kop, BlockOp(sprand(4, 6, 0.5))), (Nop, NoSizeOp(1.0)))
+    cases = (
+        (Kop, BlockOp(sprand(4, 6, 0.5))), (Nop, NoSizeOp(1.0)),
+        (Sop, spzeros(4, 6)), (Uop, 1.0I),
+    )
+    for (p, val) in cases
         @test_throws r"bindings of shaped opaque parameters are not supported" System(
             eqs, t, [u], [p]; bindings = [p => val], name = :bad
         )
