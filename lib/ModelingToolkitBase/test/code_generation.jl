@@ -483,4 +483,7 @@ end
     crule = OptimizationRule("c", (ir, expr) -> true, (ir, expr, _) -> (populate_ir!(ir, csum); (ir, csum)), 1)
     f = generate_custom_function(csys, a + 1; cachesyms = caches, optimize = [crule], expression = Val(false))
     @test f([2.0], Float64[], [10.0], [20.0, 30.0], 0.0) == 62.0
+    noop = OptimizationRule("noop", (ir, expr) -> nothing, Returns(nothing), 1)
+    g = generate_custom_function(csys, a + 1; cachesyms = ([unwrap(c[1])], [unwrap(c[2])]), optimize = [noop], checkbounds = true, expression = Val(false))
+    @test g([2.0], Float64[], [10.0], [20.0], 0.0) == 3.0
 end

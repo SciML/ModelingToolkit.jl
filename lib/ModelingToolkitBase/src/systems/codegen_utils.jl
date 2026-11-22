@@ -1080,7 +1080,7 @@ Base.@nospecializeinfer function build_function_wrapper(
             )
             shift = pbuf_end - p_start + 1
             for (arrvar, idxs) in tail
-                merged[arrvar] = [(i + shift, j) for (i, j) in idxs]
+                merged[arrvar] = [iszero(i) ? (i, j) : (i + shift, j) for (i, j) in idxs]
             end
             param_var_to_arridxs = merged
         end
