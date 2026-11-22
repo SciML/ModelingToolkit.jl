@@ -938,6 +938,10 @@ When called with analysis points as input arguments, we assume that all analysis
 `input_aps` and `dist_aps` are analysis points of the unsimplified, uncompleted system
 `sys`, obtained as `sys.ap_name`, or vectors of such points. Passing the `Symbol` names of
 the points is the old style and will be deprecated.
+
+`known_disturbance_inputs` accepts symbolic variables and analysis points. The loops
+at those analysis points are opened, and their inputs and the symbolic variables are
+supplied through the generated function's final argument.
 """
 function generate_control_function(
         sys::ModelingToolkitBase.AbstractSystem, input_ap_name::Union{
@@ -957,32 +961,34 @@ function generate_control_function(
         append!(u, du)
     end
 
-    # Handle known disturbance inputs
-    kd = SymbolicT[]
+    kd = nothing
     if known_disturbance_inputs !== nothing
-        known_dist_ap = canonicalize_ap(sys, known_disturbance_inputs)
-        for dist_ap in known_dist_ap
-            sys, (du, _) = open_loop(sys, dist_ap)
-            append!(kd, du)
+        kd = SymbolicT[]
+        known_inputs = known_disturbance_inputs isa AbstractVector ?
+            known_disturbance_inputs : [known_disturbance_inputs]
+        for disturbance in known_inputs
+            if disturbance isa Union{Symbol, AnalysisPoint}
+                sys, (du, _) = open_loop(sys, disturbance)
+                append!(kd, du)
+            else
+                push!(kd, unwrap(disturbance))
+            end
         end
     end
 
-    if dist_ap_name === nothing && isempty(kd)
-        return ModelingToolkitBase.generate_control_function(system_modifier(sys), u; kwargs...)
+    if dist_ap_name === nothing
+        return ModelingToolkitBase.generate_control_function(
+            system_modifier(sys), u; known_disturbance_inputs = kd, kwargs...
+        )
     end
 
     d = SymbolicT[]
-    if dist_ap_name !== nothing
-        dist_ap_name = canonicalize_ap(sys, dist_ap_name)
-        for dist_ap in dist_ap_name
-            sys, (du, _) = open_loop(sys, dist_ap)
-            append!(d, du)
-        end
+    for dist_ap in canonicalize_ap(sys, dist_ap_name)
+        sys, (du, _) = open_loop(sys, dist_ap)
+        append!(d, du)
     end
 
     return ModelingToolkitBase.generate_control_function(
-        system_modifier(sys), u, isempty(d) ? nothing : d;
-        known_disturbance_inputs = isempty(kd) ? nothing : kd,
-        kwargs...
+        system_modifier(sys), u, d; known_disturbance_inputs = kd, kwargs...
     )
 end
