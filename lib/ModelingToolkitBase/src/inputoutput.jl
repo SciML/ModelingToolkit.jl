@@ -222,7 +222,9 @@ inputs, parameters, and independent variable.
 - `simplify::Bool = false`: Forwarded to `mtkcompile` when `sys` is unscheduled.
 - `split::Bool = true`: Forwarded to `mtkcompile` to select split-system generation.
 - `reassemble_alg = nothing`: Forwarded to `mtkcompile` when `sys` is unscheduled.
-  When `nothing`, `mtkcompile`'s default reassemble algorithm is used.
+  Supplying an algorithm requires the ModelingToolkit compiler. Use
+  `ModelingToolkit.default_reassemble_algorithm` to configure the default algorithm.
+  When `nothing`, compilation uses the active compiler's defaults.
 - `eval_expression::Bool = false`: Evaluate generated code in `eval_module` instead of
   returning a runtime-generated function.
 - `eval_module::Module = @__MODULE__`: Module used when `eval_expression = true`.

@@ -220,6 +220,7 @@ function FMIComponent end
 
 @public linearize_symbolic, reorder_unknowns
 @public similarity_transform
+@public default_reassemble_algorithm
 @public precompile_ode_problem, precompile_dae_problem
 
 include("precompile.jl")
