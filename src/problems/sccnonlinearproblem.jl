@@ -513,7 +513,14 @@ function SCCNonlinearFunction{iip}(
     return NonlinearFunction{iip, specialize}(f; sys = subsys)
 end
 
-"""$(MTKBase.problem_docstring(SciMLBase.SCCNonlinearProblem, NonlinearFunction, false; init = false))"""
+"""
+$(MTKBase.problem_docstring(SciMLBase.SCCNonlinearProblem, NonlinearFunction, false; init = false))
+
+Systems with multiple SCCs must be time-independent. Convert an algebraic time-dependent
+system with `mtkcompile(NonlinearSystem(sys))` before constructing the problem. On the
+multi-block path, `check_compatibility = true` raises an `ArgumentError` for a time-dependent
+system.
+"""
 function SciMLBase.SCCNonlinearProblem(sys::System, op; kwargs...)
     return SCCNonlinearProblem{true}(sys, op; kwargs...)
 end
@@ -529,7 +536,8 @@ end
 function SciMLBase.SCCNonlinearProblem{iip, specialize}(
         sys::System, op; eval_expression = false,
         eval_module = @__MODULE__, u0_constructor = identity,
-        missing_guess_value = default_missing_guess_value(), combine_sccs = true, kwargs...
+        missing_guess_value = default_missing_guess_value(), combine_sccs = true,
+        check_compatibility = true, kwargs...
     ) where {iip, specialize}
     if !iscomplete(sys) || get_tearing_state(sys) === nothing
         error("A simplified `System` is required. Call `mtkcompile` on the system before creating an `SCCNonlinearProblem`.")
@@ -542,7 +550,14 @@ function SciMLBase.SCCNonlinearProblem{iip, specialize}(
     ts = get_tearing_state(sys)
     sched = get_schedule(sys)
     if sched === nothing
-        @warn "System is simplified but does not have a schedule. This should not happen."
+        verbose = get(kwargs, :verbose, nothing)
+        # other values of `verbose` are for the solver
+        verbosity = verbose isa Union{MTKVerbosity, AbstractVerbosityPreset, Bool} ?
+            MTKVerbosity(verbose) : MTKVerbosity()
+        @SciMLMessage(
+            "System is simplified but does not have a schedule. This should not happen.",
+            verbosity, :missing_scc_schedule
+        )
         var_eq_matching, var_sccs = StructuralTransformations.algebraic_variables_scc(ts)
         condensed_graph = MatchedCondensationGraph(
             DiCMOBiGraph{true}(
@@ -571,7 +586,8 @@ function SciMLBase.SCCNonlinearProblem{iip, specialize}(
         # for a stateless system, which solvers reject.
         TProb = MTKBase.get_nonlinear_problem_type(sys)
         prob = TProb{iip, specialize}(
-            sys, op; eval_expression, eval_module, u0_constructor, missing_guess_value, kwargs...
+            sys, op; eval_expression, eval_module, u0_constructor, missing_guess_value,
+            check_compatibility, jac = true, kwargs...
         )
         state_values(prob) === nothing && return remake(prob; u0 = Float64[])
         return prob
@@ -581,7 +597,7 @@ function SciMLBase.SCCNonlinearProblem{iip, specialize}(
         if calculate_A_b(sys; throw = false) !== nothing
             linprob = LinearProblem{iip}(
                 sys, op; eval_expression, eval_module,
-                u0_constructor, kwargs...
+                u0_constructor, check_compatibility, kwargs...
             )
             # Required for filling missing parameter values when this is an initialization
             # problem
@@ -600,9 +616,21 @@ function SciMLBase.SCCNonlinearProblem{iip, specialize}(
             # `NonlinearProblem` would drop the λ-sweep and Newton-solve the target directly.
             TProb = MTKBase.get_nonlinear_problem_type(sys)
             return TProb{iip, specialize}(
-                sys, op; eval_expression, eval_module, u0_constructor, missing_guess_value, kwargs...
+                sys, op; eval_expression, eval_module, u0_constructor, missing_guess_value,
+                check_compatibility, kwargs...
             )
         end
+    end
+
+    if check_compatibility && is_time_dependent(sys)
+        throw(
+            ArgumentError(
+                """
+                `SCCNonlinearProblem` with multiple SCCs requires a time-independent system. \
+                Convert it with `mtkcompile(NonlinearSystem(sys))` first.
+                """
+            )
+        )
     end
 
     dvs = unknowns(sys)
@@ -611,7 +639,7 @@ function SciMLBase.SCCNonlinearProblem{iip, specialize}(
 
     _, u0, p = process_SciMLProblem(
         EmptySciMLFunction{iip}, sys, op; eval_expression, eval_module, symbolic_u0 = true,
-        missing_guess_value, kwargs...
+        missing_guess_value, check_compatibility, kwargs...
     )
     op = calculate_op_from_u0_p(sys, u0, p)
 
@@ -676,7 +704,7 @@ function SciMLBase.SCCNonlinearProblem{iip, specialize}(
         end
         f = SCCNonlinearFunction{iip}(
             decomposition, i, cachebufsyms, op;
-            specialize, eval_expression, eval_module, kwargs...
+            specialize, eval_expression, eval_module, check_compatibility, kwargs...
         )
         push!(nlfuns, f)
     end
@@ -708,6 +736,14 @@ function SciMLBase.SCCNonlinearProblem{iip, specialize}(
     # yes, `get_p_constructor` since this is only used for `LinearProblem` and
     # will retain the shape of `A`
     u0_constructor = get_p_constructor(u0_constructor, typeof(u0), u0_eltype)
+    # `SCCNonlinearProblem` has no `kwargs` of its own: the SCC solve merges the
+    # `kwargs` of each block, so the solve-time `verbose` goes on the nonlinear blocks.
+    subprob_kwargs = if haskey(kwargs, :verbose)
+        verbose = kwargs[:verbose]
+        (; verbose = verbose isa MTKVerbosity ? verbose.nonlinear_verbosity : verbose)
+    else
+        (;)
+    end
     subprobs = []
     subber = Symbolics.FixpointSubstituter{true}(AtomicArrayDictSubstitutionWrapper(op))
     for (i, (f, vscc)) in enumerate(zip(nlfuns, decomposition.var_sccs))
@@ -774,9 +810,9 @@ function SciMLBase.SCCNonlinearProblem{iip, specialize}(
                 # solving the block sweeps λ from the `simplified` form to `actual`. Blocks
                 # are solved in dependency order, so each one reaches `λ = 1` before the
                 # next begins.
-                SciMLBase.HomotopyProblem(f, _u0, p; λspan = (0.0, 1.0))
+                SciMLBase.HomotopyProblem(f, _u0, p; λspan = (0.0, 1.0), subprob_kwargs...)
             else
-                NonlinearProblem(f, _u0, p)
+                NonlinearProblem(f, _u0, p; subprob_kwargs...)
             end
         end
         push!(subprobs, prob)
@@ -835,6 +871,22 @@ end
 """
     $(TYPEDSIGNATURES)
 
+Whether `err`, thrown by `mtkcompile`, reports a structurally unbalanced or singular
+system. See `ModelingToolkitBase.UNBALANCED_SYSTEM_EXCEPTIONS`.
+"""
+function is_structurally_unbalanced_error(err)
+    T = typeof(err)
+    kind = nameof(T)
+    kind in MTKBase.UNBALANCED_SYSTEM_EXCEPTIONS || return false
+    kind === :InvalidSystemException || return true
+    # `InvalidSystemException` also reports problems unrelated to the structure.
+    return fieldcount(T) == 1 && fieldtype(T, 1) <: AbstractString &&
+        occursin("singular", getfield(err, 1))
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
 Return a `prob -> problem` callable producing the `SCCNonlinearProblem` that a
 `SteadyStateProblem` built on `sys` lowers to: the `NonlinearSystem`
 steady-state residual of the original (uncompiled) model is `mtkcompile`d and
@@ -843,8 +895,18 @@ operating point is rebuilt from the queried problem's `u0`/`p` on every call so
 that a `remake`d `SteadyStateProblem` yields a matching lowering. The lowering
 is deferred because building it requires a full `mtkcompile` of the residual
 system, which most `SteadyStateProblem` consumers never need.
+
+The steady-state residual can be structurally unbalanced or singular even when
+the ODE is not, e.g. for a reaction network with a conservation law, where the
+residual determines the steady state only up to the conserved quantities that
+the initial condition fixes. Such a residual has no SCC lowering, so the
+callable then returns the steady-state residual wrapped as a plain
+`NonlinearProblem`, i.e. what `SciMLBase.NonlinearProblem(prob)` builds for a
+`SteadyStateProblem` without a lowering. Pseudo-transient solvers such as
+`DynamicSS` then integrate the ODE as usual.
 """
 function MTKBase.steady_state_sccprob(sys::System, op; kwargs...)
+    # `nothing`: not compiled yet, `missing`: the residual has no SCC lowering.
     ref = Ref{Any}(nothing)
     return function _sccprob(prob)
         if ref[] === nothing
@@ -854,11 +916,28 @@ function MTKBase.steady_state_sccprob(sys::System, op; kwargs...)
                 (parent === nothing || parent === ssys) && break
                 ssys = parent
             end
-            ref[] = mtkcompile(NonlinearSystem(ssys))
+            ref[] = try
+                mtkcompile(NonlinearSystem(ssys))
+            catch err
+                is_structurally_unbalanced_error(err) || rethrow()
+                @debug "The steady-state residual of $(nameof(sys)) cannot be lowered \
+                    to an `SCCNonlinearProblem`; solving the unlowered residual." err
+                missing
+            end
+        end
+        if ref[] === missing
+            return NonlinearProblem{SciMLBase.isinplace(prob)}(
+                prob.f, state_values(prob), parameter_values(prob)
+            )
         end
         op = calculate_op_from_u0_p(
             prob.f.sys, state_values(prob), parameter_values(prob)
         )
+        # `Initial` parameters are generated per system: `prob.f.sys` also has `Initial(D(x))`
+        # for its derivatives, which the time-independent residual system does not. Transfer
+        # only the `Initial` values it has; its initialization system would treat the others
+        # as solvable and add identities `Initial(x) ~ Initial(x)`.
+        filter!(kv -> !MTKBase.isinitial(first(kv)) || is_parameter(ref[], first(kv)), op)
         return SCCNonlinearProblem(ref[], op)
     end
 end

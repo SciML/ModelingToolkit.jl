@@ -2,6 +2,8 @@ using ModelingToolkitBase, Test
 using ModelingToolkitBase: value, parse_variable, unwrap
 using SymbolicUtils: <ₑ
 import SymbolicUtils as SU
+using Symbolics: VartypeT
+using Symbolics
 
 @variables x
 @test ModelingToolkitBase.float_type_from_varmap(
@@ -246,6 +248,76 @@ end
     @test haskey(dd, bu)
 end
 
+@testset "write_possibly_indexed_array! broadcasts scalars to array-shaped keys" begin
+    t = ModelingToolkitBase.t_nounits
+    @variables a(t)[1:3]
+    au = value(a)
+    dd = ModelingToolkitBase.AtomicArrayDict{ModelingToolkitBase.SymbolicT}()
+    ModelingToolkitBase.write_possibly_indexed_array!(
+        dd, au, ModelingToolkitBase.COMMON_FALSE, ModelingToolkitBase.COMMON_NOTHING
+    )
+    @test haskey(dd, au)
+    @test ModelingToolkitBase.unwrap_const(dd[au]) == [false, false, false]
+    for i in 1:3
+        @test ModelingToolkitBase.get_possibly_indexed(
+            dd, au[SU.StableIndex([i])], ModelingToolkitBase.COMMON_NOTHING
+        ) === ModelingToolkitBase.COMMON_FALSE
+    end
+end
+
+@testset "FixpointSubstituter resolves symbolic array indices" begin
+    t = ModelingToolkitBase.t_nounits
+    D = ModelingToolkitBase.D_nounits
+    Sh = ModelingToolkitBase.Shift
+    Init = ModelingToolkitBase.Initial
+    @variables a(t)[1:3]
+    @parameters i::Int
+    au = value(a)
+    iu = unwrap(i)
+    dd = ModelingToolkitBase.AtomicArrayDict{ModelingToolkitBase.SymbolicT}()
+    dd[au] = SU.Const{VartypeT}([1.0, 2.0, 3.0])
+    dd[iu] = SU.Const{VartypeT}(2)
+    wrapper = ModelingToolkitBase.AtomicArrayDictSubstitutionWrapper(dd)
+    # Membership callers still see a symbolic-index lookup as missing.
+    @test ModelingToolkitBase.get_possibly_indexed(
+        dd, au[iu], ModelingToolkitBase.COMMON_NOTHING
+    ) === ModelingToolkitBase.COMMON_NOTHING
+    subber = Symbolics.FixpointSubstituter{true}(
+        wrapper; maxiters = 10, warn_maxiters = false
+    )
+    @test ModelingToolkitBase.unwrap_const(subber(au[iu])) == 2.0
+
+    # Operator-wrapped keys: `dd[Op(a)]` is already the Op value, so
+    # `index_substituted_array` must not re-apply Op (mirrors `_get_stable_index`).
+    function check_op(opkey, query)
+        ddop = ModelingToolkitBase.AtomicArrayDict{ModelingToolkitBase.SymbolicT}()
+        ddop[opkey] = SU.Const{VartypeT}([1.0, 2.0, 3.0])
+        ddop[iu] = SU.Const{VartypeT}(2)
+        wrap = ModelingToolkitBase.AtomicArrayDictSubstitutionWrapper(ddop)
+        sb = Symbolics.FixpointSubstituter{true}(
+            wrap; maxiters = 10, warn_maxiters = false
+        )
+        return ModelingToolkitBase.unwrap_const(sb(query))
+    end
+    @test check_op(value(D(a)), value(D(a[i]))) == 2.0
+    @test check_op(value(Sh(t, 1)(a)), value(Sh(t, 1)(a[i]))) == 2.0
+    # `Initial(arr[idx])` rewrites to `Initial(arr)[idx]`; build that form directly
+    # because `Initial(a[i])` itself errors when `i` is symbolic.
+    init_a = value(Init()(a))
+    @test check_op(init_a, init_a[iu]) == 2.0
+
+    # Slice / ArrayOp keys are rejected on both membership and substitution paths;
+    # only scalar getindex uses the symbolic-index branch.
+    for slice in (au[2:3], au[1:2], au[1:2:3])
+        @test_throws ArgumentError ModelingToolkitBase.get_possibly_indexed(
+            dd, slice, ModelingToolkitBase.COMMON_NOTHING
+        )
+        @test_throws ArgumentError ModelingToolkitBase.missingvars(dd, [slice])
+        @test_throws ArgumentError get(wrapper, slice, nothing)
+        @test_throws ArgumentError subber(slice)
+    end
+end
+
 @testset "`shift2term` on an already-shifted array variable" begin
     @independent_variables tt
     @variables arr(tt)[1:2]
@@ -255,4 +327,30 @@ end
     once = ModelingToolkitBase.shift2term(unwrap(Sh(tt, -1)(arr[1])))
     twice = ModelingToolkitBase.shift2term(unwrap(Sh(tt, -1)(once)))
     @test isequal(twice, ModelingToolkitBase.shift2term(unwrap(Sh(tt, -2)(arr[1]))))
+end
+
+@testset "write_possibly_indexed_array! with array slices" begin
+    Const = ModelingToolkitBase.BSImpl.Const{ModelingToolkitBase.VartypeT}
+    for dims in ((5,), (3, 4)), initialized in (false, true)
+        @testset "shape=$dims initialized=$initialized" begin
+            @variables a[(1:n for n in dims)...]
+            arr = value(a)
+            indices = length(dims) == 1 ? (2:2:4,) : (1:2, 2:3)
+            slice_shape = map(length, indices)
+            values = reshape(collect(1.0:prod(slice_shape)), slice_shape)
+            initial = initialized ? 10.0 : -1.0
+            dd = ModelingToolkitBase.AtomicArrayDict{ModelingToolkitBase.SymbolicT}()
+            initialized && (dd[arr] = Const(fill(initial, dims)))
+            key = value(a[indices...])
+            ModelingToolkitBase.write_possibly_indexed_array!(dd, key, Const(values), Const(-1.0))
+            expected = fill(initial, dims)
+            expected[indices...] = values
+            @test SU.unwrap_const(dd[arr]) == expected
+            @test length(dd) == 1
+            @variables replacement[(1:n for n in slice_shape)...]
+            ModelingToolkitBase.write_possibly_indexed_array!(dd, key, value(replacement), Const(-1.0))
+            @test all(isequal.(collect(dd[arr][indices...]), collect(value(replacement))))
+            @test isequal(dd[arr][dims...], Const(initial))
+        end
+    end
 end

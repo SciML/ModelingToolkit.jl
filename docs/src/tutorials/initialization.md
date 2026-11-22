@@ -302,7 +302,8 @@ long enough you will see that `λ = 0` is required for this equation, but since 
     If you would prefer to have an error instead of a warning in the context of non-fully
     determined systems, pass the keyword argument `fully_determined = true` into the
     problem constructor. Additionally, any warning about not being fully determined can
-    be suppressed via passing `warn_initialize_determined = false`.
+    be suppressed via passing
+    `verbose = MTKVerbosity(initialization = SciMLLogging.Silent)`.
 
 ## Constant constraints in initialization
 

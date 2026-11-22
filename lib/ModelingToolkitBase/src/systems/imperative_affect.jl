@@ -280,7 +280,8 @@ setter callables via `setu`. All captures are encoded as typed struct fields for
 A `FunctionalAffect` struct callable as `f(integrator)`.
 """
 function compile_functional_affect(
-        affect::ImperativeAffect, sys; reset_jumps = false, kwargs...
+        affect::ImperativeAffect, sys; reset_jumps = false,
+        mtk_verbosity::MTKVerbosity = DEFAULT_MTK_VERBOSE, kwargs...
     )
     #=
     Implementation sketch:
@@ -299,7 +300,10 @@ function compile_functional_affect(
                 push!(exprs_dedup, exp)
                 push!(seen, sym)
             elseif !affect.skip_checks
-                @warn "Expression $(exp) is aliased as $sym, which has already been used. The first definition will be used."
+                @SciMLMessage(
+                    "Expression $(exp) is aliased as $sym, which has already been used. The first definition will be used.",
+                    mtk_verbosity, :imperative_affect_specification
+                )
             end
         end
         return (syms_dedup, exprs_dedup)
@@ -324,7 +328,10 @@ function compile_functional_affect(
     if !affect.skip_checks
         for mexpr in mod_exprs
             if !check_assignable(sys, mexpr)
-                @warn ("Expression $mexpr cannot be assigned to; currently only unknowns and parameters may be updated by an affect.")
+                @SciMLMessage(
+                    "Expression $mexpr cannot be assigned to; currently only unknowns and parameters may be updated by an affect.",
+                    mtk_verbosity, :imperative_affect_specification
+                )
             end
             invalid_vars = unassignable_variables(sys, mexpr)
             if length(invalid_vars) > 0
@@ -337,7 +344,10 @@ function compile_functional_affect(
 
     overlapping_syms = intersect(mod_syms, obs_syms)
     if length(overlapping_syms) > 0 && !affect.skip_checks
-        @warn "The symbols $overlapping_syms are declared as both observed and modified; this is a code smell because it becomes easy to confuse them and assign/not assign a value."
+        @SciMLMessage(
+            "The symbols $overlapping_syms are declared as both observed and modified; this is a code smell because it becomes easy to confuse them and assign/not assign a value.",
+            mtk_verbosity, :imperative_affect_specification
+        )
     end
 
     # sanity checks done! now build the data and update function for observed values
@@ -347,10 +357,12 @@ function compile_functional_affect(
     else
         zeros(sz)
     end
+    opts = GeneratedFunctionOptions(;
+        expression = Val{false},
+        codegen_function_options = Symbolics.CodegenFunctionOptions(; kwargs...)
+    )
     obs_fun = build_explicit_observed_function(
-        sys, Symbolics.scalarize.(obs_exprs),
-        GeneratedFunctionOptions(; expression = Val{false});
-        output_type = Tuple
+        sys, Symbolics.scalarize.(obs_exprs), opts; output_type = Tuple
     )
     obs_sym_tuple = (obs_syms...,)
 
@@ -358,9 +370,7 @@ function compile_functional_affect(
     mod_pairs = mod_exprs .=> mod_syms
     mod_names = (mod_syms...,)
     mod_og_val_fun = build_explicit_observed_function(
-        sys, Symbolics.scalarize.(first.(mod_pairs)),
-        GeneratedFunctionOptions(; expression = Val{false});
-        output_type = Tuple
+        sys, Symbolics.scalarize.(first.(mod_pairs)), opts; output_type = Tuple
     )
 
     upd_funs = NamedTuple{mod_names}((setu.((sys,), first.(mod_pairs))...,))

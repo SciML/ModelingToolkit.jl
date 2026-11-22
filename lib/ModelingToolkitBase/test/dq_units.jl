@@ -86,6 +86,33 @@ good_eqs = [connect(op, op2)]
 @test MT.validate(good_eqs)
 @named sys = System(good_eqs, t, [], [])
 
+# Causal variable connect with matching units
+function voltage_blk(; name)
+    @parameters k = 1.0 [unit = u"1"]
+    vars = @variables begin
+        u(t), [input = true, unit = u"V"]
+        y(t), [output = true, unit = u"V"]
+    end
+    return System([y ~ k * u], t, vars, [k]; name)
+end
+function ampere_blk(; name)
+    @parameters k = 1.0 [unit = u"1"]
+    vars = @variables begin
+        u(t), [input = true, unit = u"A"]
+        y(t), [output = true, unit = u"A"]
+    end
+    return System([y ~ k * u], t, vars, [k]; name)
+end
+b1 = voltage_blk(name = :b1)
+b2 = voltage_blk(name = :b2)
+var_eqs = [connect(b1.y, b2.u)]
+@test MT.validate(var_eqs)
+@named varsys = System(var_eqs, t; systems = [b1, b2])
+bA = ampere_blk(name = :bA)
+bad_var_eqs = [connect(b1.y, bA.u)]
+@test !MT.validate(bad_var_eqs)
+@test_throws MT.ValidationError @named badsys = System(bad_var_eqs, t; systems = [b1, bA])
+
 # Array variables
 @variables x(t)[1:3] [unit = u"m"]
 @parameters v[1:3] = [1, 2, 3] [unit = u"m/s"]

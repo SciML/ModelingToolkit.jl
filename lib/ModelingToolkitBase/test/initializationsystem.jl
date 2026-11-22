@@ -1,7 +1,7 @@
 using ModelingToolkitBase, OrdinaryDiffEq, NonlinearSolve, Test
 using OrdinaryDiffEqBDF
 using StochasticDiffEq, DelayDiffEq, JumpProcesses
-using ForwardDiff, StaticArrays
+using ForwardDiff, StaticArrays, Random
 using RuntimeGeneratedFunctions: RuntimeGeneratedFunction
 using SymbolicIndexingInterface, SciMLStructures
 using SciMLStructures: Tunable
@@ -117,6 +117,64 @@ sol = solve(prob, Rodas5P())
     guesses = [x => 1, y => 0.2, λ => 0.0],
     fully_determined = true
 )
+
+@testset "residual-form DAE initialization with array slices" begin
+    @independent_variables t_residual
+    @variables sx(t_residual) sy(t_residual)[1:3]
+    D = Differential(t_residual)
+
+    function check_residual_initialization(eqs, unks, op, expected_du; guesses = [])
+        sys = complete(System(eqs, t_residual, unks, []; name = :residual))
+        prob = DAEProblem(
+            sys, op, (0.0, 1.0); build_initializeprob = true, guesses
+        )
+        @test SciMLBase.successful_retcode(solve(prob.f.initializeprob))
+
+        integ = init(prob, DFBDF())
+        @test integ.du ≈ expected_du
+        residual = similar(integ.u)
+        prob.f(residual, integ.du, integ.u, integ.p, 0.0)
+        @test residual ≈ zeros(length(residual))
+    end
+
+    cases = [
+        (
+            "scalar", [0 ~ D(sx) + sx], [sx],
+            [sx => 1.0, D(sx) => -1.0], [-1.0],
+        ),
+        (
+            "array scalar equations", [0 ~ D(sy[i]) + sy[i] for i in 1:3],
+            [sy], [sy => [1.0, 2.0, 3.0], D(sy) => -[1.0, 2.0, 3.0]],
+            -[1.0, 2.0, 3.0],
+        ),
+        (
+            "scalarized slice equations", [zeros(3) ~ D(sy[1:3]) + sy[1:3]],
+            collect(sy),
+            [el => v for (el, v) in zip(vcat(collect(sy), D.(collect(sy))), [1.0, 2.0, 3.0, -1.0, -2.0, -3.0])],
+            -[1.0, 2.0, 3.0],
+        ),
+        (
+            "array slice equations", [zeros(3) ~ D(sy[1:3]) + sy[1:3]],
+            [sy], [sy => [1.0, 2.0, 3.0], D(sy) => -[1.0, 2.0, 3.0]],
+            -[1.0, 2.0, 3.0],
+        ),
+    ]
+    for (label, eqs, unks, op, expected_du) in cases
+        @testset "$label" begin
+            check_residual_initialization(eqs, unks, op, expected_du)
+        end
+    end
+
+    @testset "inconsistent fixed derivative operating point fails" begin
+        sys = complete(System([0 ~ D(sx) + sx], t_residual, [sx], []; name = :residual))
+        prob = DAEProblem(
+            sys, [sx => 1.0, D(sx) => 0.0], (0.0, 1.0);
+            build_initializeprob = true
+        )
+        @test !SciMLBase.successful_retcode(solve(prob.f.initializeprob))
+        @test !SciMLBase.successful_retcode(solve(prob, DFBDF()))
+    end
+end
 
 @testset "Unbalanced initialization error names the initialization system" begin
     err = try
@@ -2027,6 +2085,46 @@ end
     @test def_sol.u[1] == auto_sol.u[1]
 end
 
+@testset "FullSpecialize initialization keeps discrete and Bool buffer types" begin
+    @variables dbx(t)
+    @parameters db_rate = 1.0 db_flag::Bool = true [tunable = false]
+    @discretes db_d(t) = 1.0
+    db_ev = ModelingToolkitBase.SymbolicDiscreteCallback(1.0, [db_d ~ Pre(db_d) + 1]; discrete_parameters = [db_d])
+    @mtkcompile db_sys = System(
+        [D(dbx) ~ ifelse(db_flag, -db_rate * db_d * dbx, 0.0)], t;
+        initialization_eqs = [dbx^3 + dbx ~ 2], discrete_events = [db_ev]
+    )
+    for spec in (SciMLBase.AutoSpecialize, SciMLBase.FullSpecialize)
+        prob = ODEProblem{true, spec}(db_sys, [], (0.0, 1.5); guesses = [dbx => 0.5])
+        @test prob.p.constant isa Tuple{BitVector}
+        data = prob.f.initialization_data
+        @test typeof(data.initializeprobpmap(prob, data.initializeprob)) === typeof(prob.p)
+        sol = solve(prob, Tsit5(); abstol = 1.0e-10, reltol = 1.0e-10)
+        @test SciMLBase.successful_retcode(sol)
+        # x^3 + x = 2 has the single real root x = 1; the rate is 1 until t = 1, then 2.
+        @test sol[dbx][1] ≈ 1.0 atol = 1.0e-8
+        @test sol(0.5; idxs = dbx) ≈ exp(-0.5) rtol = 1.0e-6
+        @test sol[dbx][end] ≈ exp(-2.0) rtol = 1.0e-6
+    end
+
+    @variables dqx(t)
+    @discretes dq(t)::Bool = true
+    dq_ev = ModelingToolkitBase.SymbolicDiscreteCallback(0.5, [dq ~ !Pre(dq)]; discrete_parameters = [dq])
+    @mtkcompile dq_sys = System(
+        [D(dqx) ~ ifelse(dq, -dqx, 0.0)], t;
+        initialization_eqs = [dqx^3 + dqx ~ 2], discrete_events = [dq_ev]
+    )
+    for spec in (SciMLBase.AutoSpecialize, SciMLBase.FullSpecialize)
+        prob = ODEProblem{true, spec}(dq_sys, [], (0.0, 0.75); guesses = [dqx => 0.5])
+        data = prob.f.initialization_data
+        @test typeof(data.initializeprobpmap(prob, data.initializeprob)) === typeof(prob.p)
+        sol = solve(prob, Tsit5(); abstol = 1.0e-10, reltol = 1.0e-10)
+        @test SciMLBase.successful_retcode(sol)
+        # x(0) = 1 decays at rate 1 until the flag flips off at t = 0.5, then stays put.
+        @test sol(0.75; idxs = dqx) ≈ exp(-0.5) rtol = 1.0e-6
+    end
+end
+
 @testset "Issue#3570, #3552: `Initial`s/guesses are copied to `u0` during `solve`/`init`" begin
     @parameters g
     @variables x(t) [state_priority = 10] y(t) λ(t)
@@ -2541,4 +2639,126 @@ end
     @test meta isa ModelingToolkitBase.InitializationMetadata
     @test ModelingToolkitBase.EnzymeCore.EnzymeRules.inactive_type(typeof(meta))
     @test ModelingToolkitBase.EnzymeCore.EnzymeRules.inactive_type(typeof(sys))
+end
+
+@testset "A buffer holding a single Bool discrete is copied from the initialization problem" begin
+    # The only Bool in the parameter object: its buffer is copied element by element from the
+    # initialization problem, through a template with a single entry
+    for n in (1, 2)
+        @discretes b(t)[1:n]::Bool
+        @variables x(t) = 0.0
+        ev = ModelingToolkitBase.SymbolicDiscreteCallback(0.1 => [b ~ .!Pre(b)]; discrete_parameters = [b])
+        @named sys = System([D(x) ~ ifelse(b[1], 1.0, -1.0)], t, [x], [b]; discrete_events = [ev])
+        prob = ODEProblem(mtkcompile(sys), [b => fill(true, n)], (0.0, 1.0))
+        @test prob.ps[b] == fill(true, n)
+        sol = solve(prob, Tsit5())
+        @test SciMLBase.successful_retcode(sol)
+    end
+end
+
+@testset "Inputs represented by time-independent parameters" begin
+    @variables x(t) = 1.0
+    @parameters u = 2.0
+    @named sys = System([D(x) ~ -x + u], t; inputs = [u])
+    sys = complete(sys)
+    @test isequal(only(ModelingToolkitBase.inputs(sys)), ModelingToolkitBase.unwrap(u))
+    prob = ODEProblem(sys, [], (0.0, 1.0))
+    @test prob[x] == 1.0
+    @test prob.ps[u] == 2.0
+    sol = solve(prob, Tsit5())
+    @test SciMLBase.successful_retcode(sol)
+    # With an initialization equation that involves the input
+    @variables z(t)
+    @named sys2 = System([D(z) ~ -z + u], t; inputs = [u], initialization_eqs = [z ~ 2u])
+    sys2 = complete(sys2)
+    prob2 = ODEProblem(sys2, [], (0.0, 1.0))
+    @test prob2[z] ≈ 4.0
+end
+
+@testset "`generate_initializesystem` pins each value of the operating point once" begin
+    # Each pin inserts an `Initial` key into the operating point. With 128 values, these
+    # insertions rehash its `Dict` while `generate_initializesystem` iterates over it.
+    n = 128
+    pinned(isys) = [eq.lhs for eq in equations(isys) if isequal(eq.rhs, Initial(eq.lhs))]
+
+    xs = [only(@variables $(Symbol(:x, i))(t)) for i in 1:n]
+    @mtkcompile sys = System([D(x) ~ -x for x in xs], t)
+    isys = generate_initializesystem(sys; op = [x => Float64(i) for (i, x) in enumerate(xs)])
+    pins = pinned(isys)
+    @test length(pins) == n
+    @test issetequal(pins, ModelingToolkitBase.unwrap.(xs))
+
+    ps = [only(@parameters $(Symbol(:p, i))) for i in 1:n]
+    @variables y
+    @mtkcompile sys = System(
+        [0 ~ y - sum(ps)], [y], ps;
+        bindings = [p => missing for p in ps], guesses = [p => 1.0 for p in ps]
+    )
+    isys = generate_initializesystem(
+        sys; time_dependent_init = false, op = [p => Float64(i) for (i, p) in enumerate(ps)]
+    )
+    pins = pinned(isys)
+    @test length(pins) == n
+    @test issetequal(pins, ModelingToolkitBase.unwrap.(ps))
+end
+
+@testset "Elements of an array parameter given as `missing` raise an informative error" begin
+    @variables x(t)
+    @parameters u[1:2]
+    @mtkcompile sys = System(
+        [D(x) ~ -x + u[1] + u[2]], t, [x], [u];
+        initialization_eqs = [u[1] ~ 1.0, u[2] ~ 2.0]
+    )
+    prob = ODEProblem(
+        sys, [x => 1.0, u => missing], (0.0, 1.0); guesses = [u => [0.0, 0.0]]
+    )
+    @test prob.ps[u] ≈ [1.0, 2.0]
+
+    for op in (
+            [x => 1.0, u[1] => missing, u[2] => missing],
+            [x => 1.0, u[1] => 1.0, u[2] => missing],
+        )
+        @test_throws ModelingToolkitBase.ElementwiseMissingArrayParameterError ODEProblem(
+            sys, op, (0.0, 1.0); guesses = [u => [0.0, 0.0]]
+        )
+        @test_throws "`u => missing`" ODEProblem(
+            sys, op, (0.0, 1.0); guesses = [u => [0.0, 0.0]]
+        )
+    end
+end
+
+@testset "Missing values for variables of integer type are integers of that type" begin
+    @variables x(t)
+    @parameters b::Bool n::Int
+    # `b` and `n` only appear in conditions, so the initialization system cannot solve for
+    # them through an equation and they remain unknowns that need a value or guess
+    @mtkcompile sys = System([D(x) ~ ifelse(b, -x, x) + ifelse(n > 0, 1, 0)], t)
+    op = [x => 0.0, b => missing, n => missing]
+
+    prob = ODEProblem(sys, op, (0.0, 1.0); missing_guess_value = MissingGuessValue.Constant(1.0))
+    @test prob.ps[b] === true
+    @test prob.ps[n] === 1
+    @test_throws "in the `missing_guess_value` cannot be converted to its declared type" ODEProblem(
+        sys, op, (0.0, 1.0); missing_guess_value = MissingGuessValue.Constant(0.5)
+    )
+
+    for missing_guess_value in (
+            MissingGuessValue.HashedRandom(), MissingGuessValue.Random(Random.Xoshiro(1)),
+        )
+        prob = ODEProblem(sys, op, (0.0, 1.0); missing_guess_value)
+        @test prob.ps[b] isa Bool
+        @test prob.ps[n] isa Int
+    end
+
+    @test_throws ModelingToolkitBase.MissingGuessError ODEProblem(
+        sys, op, (0.0, 1.0); missing_guess_value = MissingGuessValue.Error()
+    )
+
+    # a guess takes precedence
+    prob = ODEProblem(
+        sys, op, (0.0, 1.0); guesses = [b => true, n => 2],
+        missing_guess_value = MissingGuessValue.Constant(0.0)
+    )
+    @test prob.ps[b] === true
+    @test prob.ps[n] === 2
 end

@@ -1,17 +1,15 @@
 module SciCompDSL
 
-using OrderedCollections
-using Symbolics
-using Symbolics: getname, wrap
-using SymbolicUtils: unwrap
+using OrderedCollections: OrderedCollections
+using Symbolics: Symbolics, wrap, Num, Equation, @variables
+using SymbolicUtils: SymbolicUtils, unwrap, setmetadata
 import ModelingToolkitBase as MTKBase
-using MLStyle
-using URIs
-using PrecompileTools
-using DocStringExtensions
-using SymbolicIndexingInterface
-import ModelingToolkitBase: observed
-using Setfield
+using MLStyle: MLStyle
+using URIs: URI
+using PrecompileTools: @recompile_invalidations, @compile_workload
+using DocStringExtensions: TYPEDEF, FIELDS
+using SymbolicIndexingInterface: getname, ScalarSymbolic, symbolic_type
+using Setfield: Setfield
 
 let allnames = names(MTKBase; all = true),
         banned_names = Set{Symbol}([:eval, :include, :Variable])
@@ -26,9 +24,6 @@ let allnames = names(MTKBase; all = true),
     end
     @eval SciCompDSL $using_expr
 end
-
-using ModelingToolkitBase: COMMON_SENTINEL, COMMON_NOTHING, COMMON_MISSING,
-    COMMON_TRUE, COMMON_FALSE, COMMON_INF
 
 @recompile_invalidations begin
     include("model_parsing.jl")

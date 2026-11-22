@@ -93,8 +93,8 @@ end
         @test length(MT.jumps(compiled_sys)) == 2
 
         # Verify can solve
-        jprob = JumpProblem(compiled_sys, [X => 0, Y => 0, λ1 => 1.0, λ2 => 2.0], (0.0, 10.0); rng)
-        sol = solve(jprob, SSAStepper())
+        jprob = JumpProblem(compiled_sys, [X => 0, Y => 0, λ1 => 1.0, λ2 => 2.0], (0.0, 10.0))
+        sol = solve(jprob, SSAStepper(); rng)
         @test sol.retcode == ReturnCode.Success
     end
 
@@ -116,8 +116,8 @@ end
         @test length(MT.jumps(compiled_sys)) == 1
 
         # Verify can solve
-        jprob = JumpProblem(compiled_sys, [X => 0, Y => 0, λ => 2.0], (0.0, 10.0); rng)
-        sol = solve(jprob, SSAStepper())
+        jprob = JumpProblem(compiled_sys, [X => 0, Y => 0, λ => 2.0], (0.0, 10.0))
+        sol = solve(jprob, SSAStepper(); rng)
         @test sol.retcode == ReturnCode.Success
         # Y should increase twice as fast as X
         @test sol[Y][end] ≈ 2 * sol[X][end]
@@ -188,8 +188,8 @@ end
         completed = complete(extended)
         u0 = [S => 99, I => 1, R => 0]
         ps = [β => 0.1 / 100, γ => 0.05]
-        jprob = JumpProblem(completed, [u0; ps], (0.0, 100.0); rng)
-        sol = solve(jprob, SSAStepper())
+        jprob = JumpProblem(completed, [u0; ps], (0.0, 100.0))
+        sol = solve(jprob, SSAStepper(); rng)
         @test sol.retcode == ReturnCode.Success
         # Conservation check: S + I + R should equal 100
         @test sol[S][end] + sol[I][end] + sol[R][end] == 100
@@ -212,8 +212,8 @@ end
         completed = complete(extended)
         u0 = [A => 50, B => 50]
         ps = [k1 => 0.1, k2 => 0.1]
-        jprob = JumpProblem(completed, [u0; ps], (0.0, 10.0); rng)
-        sol = solve(jprob, SSAStepper())
+        jprob = JumpProblem(completed, [u0; ps], (0.0, 10.0))
+        sol = solve(jprob, SSAStepper(); rng)
         @test sol.retcode == ReturnCode.Success
         # Conservation: A + B = 100
         @test sol[A][end] + sol[B][end] == 100
@@ -408,8 +408,8 @@ end
         u0 = [S => N_pop - 1, I => 1, R => 0]
         ps = [β => 0.3 / N_pop, γ => 0.1]
 
-        jprob = JumpProblem(completed, [u0; ps], (0.0, 100.0); rng)
-        sol = solve(jprob, SSAStepper())
+        jprob = JumpProblem(completed, [u0; ps], (0.0, 100.0))
+        sol = solve(jprob, SSAStepper(); rng)
 
         # Check conservation at multiple time points
         for i in 1:length(sol.t)
@@ -437,8 +437,8 @@ end
         N = 500
         counts = zeros(N)
         for i in 1:N
-            jprob = JumpProblem(compiled_sys, [X => 0, λ => λ_val], (0.0, T); rng = StableRNG(i))
-            sol = solve(jprob, SSAStepper())
+            jprob = JumpProblem(compiled_sys, [X => 0, λ => λ_val], (0.0, T))
+            sol = solve(jprob, SSAStepper(); rng = StableRNG(i))
             counts[i] = sol[X][end]
         end
 

@@ -26,7 +26,7 @@ Takes every residual at once, and works in the system's `ir`, so the search and
 substitution caches are shared and the rewritten residuals are already populated for
 codegen.
 """
-function expand_array_derivatives!(rhss::Vector{SymbolicT}, ir::IRStructure{VartypeT})
+function expand_array_derivatives!(rhss::Union{Vector{SymbolicT}, Vector{Equation}}, ir::IRStructure{VartypeT})
     terms = Set{SymbolicT}()
     buffer = SU.IRStructureSearchBuffer(ir, terms)
     for rhs in rhss
@@ -37,6 +37,89 @@ function expand_array_derivatives!(rhss::Vector{SymbolicT}, ir::IRStructure{Vart
     subber = SU.IRSubstituter{false}(ir, array_derivative_expansion_map(terms))
     map!(subber, rhss, rhss)
     return rhss
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Bind contiguous array derivatives to reshaped `view`s of the implicit-DAE `du`
+argument, in place, and return `(du_symbol, substituter)`.
+
+Unlike [`expand_array_derivatives!`](@ref), which rebuilds each array derivative as an
+`array_literal` of scalar `D(uᵢ)` terms, this keeps a contiguous block of `du` as one
+expression so residual codegen size stays independent of the block length. Observed
+expressions and assertions that mention the same derivatives are included via
+`extra_expressions` / `reserved_symbols`. Noncontiguous layouts fall back to the
+scalar expansion.
+"""
+function array_derivative_arguments!(rhss::Vector{SymbolicT}, dvs, D, ir::IRStructure{VartypeT}; extra_expressions = SymbolicT[], reserved_symbols = dvs)
+    terms = Set{SymbolicT}()
+    buffer = SU.IRStructureSearchBuffer(ir, terms)
+    for expressions in (rhss, extra_expressions), rhs in expressions
+        Symbolics.get_variables!(buffer, rhs; is_atomic = array_derivative_is_atomic)
+    end
+    # No array derivatives in the residuals / extras: keep the scalar `du` binding path.
+    if isempty(terms)
+        expand_array_derivatives!(rhss, ir)
+        return map(D, dvs), identity
+    end
+
+    # A fixed sentinel keeps the generated Expr hash-stable across processes; reject a
+    # collision so a user symbol cannot silently shadow the `du` argument binding.
+    du_name = :__mtk_dae_du
+    for v in reserved_symbols
+        parent, _ = split_indexed_var(v)
+        if hasname(parent) && getname(parent) === du_name
+            throw(ArgumentError("the array derivative sentinel `$du_name` collides with a symbol of the system; this name is reserved for internal use."))
+        end
+    end
+    du = unwrap(only(@variables $du_name[1:length(dvs)]))
+    subs = Dict{SymbolicT, SymbolicT}(D(v) => du[i] for (i, v) in enumerate(dvs))
+    groups = Dict{SymbolicT, Vector{Int}}()
+    for (i, v) in enumerate(dvs)
+        parent, indexed = split_indexed_var(v)
+        indexed && push!(get!(Vector{Int}, groups, parent), i)
+    end
+    arrays = Dict{SymbolicT, SymbolicT}()
+    for (parent, positions) in groups
+        indices = SU.stable_eachindex(parent)
+        # Contiguous state blocks share one segment of `du`; a view+reshape keeps the
+        # parent shape without copying or emitting one scalar read per element.
+        if length(positions) == length(indices) &&
+                positions == collect(first(positions):last(positions)) &&
+                all(isequal(dvs[i], parent[j]) for (i, j) in zip(positions, indices))
+            a, b = first(positions), last(positions)
+            du_view = Symbolics.STerm(
+                view,
+                Symbolics.SArgsT((du, a:b));
+                type = Any, shape = SU.ShapeVecT((1:(b - a + 1),))
+            )
+            arrays[parent] = Symbolics.STerm(
+                reshape,
+                Symbolics.SArgsT((du_view, size(parent)));
+                type = symtype(parent), shape = SU.shape(parent)
+            )
+        end
+    end
+    parent_subs = Dict{SymbolicT, SymbolicT}()
+    for term in terms
+        op = operation(term)
+        arg = only(arguments(term))
+        parent, _ = split_indexed_var(arg)
+        if isequal(op, D)::Bool && haskey(arrays, parent)
+            empty!(parent_subs)
+            parent_subs[parent] = arrays[parent]
+            subs[term] = SU.IRSubstituter{false}(ir, parent_subs)(arg)
+        else
+            # Noncontiguous or interleaved layouts cannot share a single `du` view.
+            expanded = SymbolicT[term]
+            expand_array_derivatives!(expanded, ir)
+            subs[term] = SU.IRSubstituter{false}(ir, subs)(only(expanded))
+        end
+    end
+    subber = SU.IRSubstituter{false}(ir, subs)
+    map!(subber, rhss, rhss)
+    return du, subber
 end
 
 """
@@ -104,7 +187,11 @@ function similar_for_residual(prototype, extras...)
     for x in extras
         T = promote_type(T, residual_eltype(x))
     end
-    return sz -> similar(prototype, T, sz)
+    return let prototype = prototype, T = T
+        function __similar_for_residual(sz)
+            return similar(prototype, T, sz)
+        end
+    end
 end
 
 function residual_allocator_arg(arg)
@@ -120,7 +207,7 @@ end
 
 function residual_allocator_term(args)
     return STerm(
-        similar_for_residual, SArgsT((map(residual_allocator_arg, args)...,));
+        similar_for_residual, map(residual_allocator_arg, args);
         type = SU.FnType{Tuple, Any, Any},
         shape = SU.ShapeVecT(),
     )
@@ -133,13 +220,7 @@ function inject_similar_for_residual(body, alloc_term)
             body.let_block
         )
     elseif body isa SymbolicT && Code.supports_with_allocator(body)
-        # The public helper would wrap the symbolic allocator in `Const`.
-        return STerm(
-            Code.with_allocator,
-            SArgsT((alloc_term, body));
-            type = SU.symtype(body),
-            shape = SU.shape(body),
-        )
+        return Code.with_allocator(alloc_term, body)
     else
         return body
     end
@@ -152,6 +233,16 @@ function wrap_oop_similar_for_residual(fn)
     return Func(
         fn.args, fn.kwargs, inject_similar_for_residual(fn.body, alloc_term),
         fn.pre
+    )
+end
+
+function generate_empty_nonlinear_function(sys::System, opts::GeneratedFunctionOptions, dims)
+    (; eval_expression, eval_module, compiler_options) = opts
+    oop = :((u, p) -> u === nothing ? zeros($dims) : similar(u, $dims))
+    iip = :((out, u, p) -> nothing)
+    return maybe_compile_function(
+        expression_val(opts), wrap_gfw_val(opts), (2, 2, is_split(sys)), (oop, iip);
+        compiler_options, eval_expression, eval_module
     )
 end
 
@@ -191,6 +282,12 @@ function generate_rhs(
     wrap_gfw = wrap_gfw_val(opts)
     dvs = flat_unknowns(sys)
     eqs = equations(sys)
+    # Empty-SCC / fully-eliminated nonlinear residual: skip when scalar,
+    # implicit_dae, or cachesyms would need a different signature/body.
+    if !is_time_dependent(sys) && isempty(dvs) && isempty(eqs) && isempty(extra_args) &&
+            !scalar && !implicit_dae && cachesyms === nothing
+        return generate_empty_nonlinear_function(sys, opts, (0,))
+    end
     obs = observed(sys)
     u = dvs
     p = reorder_parameters(sys) # 1 arg to use the cached version
@@ -202,6 +299,8 @@ function generate_rhs(
     ddvs = nothing
     extra_assignments = Assignment[]
     assemble_residuals = false
+    derivative_subber = identity
+    assertion_expr = isempty(assertions(sys)) ? nothing : unwrap(get_assertions_expr(sys))
 
     # used for DAEProblem and ImplicitDiscreteProblem
     if implicit_dae
@@ -229,9 +328,13 @@ function generate_rhs(
             D = Differential(t)
             ddvs = map(D, dvs)
             rhss = SymbolicT[_iszero(eq.lhs) ? eq.rhs : eq.rhs - eq.lhs for eq in eqs]
-            # Rewrite array derivatives to the scalar ones bound to the `du` argument.
-            # Assembly into a single array happens below, after assertions.
-            expand_array_derivatives!(rhss, get_irstructure(sys))
+            extra_expressions = SymbolicT[unwrap(eq.rhs) for eq in obs]
+            assertion_expr === nothing || push!(extra_expressions, assertion_expr)
+            reserved_symbols = Iterators.flatten((dvs, parameters(sys; initial_parameters = true), (eq.lhs for eq in obs)))
+            ddvs, derivative_subber = array_derivative_arguments!(rhss, dvs, D, get_irstructure(sys); extra_expressions, reserved_symbols)
+            if derivative_subber !== identity && !isempty(obs)
+                @set! sys.observed = [eq.lhs ~ derivative_subber(unwrap(eq.rhs)) for eq in obs]
+            end
             assemble_residuals = true
         end
     elseif !is_time_dependent(sys)
@@ -250,7 +353,7 @@ function generate_rhs(
     end
 
     if !isempty(assertions(sys)) && !isempty(rhss)
-        assertion_expr = unwrap(get_assertions_expr(sys))
+        assertion_expr = derivative_subber(assertion_expr)
         # An array-valued residual stands for several output rows, and `+` is not defined
         # between a symbolic array and a scalar, so add the assertion to each of its rows.
         rhss[end] = if SU.is_array_shape(SU.shape(rhss[end]))
@@ -299,10 +402,20 @@ function generate_rhs(
             (; wrap_code = (wrap_oop_similar_for_residual ∘ oop_wrap, iip_wrap))
         )
     end
+    if implicit_dae && assemble_residuals &&
+            hasfield(typeof(codegen_opts), :scalarize_single_element_regions)
+        # Write a one-element slice equation through a view of the output rather than
+        # scalarizing it, so the residual works on arrays that disallow scalar indexing.
+        # Older Symbolics versions lack the option and keep the scalarized form.
+        codegen_opts = setproperties(codegen_opts, (; scalarize_single_element_regions = false))
+    end
+    # Very large right-hand sides are chunked automatically. This is sound because in-place
+    # SciML functions are called with an `out` (`du`) that is distinct from `u` and `p`, as the
+    # SciMLBase in-place function documentation states for `f(du, u, p, t)`.
     res = build_function_wrapper(
         sys, rhss, collect(Any, args), BuildFunctionWrapperOptions(;
             p_start, extra_assignments, u_arg, n_param_buffers, p_end_kw...,
-            codegen_function_options = codegen_opts
+            chunk_size = -1, codegen_function_options = codegen_opts
         )
     )
     nargs = length(args) - length(p) + 1
@@ -405,11 +518,15 @@ function calculate_jacobian(
             # Add nonzeros of W as non-structural zeros of the Jacobian
             # (to ensure equal results for oop and iip Jacobian)
             JIs, JJs, JVs = findnz(jac)
+            # The iip Jacobian writes into `jac_prototype.nzval` (the pattern of `W_sparsity`),
+            # so drop stored zeros that could push this pattern past it.
+            keep = findall(v -> !_iszero(unwrap(v)), JVs)
+            JIs, JJs, JVs = JIs[keep], JJs[keep], JVs[keep]
             WIs, WJs, _ = findnz(W_sparsity(sys))
             append!(JIs, WIs) # explicitly put all W's indices also in J,
             append!(JJs, WJs) # even if it duplicates some indices
             append!(JVs, zeros(eltype(JVs), length(WIs))) # add zero
-            jac = SparseArrays.sparse(JIs, JJs, JVs) # values at duplicate indices are summed; not overwritten
+            jac = SparseArrays.sparse(JIs, JJs, JVs, size(jac)...) # values at duplicate indices are summed; not overwritten
         end
     else
         jac = jacobian(rhs, dvs; simplify)
@@ -440,6 +557,10 @@ function generate_jacobian(
     expression = expression_val(opts)
     wrap_gfw = wrap_gfw_val(opts)
     dvs = flat_unknowns(sys)
+    # Empty-SCC / fully-eliminated dense Jacobian; sparse needs the normal path.
+    if !is_time_dependent(sys) && isempty(dvs) && isempty(equations(sys)) && !sparse
+        return generate_empty_nonlinear_function(sys, opts, (0, 0))
+    end
     jac = calculate_jacobian(sys; simplify, sparse, dvs)
     p = reorder_parameters(sys)
     t = get_iv(sys)
@@ -1224,12 +1345,15 @@ function scalarized_dims_reduction(ex::SymbolicT)
         SU.is_array_shape(SU.shape(arg)) ? collect(arg)::Array{SymbolicT} : arg
     end
     mapped_axes = axes(first(x for x in xs if x isa Array))
+    nd = length(mapped_axes)
+    # like Julia, `dims > ndims` reduces over a trailing singleton axis
+    reduced_axis = d <= nd ? mapped_axes[d] : Base.OneTo(1)
     elements = Array{SymbolicT}(undef, Tuple(length.(SU.shape(ex)::SU.ShapeVecT)))
     for I in CartesianIndices(elements)
         acc = op.init
-        for j in mapped_axes[d]
+        for j in reduced_axis
             J = CartesianIndex(
-                ntuple(length(mapped_axes)) do i
+                ntuple(nd) do i
                     i == d ? j : first(mapped_axes[i]) + I[i] - 1
                 end
             )
@@ -1874,7 +1998,7 @@ struct CheckInvalidAndTrackNamespaced
 end
 
 function (pred::CheckInvalidAndTrackNamespaced)(x::SymbolicT)
-    isatomic1 = SU.default_is_atomic(x)
+    isatomic1 = SU.default_is_atomic(x) || is_symstruct_field(x)
     isatomic1 || return false
 
     newx = get(pred.ns_map, x, nothing)
@@ -1893,6 +2017,8 @@ function (pred::CheckInvalidAndTrackNamespaced)(x::SymbolicT)
         end
     end
     arrx in pred.simplevars && return true
+    # `simplevars` keys struct variables on the whole record, so also try the record.
+    split_field_access(arrx)[1] in pred.simplevars && return true
     if x in pred.dervars
         push!(pred.present_dervars, x)
         return true
@@ -2484,7 +2610,7 @@ function generate_custom_function(
             sys, exprs,
             [Any[dvs]; p; collect(cachesyms); Any[get_iv(sys)]],
             BuildFunctionWrapperOptions(;
-                u_arg = 1,
+                u_arg = 1, n_param_buffers = length(p),
                 codegen_function_options = opts.codegen
             )
         )

@@ -164,6 +164,10 @@ equations OR its observed equations.
 function has_any_homotopy(sys::AbstractSystem)
     ir = get_irstructure(sys)
     irinfo = get_ir_info(sys)
+    # `query` allocates a visited set the size of `ir` per call, which is quadratic over
+    # the equations. A node that is reachable from an equation is in `ir`, so if `ir` has
+    # no `homotopy` node at all, the per-equation queries cannot find one.
+    any(__has_homotopy_predicate, ir.symbols) || return false
     predicate = Base.Fix1(has_homotopy, ir) ∘ Base.Fix1(getindex, ir)
     return any(predicate, irinfo.eqs_idxs) || any(predicate, irinfo.obs_idxs)
 end

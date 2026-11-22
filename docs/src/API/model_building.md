@@ -156,6 +156,16 @@ structural_simplify
 @mtkbuild
 ```
 
+### Diagnostic output
+
+The `verbose` keyword of `mtkcompile`, of the problem constructors, and of other
+functions accepts an `MTKVerbosity`. See [Controlling verbosity](@ref) for examples.
+
+```@docs
+MTKVerbosity
+ModelingToolkitBase.MTKVerbosityCtx
+```
+
 It is also possible (though not always advisable) to build numerical problems from systems without
 passing them through `mtkcompile`. To do this, the system must first be marked as "complete" via
 the `complete` function. This process is used to indicate that a system will not be modified

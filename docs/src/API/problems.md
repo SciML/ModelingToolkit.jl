@@ -108,7 +108,8 @@ ModelingToolkit.varmap_to_vars
 The parameters of a split system are stored in a custom data structure called
 `MTKParameters`. ModelingToolkit problem constructors use
 [`SciMLBase.AutoDespecialize`](https://docs.sciml.ai/SciMLBase/stable/interfaces/Problems/)
-by default. Solvers that support this policy wrap the parameters in
+by default, except `JumpProblem`, which uses `SciMLBase.FullSpecialize`. Solvers that
+support this policy wrap the parameters in
 [`SciMLBase.DespecializedParameters`](https://docs.sciml.ai/SciMLBase/stable/interfaces/Problems/)
 at solve time so compiled code
 can be reused across parameter-buffer layouts. Explicit `AutoSpecialize` and
@@ -147,6 +148,10 @@ LinearizationProblem
 ModelingToolkit.LinearizationOpPoint
 linearize
 ModelingToolkit.linearize_symbolic
+linearize_hybrid
+HybridLinearization
+ClockPartitionLinearization
+clock_boundary
 ```
 
 There are also utilities for manipulating the results of these analyses in a symbolic context.

@@ -45,9 +45,9 @@ function equation_dependencies(
 
     for (i, eq) in enumerate(eqs)
         # For Equations, only examine RHS (dependencies, not what's modified).
-        # For jumps, use the whole object (specialized search_variables! handles it).
+        # For jumps, use the whole object so the local traversal handles their rate fields.
         target = eq isa Equation ? eq.rhs : eq
-        get_variables!(deps, target, variables)
+        _get_variables!(deps, target, variables)
         depeqs_to_vars[i] = [value(v) for v in deps]
         empty!(deps)
     end
@@ -160,9 +160,10 @@ function variable_dependencies(
         variablestoids
 
     deps = Set()
+    sts = Set(keys(vtois))
     badjlist = Vector{Vector{Int}}(undef, length(eqs))
     for (eidx, eq) in enumerate(eqs)
-        modified_unknowns!(deps, eq, variables)
+        modified_unknowns!(deps, eq, sts)
         badjlist[eidx] = sort!([vtois[var] for var in deps])
         empty!(deps)
     end

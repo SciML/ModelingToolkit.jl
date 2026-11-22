@@ -60,11 +60,11 @@ function check_symbolic_ad_allowed(sys::AbstractSystem)
 end
 
 __new_irstructure() = IRStructure{VartypeT}()
-__new_irstructure_tlv() = TaskLocalValue{IRStructure{VartypeT}}(__new_irstructure)
+__new_irstructure_tlv() = PerTaskValue{IRStructure{VartypeT}}(__new_irstructure)
 const IRStructureTLVT = typeof(__new_irstructure_tlv())
 
 __new_mutable_cache() = MutableCacheT()
-__new_mutable_cache_tlv() = TaskLocalValue{MutableCacheT}(__new_mutable_cache)
+__new_mutable_cache_tlv() = PerTaskValue{MutableCacheT}(__new_mutable_cache)
 const MutableCacheTLVT = typeof(__new_mutable_cache_tlv())
 
 """
@@ -339,9 +339,9 @@ struct System <: IntermediateDeprecationSystem
     maybe_zeros::AtomicSetT
     """
     $INTERNAL_FIELD_WARNING
-    The `IRStructure` used for efficient symbolic manipulation, stored in a `TaskLocalValue`.
+    The `IRStructure` used for efficient symbolic manipulation, stored in a `PerTaskValue`.
     """
-    irstructure_tlv::TaskLocalValue{IRStructure{VartypeT}}
+    irstructure_tlv::IRStructureTLVT
     """
     $INTERNAL_FIELD_WARNING
     Whether the system has been simplified by `mtkcompile`.
@@ -394,7 +394,9 @@ struct System <: IntermediateDeprecationSystem
         end
         @assert iv === nothing || symtype(iv) === Real
         if (checks isa Bool && checks === true || checks isa Int && (checks & CheckComponents) > 0) && iv !== nothing
-            check_independent_variables((iv,))
+            # scan the metadata for the verbosity only when the warning can show
+            isparameter(iv) ||
+                check_independent_variables((iv,), _metadata_verbosity(metadata))
             check_variables(unknowns, iv)
             check_parameters(ps, iv)
             check_equations(eqs, iv)
@@ -473,7 +475,13 @@ defsdict(x::Vector{Any}) = isempty(x) ? SymmapT() : defsdict(Dict(x))
 function defsdict(x::Union{AbstractDict, AbstractArray{<:Pair}})
     result = SymmapT()
     for (k, v) in x
-        result[unwrap(k)] = SU.Const{VartypeT}(v)
+        k = unwrap(k)
+        # This is where a user's own map enters the system, so it gets the strict check:
+        # a projection of a composite is not a key, whether that composite is an array or
+        # a record. A `SymmapT` passes through the method above instead, which is how
+        # initialization hands back maps keyed on the leaves `Initial` is defined for.
+        validate_given_atomic_array_key(k)
+        result[k] = SU.Const{VartypeT}(v)
     end
     return result
 end
@@ -532,6 +540,11 @@ instead.
   system to obtain bindings, initial conditions and/or guesses.
 - `checks`: Whether to perform sanity checks on the passed values. Accepts `true`, `false`
   or a bitmask combination of `CheckComponents` and `CheckUnits`.
+- `verbose = nothing`: Controls the diagnostics of the constructor checks. Accepts an
+  [`MTKVerbosity`](@ref), a `SciMLLogging` preset, or a `Bool`. If given, the value is
+  stored in the metadata of the system, and `@connector`, callback affects, and `remake`
+  use it. If `nothing`, the constructor uses the verbosity stored in `metadata`, or the
+  default.
 
 All other keyword arguments are named identically to the corresponding fields in
 [`System`](@ref).
@@ -574,7 +587,7 @@ function System(
         description = "", name = nothing, discover_from_metadata = true,
         initializesystem = nothing, is_initializesystem = false, is_discrete = false,
         irstructure = IRStructure{VartypeT}(), irstructure_tlv = nothing,
-        checks = true, __legacy_defaults__ = nothing
+        checks = true, verbose = nothing, __legacy_defaults__ = nothing
     )
     name === nothing && throw(NoNameError())
 
@@ -726,6 +739,11 @@ function System(
             meta = Base.ImmutableDict(meta, kvp)
         end
         metadata = meta
+    end
+    if verbose !== nothing
+        metadata = Base.ImmutableDict(
+            metadata, MTKVerbosityCtx => _process_verbose_param(verbose)
+        )
     end
     metadata = refreshed_metadata(metadata)
     jumps = Vector{JumpType}(jumps)
@@ -932,8 +950,13 @@ function System(eqs::Vector{Equation}, iv; kwargs...)
         end
     end
 
+    verbose = get(kwargs, :verbose, nothing)
+    verbosity = verbose === nothing ? _metadata_verbosity(get(kwargs, :metadata, ())) :
+        _process_verbose_param(verbose)
     cstrs = Vector{Union{Equation, Inequality}}(get(kwargs, :constraints, []))
-    _cstrunknowns, cstrps = process_constraint_system(cstrs, allunknowns, ps, iv)
+    _cstrunknowns, cstrps = process_constraint_system(
+        cstrs, allunknowns, ps, iv; verbosity
+    )
     cstrunknowns = empty(_cstrunknowns)
     for var in _cstrunknowns
         op, inner = Moshi.Match.@match var begin
@@ -959,7 +982,7 @@ function System(eqs::Vector{Equation}, iv; kwargs...)
 
     costs = get(kwargs, :costs, nothing)
     if costs !== nothing
-        costunknowns, costps = process_costs(costs, allunknowns, ps, iv)
+        costunknowns, costps = process_costs(costs, allunknowns, ps, iv; verbosity)
         union!(allunknowns, costunknowns)
         union!(ps, costps)
     end
@@ -1101,6 +1124,7 @@ Process variables in constraints of the (ODE) System.
 """
 function process_constraint_system(
         constraints::Vector{Union{Equation, Inequality}}, sts, ps, iv; validate = true,
+        verbosity::MTKVerbosity = DEFAULT_MTK_VERBOSE
     )
     isempty(constraints) && return OrderedSet{SymbolicT}(), OrderedSet{SymbolicT}()
 
@@ -1116,7 +1140,7 @@ function process_constraint_system(
 
     # Validate the states.
     if validate
-        validate_vars_and_find_ps!(constraintsts, constraintps, sts, iv)
+        validate_vars_and_find_ps!(constraintsts, constraintps, sts, iv, verbosity)
     end
 
     return constraintsts, constraintps
@@ -1125,14 +1149,16 @@ end
 """
 Process the costs for the constraint system.
 """
-function process_costs(costs::Vector, sts, ps, iv)
+function process_costs(
+        costs::Vector, sts, ps, iv; verbosity::MTKVerbosity = DEFAULT_MTK_VERBOSE
+    )
     coststs = OrderedSet{SymbolicT}()
     costps = OrderedSet{SymbolicT}()
     for cost in costs
         collect_vars!(coststs, costps, cost, iv)
     end
 
-    validate_vars_and_find_ps!(coststs, costps, sts, iv)
+    validate_vars_and_find_ps!(coststs, costps, sts, iv, verbosity)
     return coststs, costps
 end
 
@@ -1145,7 +1171,9 @@ well-formed states or parameters.
 Return the set of additional parameters found in the system, e.g. in x(p) ~ 3 then p should be added as a
 parameter of the system.
 """
-function validate_vars_and_find_ps!(auxvars, auxps, sysvars, iv)
+function validate_vars_and_find_ps!(
+        auxvars, auxps, sysvars, iv, verbosity::MTKVerbosity = DEFAULT_MTK_VERBOSE
+    )
     sts = sysvars
 
     for var in auxvars
@@ -1169,8 +1197,12 @@ function validate_vars_and_find_ps!(auxvars, auxps, sysvars, iv)
 
             isparameter(arg) && !isequal(arg, iv) && push!(auxps, arg)
         else
-            var ∈ sts &&
-                @warn "Variable $var has no argument. It will be interpreted as $var($iv), and the constraint will apply to the entire interval."
+            if var ∈ sts
+                @SciMLMessage(
+                    "Variable $var has no argument. It will be interpreted as $var($iv), and the constraint will apply to the entire interval.",
+                    verbosity, :constraint_variable_without_argument
+                )
+            end
         end
     end
     return
@@ -1374,17 +1406,30 @@ function NonlinearSystem(sys::System; bind_iv::Bool = true)
     # are recursively converted below, so their namespaced entries must not be folded
     # into the parent's fields a second time. The rule keyspaces still use the merged
     # accessors since the system's own equations can reference namespaced variables.
-    eqs = get_eqs(sys)
+    eqs = copy(get_eqs(sys))
     obs = get_observed(sys)
     D = Differential(get_iv(sys))
-    subrules = Dict([D(x) => 0.0 for x in unknowns(sys)])
+    subrules = Dict{SymbolicT, SymbolicT}()
+    symbolic_zero = SU.zero_of_vartype(VartypeT)
+    for x in unknowns(sys)
+        subrules[D(x)] = symbolic_zero
+        sh = SU.shape(x)
+        if SU.is_array_shape(sh) && sh isa SU.ShapeVecT
+            for i in SU.stable_eachindex(x)
+                subrules[D(x[i])] = symbolic_zero
+            end
+        end
+    end
     for var in brownians(sys)
         subrules[var] = 0.0
     end
+    ir = IRStructure{VartypeT}()
+    subber = SU.IRSubstituter{false}(ir, subrules)
     # Derivatives of the unknowns themselves are replaced as they are; a derivative of a
     # slice is not one of them, so expand it and replace its elements.
-    eqs = map(eq -> substitute(eq, subrules), eqs)
-    eqs = map(eq -> substitute(eq, subrules), expand_array_derivatives(eqs))
+    map!(subber, eqs, eqs)
+    expand_array_derivatives!(eqs, ir)
+    map!(subber, eqs, eqs)
     new_ps = collect(get_ps(sys))
     filter!(__no_initial_params_pred, new_ps)
     push!(new_ps, get_iv(sys))
@@ -1412,7 +1457,16 @@ function NonlinearSystem(sys::System; bind_iv::Bool = true)
         initial_conditions = new_ics, guesses = get_guesses(sys),
         initialization_eqs = steady_state_initialization_eqs(sys), name = nameof(sys),
         observed = obs,
-        systems = map(s -> NonlinearSystem(s; bind_iv = false), get_systems(sys))
+        systems = map(s -> NonlinearSystem(s; bind_iv = false), get_systems(sys)),
+        # Unlike `flatten`, the hierarchy is retained, so connections are expanded after
+        # this conversion; that needs `connector_type` and `ignored_connections`.
+        connector_type = get_connector_type(sys),
+        ignored_connections = _maybe_copy(get_ignored_connections(sys)),
+        assertions = copy(get_assertions(sys)), inputs = copy(get_inputs(sys)),
+        outputs = copy(get_outputs(sys)), state_priorities = copy(get_state_priorities(sys)),
+        irreducibles = copy(get_irreducibles(sys)), maybe_zeros = copy(get_maybe_zeros(sys)),
+        metadata = get_metadata(sys), gui_metadata = get_gui_metadata(sys),
+        description = get_description(sys)
     )
     if iscomplete(sys)
         nsys = complete(nsys; split = is_split(sys))
@@ -1433,15 +1487,15 @@ inside `Initial` - is replaced by `0`.
 function steady_state_initialization_eqs(sys::System)
     # `get_initialization_eqs` rather than `initialization_equations`: subsystems keep
     # their own translated equations through the recursive conversion.
-    initeqs = get_initialization_eqs(sys)
+    initeqs = copy(get_initialization_eqs(sys))
     isempty(initeqs) && return initeqs
     D = Differential(get_iv(sys))
-    subrules = Dict{SymbolicT, Float64}()
+    subrules = Dict{SymbolicT, SymbolicT}()
     for v in Iterators.flatten((unknowns(sys), observables(sys)))
-        subrules[D(v)] = 0.0
+        subrules[D(v)] = Symbolics.COMMON_ZERO
     end
     for var in brownians(sys)
-        subrules[var] = 0.0
+        subrules[var] = Symbolics.COMMON_ZERO
     end
     heads = Set{SymbolicT}()
     foreach(Base.Fix1(push!, heads) ∘ first ∘ split_indexed_var, unknowns(sys))
@@ -1451,30 +1505,34 @@ function steady_state_initialization_eqs(sys::System)
         push!(diff_heads, split_indexed_var(D(v))[1])
         push!(diff_heads, split_indexed_var(default_toterm(D(v)))[1])
     end
-    vs = Set{SymbolicT}()
-    initeqs = map(expand_array_derivatives(initeqs)) do eq
-        eq = substitute(eq, subrules)
+    ir = get_irstructure(sys)
+    expand_array_derivatives!(initeqs, ir)
+    ss_subber = SU.IRSubstituter{false}(ir, subrules)
+    map!(ss_subber, initeqs, initeqs)
+    vs_buffer = Set{SymbolicT}()
+    vs = SU.IRStructureSearchBuffer(ir, vs_buffer)
+    map!(initeqs, initeqs) do eq
         empty!(vs)
         SU.search_variables!(vs, eq; is_atomic = OperatorIsAtomic{Initial}())
-        rules = Dict{SymbolicT, Any}()
+        rules = Dict{SymbolicT, SymbolicT}()
         for v in vs
             if isinitial(v)
                 # `Initial(D(x))` is stored as `Initial(xˍt)`; all derivatives are
                 # zero at steady state.
                 arg = split_indexed_var(only(arguments(split_indexed_var(v)[1])))[1]
                 if arg in diff_heads
-                    rules[v] = 0.0
+                    rules[v] = Symbolics.COMMON_ZERO
                 end
             else
                 head = split_indexed_var(v)[1]
                 if head in diff_heads
-                    rules[v] = 0.0
+                    rules[v] = Symbolics.COMMON_ZERO
                 elseif head in heads
                     rules[v] = Initial(v)
                 end
             end
         end
-        isempty(rules) ? eq : substitute(eq, rules)
+        isempty(rules) ? eq : SU.IRSubstituter{false}(ir, rules)(eq)
     end
     # e.g. `D(x) ~ 0` collapses to a trivially true constant equation
     return filter!(eq -> !_iszero(eq.lhs - eq.rhs), initeqs)
@@ -2054,4 +2112,29 @@ function set_necessary_initial_conditions(sys::System, ics)
     end
     get_necessary_initial_conditions(sys) === ics && return sys
     return setmetadata(sys, NecessaryInitialConditions, ics)::System
+end
+
+# The per-task caches of a `System` (`irstructure_tlv` and the `MutableCacheKey`
+# metadata) hold values specific to whichever `Task` accessed them. A copied or
+# deserialized `System` gets fresh `PerTaskValue`s rather than transferring task-local
+# state, so those values never reach `deepcopy` or `Serialization`.
+function _fresh_per_task_caches(sys::System)
+    return setproperties(
+        sys; metadata = refreshed_metadata(get_metadata(sys); preserve_cache = false),
+        irstructure_tlv = __new_irstructure_tlv()
+    )
+end
+
+function Base.deepcopy_internal(sys::System, iddict::IdDict)
+    haskey(iddict, sys) && return iddict[sys]::System
+    return iddict[sys] = invoke(
+        Base.deepcopy_internal, Tuple{Any, IdDict}, _fresh_per_task_caches(sys), iddict
+    )::System
+end
+
+function Serialization.serialize(s::Serialization.AbstractSerializer, sys::System)
+    return invoke(
+        Serialization.serialize, Tuple{Serialization.AbstractSerializer, Any},
+        s, _fresh_per_task_caches(sys)
+    )
 end
