@@ -143,6 +143,8 @@ end
     eqs = [zeros(6) ~ D(u) + u]
     @named sys = System(eqs, t, [u], [Kop]; bindings = [Kop => BlockOp(sprand(4, 6, 0.5))])
     @test sys isa System
+    Nop = shaped_parameter(:Nop, NoSizeOp, 4, 6)
+    @test System(eqs, t, [u], [Nop]; bindings = [Nop => NoSizeOp(1.0)], name = :nosize) isa System
     @test_throws ArgumentError System(
         eqs, t, [u], [Kop]; bindings = [Kop => BlockOp(sprand(5, 6, 0.5))], name = :bad
     )
