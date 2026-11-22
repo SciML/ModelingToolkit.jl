@@ -45,7 +45,7 @@ end
     @test f[1]([2.0], [3.0], p, 0.0, [4.0]) == [1.0]
 end
 
-@testset "Array-valued known disturbance at an analysis point" begin
+@testset "Array-valued known disturbance at an analysis point (split = $split)" for split in (true, false)
     @variables x(t) control(t) [input = true] control_source(t) [output = true]
     @variables (w(t))[1:2] [input = true] (disturbance_source(t))[1:2] [output = true]
     @named sys = System(
@@ -61,13 +61,57 @@ end
             ("positional", (sys.u, sys.d), (; disturbance_argument = true)),
         )
         (; f, ps, io_sys) = ModelingToolkit.generate_control_function(
-            sys, args...; split = false, kwargs...
+            sys, args...; split, kwargs...
         )
         @test isempty(ps)
         p = ModelingToolkit.get_p(io_sys, ModelingToolkit.inputs(io_sys) .=> 0.0)
         @test f[1]([2.0], [3.0], p, 0.0, [4.0, 5.0]) == [36.0]
         @test f[1]([2.0], [3.0], p, 0.0, [5.0, 5.0]) == [33.0]
         @test f[1]([2.0], [3.0], p, 0.0, [4.0, 6.0]) == [43.0]
+    end
+end
+
+energy(v) = sum(abs2, v)
+@register_symbolic energy(v::AbstractVector)
+
+@testset "Array-valued unknown disturbance at an analysis point (split = $split)" for split in (true, false)
+    @variables x(t) c(t) [input = true] control_source(t) [output = true]
+    @variables (w(t))[1:2] [input = true] (load_source(t))[1:2] [output = true]
+    @named sys = System(
+        [
+            control_source ~ 0, load_source ~ [0.0, 0.0],
+            connect(control_source, :control_ap, c), connect(load_source, :load_ap, w),
+            D(x) ~ 5c + energy(w),
+        ], t
+    )
+
+    (; f, io_sys) = ModelingToolkit.generate_control_function(sys, sys.control_ap, sys.load_ap; split)
+    p = ModelingToolkit.get_p(io_sys, ModelingToolkit.inputs(io_sys) .=> 0.0)
+    @test f[1]([0.0], [3.0], p, 0.0) == [15.0]
+end
+
+@testset "Mixed disturbances at array elements (split = $split)" for split in (true, false)
+    @variables x(t) c(t) [input = true] control_source(t) [output = true]
+    @variables (w(t))[1:2] [input = true, disturbance = true] load_source(t) [output = true]
+    @testset "Known elements $indices" for (indices, load, expected) in (
+            ((1,), [4.0], 17.0),
+            ((2,), [4.0], -23.0),
+            ((2, 1), [4.0, 6.0], -5.0),
+        )
+        @named sys = System(
+            [
+                control_source ~ 0, load_source ~ 0,
+                connect(control_source, :control_ap, c), connect(load_source, :load_ap, w[first(indices)]),
+                D(x) ~ 5c + 3w[1] - 7w[2],
+            ], t
+        )
+
+        known_disturbances = [sys.load_ap, (w[i] for i in Base.tail(indices))...]
+        (; f, io_sys) = ModelingToolkit.generate_control_function(
+            sys, sys.control_ap; known_disturbance_inputs = known_disturbances, split
+        )
+        p = ModelingToolkit.get_p(io_sys, ModelingToolkit.inputs(io_sys) .=> 0.0)
+        @test f[1]([0.0], [1.0], p, 0.0, load) == [expected]
     end
 end
 
