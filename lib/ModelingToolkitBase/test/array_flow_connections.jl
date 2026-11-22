@@ -1,15 +1,20 @@
-using ModelingToolkitBase, Symbolics, Test
-using ModelingToolkitBase: t_nounits as t
+using ModelingToolkitBase, Symbolics, SciMLBase, Test
+using FillArrays: Zeros
+using LinearAlgebra: rank
+using ModelingToolkitBase: t_nounits as t, D_nounits as D
 
-@connector function ArrayFlowPort(; name, rows = 1, columns = 1)
+@connector function ArrayFlowPort(; name, rows = 1, columns = 1, dynamic = false)
     vars = @variables potential(t)[1:rows, 1:columns] flow(t)[1:rows, 1:columns] [connect = Flow]
-    return System(Equation[], t, vars, []; name)
+    eqs = dynamic ? [D(potential) ~ (flow .- potential)] : Equation[]
+    return System(eqs, t, vars, []; name)
 end
 
 function connection_block_size(x)
     x = Symbolics.value(x)
     if Symbolics.iscall(x)
         return 1 + sum(connection_block_size, Symbolics.arguments(x); init = 0)
+    elseif x isa Zeros
+        return 1 + ndims(x)
     elseif x isa AbstractArray
         return 1 + sum(connection_block_size, x; init = 0)
     end
@@ -81,5 +86,27 @@ end
         for term in expected
             @test (0 ~ term) in scalar_eqs
         end
+    end
+end
+
+@testset "Array flow port edge cases" begin
+    @testset "Open port in a mass-matrix ODE" begin
+        @named a = ArrayFlowPort(; rows = 2, columns = 3, dynamic = true)
+        @named network = System(Equation[], t; systems = [a])
+        p0 = [1.0 3.0 5.0; 2.0 4.0 6.0]
+        prob = ODEProblem(
+            complete(network), [a.potential => p0, a.flow => zeros(2, 3)],
+            (0.0, 1.0); build_initializeprob = false
+        )
+        @test rank(prob.f.mass_matrix) == 6
+        @test prob.f(prob.u0, prob.p, 0.0) == vcat(-vec(p0), zeros(6))
+    end
+
+    @testset "Zero-width port in structural compilation" begin
+        @variables x(t)
+        @named a = ArrayFlowPort(; rows = 0, columns = 3)
+        @named network = System([D(x) ~ -x], t, [x], []; systems = [a])
+        prob = ODEProblem(mtkcompile(network), [x => 3.0], (0.0, 1.0))
+        @test prob.f(prob.u0, prob.p, 0.0) == [-3.0]
     end
 end

@@ -876,8 +876,9 @@ function _generate_connection_set!(
     return sys
 end
 
-function _flow_equations_from_idxs!(sys::AbstractSystem, eqs::Vector{Equation}, cset::Vector{ConnectionVertex}, len::Int)
-    representative = variable_from_vertex(sys, first(cset))::SymbolicT
+function _flow_equations_from_idxs!(sys::AbstractSystem, eqs::Vector{Equation}, cset::Vector{ConnectionVertex}, representative::SymbolicT)
+    len = length(representative)::Int
+    iszero(len) && return
     if SU.is_array_shape(SU.shape(representative)) && all(cset) do cvert
             v = variable_from_vertex(sys, cvert)::SymbolicT
             isequal(SU.shape(v), SU.shape(representative))
@@ -887,7 +888,8 @@ function _flow_equations_from_idxs!(sys::AbstractSystem, eqs::Vector{Equation}, 
             cvert.isouter ? .-v : v
         end
         rhs = reduce((a, b) -> a .+ b, terms)
-        push!(eqs, 0 .* Symbolics.wrap(representative) ~ rhs)
+        lhs = FillArrays.Zeros{Int}(axes(representative))
+        push!(eqs, lhs ~ rhs)
         return
     end
     add_buffer = SymbolicT[]
@@ -1006,8 +1008,7 @@ function generate_connection_equations_and_stream_connections(
         elseif vtype === Stream
             push!(stream_connections, cset)
         elseif vtype === Flow
-            representative = variable_from_vertex(sys, cset[1])::SymbolicT
-            _flow_equations_from_idxs!(sys, eqs, cset, length(representative)::Int)
+            _flow_equations_from_idxs!(sys, eqs, cset, var)
         else # Equality
             vars = SymbolicT[]
             for cvar in cset
