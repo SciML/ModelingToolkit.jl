@@ -99,7 +99,11 @@ end
 
 macro import_mtkbase()
     allnames = names(MTKBase; all = true)
-    banned_names = Set{Symbol}([:eval, :include, :Variable, :__init__])
+    banned_names = Set{Symbol}(
+        [
+            :eval, :include, :Variable, :__init__, :preserve_array_equations_supported,
+        ]
+    )
     using_expr = Expr(:using, Expr(:(:), Expr(:., :ModelingToolkitBase)))
     inner_using_expr = using_expr.args[1]
 

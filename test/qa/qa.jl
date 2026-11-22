@@ -58,6 +58,13 @@ end
     @test g([1.0], [2.0], p, 3.0) ≈ [7.0]
 end
 
+@testset "Array preservation backend capability API" begin
+    @static if VERSION >= v"1.11"
+        @test Base.ispublic(ModelingToolkitBase, :preserve_array_equations_supported)
+        @test !Base.ispublic(ModelingToolkit, :preserve_array_equations_supported)
+    end
+end
+
 # The exact set of externally-owned bindings ModelingToolkit deliberately exposes as part
 # of its own public API. ModelingToolkit is a facade: `@reexport using ModelingToolkitBase`
 # pulls up the modelling layer, which in turn `@reexport`s Symbolics (and, through it,
@@ -70,9 +77,7 @@ end
 # public name fails this test instead of silently widening ModelingToolkit's API, and every
 # addition becomes a deliberate decision. Removing an entry is a breaking change.
 const REEXPORTED_API = (
-    # ModelingToolkitBase: the lower half of this library. ModelingToolkit is a facade
-    # over it (`@reexport using ModelingToolkitBase` plus `@import_mtkbase`), so its entire
-    # public API is deliberately part of ModelingToolkit's.
+    # ModelingToolkitBase API exposed by the ModelingToolkit facade.
     Symbol("@brownian"), Symbol("@brownians"), Symbol("@component"), Symbol("@connector"),
     Symbol("@constants"), Symbol("@discretes"), Symbol("@independent_variables"),
     Symbol("@mtkbuild"), Symbol("@mtkcompile"), Symbol("@mtkcomplete"), Symbol("@named"),
