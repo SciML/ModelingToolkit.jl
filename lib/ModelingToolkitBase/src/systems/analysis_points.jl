@@ -974,11 +974,17 @@ function generate_control_function(
                 push!(kd, unwrap(disturbance))
             end
         end
+        kd = scalarized_vars(kd)
     end
 
     if dist_ap_name === nothing
+        sys = system_modifier(sys)
+        d = disturbances(sys)
+        if kd !== nothing && !isempty(kd)
+            d = setdiff(scalarized_vars(d), kd)
+        end
         return ModelingToolkitBase.generate_control_function(
-            system_modifier(sys), u; known_disturbance_inputs = kd, kwargs...
+            sys, u, d; known_disturbance_inputs = kd, kwargs...
         )
     end
 
@@ -989,6 +995,6 @@ function generate_control_function(
     end
 
     return ModelingToolkitBase.generate_control_function(
-        system_modifier(sys), u, d; known_disturbance_inputs = kd, kwargs...
+        system_modifier(sys), u, scalarized_vars(d); known_disturbance_inputs = kd, kwargs...
     )
 end

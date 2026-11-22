@@ -26,6 +26,51 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
     end
 end
 
+@testset "Marked known disturbance at an analysis point" begin
+    @variables x(t) control(t) [input = true] control_source(t) [output = true]
+    @variables w(t) [input = true, disturbance = true] disturbance_source(t) [output = true]
+    @variables unknown_disturbance(t) [disturbance = true]
+    @named sys = System(
+        [
+            control_source ~ 0, disturbance_source ~ 0,
+            connect(control_source, :u, control), connect(disturbance_source, :d, w),
+            D(x) ~ -x + 5control - 3w + unknown_disturbance,
+        ], t
+    )
+
+    (; f, io_sys) = ModelingToolkit.generate_control_function(
+        sys, sys.u; known_disturbance_inputs = [sys.d], split = false
+    )
+    p = ModelingToolkit.get_p(io_sys, ModelingToolkit.inputs(io_sys) .=> 0.0)
+    @test f[1]([2.0], [3.0], p, 0.0, [4.0]) == [1.0]
+end
+
+@testset "Array-valued known disturbance at an analysis point" begin
+    @variables x(t) control(t) [input = true] control_source(t) [output = true]
+    @variables (w(t))[1:2] [input = true] (disturbance_source(t))[1:2] [output = true]
+    @named sys = System(
+        [
+            control_source ~ 0, disturbance_source ~ [0.0, 0.0],
+            connect(control_source, :u, control), connect(disturbance_source, :d, w),
+            D(x) ~ -x + 5control - 3w[1] + 7w[2],
+        ], t
+    )
+
+    @testset "$interface" for (interface, args, kwargs) in (
+            ("keyword", (sys.u,), (; known_disturbance_inputs = [sys.d])),
+            ("positional", (sys.u, sys.d), (; disturbance_argument = true)),
+        )
+        (; f, ps, io_sys) = ModelingToolkit.generate_control_function(
+            sys, args...; split = false, kwargs...
+        )
+        @test isempty(ps)
+        p = ModelingToolkit.get_p(io_sys, ModelingToolkit.inputs(io_sys) .=> 0.0)
+        @test f[1]([2.0], [3.0], p, 0.0, [4.0, 5.0]) == [36.0]
+        @test f[1]([2.0], [3.0], p, 0.0, [5.0, 5.0]) == [33.0]
+        @test f[1]([2.0], [3.0], p, 0.0, [4.0, 6.0]) == [43.0]
+    end
+end
+
 indexof(sym, syms) = findfirst(isequal(sym), syms)
 
 ## Build the system model ======================================================
@@ -216,7 +261,7 @@ f, x_sym,
         ([:u], [:d1, :d2]),
         ([model_with_disturbance.u], [model_with_disturbance.d1, model_with_disturbance.d2]),
     )
-    (; f, io_sys) = ModelingToolkit.generate_control_function(
+    (; f, dvs, io_sys) = ModelingToolkit.generate_control_function(
         model_with_disturbance, control_inputs;
         known_disturbance_inputs = disturbance_inputs, split = false
     )
@@ -226,8 +271,14 @@ f, x_sym,
     p = ModelingToolkit.get_p(io_sys, op)
     u = zeros(length(control_inputs))
     @test f[1](x0, u, p, 0.0, zeros(length(disturbance_inputs))) == zeros(length(x0))
-    # The direct feedthrough of dist3 also changes the inertia1 velocity derivative.
-    @test sort(f[1](x0, u, p, 0.0, [1.0, 2.0])) == [0, 0, 1, 1, 2]
+    inertia1_velocity = io_sys.system_model.inertia1.w
+    inertia2_velocity = io_sys.system_model.inertia2.w
+    integrator_state = io_sys.disturbance_model.x[1]
+    expected_d1 = [isequal(x, inertia1_velocity) || isequal(x, integrator_state) for x in dvs]
+    expected_d2 = [isequal(x, inertia2_velocity) for x in dvs]
+    @test f[1](x0, u, p, 0.0, [1.0, 0.0]) == expected_d1
+    @test f[1](x0, u, p, 0.0, [0.0, 2.0]) == 2 .* expected_d2
+    @test f[1](x0, u, p, 0.0, [1.0, 2.0]) == expected_d1 + 2 .* expected_d2
 end
 
 measurement = ModelingToolkit.build_explicit_observed_function(
