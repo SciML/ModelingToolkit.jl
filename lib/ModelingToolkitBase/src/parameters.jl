@@ -133,8 +133,9 @@ end
 ```
 
 `T` must be a concrete type and every dimension must be positive (a nonempty range is
-allowed). The parameter is not tunable unless `tunable = true`, which requires a dense `Array` type. Values are supplied through
-the problem `op` map, not through `bindings`, which reject shaped opaque parameters.
+allowed). The parameter is a constant, not tunable (`tunable = true` throws). Values are
+supplied through the problem `op` map, not through `bindings`, which reject shaped opaque
+parameters.
 """
 function shaped_parameter(
         name::Symbol, T::Type, dims::Union{Int, AbstractUnitRange{Int}}...;
@@ -142,17 +143,17 @@ function shaped_parameter(
     )
     isconcretetype(T) || throw(ArgumentError("`shaped_parameter` requires a concrete type, got `$T`."))
     isempty(dims) && throw(ArgumentError("`shaped_parameter` requires at least one dimension."))
-    tunable && !(T <: Array) && throw(
+    tunable && throw(
         ArgumentError(
-            "`shaped_parameter` can only be `tunable` for dense `Array` types, got `$T`; " *
-                "tunable values are stored in a flat buffer and lose the declared type."
+            "shaped opaque/array parameters are not tunable; they are stored as constants " *
+                "and updated through the `op` map / `setp`."
         )
     )
     all(d -> d isa Int ? d > 0 : !isempty(d), dims) ||
         throw(ArgumentError("`shaped_parameter` dimensions must be positive, got $dims."))
     shape = SymbolicUtils.ShapeVecT(map(d -> d isa Int ? (1:d) : UnitRange{Int}(d), dims))
     sym = SymbolicUtils.Sym{SymReal}(name; type = T, shape)
-    sym = setmetadata(sym, VariableTunable, tunable)
+    sym = setmetadata(sym, VariableTunable, false)
     return wrap(toparam(sym))
 end
 

@@ -28,9 +28,9 @@ D = Differential(t)
     @test SymbolicUtils.symtype(unwrap(K)) == SparseMatrixCSC{Float64, Int}
     @test ModelingToolkitBase.isparameter(K)
     @test !ModelingToolkitBase.istunable(K)
-    @test ModelingToolkitBase.istunable(shaped_parameter(:K2, Matrix{Float64}, 4, 6; tunable = true))
-    @test_throws ArgumentError shaped_parameter(:K2, SparseMatrixCSC{Float64, Int}, 4, 6; tunable = true)
-    @test_throws ArgumentError shaped_parameter(:K2, BlockOp, 4, 6; tunable = true)
+    for T in (Matrix{Float64}, SparseMatrixCSC{Float64, Int}, BlockOp)
+        @test_throws "not tunable" shaped_parameter(:K2, T, 4, 6; tunable = true)
+    end
     @variables u(t)[1:6] w(t)[1:4]
     @test size(K * u) == (4,)
     @test (w ~ K * u) isa Equation
