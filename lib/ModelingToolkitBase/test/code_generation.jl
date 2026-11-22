@@ -475,4 +475,12 @@ end
     prob.f(du, prob.u0, prob.p, 0.0)
     @test du[1] == sum(prob.u0) + 1
     @test prob.f(prob.u0, prob.p, 0.0)[1] == sum(prob.u0) + 1
+
+    @variables a(t) c[1:3]
+    csys = complete(System(Equation[], t, [a], []; name = :caches); split = false)
+    caches = ([unwrap(c[1])], unwrap.([c[2], c[3]]))
+    csum = unwrap(a + sum(c))
+    crule = OptimizationRule("c", (ir, expr) -> true, (ir, expr, _) -> (populate_ir!(ir, csum); (ir, csum)), 1)
+    f = generate_custom_function(csys, a + 1; cachesyms = caches, optimize = [crule], expression = Val(false))
+    @test f([2.0], Float64[], [10.0], [20.0, 30.0], 0.0) == 62.0
 end

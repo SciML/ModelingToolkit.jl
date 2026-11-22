@@ -498,7 +498,7 @@ function array_variable_buffer_idxs_to_assignments(
             end
             for idx in idxs
                 i, j = idx
-                push!(expr.args, Expr(:ref, argument_name(i), j))
+                push!(expr.args, Expr(:ref, argument_name(i + buffer_offset), j))
             end
         end
         expr = Expr(:call, reshape, expr, var_size_expr)
