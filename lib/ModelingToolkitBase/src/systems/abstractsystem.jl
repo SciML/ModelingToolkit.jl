@@ -731,10 +731,13 @@ function complete(
                 append!(ordered_ps, ps_split[i]::Vector{SymbolicT})
             end
             if isscheduled(sys)
-                # ensure inputs are sorted
+                # ensure inputs are sorted. Only tunable inputs have a defined order;
+                # non-floating point inputs are stored in buffers grouped by type.
                 last_idx = 0
+                tunable_idx = get_index_cache(sys).tunable_idx
                 for p in input_vars
                     p, _ = split_indexed_var(p)
+                    haskey(tunable_idx, p) || continue
                     idx = findfirst(isequal(p), ordered_ps)::Int
                     @assert last_idx <= idx
                     last_idx = idx
