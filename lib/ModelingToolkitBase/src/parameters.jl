@@ -133,7 +133,8 @@ end
 ```
 
 `T` must be a concrete type and every dimension must be positive (a nonempty range is
-allowed). The parameter is not tunable unless `tunable = true`.
+allowed). The parameter is not tunable unless `tunable = true`. Values are supplied through
+the problem `op` map, not through `bindings`, which reject shaped opaque parameters.
 """
 function shaped_parameter(
         name::Symbol, T::Type, dims::Union{Int, AbstractUnitRange{Int}}...;

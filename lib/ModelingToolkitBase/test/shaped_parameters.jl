@@ -137,17 +137,16 @@ end
     @test getp(csys, Nop)(ps) == NoSizeOp(2.0)
 end
 
-@testset "bindings of shaped opaque parameters are size-checked" begin
+@testset "bindings of shaped opaque parameters are rejected" begin
     @variables u(t)[1:6]
     Kop = shaped_parameter(:Kop, BlockOp, 4, 6)
-    eqs = [zeros(6) ~ D(u) + u]
-    @named sys = System(eqs, t, [u], [Kop]; bindings = [Kop => BlockOp(sprand(4, 6, 0.5))])
-    @test sys isa System
     Nop = shaped_parameter(:Nop, NoSizeOp, 4, 6)
-    @test System(eqs, t, [u], [Nop]; bindings = [Nop => NoSizeOp(1.0)], name = :nosize) isa System
-    @test_throws ArgumentError System(
-        eqs, t, [u], [Kop]; bindings = [Kop => BlockOp(sprand(5, 6, 0.5))], name = :bad
-    )
+    eqs = [zeros(6) ~ D(u) + u]
+    for (p, val) in ((Kop, BlockOp(sprand(4, 6, 0.5))), (Nop, NoSizeOp(1.0)))
+        @test_throws r"bindings of shaped opaque parameters are not supported" System(
+            eqs, t, [u], [p]; bindings = [p => val], name = :bad
+        )
+    end
 end
 
 @testset "declared shape is validated for sparse matrix parameters" begin

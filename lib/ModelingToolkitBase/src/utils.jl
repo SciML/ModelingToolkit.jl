@@ -402,17 +402,19 @@ function check_bindings(atomic_ps::AtomicArraySet{Dict{SymbolicT, Nothing}}, bin
             psh = SU.shape(p)
             vsh = SU.shape(val)
             if psh isa SU.ShapeVecT && vsh isa SU.ShapeVecT && !(symtype(p) <: FnType)
-                psz = Tuple(map(length, psh))
-                vsz = Tuple(map(length, vsh))
-                # `SU.shape` sees an opaque value as a scalar; a `shaped_parameter` is
-                # compared with the value's own `size`, when it has one.
-                skip = false
                 if isempty(vsh) && has_declared_opaque_shape(p)
-                    raw = SU.isconst(val) ? unwrap_const(val) : val
-                    # values without a `size` are accepted, as for parameter updates
-                    applicable(size, raw) ? (vsz = size(raw)) : (skip = true)
+                    throw(
+                        ArgumentError(
+                            "binding for $p: bindings of shaped opaque parameters are not supported " *
+                                "because the declared shape is lost when the value is substituted into " *
+                                "an operator application; supply the value through the problem `op` map instead."
+                        )
+                    )
                 end
-                if !skip && psz != vsz
+                if length(psh) != length(vsh) ||
+                        any(i -> length(psh[i]) != length(vsh[i]), eachindex(psh))
+                    psz = Tuple(map(length, psh))
+                    vsz = Tuple(map(length, vsh))
                     throw(
                         ArgumentError(
                             "binding for $p has size $vsz, but $p has size $psz"
