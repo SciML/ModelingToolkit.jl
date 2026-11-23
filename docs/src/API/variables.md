@@ -423,6 +423,11 @@ to symbolic variables. The most common operator is the
 [Differential operator](https://docs.sciml.ai/Symbolics/stable/manual/derivatives/), defined
 in Symbolics.jl.
 
+With Symbolics.jl 7.49 or later, ModelingToolkit and ModelingToolkitBase also re-export
+`Curl`, `Divergence`, `Grad`, `Laplacian`, and `NormalDerivative`.
+See the [Symbolics.jl derivative reference](https://docs.sciml.ai/Symbolics/stable/manual/derivatives/)
+for their definitions and examples.
+
 ModelingToolkit also defines a plethora of custom operators.
 
 ```@docs

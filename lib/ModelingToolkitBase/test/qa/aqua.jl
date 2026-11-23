@@ -135,13 +135,14 @@ const NONPUBLIC_QUALIFIED_ACCESSES = (
 # every addition becomes a deliberate decision. Removing an entry is a breaking change.
 const REEXPORTED_API = (
     # Symbolics
-    :approximation_function, :build_function, Symbol("@derivative_rule"),
-    Symbol("@derivatives"), :Differential, :Equation, :expand_derivatives, :factors,
-    :gather_factor, :get_variables, :groebner_basis, :has_inverse, :has_left_inverse,
+    :approximation_function, :build_function, :Curl, Symbol("@derivative_rule"),
+    Symbol("@derivatives"), :Differential, :Divergence, :Equation, :expand_derivatives, :factors,
+    :gather_factor, :get_variables, :Grad, :groebner_basis, :has_inverse, :has_left_inverse,
     :has_right_inverse, :Inequality, :infimum, :Integral, :inverse, :inverse_laplace,
-    :is_derivative, :is_groebner_basis, :laplace, :laplace_solve_ode,
+    :is_derivative, :is_groebner_basis, :laplace, :laplace_solve_ode, :Laplacian,
     :left_continuous_function, :left_inverse, :limit, :majorization_function,
-    :minorization_function, :Num, :parse_expr_to_symbolic, :partial_frac_decomposition,
+    :minorization_function, :NormalDerivative, :Num, :parse_expr_to_symbolic,
+    :partial_frac_decomposition,
     :polynomial_coeffs, Symbol("@register_array_symbolic"), Symbol("@register_derivative"),
     Symbol("@register_discontinuity"), Symbol("@register_inverse"),
     Symbol("@register_symbolic"), :right_continuous_function, :right_inverse, :rootfunction,
