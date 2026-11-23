@@ -535,135 +535,69 @@ function array_variable_assignments(
     return array_variable_buffer_idxs_to_assignments(var_to_arridxs; argument_name, buffer_offset, filter_vars)
 end
 
-"""
-    $(TYPEDSIGNATURES)
-
-Map each record occurring scalarized in `args` to the buffer position of each of its
-leaves, in [`record_leaves`](@ref) order. A leaf missing from `args` is left `(0, 0)`,
-which skips the record below.
-
-The record counterpart of [`compute_array_variable_buffer_idxs`](@ref).
-"""
-function compute_record_variable_buffer_idxs(@nospecialize(args); ignore_arg_idxs = nothing)
-    var_to_leafidxs = Dict{SymbolicT, Vector{Tuple{Int, Int}}}()
-    for (i, arg) in enumerate(args)
-        # Every record leaf is a scalar, so it can only live in a vector of symbolics.
-        arg isa AbstractVector{SymbolicT} || continue
-        ignore_arg_idxs === nothing || i in ignore_arg_idxs && continue
-
-        for (j, var) in enumerate(arg)
-            var = unwrap(var)
-            root, isrec = record_key_root(var)
-            isrec || continue
-            k = get(record_leaf_indexmap(root), var, 0)
-            # A record-valued field contributes nothing; its leaves are in the buffer
-            # separately.
-            k == 0 && continue
-            idxbuffer = get(var_to_leafidxs, root, nothing)
-            if idxbuffer === nothing
-                idxbuffer = Tuple{Int, Int}[(0, 0) for _ in eachindex(record_leaves(root))]
-                var_to_leafidxs[root] = idxbuffer
-            end
-            idxbuffer[k] = (i, j)
-        end
-    end
-
-    return var_to_leafidxs
-end
-
-"""
-    $(TYPEDSIGNATURES)
-
-The expression reconstructing `node`, a projection of the record `root` or `root` itself,
-from `leafexprs`: one expression per leaf of `root`, in [`record_leaves`](@ref) order.
-
-Mirrors [`record_node_value`](@ref) but assembles source, so each field keeps its declared
-type in the generated function.
-"""
-function record_construction_expr(root::SymbolicT, node::SymbolicT, leafexprs::Vector{Expr})
-    i = get(record_leaf_indexmap(root), node, 0)
-    i == 0 || return leafexprs[i]
-
-    if SU.is_array_shape(SU.shape(node))
-        # `stable_eachindex` walks in linear order, which is the order the leaves are laid
-        # out in, so the elements come back flat and have to be reshaped.
-        vect = Expr(:vect)
-        for idx in SU.stable_eachindex(node)
-            push!(vect.args, record_construction_expr(root, node[idx]::SymbolicT, leafexprs))
-        end
-        sizeexpr = Expr(:tuple)
-        append!(sizeexpr.args, size(node))
-        return Expr(:call, reshape, vect, sizeexpr)
-    end
-
-    T = SU.symtype(node)::SU.TypeT
-    Symbolics.issymstruct(node) || error(
-        lazy"Cannot assemble an expression for $node of type $T from the leaves of $root."
-    )
-    call = Expr(:call, T)
-    for fname in fieldnames(T::DataType)
-        field = Symbolics.SymbolicGetproperty{T, fname}()(node)::SymbolicT
-        push!(call.args, record_construction_expr(root, field, leafexprs))
-    end
-    return call
-end
-
-function record_variable_buffer_idxs_to_assignments(
-        var_to_leafidxs::Dict{SymbolicT, Vector{Tuple{Int, Int}}};
-        argument_name = generated_argument_name, buffer_offset = 0,
-        filter_vars = nothing,
-    )
-    assignments = Assignment[]
-    for (root, idxs) in var_to_leafidxs
-        filter_vars === nothing || root in filter_vars || continue
-        # every leaf of the record has to be present in `args` to rebuild it
-        any(iszero ∘ first, idxs) && continue
-
-        leafexprs = Expr[Expr(:ref, argument_name(i + buffer_offset), j) for (i, j) in idxs]
-        push!(assignments, Assignment(root, record_construction_expr(root, root, leafexprs)))
-    end
-
-    return assignments
-end
-
-"""
-    $(TYPEDSIGNATURES)
-
-Given the arguments to `build_function_wrapper`, return a list of assignments which
-reconstruct the records referenced whole in the generated code from the leaves they are
-present as in `args`.
-
-# Keyword Arguments
-
-- `argument_name` a function of the form `(::Int) -> Symbol` which takes the index of
-  an argument to the generated function and returns the name of the argument in the
-  generated function.
-"""
-function record_variable_assignments(
-        @nospecialize(args...); filter_vars = nothing,
-        argument_name = generated_argument_name, buffer_offset = 0, ignore_arg_idxs = nothing
-    )
-    var_to_leafidxs = compute_record_variable_buffer_idxs(args; ignore_arg_idxs)
-    return record_variable_buffer_idxs_to_assignments(
-        var_to_leafidxs; argument_name, buffer_offset, filter_vars
-    )
-end
-
-"""
-    $(TYPEDSIGNATURES)
-
-Whether `ex` is a record referenced whole, and so has to be rebuilt from its leaves before
-the generated code can use it.
-"""
 function find_recordvars_is_atomic(ex::SymbolicT)
     return SU.default_is_atomic(ex) && Symbolics.issymstruct(ex)
 end
 
-# A projection `s.p` is read straight from the buffer. Descending into it would rebuild
-# `s` for a reference that never needs it.
 function find_recordvars_recurse(ex::SymbolicT)
-    is_symstruct_field(ex) && return false
-    return !SU.default_is_atomic(ex) || !has_const_int_indices(ex)
+    return iscall(ex) && !is_symstruct_field(ex) && find_arrvars_recurse(ex)
+end
+
+function search_record_arguments!(buffer, expr)
+    SU.search_variables!(
+        buffer, expr; is_atomic = find_recordvars_is_atomic, recurse = find_recordvars_recurse
+    )
+    return nothing
+end
+
+function substitute_record_arguments(ir, expr, rules)
+    isempty(rules) && return expr
+    return SU.IRSubstituter{false}(ir, rules; filterer = find_recordvars_recurse)(expr)
+end
+
+function expand_codegen_record!(rules, active, ir, record, supplied, obs_subber)
+    root, _ = record_key_root(record)
+    (haskey(rules, record) || record in supplied || root in supplied) && return
+    record in active && throw(ArgumentError(lazy"Cyclic dependencies in the leaves of $record."))
+    push!(active, record)
+
+    value = obs_subber(record_as_literal(record))
+    dependencies = Set{SymbolicT}()
+    search_record_arguments!(SU.IRStructureSearchBuffer(ir, dependencies), value)
+    for dependency in dependencies
+        expand_codegen_record!(rules, active, ir, dependency, supplied, obs_subber)
+    end
+    rules[record] = substitute_record_arguments(ir, value, rules)
+    delete!(active, record)
+    return nothing
+end
+
+function lower_codegen_record_arguments(ir, expr, args::Vector{Any}, extra_assignments, pref, obs_subber)
+    records = Set{SymbolicT}()
+    search = SU.IRStructureSearchBuffer(ir, records)
+    search_record_arguments!(search, expr)
+    isempty(records) && return expr
+
+    supplied = Set{SymbolicT}()
+    for arg in args
+        if arg isa SymbolicT
+            push!(supplied, arg)
+        elseif arg isa AbstractArray{SymbolicT}
+            union!(supplied, arg)
+        end
+    end
+    for assignment in Iterators.flatten((extra_assignments, something(pref, ())))
+        assignment isa Assignment || continue
+        lhs = assignment.lhs
+        lhs isa SymbolicT && push!(supplied, lhs)
+    end
+
+    rules = Dict{SymbolicT, SymbolicT}()
+    active = Set{SymbolicT}()
+    for record in records
+        expand_codegen_record!(rules, active, ir, record, supplied, obs_subber)
+    end
+    return substitute_record_arguments(ir, expr, rules)
 end
 
 """
@@ -1133,7 +1067,9 @@ Base.@nospecializeinfer function build_function_wrapper(
 
     ir_info = get_ir_info(sys)
     ir = get_irstructure(sys)
+    pref = has_preface(sys) ? preface(sys) : nothing
     expr = ir_info.obs_subber(expr)
+    expr = lower_codegen_record_arguments(ir, expr, args, extra_assignments, pref, ir_info.obs_subber)
     stmts = SU.IRStructureSearchBuffer(ir, Set{SymbolicT}())
     SU.search_variables!(stmts, expr; is_atomic = Returns(true))
     for subexpr in stmts
@@ -1145,7 +1081,7 @@ Base.@nospecializeinfer function build_function_wrapper(
     # function. The chunked in-place function requires that `out` does not alias any input.
     if chunk_size != 0 && opts.codegen.iip_config == (true, true) && !wrap_delays &&
             !create_bindings && isempty(compress_args) && isempty(extra_assignments) &&
-            !(has_preface(sys) && preface(sys) !== nothing) &&
+            pref === nothing &&
             all(==(identity), opts.codegen.wrap_code) && opts.codegen.outputidxs === nothing &&
             mkarray === nothing && _is_plain_array_type(output_type) &&
             _is_plain_array_type(opts.codegen.similarto)
@@ -1221,22 +1157,6 @@ Base.@nospecializeinfer function build_function_wrapper(
         append!(assignments, other_assigns)
     end
 
-    # Assignments reconstructing records referenced whole. Over every buffer at once:
-    # leaves are scalars wherever they live, and `u_argument_name` names any buffer.
-    required_recordvars = Set{SymbolicT}()
-    record_search_buffer = SU.IRStructureSearchBuffer(ir, required_recordvars)
-    SU.search_variables!(
-        record_search_buffer, expr; is_atomic = find_recordvars_is_atomic,
-        recurse = find_recordvars_recurse
-    )
-    if !isempty(required_recordvars)
-        append!(
-            assignments, record_variable_assignments(
-                args...; filter_vars = required_recordvars, argument_name = u_argument_name
-            )
-        )
-    end
-
     append!(assignments, extra_assignments)
 
     for (i, arg) in enumerate(args)
@@ -1270,7 +1190,7 @@ Base.@nospecializeinfer function build_function_wrapper(
     end
 
     # add preface assignments
-    if has_preface(sys) && (pref = preface(sys)) !== nothing
+    if pref !== nothing
         append!(assignments, pref)
     end
 

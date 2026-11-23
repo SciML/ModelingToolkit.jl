@@ -286,23 +286,6 @@ function has_observed_with_lhs(sys::AbstractSystem, sym)
     end
 end
 
-"""
-    $(TYPEDSIGNATURES)
-
-Whether `sym` is a record referenced whole whose leaves are all unknowns of `sys`.
-
-Such a record has no index of its own, but an expression containing it varies over the
-continuous timeseries exactly as its leaves do.
-"""
-function is_record_of_variables(sys::AbstractSystem, sym)
-    sym = unwrap(sym)
-    sym isa SymbolicT || return false
-    Symbolics.issymstruct(sym) || return false
-    leaves = record_leaves(sym)
-    isempty(leaves) && return false
-    return all(leaf -> is_variable(sys, leaf), leaves)
-end
-
 function _all_ts_idxs!(ts_idxs, ::NotSymbolic, sys, sym)
     return if is_variable(sys, sym) || is_independent_variable(sys, sym)
         push!(ts_idxs, ContinuousTimeseries())
@@ -318,10 +301,10 @@ for traitT in [
     @eval function _all_ts_idxs!(ts_idxs, ::$traitT, sys, sym)
         allsyms = Set{SymbolicT}()
         SU.search_variables!(allsyms, sym; is_atomic = OperatorIsAtomic{SU.Operator}())
-        for s in allsyms
-            s = unwrap(s)
-            if is_variable(sys, s) || is_independent_variable(sys, s) ||
-                    is_record_of_variables(sys, s)
+        for v in allsyms, s in (
+                    Symbolics.issymstruct(v) ? Iterators.flatten(((v,), record_leaves(v))) : (v,)
+                )
+            if is_variable(sys, s) || is_independent_variable(sys, s)
                 push!(ts_idxs, ContinuousTimeseries())
             elseif is_timeseries_parameter(sys, s)
                 push!(ts_idxs, timeseries_parameter_index(sys, s).timeseries_idx)
