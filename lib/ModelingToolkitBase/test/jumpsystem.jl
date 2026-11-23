@@ -276,6 +276,79 @@ end
     @test jtoj == [[1, 2, 4], [1, 2, 4], [1, 2, 3, 4], [1, 2, 3, 4]]
 end
 
+# The same maps with array unknowns scalarized by hand: elements of a vector and of a matrix,
+# before and after a scalar unknown. The maps index variables by position in the state.
+@testset "Dependency graphs with scalarized array unknowns" begin
+    @variables A(t) X(t)[1:2] Y(t)[1:2, 1:2]
+    @parameters k
+    # mass action jumps first, as the aggregators number them
+    jumps = [
+        SymbolicMassActionJump(k, [X[1] => 1], [X[1] => -1, X[2] => 1]),
+        SymbolicMassActionJump(k, [X[2] => 1, A => 1], [X[2] => -1, A => -1, Y[2, 1] => 1]),
+        ConstantRateJump(k * (X[1] + X[2]), [A ~ Pre(A) + 1]),
+        ConstantRateJump(k * Y[1, 2] * A, [A ~ Pre(A) - 1]),
+    ]
+    @named js = JumpSystem(jumps, t, [collect(X); A; vec(collect(Y))], [k])
+    js = complete(js)
+    @test isequal(unknowns(js), MT.flat_unknowns(js))
+
+    # the variables each jump's rate depends on and the variables each jump changes
+    depends = [[X[1]], [X[2], A], [X[1], X[2]], [Y[1, 2], A]]
+    changes = [[X[1], X[2]], [X[2], A, Y[2, 1]], [A], [A]]
+    idxs(vars) = sort!([variable_index(js, v) for v in vars])
+    vtoj = [findall(vars -> i in idxs(vars), depends) for i in 1:length(unknowns(js))]
+    jtov = [idxs(vars) for vars in changes]
+    jtoj = [findall(vars -> !isdisjoint(idxs(vars), idxs(c)), depends) for c in changes]
+
+    jdeps = asgraph(js; eqs = MT.jumps(js))
+    vdeps = variable_dependencies(js; eqs = MT.jumps(js))
+    @test jdeps.badjlist == vtoj
+    @test vdeps.badjlist == jtov
+    @test eqeq_dependencies(jdeps, vdeps).fadjlist == jtoj
+end
+
+# `JumpProblem` rejects unscalarized array unknowns, whose flat state the jump and event code
+# doesn't index correctly. With the unknowns scalarized, the aggregators that use dependency
+# maps must update every rate a jump changes.
+@testset "Array unknowns: rejected unless scalarized" begin
+    @variables V(t) A(t) X(t)[1:2] B(t)
+    @parameters k
+    # both mass action jumps consume the single X[2], after which their rates and the rate of
+    # the constant rate jump, which uses both elements of `X`, must be zero
+    jumps = [
+        SymbolicMassActionJump(k, [X[2] => 1], [X[2] => -1, A => 1]),
+        SymbolicMassActionJump(k, [X[2] => 1], [X[2] => -1]),
+        ConstantRateJump(k * (X[1] + X[2]), [B ~ Pre(B) + 1]),
+    ]
+    op = [A => 0, X => [0, 1], B => 0, k => 1.0]
+    tspan = (0.0, 50.0)
+
+    @named arraysys = JumpSystem(jumps, t, [A, X, B], [k])
+    arraysys = complete(arraysys)
+    @test_throws ArgumentError JumpProblem(arraysys, op, tspan)
+    @test_throws ArgumentError JumpProblem(arraysys, op, tspan; check_compatibility = false)
+    @named hybridsys = JumpSystem([D(V) ~ 1; jumps], t, [V, A, X, B], [k])
+    hybridsys = complete(hybridsys)
+    @test_throws ArgumentError JumpProblem(hybridsys, [op; V => 0.0], tspan)
+
+    @named sys = JumpSystem(jumps, t, [A; collect(X); B], [k])
+    sys = complete(sys)
+    aggregators = (
+        JumpProcesses.NullAggregator(), Direct(), NRM(), SortingDirect(), RDirect(),
+        DirectCR(), CCNRM(), RSSA(), RSSACR(), Coevolve(),
+    )
+    for aggregator in aggregators, _ in 1:3
+        sol = solve(JumpProblem(sys, op, tspan; aggregator), SSAStepper(); rng)
+        x2 = sol[X[2]]
+        @test all(>=(0), x2)
+        @test x2[end] == 0
+        @test sol[A][end] <= 1
+        # B stops changing once X[2], and so all of X, is zero
+        b = sol[B][findfirst(iszero, x2):end]
+        @test all(==(b[1]), b)
+    end
+end
+
 # Create JumpProblems for systems without parameters
 # Issue#2559
 @parameters k
@@ -580,6 +653,45 @@ end
     @test eltype(sol[X]) === Int64
 end
 
+@testset "`remake` keeps an integer `u0`" begin
+    @parameters p d Y0
+    @variables X(t) Y(t) = Y0
+    j1 = ConstantRateJump(p, [X ~ Pre(X) + 1])
+    j2 = ConstantRateJump(d * X, [X ~ Pre(X) - 1])
+    j3 = ConstantRateJump(d * Y, [Y ~ Pre(Y) - 1])
+    @mtkcompile js = JumpSystem([j1, j2, j3], t, [X, Y], [p, d, Y0])
+    ps = [p => 2.0, d => 0.5, Y0 => 10.0]
+    jprob = JumpProblem(js, [X => 15; ps], (0.0, 10.0); aggregator = Direct(), u0_eltype = Int)
+    @test jprob.prob.u0 isa Vector{Int}
+
+    # `Y` is filled in from its default, the float parameter `Y0`.
+    for u0 in ([X => 5], Dict(X => 5), (X => 5,), [:X => 5])
+        jprob2 = remake(jprob; u0)
+        @test jprob2.prob.u0 isa Vector{Int}
+        @test jprob2[X] == 5
+        @test jprob2[Y] == 10
+    end
+    jprob2 = remake(jprob; u0 = [X => 5], p = [Y0 => 4.0])
+    @test jprob2.prob.u0 isa Vector{Int}
+    @test jprob2[Y] == 4
+    sol = solve(remake(jprob; u0 = [X => 5]), SSAStepper())
+    @test sol.u[end] isa Vector{Int}
+
+    # A float value in the map is converted to the integer type (and must be a whole number).
+    jprob2 = remake(jprob; u0 = [X => 5.0])
+    @test jprob2.prob.u0 isa Vector{Int}
+    @test jprob2[X] == 5
+    @test_throws InexactError remake(jprob; u0 = [X => 5.5])
+
+    # A numeric `u0` gives a float `u0`, as does a float problem.
+    @test eltype(remake(jprob; u0 = [5.0, 10.0]).prob.u0) == Float64
+    fprob = JumpProblem(js, [X => 15; ps], (0.0, 10.0); aggregator = Direct())
+    @test eltype(remake(fprob; u0 = [X => 5]).prob.u0) == Float64
+
+    # A filled-in value that isn't a whole number can't be stored in an integer `u0`.
+    @test_throws InexactError remake(jprob; u0 = [X => 5], p = [Y0 => 10.5])
+end
+
 @testset "Issue#3571: `remake(::JumpProblem)`" begin
     @variables X(t)
     @parameters a b
@@ -601,7 +713,10 @@ end
     jump2 = ConstantRateJump(d * exp(X) * X, [X ~ Pre(X) - 1])
     @named sys = JumpSystem([jump1, jump2], t, [X], [p, d])
     sys = complete(sys)
-    @test_nowarn JumpProblem(sys, [:X => 0.1, :p => 1.0, :d => 2.0], (0.0, 1.0))
+    jprob = JumpProblem(sys, [:X => 0.1, :p => 1.0, :d => 2.0], (0.0, 1.0))
+    # the aggregator's mass action rate is filled from the parameters at `init`
+    init(jprob, SSAStepper())
+    @test jprob.discrete_jump_aggregation.maj_rates[1] ≈ exp(1.0)
 end
 
 @testset "Issue#4216: Discrete events fire once in hybrid JumpProblems" begin
