@@ -307,7 +307,7 @@ function generate_rhs(
         if override_discrete || is_discrete_system(sys)
             # ImplicitDiscrete case
             D = Shift(t, 1)
-            rhss = map(eqs) do eq
+            rhss = map(scalarize_array_equations(eqs)) do eq
                 # Algebraic equations get shifted forward 1, to match with differential
                 # equations
                 is_zero_lhs(eq) ? distribute_shift(D(eq.rhs)) : (eq.rhs - eq.lhs)

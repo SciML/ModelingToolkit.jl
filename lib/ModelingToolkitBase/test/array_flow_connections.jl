@@ -1,6 +1,6 @@
 using ModelingToolkitBase, Symbolics, SciMLBase, Test
 using FillArrays: Fill, Zeros
-using LinearAlgebra: rank
+using LinearAlgebra: diag, rank
 using ModelingToolkitBase: t_nounits as t, D_nounits as D
 
 @connector function ArrayFlowPort(; name, rows = 1, columns = 1, dynamic = false, flow_axes = (1:rows, 1:columns))
@@ -8,6 +8,11 @@ using ModelingToolkitBase: t_nounits as t, D_nounits as D
     vars = @variables potential(t)[1:rows, 1:columns] flow(t)[row_axis, column_axis] [connect = Flow]
     eqs = dynamic ? [D(potential) ~ (flow .- potential)] : Equation[]
     return System(eqs, t, vars, []; name)
+end
+
+@connector function ScalarPotentialArrayFlowPort(; name)
+    vars = @variables p(t) f(t)[1:2] [connect = Flow]
+    return System(Equation[], t, vars, []; name)
 end
 
 function connection_block_size(x)
@@ -119,4 +124,41 @@ end
     balance = only(equations(expand_connections(network)))
     @test axes(balance.lhs) == axes(balance.rhs) == flow_axes
     @test Set(Symbolics.scalarize(balance)) == Set(0 .~ Symbolics.scalarize(a.flow))
+end
+
+@testset "Direct problem construction with open array flows" begin
+    @named port = ScalarPotentialArrayFlowPort()
+
+    @testset "Implicit discrete residual" begin
+        @named network = System([Shift(t, 1)(port.p) ~ port.p + port.f[1]], t, [], []; systems = [port])
+        sys = complete(network)
+        next = [4.0, 5.0, 6.0]
+        current = [1.0, 2.0, 3.0]
+        expected = [-1.0, 5.0, 6.0]
+
+        @testset "Function" begin
+            f = ImplicitDiscreteFunction(sys)
+            @test f(next, current, [], 0) == expected
+            @test f.resid_prototype === nothing
+            residual = fill(NaN, 3)
+            f(residual, next, current, [], 0)
+            @test residual == expected
+        end
+
+        @testset "Problem" begin
+            prob = ImplicitDiscreteProblem(sys, [port.p => 1.0, port.f => zeros(2)], (0, 10))
+            @test prob.f(next, current, prob.p, 0) == expected
+        end
+    end
+
+    @testset "Mass-matrix DDE" begin
+        @variables x(..)
+        eqs = [D(x(t)) ~ x(t - 1) + port.f[1], D(port.p) ~ port.p + port.f[2]]
+        @named network = System(eqs, t, [x(t)], []; systems = [port])
+        prob = DDEProblem(
+            complete(network), [x(t) => 1.0, port.p => 2.0, port.f => zeros(2)], (0.0, 2.0)
+        )
+        @test prob.f([1.0, 2.0, 3.0, 4.0], prob.h, prob.p, 0.0) == [4.0, 6.0, 3.0, 4.0]
+        @test diag(prob.f.mass_matrix) == [1.0, 1.0, 0.0, 0.0]
+    end
 end

@@ -176,10 +176,11 @@ end
 
 @testset "accepting array equations is a per-constructor capability" begin
     @test accepts_array_equations(DAEFunction)
+    @test accepts_array_equations(DDEFunction)
+    @test accepts_array_equations(ImplicitDiscreteFunction)
     @test accepts_array_equations(NonlinearFunction)
     @test accepts_array_equations(ODEFunction)
     @test !accepts_array_equations(SDEFunction)
-    @test !accepts_array_equations(ImplicitDiscreteFunction)
     # Optimization vectorizes `costs` and `constraints`, not `equations`:
     # `check_no_equations` rejects them before this gate is reached.
     @test !accepts_array_equations(OptimizationFunction)
