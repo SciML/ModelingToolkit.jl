@@ -245,7 +245,7 @@ end
 @testset "Underdetermined init message names parameters with missing value" begin
     @parameters pm
     msg = ModelingToolkitBase.initialization_structure_error_message(
-        :ExtraVariablesSystemException, "The system is unbalanced.", (1, 2), [pm]
+        :ExtraVariablesSystemException, "The system is unbalanced.", (1, 2), ["pm"]
     )
     @test occursin("`pm` has a value of `missing`", msg)
     # The example value is a placeholder, so it is valid for array parameters too
@@ -260,7 +260,7 @@ end
     old = ModelingToolkitBase.show_api_guidance!(false)
     try
         msg = ModelingToolkitBase.initialization_structure_error_message(
-            :ExtraVariablesSystemException, "The system is unbalanced.", (1, 2), [pm]
+            :ExtraVariablesSystemException, "The system is unbalanced.", (1, 2), ["pm"]
         )
         # The name stays; only the guidance naming ModelingToolkit API is left out
         @test occursin("`pm` has a value of `missing`", msg)
