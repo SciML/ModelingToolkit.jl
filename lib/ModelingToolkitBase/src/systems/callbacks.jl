@@ -751,7 +751,7 @@ function Base.hash(cb::AbstractCallback, s::UInt)
     s = hash(initialize_affects(cb), s)
     s = hash(finalize_affects(cb), s)
     !is_discrete(cb) && (s = hash(cb.rootfind, s))
-    hash(cb.reinitializealg, s)
+    s = hash(cb.reinitializealg, s)
     !is_discrete(cb) && (s = hash(cb.zero_crossing_id, s))
     return s
 end

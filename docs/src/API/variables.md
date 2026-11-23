@@ -339,14 +339,22 @@ ModelingToolkit.MTKVariableTypeCtx
 ModelingToolkit.isparameter
 ```
 
-The `@parameters` and `@brownians` macros set this metadata on the variables they declare.
-The same can be done to an existing symbolic variable, which is useful when generating
-variables programmatically.
+The `@parameters`, `@brownians` and `@poissonians` macros set this metadata on the variables
+they declare. The same can be done to an existing symbolic variable, which is useful when
+generating variables programmatically.
 
 ```@docs
 ModelingToolkitBase.toparam
 ModelingToolkitBase.tovar
 ModelingToolkitBase.tobrownian
+ModelingToolkitBase.topoissonian
+```
+
+A poissonian also stores its rate expression as metadata, which can be queried with
+`getpoissonianrate`.
+
+```@docs
+ModelingToolkitBase.getpoissonianrate
 ```
 
 ## Miscellaneous metadata

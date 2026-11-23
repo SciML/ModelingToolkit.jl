@@ -395,6 +395,24 @@ function check_bindings(atomic_ps::AtomicArraySet{Dict{SymbolicT, Nothing}}, bin
                     )
                 )
             end
+        else
+            # Known sizes must match; later symbolic substitution errors do not name the
+            # parameter. For a callable parameter the shape is that of the return value,
+            # while the binding is the function itself, so the sizes are not comparable.
+            psh = SU.shape(p)
+            vsh = SU.shape(val)
+            if psh isa SU.ShapeVecT && vsh isa SU.ShapeVecT && !(symtype(p) <: FnType)
+                if length(psh) != length(vsh) ||
+                        any(i -> length(psh[i]) != length(vsh[i]), eachindex(psh))
+                    psz = Tuple(map(length, psh))
+                    vsz = Tuple(map(length, vsh))
+                    throw(
+                        ArgumentError(
+                            "binding for $p has size $vsz, but $p has size $psz"
+                        )
+                    )
+                end
+            end
         end
         empty!(varsbuf)
         SU.search_variables!(varsbuf, val; is_atomic = check_bindings_is_atomic)
@@ -1783,6 +1801,9 @@ function underscore_to_D(v, iv, inv_map)
         # The name lives on the record, so rewrite the base and re-apply the field access.
         f = operation(v)
         unwrap(f(underscore_to_D(only(arguments(v)), iv, inv_map)))
+    elseif !hasname(v)
+        # Operator terms such as `Hold(x)` have no name and are not dummy derivatives
+        v
     else
         v = ModelingToolkitBase.detime_dvs(v)
         s = split(string(getname(v)), 'ˍ')

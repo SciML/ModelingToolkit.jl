@@ -179,6 +179,11 @@ The `simplified_sys` has undergone [`ModelingToolkitBase.mtkcompile`](@ref) and 
     diagnostic output (the `empty_operating_point` toggle and the initialization toggles).
     The deprecated boolean keywords `warn_empty_op` and `warn_initialize_determined`
     remain accepted and override the corresponding toggles when explicitly passed.
+  - `specialize`: The `SciMLBase.AbstractSpecialization` of the `ODEProblem` built for the system, or `nothing` for
+    `ODEProblem`'s default. With `SciMLBase.FullSpecialize`, the system and observed functions are called directly
+    instead of through function wrappers, so the evaluation is fully specialized; `eval_expression` and
+    `eval_module` also apply to the system function; and with `initialize = false`, a call whose `u` and `p` have
+    the types of the problem's uses them as given, without remaking the problem.
   - `kwargs`: Are passed on to `find_solvables!`
 
 See also [`linearize`](@ref) which provides a higher-level interface.
@@ -207,6 +212,7 @@ function linearization_function(
         loop_opening_drivers = SymbolicT[],
         loop_openings = [],
         system_modifier = identity,
+        specialize = nothing,
         kwargs...
     )
     verbosity = verbose === nothing ? MTKVerbosity() : MTKVerbosity(verbose)
@@ -240,6 +246,51 @@ function linearization_function(
     end
     sys = system_modifier(sys)
     ssys = mtkcompile(sys; inputs, outputs, simplify, verbose = verbosity, kwargs...)
+    zero_dummy_der_vars = zero_dummy_der ? setdiff(unknowns(ssys), unknowns(sys)) : SymbolicT[]
+    return _linearization_function_compiled(
+        ssys, inputs, outputs; initialize, initializealg, initialization_abstol,
+        initialization_reltol, op, p, initialization_solver_alg, autodiff, eval_expression,
+        eval_module, verbosity, warn_initialize_determined, guesses, missing_guess_value, t,
+        ignore_system_initial_conditions, loop_opening_params, loop_opening_drivers,
+        zero_dummy_der_vars, specialize
+    )
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+The part of [`linearization_function`](@ref) that operates on a system `ssys` that has
+already been compiled with `inputs` and `outputs`. `zero_dummy_der_vars` are the unknowns
+whose operating-point value is set to zero. Keyword arguments are documented in
+[`linearization_function`](@ref).
+"""
+function _linearization_function_compiled(
+        ssys::AbstractSystem, inputs, outputs;
+        initialize = true,
+        initializealg = nothing,
+        initialization_abstol = 1.0e-5,
+        initialization_reltol = 1.0e-3,
+        op = Dict{SymbolicT, SymbolicT}(),
+        p = SciMLBase.NullParameters(),
+        initialization_solver_alg = nothing,
+        autodiff = AutoForwardDiff(),
+        eval_expression = false, eval_module = @__MODULE__,
+        verbosity = MTKVerbosity(),
+        warn_initialize_determined = nothing,
+        guesses = Dict{SymbolicT, SymbolicT}(),
+        missing_guess_value = MTKBase.default_missing_guess_value(),
+        t = 0.0,
+        ignore_system_initial_conditions = false,
+        loop_opening_params = SymbolicT[],
+        loop_opening_drivers = SymbolicT[],
+        zero_dummy_der_vars = SymbolicT[],
+        initialization_eqs = Equation[],
+        algebraic_only = isempty(initialization_eqs),
+        specialize = nothing
+    )
+    op = Dict(op)
+    inputs isa AbstractVector || (inputs = [inputs])
+    outputs isa AbstractVector || (outputs = [outputs])
     if ignore_system_initial_conditions
         ics = copy(initial_conditions(ssys))
         filter!(Base.Fix2(SU.hasmetadata, MTKBase.AnalysisVariable) ∘ first, ics)
@@ -249,10 +300,9 @@ function linearization_function(
         op, loop_opening_params, loop_opening_drivers, initial_conditions(ssys)
     )
     diff_idxs, alge_idxs = eq_idxs(ssys)
-    if zero_dummy_der
-        dummyder = setdiff(unknowns(ssys), unknowns(sys))
+    if !isempty(zero_dummy_der_vars)
         ics = initial_conditions(ssys)
-        for x in dummyder
+        for x in zero_dummy_der_vars
             ics[x] = Symbolics.COMMON_ZERO
         end
     end
@@ -281,12 +331,15 @@ function linearization_function(
         initializealg = initialize ? OverrideInit() : NoInit()
     end
 
-    prob = ODEProblem{true}(
+    full_specialize = specialize === SciMLBase.FullSpecialize
+    prob_type = specialize === nothing ? ODEProblem{true} : ODEProblem{true, specialize}
+    codegen_kwargs = full_specialize ? (; eval_expression, eval_module) : (;)
+    prob = prob_type(
         sys, merge(op, anydict(p)), (t, t); allow_incomplete = true,
-        algebraic_only = true, guesses, missing_guess_value, verbose = verbosity,
-        initialization_eqs = held_eqs,
+        algebraic_only, guesses, missing_guess_value, verbose = verbosity,
+        initialization_eqs = [initialization_eqs; held_eqs],
         # the problem constructor applies and deprecates this keyword
-        warn_initialize_determined
+        warn_initialize_determined, codegen_kwargs...
     )
     initial_idxs_for_unknowns = ParameterIndex{SciMLStructures.Initials, Int}[]
     for v in unknowns(sys)
@@ -299,7 +352,8 @@ function linearization_function(
         sys, outputs,
         GeneratedFunctionOptions(; expression = Val{false}, eval_expression, eval_module)
     )
-    h = SciMLBase.Void{Any}(h)
+    wrap = !full_specialize
+    h = wrap ? SciMLBase.Void{Any}(h) : SciMLBase.Void(h)
 
     initialization_kwargs = (;
         abstol = initialization_abstol, reltol = initialization_reltol,
@@ -317,14 +371,14 @@ function linearization_function(
     # Preparing the jacobians with respect to the inputs requires a vector of a concrete
     # element type, also when there are no inputs.
     inputvals = isempty(inputs) ? T[] : [prob.ps[i] for i in inputs]
-    prob = _linearization_wrap_odeproblem_f(prob, T)
+    wrap && (prob = _linearization_wrap_odeproblem_f(prob, T))
     ct0 = DI.Constant(T(t0))
     u0T = if u0 === nothing
         T[]
     else
         T.(u0)
     end
-    h = SciMLBase.wrapfun_iip(h, (u0T, u0T, p, T(t0)))
+    wrap && (h = SciMLBase.wrapfun_iip(h, (u0T, u0T, p, T(t0))))
     hp_fun = HPFun(h, setp_oop(sys, inputs))
 
     cu0T = DI.Constant(u0T)
@@ -648,16 +702,23 @@ function (linfun::LinearizationFunction)(u, p, t)
         T = promote_type(T, typeof(t))
         u = promote_with_nothing(T, u)
         p = promote_with_nothing(T, p)
-        integ = MockIntegrator{true}(u, p, t, fun, integ_cache, nothing)
-        prob = remake(linfun.prob; u0 = u, p = p)
-        u, p,
-            success = SciMLBase.get_initial_values(
-            prob, integ, fun, linfun.initializealg, Val(true);
-            linfun.initialize_kwargs...
-        )
-        u = u::typeof(prob.u0)
-        p = p::typeof(prob.p)
-        success = success::Bool
+        if SciMLBase.specialization(fun) === SciMLBase.FullSpecialize &&
+                linfun.initializealg isa NoInit &&
+                typeof(u) === typeof(linfun.prob.u0) && typeof(p) === typeof(linfun.prob.p)
+            # `get_initial_values` with `NoInit` returns the integrator's `u` and `p`
+            success = true
+        else
+            integ = MockIntegrator{true}(u, p, t, fun, integ_cache, nothing)
+            prob = remake(linfun.prob; u0 = u, p = p)
+            u, p,
+                success = SciMLBase.get_initial_values(
+                prob, integ, fun, linfun.initializealg, Val(true);
+                linfun.initialize_kwargs...
+            )
+            u = u::typeof(prob.u0)
+            p = p::typeof(prob.p)
+            success = success::Bool
+        end
         if !success
             error("Initialization algorithm $(linfun.initializealg) failed with `unknowns = $u` and `p = $p`.")
         end
@@ -1288,12 +1349,8 @@ function linearize(
     for (k, v) in op
         isequal(v, COMMON_NOTHING) && continue
         v === COMMON_MISSING && continue
-        v = _resolve_op_value(prob, v)
-        if is_parameter(prob, Initial(k))
-            setu(prob, Initial(k))(prob, v)
-        else
-            setu(prob, k)(prob, v)
-        end
+        target = is_parameter(prob, Initial(k)) ? Initial(k) : k
+        setu(prob, target)(prob, _complete_array_value(prob, target, _resolve_op_value(prob, v)))
     end
     p = anydict(p)
     for (k, v) in p
@@ -1316,6 +1373,15 @@ function _resolve_op_value(prob, v)
     else
         return v
     end
+end
+
+# An operating point that gives values for some elements of an array variable only is
+# collected into an array with `nothing` at the remaining elements. These elements keep the
+# value that `prob` currently holds for `target`.
+function _complete_array_value(prob, target, v)
+    v isa AbstractArray && any(isnothing, v) || return v
+    current = getu(prob, target)(prob)
+    return map((vi, ci) -> vi === nothing ? ci : vi, v, current)
 end
 
 # The opened signals in `held_params` are held at the value of their driver by an
@@ -1357,18 +1423,17 @@ function __linearize_multiple_op_barrier(ssys, lin_fun; ops, ts, allow_input_der
     # The op keys are identical across time points, so checking the first one suffices.
     _check_held_signals(lin_fun.loop_opening_params, op1)
     op_keys = collect(keys(op1))
-    setters = map(op_keys) do k
-        is_parameter(prob, Initial(k)) ? setu(prob, Initial(k)) : setu(prob, k)
-    end
+    targets = map(k -> is_parameter(prob, Initial(k)) ? Initial(k) : k, op_keys)
+    setters = map(target -> setu(prob, target), targets)
 
     for (op, t) in zip(ops, ts)
         op = as_atomic_dict_with_defaults(Dict{SymbolicT, SymbolicT}(op), COMMON_NOTHING)
         evaluate_varmap!(op, keys(op))
-        for (setter, k) in zip(setters, op_keys)
+        for (setter, target, k) in zip(setters, targets, op_keys)
             v = get(op, k, COMMON_NOTHING)
             isequal(v, COMMON_NOTHING) && continue
             v === COMMON_MISSING && continue
-            setter(prob, _resolve_op_value(prob, v))
+            setter(prob, _complete_array_value(prob, target, _resolve_op_value(prob, v)))
         end
         prob.t = t
         res, xpt = solve(prob; allow_input_derivatives)::Tuple{eltype(results), eltype(xpts)}
