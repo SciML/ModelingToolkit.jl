@@ -93,25 +93,33 @@ end
 @testset "Mixed disturbances at array elements (split = $split)" for split in (true, false)
     @variables x(t) c(t) [input = true] control_source(t) [output = true]
     @variables (w(t))[1:2] [input = true, disturbance = true] load_source(t) [output = true]
-    @testset "Known elements $indices" for (indices, load, expected) in (
-            ((1,), [4.0], 17.0),
-            ((2,), [4.0], -23.0),
-            ((2, 1), [4.0, 6.0], -5.0),
+    @testset "Known elements $indices" for (indices, load, indexed_expected, array_expected) in (
+            ((1,), [4.0], 17.0, 31.0),
+            ((2,), [4.0], -23.0, 31.0),
+            ((2, 1), [4.0, 6.0], -5.0, 67.0),
         )
-        @named sys = System(
-            [
-                control_source ~ 0, load_source ~ 0,
-                connect(control_source, :control_ap, c), connect(load_source, :load_ap, w[first(indices)]),
-                D(x) ~ 5c + 3w[1] - 7w[2],
-            ], t
-        )
+        @testset "$consumer" for (consumer, rhs, control, expected) in (
+                ("Indexed", 5c + 3w[1] - 7w[2], [1.0], indexed_expected),
+                ("Whole array", 5c + energy(w), [3.0], array_expected),
+            )
+            @named sys = System(
+                [
+                    control_source ~ 0, load_source ~ 0,
+                    connect(control_source, :control_ap, c), connect(load_source, :load_ap, w[first(indices)]),
+                    D(x) ~ rhs,
+                ], t
+            )
 
-        known_disturbances = [sys.load_ap, (w[i] for i in Base.tail(indices))...]
-        (; f, io_sys) = ModelingToolkit.generate_control_function(
-            sys, sys.control_ap; known_disturbance_inputs = known_disturbances, split
-        )
-        p = ModelingToolkit.get_p(io_sys, ModelingToolkit.inputs(io_sys) .=> 0.0)
-        @test f[1]([0.0], [1.0], p, 0.0, load) == [expected]
+            known_disturbances = [sys.load_ap, (w[i] for i in Base.tail(indices))...]
+            (; f, io_sys) = ModelingToolkit.generate_control_function(
+                sys, sys.control_ap; known_disturbance_inputs = known_disturbances, split
+            )
+            p = ModelingToolkit.get_p(io_sys, ModelingToolkit.inputs(io_sys) .=> 0.0)
+            @test f[1]([0.0], control, p, 0.0, load) == [expected]
+            dx = [NaN]
+            f[2](dx, [0.0], control, p, 0.0, load)
+            @test dx == [expected]
+        end
     end
 end
 

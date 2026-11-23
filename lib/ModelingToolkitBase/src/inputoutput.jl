@@ -343,6 +343,7 @@ function generate_control_function(
     # Set unknown disturbance inputs to zero (we just want to keep the disturbance state)
     if !isempty(unknown_disturbances)
         subs = Dict{SymbolicT, SymbolicT}()
+        partial_arrays = Set{SymbolicT}()
         for disturbance in group_disturbance_arrays(unknown_disturbances)
             if SU.is_array_shape(SU.shape(disturbance))
                 subs[disturbance] = zeros(eltype(symtype(disturbance)), size(disturbance))
@@ -351,7 +352,21 @@ function generate_control_function(
                 end
             else
                 subs[disturbance] = 0
+                parent, indexed = split_indexed_var(disturbance)
+                indexed && symbolic_has_known_size(parent) && push!(partial_arrays, parent)
             end
+        end
+        for parent in partial_arrays
+            elements = map(i -> parent[i], SU.stable_eachindex(parent))
+            all(in(inputs_set), elements) || continue
+            literal_args = SU.ArgsT{VartypeT}((SU.Const{VartypeT}(size(parent)),))
+            for element in elements
+                # Keep direct references to measured elements bound to their argument slots.
+                push!(literal_args, get!(subs, element, element))
+            end
+            subs[parent] = SU.Term{VartypeT}(
+                SU.array_literal, literal_args; type = symtype(parent), shape = SU.shape(parent)
+            )
         end
         eqs = [eq.lhs ~ substitute(eq.rhs, subs) for eq in eqs]
     end
