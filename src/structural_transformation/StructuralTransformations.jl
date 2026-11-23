@@ -24,7 +24,8 @@ using ModelingToolkitBase: System, AbstractSystem, Differential,
     isdiffeq, isdifferential,
     get_tearing_state, get_iv,
     invalidate_cache!,
-    iscomplete, get_schedule
+    iscomplete, get_schedule,
+    MTKVerbosity
 
 using SymbolicUtils: substitute
 
@@ -38,7 +39,7 @@ import CommonSolve
 using SparseArrays: sparse
 
 import DocStringExtensions
-using DocStringExtensions: TYPEDSIGNATURES
+using DocStringExtensions: TYPEDSIGNATURES, TYPEDEF
 
 import ModelingToolkitBase as MTKBase
 import StateSelection

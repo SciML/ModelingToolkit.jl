@@ -21,10 +21,72 @@ jobs:
           - "1"
           - "lts"
     runs-on: ubuntu-latest
+    env:
+      BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
     steps:
-      - uses: MilesCranmer/AirspeedVelocity.jl@action-v1
+      - uses: actions/checkout@v6
         with:
-          julia-version: "${{ matrix.version }}"
-          script: "benchmark/benchmarks.jl"
-          extra-pkgs: "${{ github.event.pull_request.head.repo.clone_url }}#${{ github.event.pull_request.head.sha }}:lib/ModelingToolkitBase,ModelingToolkitStandardLibrary,OrdinaryDiffEqDefault,CommonSolve"
-          job-summary: "${{ github.event.pull_request.head.repo.fork }}"
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: head
+          persist-credentials: false
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: base
+          persist-credentials: false
+      - uses: julia-actions/setup-julia@v3
+        with:
+          version: ${{ matrix.version }}
+      - uses: julia-actions/cache@v3
+      - name: Install benchmark tools
+        env:
+          JULIA_PKG_PRECOMPILE_AUTO: "0"
+        run: |
+          julia --project=.benchmark-tools -e 'using Pkg; pkg"add AirspeedVelocity@0.6"; Pkg.build("AirspeedVelocity")'
+          echo "$HOME/.julia/bin" >> "$GITHUB_PATH"
+      - name: Benchmark both revisions with their sublibraries
+        run: |
+          mkdir results
+          for source in base head; do
+            if [[ "$source" == base ]]; then revision="$BASE_SHA"; else revision="$HEAD_SHA"; fi
+            benchpkg ModelingToolkit \
+              --path="$GITHUB_WORKSPACE/$source" --rev="$revision" \
+              --script="$GITHUB_WORKSPACE/head/benchmark/benchmarks.jl" \
+              --add=ModelingToolkitStandardLibrary,OrdinaryDiffEqDefault,CommonSolve \
+              --output-dir=results --dont-print
+          done
+      - name: Compare benchmark results
+        run: |
+          echo "## Benchmark Results (Julia v${{ matrix.version }})" > body.md
+          for mode in time memory; do
+            {
+              echo "<details><summary>${mode^} benchmarks</summary>"
+              echo
+              benchpkgtable ModelingToolkit --input-dir=results \
+                --rev="$BASE_SHA,$HEAD_SHA" --mode="$mode" --ratio
+              echo
+              echo "</details>"
+              echo
+            } >> body.md
+          done
+      - name: Write job summary
+        if: github.event.pull_request.head.repo.fork
+        run: cat body.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Find benchmark comment
+        if: ${{ !github.event.pull_request.head.repo.fork }}
+        uses: peter-evans/find-comment@v4
+        id: find
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          comment-author: 'github-actions[bot]'
+          body-includes: "Benchmark Results (Julia v${{ matrix.version }})"
+      - name: Update benchmark comment
+        if: ${{ !github.event.pull_request.head.repo.fork }}
+        uses: peter-evans/create-or-update-comment@v5
+        with:
+          comment-id: ${{ steps.find.outputs.comment-id }}
+          issue-number: ${{ github.event.pull_request.number }}
+          body-path: body.md
+          edit-mode: replace

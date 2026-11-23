@@ -1,4 +1,5 @@
 using ModelingToolkitBase, Test
+import SciMLLogging
 using ModelingToolkitBase: complete, unknowns, generate_rhs, GeneratedFunctionOptions,
     calculate_massmatrix, full_equations, scalarize_array_equations
 using Symbolics
@@ -116,7 +117,10 @@ end
     @test sdu ≈ du
 
     # the default initialization problem handles the array equation
-    iprob = ODEProblem(sys, [u => u0], (0.0, tend); warn_initialize_determined = false)
+    iprob = ODEProblem(
+        sys, [u => u0], (0.0, tend);
+        verbose = MTKVerbosity(initialization = SciMLLogging.Silent)
+    )
     isol = solve(iprob, Rodas5P(); reltol = 1.0e-8, abstol = 1.0e-8, saveat = [tend])
     @test SciMLBase.successful_retcode(isol)
     @test isol[u][end] ≈ csol[u][end] atol = 1.0e-10

@@ -47,6 +47,7 @@ ModelingToolkit.get_brownians
 brownians
 ModelingToolkit.has_poissonians
 ModelingToolkit.get_poissonians
+poissonians
 ModelingToolkit.has_iv
 ModelingToolkit.get_iv
 ModelingToolkitBase.independent_variable

@@ -1,4 +1,5 @@
 using ModelingToolkit, Test
+import SciMLLogging
 using ModelingToolkit: t_nounits as t, D_nounits as D
 
 # Underdetermined initialization: a point constrained to the unit circle, with no
@@ -10,7 +11,7 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 sys = mtkcompile(sys)
 prob = ODEProblem(
     sys, [], (0.0, 1.0); guesses = [x => 0.6, y => 0.8],
-    warn_initialize_determined = false
+    verbose = MTKVerbosity(initialization = SciMLLogging.Silent)
 )
 res = analyze_initialization_jacobian(prob; verbose = false)
 @test res.nullity ≥ 1
@@ -26,7 +27,7 @@ res = analyze_initialization_jacobian(prob; verbose = false)
 sys2 = mtkcompile(sys2)
 prob2 = ODEProblem(
     sys2, [], (0.0, 1.0); guesses = [z => 0.9],
-    warn_initialize_determined = false
+    verbose = MTKVerbosity(initialization = SciMLLogging.Silent)
 )
 res2 = analyze_initialization_jacobian(prob2; verbose = false)
 @test res2.redundancy ≥ 1

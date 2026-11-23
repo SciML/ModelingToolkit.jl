@@ -564,6 +564,41 @@ end
     @test !haskey(ModelingToolkitBase.bindings(nlsys), z)
 end
 
+@testset "NonlinearSystem conversion: array-element derivatives are zeroed" begin
+    @independent_variables t
+    D = Differential(t)
+    @variables x(t)[1:2] y(t)
+    eqs = [D(x[1]) ~ -x[1] + y, D(x[2]) ~ -2x[2] + x[1], 0 ~ y - 1.0 + x[2]]
+    sys = complete(System(eqs, t, [x, y], []; name = :A))
+    nlsys = NonlinearSystem(sys)
+    @test length(equations(nlsys)) == 3
+    for eq in equations(nlsys)
+        @test isempty(ModelingToolkitBase.collect_applied_operators(eq, Differential))
+    end
+    compiled = mtkcompile(nlsys)
+    @test !is_time_dependent(compiled)
+    # Steady state from D≡0: y = x[1] = 2x[2] and y + x[2] = 1 ⇒ x[2]=1/3.
+    prob = NonlinearProblem(compiled, [x[1] => 0.0, x[2] => 0.0, y => 0.0])
+    sol = solve(prob)
+    @test SciMLBase.successful_retcode(sol)
+    @test sol[x[1]] ≈ 2 / 3 atol = 1.0e-10
+    @test sol[x[2]] ≈ 1 / 3 atol = 1.0e-10
+    @test sol[y] ≈ 2 / 3 atol = 1.0e-10
+end
+
+@testset "NonlinearSystem conversion: unknown-shape array unknown" begin
+    @independent_variables t
+    D = Differential(t)
+    @variables q(t) z(t)::Vector{Real}
+    sys = System([D(q) ~ 1 - q, z[1] ~ q, z[2] ~ 2q], t, [q, z], []; name = :mixed)
+    nlsys = NonlinearSystem(sys)
+    @test !is_time_dependent(nlsys)
+    @test length(equations(nlsys)) == 3
+    for eq in equations(nlsys)
+        @test isempty(ModelingToolkitBase.collect_applied_operators(eq, Differential))
+    end
+end
+
 @testset "NonlinearSystem conversion: connectors" begin
     @independent_variables t
     D = Differential(t)
@@ -770,6 +805,23 @@ end
     uprob = NonlinearProblem(sys, [x => 1.5]; lb = [-10.0], ub = [10.0])
     @test uprob.lb == [-10.0]
     @test uprob.ub == [10.0]
+
+    # Symbolic bounds are resolved through the operating point, whose values for unknowns
+    # are initial guesses: they must not become the bound of an unbounded side.
+    @parameters lo = -1.0
+    @variables sc [bounds = (lo, 1.0)] sd se [bounds = (0.0, Inf)]
+    for (v, vbounds) in [(sd, (-Inf, Inf)), (se, (0.0, Inf))]
+        @mtkcompile ssys = System([0 ~ sc^2 + v^2 - 1, 0 ~ sc^2 - v^2 - 0.5])
+        sprob = NonlinearProblem(ssys, [sc => 0.8, v => 0.4])
+        sdvs = unknowns(ssys)
+        sci = findfirst(isequal(sc), sdvs)
+        vi = findfirst(isequal(v), sdvs)
+        @test sprob.lb[sci] == -1.0 && sprob.ub[sci] == 1.0
+        @test (sprob.lb[vi], sprob.ub[vi]) == vbounds
+        ssol = solve(sprob)
+        @test SciMLBase.successful_retcode(ssol)
+        @test !any(isnan, ssol.u)
+    end
 end
 
 @testset "Array unknowns on a `complete`d system" begin

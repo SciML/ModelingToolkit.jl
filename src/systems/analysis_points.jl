@@ -2,23 +2,41 @@
     $(TYPEDSIGNATURES)
 
 Given a list of analysis points, break the connection for each. The output of each broken
-analysis point is turned into a parameter of the system. Returns the modified system and a
-vector of the variables that were turned into parameters (the "loop-opening parameters"),
-whose operating-point values must be supplied by the user when linearizing.
+analysis point is turned into a solvable parameter of the system (a parameter with a
+binding of `missing`), whose value is determined by initialization. Returns the modified
+system, a vector of the variables that were turned into parameters (the "loop-opening
+parameters"), and a vector of the variables that drove them before the connection was
+broken (the inputs of the analysis points), in the same order.
+
+The linearization functions use the drivers to hold each opened signal at the value it has
+at the operating point of the loop-closed system, unless the operating point or an initial
+condition of the opened variable specifies its value.
 """
 function handle_loop_openings(sys::AbstractSystem, aps)
     loop_opening_params = SymbolicT[]
+    loop_opening_drivers = SymbolicT[]
     for ap in canonicalize_ap(sys, aps)
+        sys, (driver,) = apply_transformation(GetInput(ap), sys)
         sys, (d_vs,) = apply_transformation(Break(ap, true), sys)
         append!(loop_opening_params, d_vs)
+        append!(loop_opening_drivers, fill(driver, length(d_vs)))
     end
-    return sys, loop_opening_params
+    isempty(loop_opening_params) && return sys, loop_opening_params, loop_opening_drivers
+    binds = copy(parent(get_bindings(sys)))
+    for p in loop_opening_params
+        binds[p] = COMMON_MISSING
+    end
+    @set! sys.bindings = ROSymmapT(binds)
+    return sys, loop_opening_params, loop_opening_drivers
 end
 
 const DOC_LOOP_OPENINGS = """
-- `loop_openings`: A list of analysis points whose connections should be removed and
-  the outputs set to the input as a part of the linear analysis. Each entry is an
-  analysis point of the unsimplified, uncompleted system, obtained as `sys.ap_name`.
+- `loop_openings`: A list of analysis points whose connections should be removed as a
+  part of the linear analysis. Each entry is an analysis point of the unsimplified,
+  uncompleted system, obtained as `sys.ap_name`. The disconnected signals keep the value
+  of their drivers at the operating point of the loop-closed system, unless the operating
+  point or an initial condition specifies their value, see the section "Operating Point
+  of Signals Disconnected by Loop Openings" of the linear-analysis tutorial.
 """
 
 const DOC_APS = """
@@ -56,9 +74,28 @@ All other keyword arguments are forwarded to `linearization_function`.
 function get_linear_analysis_function(
         sys::AbstractSystem, transform, aps; system_modifier = identity, loop_openings = [], kwargs...
     )
+    sys, dus, us, loop_opening_params, loop_opening_drivers = linear_analysis_transform(
+        sys, transform, aps; system_modifier, loop_openings
+    )
+    return linearization_function(
+        sys, dus, us; loop_opening_params, loop_opening_drivers, kwargs...
+    )
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Apply the analysis-point transformation `transform` at the analysis point(s) `aps` of `sys`
+after opening the loops in `loop_openings`. Return the transformed system after applying
+`system_modifier`, the input and output variables introduced by the transformation, the
+parameters created by the loop openings and the variables that drove the opened signals.
+"""
+function linear_analysis_transform(
+        sys::AbstractSystem, transform, aps; system_modifier = identity, loop_openings = []
+    )
     dus = SymbolicT[]
     us = SymbolicT[]
-    sys, loop_opening_params = handle_loop_openings(sys, loop_openings)
+    sys, loop_opening_params, loop_opening_drivers = handle_loop_openings(sys, loop_openings)
     aps = canonicalize_ap(sys, aps)
     for ap in aps
         sys, (du, u) = apply_transformation(transform(ap), sys)
@@ -74,8 +111,16 @@ function get_linear_analysis_function(
         else
             append!(us, u)
         end
+        if transform === LoopTransferTransform
+            # The input that replaces the broken connection is held at the value of the
+            # signal that drove it, like the signals opened by `loop_openings`
+            for d in (du isa SymbolicT ? (du,) : du)
+                push!(loop_opening_params, d)
+                push!(loop_opening_drivers, u::SymbolicT)
+            end
+        end
     end
-    return linearization_function(system_modifier(sys), dus, us; loop_opening_params, kwargs...)
+    return system_modifier(sys), dus, us, loop_opening_params, loop_opening_drivers
 end
 """
     $(TYPEDSIGNATURES)
@@ -140,6 +185,31 @@ function get_looptransfer_function(sys::AbstractSystem, aps; kwargs...)
     return get_linear_analysis_function(sys, LoopTransferTransform, aps; kwargs...)
 end
 
+# The common implementation of `get_sensitivity`, `get_comp_sensitivity` and
+# `get_looptransfer`. `analysis_function` builds the linearization function of the
+# analysis, `transform` is the corresponding analysis-point transformation used for
+# `hybrid = true`.
+function _linear_analysis(
+        analysis_function, transform, sys, ap, args...; loop_openings = [],
+        system_modifier = identity, allow_input_derivatives = true,
+        op = Dict{SymbolicT, SymbolicT}(), t = 0.0, hybrid = false, kwargs...
+    )
+    if hybrid
+        sys, dus, us, loop_opening_params, loop_opening_drivers = linear_analysis_transform(
+            sys, transform, ap, args...; system_modifier, loop_openings
+        )
+        return linearize_hybrid(
+            sys, dus, us; loop_opening_params, loop_opening_drivers, op,
+            allow_input_derivatives, t, kwargs...
+        )
+    end
+    lin_fun, ssys = analysis_function(
+        sys, ap, args...; loop_openings, system_modifier, op, kwargs...
+    )
+    mats, extras = ModelingToolkit.linearize(ssys, lin_fun; op, allow_input_derivatives, t)
+    return mats, ssys, extras
+end
+
 """
     get_sensitivity(sys, ap; loop_openings = [], system_modifier = identity, op = Dict(), kwargs...)
 
@@ -162,23 +232,20 @@ perturbation to the output of `ap`.
 
 - `loop_openings`: connections to open before linearization.
 - `system_modifier`: transformation applied before linearization.
-- `op`: operating-point values passed to [`linearize`](@ref).
+- `op`: operating-point values passed to [`linearize`](@ref), a dictionary or a
+  [`LinearizationOpPoint`](@ref).
 - `allow_input_derivatives`: allow derivatives of input variables in the linearization.
 - `t`: time at which to evaluate the linearization.
+- `hybrid`: linearize every clock partition of a system with clocked (discrete-time)
+  equations separately with [`linearize_hybrid`](@ref), and return its
+  [`HybridLinearization`](@ref) instead of `(matrices, simplified_system, extras)`.
+  The remaining keyword arguments are then forwarded to `linearize_hybrid`.
 - `kwargs...`: forwarded to [`get_sensitivity_function`](@ref).
 
 See also [`get_comp_sensitivity`](@ref) and [`get_looptransfer`](@ref).
 """
-function get_sensitivity(
-        sys, ap, args...; loop_openings = [], system_modifier = identity,
-        allow_input_derivatives = true, op = Dict{SymbolicT, SymbolicT}(), t = 0.0,
-        kwargs...
-    )
-    lin_fun, ssys = get_sensitivity_function(
-        sys, ap, args...; loop_openings, system_modifier, op, kwargs...
-    )
-    mats, extras = ModelingToolkit.linearize(ssys, lin_fun; op, allow_input_derivatives, t)
-    return mats, ssys, extras
+function get_sensitivity(sys, ap, args...; kwargs...)
+    return _linear_analysis(get_sensitivity_function, SensitivityTransform, sys, ap, args...; kwargs...)
 end
 
 """
@@ -194,16 +261,8 @@ forwarded to [`get_comp_sensitivity_function`](@ref).
 
 See also [`get_sensitivity`](@ref) and [`get_looptransfer`](@ref).
 """
-function get_comp_sensitivity(
-        sys, ap, args...; loop_openings = [], system_modifier = identity,
-        allow_input_derivatives = true, op = Dict{SymbolicT, SymbolicT}(), t = 0.0,
-        kwargs...
-    )
-    lin_fun, ssys = get_comp_sensitivity_function(
-        sys, ap, args...; loop_openings, system_modifier, op, kwargs...
-    )
-    mats, extras = ModelingToolkit.linearize(ssys, lin_fun; op, allow_input_derivatives, t)
-    return mats, ssys, extras
+function get_comp_sensitivity(sys, ap, args...; kwargs...)
+    return _linear_analysis(get_comp_sensitivity_function, ComplementarySensitivityTransform, sys, ap, args...; kwargs...)
 end
 
 """
@@ -222,16 +281,8 @@ forwarded to [`get_looptransfer_function`](@ref).
 
 See also [`get_sensitivity`](@ref), [`get_comp_sensitivity`](@ref), and [`open_loop`](@ref).
 """
-function get_looptransfer(
-        sys, ap, args...; loop_openings = [], system_modifier = identity,
-        allow_input_derivatives = true, op = Dict{SymbolicT, SymbolicT}(), t = 0.0,
-        kwargs...
-    )
-    lin_fun, ssys = get_looptransfer_function(
-        sys, ap, args...; loop_openings, system_modifier, op, kwargs...
-    )
-    mats, extras = ModelingToolkit.linearize(ssys, lin_fun; op, allow_input_derivatives, t)
-    return mats, ssys, extras
+function get_looptransfer(sys, ap, args...; kwargs...)
+    return _linear_analysis(get_looptransfer_function, LoopTransferTransform, sys, ap, args...; kwargs...)
 end
 
 """
@@ -247,8 +298,10 @@ Returns
 - `sys`: The transformed system.
 - `input_vars`: A vector of input variables corresponding to the input analysis points.
 - `output_vars`: A vector of output variables corresponding to the output analysis points.
-- `loop_opening_params`: A vector of the variables that were turned into parameters by the
-  `loop_openings` (their operating-point values must be supplied when linearizing).
+- `loop_opening_params`: A vector of the signals disconnected by the `loop_openings`,
+  including the input variables of input analysis points that are also loop openings.
+- `loop_opening_drivers`: A vector of the variables that drove the signals in
+  `loop_opening_params` before the connections were broken, in the same order.
 """
 function linearization_ap_transform(
         sys,
@@ -258,12 +311,26 @@ function linearization_ap_transform(
     loop_openings = Set(map(nameof, canonicalize_ap(sys, loop_openings)))
     inputs = canonicalize_ap(sys, inputs)
     outputs = canonicalize_ap(sys, outputs)
+    input_names = Set{Symbol}(nameof(input) for input in inputs)
+    for output in outputs
+        output isa AnalysisPoint && nameof(output) in input_names || continue
+        throw(
+            ArgumentError(
+                lazy"The analysis point $(nameof(output)) is used both as an input and as an output of the linearization. The transfer function from a perturbation at an analysis point to the signal at the same analysis point depends on whether the perturbation is added before or after the signal is measured: it is the sensitivity function in one case and the complementary sensitivity function in the other. Use `get_sensitivity` or `get_comp_sensitivity` instead."
+            )
+        )
+    end
     input_vars = SymbolicT[]
+    opened_inputs = SymbolicT[]
+    opened_input_drivers = SymbolicT[]
     for input in inputs
         if nameof(input) in loop_openings
             delete!(loop_openings, nameof(input))
+            sys, (driver,) = apply_transformation(GetInput(input), sys)
             sys, (input_vs,) = apply_transformation(Break(input), sys)
             append!(input_vars, input_vs)
+            append!(opened_inputs, input_vs)
+            append!(opened_input_drivers, fill(driver, length(input_vs)))
         else
             sys, (input_var,) = apply_transformation(PerturbOutput(input), sys)
             push!(input_vars, input_var)
@@ -280,8 +347,12 @@ function linearization_ap_transform(
         end
         push!(output_vars, output_var)
     end
-    sys, loop_opening_params = handle_loop_openings(sys, map(AnalysisPoint, collect(loop_openings)))
-    return sys, input_vars, output_vars, loop_opening_params
+    sys, loop_opening_params, loop_opening_drivers = handle_loop_openings(
+        sys, map(AnalysisPoint, collect(loop_openings))
+    )
+    append!(loop_opening_params, opened_inputs)
+    append!(loop_opening_drivers, opened_input_drivers)
+    return sys, input_vars, output_vars, loop_opening_params, loop_opening_drivers
 end
 
 function linearization_function(
@@ -289,12 +360,35 @@ function linearization_function(
         inputs::Union{Symbol, Vector{Symbol}, AnalysisPoint, Vector{AnalysisPoint}},
         outputs; loop_openings = [], system_modifier = identity, kwargs...
     )
-    sys, input_vars, output_vars,
-        loop_opening_params = linearization_ap_transform(
+    sys, input_vars, output_vars, loop_opening_params,
+        loop_opening_drivers = linearization_ap_transform(
         sys, inputs, outputs, loop_openings
     )
     return linearization_function(
-        system_modifier(sys), input_vars, output_vars; loop_opening_params, kwargs...
+        system_modifier(sys), input_vars, output_vars;
+        loop_opening_params, loop_opening_drivers, kwargs...
+    )
+end
+
+"""
+    linearize_hybrid(sys, input_aps, output_aps; loop_openings = [], system_modifier = identity, kwargs...)
+
+Linearize the hybrid system `sys` between analysis points, see [`linearize_hybrid`](@ref)
+and [`linearization_ap_transform`](@ref). `loop_openings` and `system_modifier` are
+documented in [`get_sensitivity`](@ref).
+"""
+function linearize_hybrid(
+        sys::AbstractSystem,
+        inputs::Union{Symbol, Vector{Symbol}, AnalysisPoint, Vector{AnalysisPoint}},
+        outputs; loop_openings = [], system_modifier = identity, kwargs...
+    )
+    sys, input_vars, output_vars, loop_opening_params,
+        loop_opening_drivers = linearization_ap_transform(
+        sys, inputs, outputs, loop_openings
+    )
+    return linearize_hybrid(
+        system_modifier(sys), input_vars, output_vars;
+        loop_opening_params, loop_opening_drivers, kwargs...
     )
 end
 

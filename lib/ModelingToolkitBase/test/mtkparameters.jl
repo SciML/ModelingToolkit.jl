@@ -295,6 +295,25 @@ end
 VDual = Vector{<:ForwardDiff.Dual}
 VVDual = Vector{<:Vector{<:ForwardDiff.Dual}}
 
+@testset "A portion with many buffer types is indexed without dynamic dispatch" begin
+    # Five element types, so five `Constants` buffers, indexed with a runtime number.
+    @parameters i8::Int8 i16::Int16 i32::Int32 i64::Int64 u32::UInt32
+    @named manybufs = System(Equation[], t, [], [i8, i16, i32, i64, u32])
+    manybufs = complete(manybufs)
+    ps = MTKParameters(manybufs, Dict(i8 => 1, i16 => 2, i32 => 3, i64 => 4, u32 => 5))
+    @test length(ps.constant) == 5
+    idx = parameter_index(manybufs, i32)
+    @test parameter_values(ps, idx) === Int32(3)
+    # Julia 1.10 widens the union of the five element types to `Any`.
+    @test only(Base.return_types(parameter_values, (typeof(ps), typeof(idx)))) !== Any skip = VERSION < v"1.11"
+    # Measured inside a function so only `set_parameter!` is counted; dynamic dispatch would box.
+    write_allocs(ps, val, idx) = @allocated set_parameter!(ps, val, idx)
+    write_allocs(ps, Int32(100_000), idx)
+    @test parameter_values(ps, idx) === Int32(100_000)
+    @test write_allocs(ps, Int32(200_000), idx) == 0
+    @test parameter_values(ps, idx) === Int32(200_000)
+end
+
 @testset "Parameter type validation" begin
     abstract type AbstractFooT end
     struct Foo{T} <: AbstractFooT
@@ -418,6 +437,63 @@ with_updated_parameter_timeseries_values(
     @test ps.nonnumeric isa Tuple{Vector{Any}}
     ps2 = remake_buffer(sys, ps, [p], [:a])
     @test ps2.nonnumeric isa Tuple{Vector{Any}}
+end
+
+struct ReplaceFoo
+    x::Float64
+end
+
+@testset "`replace` keeps the types of nonnumeric and cache buffers" begin
+    @variables x(t)
+    @parameters k h::ReplaceFoo
+    @named sys = System(D(x) ~ -k * x, t, [x], [k, h])
+    sys, _ = ModelingToolkitBase.add_diffcache(sys, 3)
+    sys = complete(sys)
+    ps = MTKParameters(sys, [k => 2.0, h => ReplaceFoo(1.0)])
+    for portion in (ModelingToolkitBase.NONNUMERIC_PORTION, SciMLStructures.Caches())
+        buffer, repack, _ = canonicalize(portion, ps)
+        @test typeof(SciMLStructures.replace(portion, ps, deepcopy(buffer))) == typeof(ps)
+        @test typeof(repack(buffer)) == typeof(ps)
+    end
+end
+
+@testset "Issue#4530: `replace` with a `DiffCache` buffer" begin
+    @variables x(t) y(t)
+    @parameters a = 1.0 b = 2.0
+    @named sys = System([D(x) ~ -a * x + y, 0 ~ y^2 - b * x], t)
+    sys = mtkcompile(sys)
+    # `FullSpecialize` keeps the parameter object passed to `solve` as it is
+    prob = ODEProblem{true, SciMLBase.FullSpecialize}(
+        sys, [x => 1.0], (0.0, 1.0); guesses = [y => 1.0]
+    )
+    cache = ModelingToolkitBase.DiffCache(copy(prob.p.tunable))
+    setter = setp(sys, a)
+    function loss(vals)
+        buffer = ModelingToolkitBase.get_tmp(cache, vals)
+        copyto!(buffer, prob.p.tunable)
+        ps = SciMLStructures.replace(Tunable(), prob.p, buffer)
+        setter(ps, vals[1])
+        sol = solve(
+            remake(prob; p = ps), Rodas5P(); saveat = 0.1, abstol = 1.0e-10, reltol = 1.0e-10
+        )
+        return sum(abs2, sol[x])
+    end
+
+    dual_buffer = ModelingToolkitBase.get_tmp(cache, [ForwardDiff.Dual(1.5, 1.0)])
+    @test dual_buffer isa Base.ReinterpretArray
+    for portion in (Tunable(), SciMLStructures.Initials())
+        len = length(canonicalize(portion, prob.p)[1])
+        buffer = reinterpret(eltype(dual_buffer), ones(2len))
+        @test buffer isa Base.ReinterpretArray
+        ps = SciMLStructures.replace(portion, prob.p, buffer)
+        newbuffer = canonicalize(portion, ps)[1]
+        @test newbuffer isa Vector{eltype(dual_buffer)}
+        @test newbuffer == buffer
+    end
+
+    grad = ForwardDiff.gradient(loss, [1.5])
+    step = 1.0e-5
+    @test grad[1] ≈ (loss([1.5 + step]) - loss([1.5 - step])) / 2step rtol = 1.0e-4
 end
 
 if @isdefined(ModelingToolkit)
