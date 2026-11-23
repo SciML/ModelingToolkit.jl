@@ -911,6 +911,8 @@ const SYS_PROPS = [
     :domain
     :ivs
     :dvs
+    :analytic
+    :analytic_func
     :connector_type
     :preface
     :initializesystem
