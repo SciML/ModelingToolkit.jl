@@ -2935,7 +2935,7 @@ const EVENT_CODEGEN_OPTIONS = Tuple(
 event_codegen_kwargs(kwargs) = filter(kv -> first(kv) in EVENT_CODEGEN_OPTIONS, kwargs)
 
 function process_kwargs(
-        sys::System; expression = Val{false}, callback = nothing,
+        sys::System, problem_type = nothing; expression = Val{false}, callback = nothing,
         eval_expression = false, eval_module = @__MODULE__,
         _skip_events = false, _skip_tstops = false, tspan = nothing, kwargs...
     )
@@ -2943,7 +2943,7 @@ function process_kwargs(
     mtk_verbosity = _problem_verbosity(kwargs)
     # Read before `filter_kwargs`, which keeps only solver keywords.
     codegen_kwargs = event_codegen_kwargs(kwargs)
-    kwargs = filter_kwargs(kwargs)
+    kwargs = filter_kwargs(kwargs, problem_type)
     kwargs1 = (;)
 
     if is_time_dependent(sys)
@@ -2977,18 +2977,23 @@ end
 # Keywords that SciMLBase problems carry but that MTK derives from the system's structure,
 # with how to apply a different value to the returned problem.
 const STRUCTURAL_KWARGS = (
-    differential_vars = "`remake(prob; differential_vars = mask)`",
-    mass_matrix = "`remake(prob; f = remake(prob.f; mass_matrix = M))`",
+    differential_vars = (DAEProblem, "`remake(prob; differential_vars = mask)`"),
+    mass_matrix = (ODEProblem, "`remake(prob; f = remake(prob.f; mass_matrix = M))`"),
 )
 
-function filter_kwargs(kwargs)
+function filter_kwargs(kwargs, problem_type = nothing)
     kwargs = Dict(kwargs)
-    for key in keys(STRUCTURAL_KWARGS)
+    for (key, (supported_problem, remedy)) in pairs(STRUCTURAL_KWARGS)
         haskey(kwargs, key) || continue
-        @warn LazyString(
-            "Ignoring keyword argument `", key, "`: the system derives it from its structure. ",
-            "Apply a different value to the returned problem with ", STRUCTURAL_KWARGS[key], "."
-        )
+        if problem_type === supported_problem
+            @warn LazyString(
+                "Ignoring keyword argument `", key, "`: the system derives it from its structure. ",
+                "Apply a different value to the returned problem with ", remedy, "."
+            )
+        else
+            @warn LazyString("Ignoring unsupported keyword argument `", key, "` for this problem constructor.")
+        end
+        delete!(kwargs, key)
     end
     for key in keys(kwargs)
         key in SciMLBase.allowedkeywords || delete!(kwargs, key)
