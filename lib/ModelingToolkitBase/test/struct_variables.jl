@@ -34,6 +34,10 @@ end
     shape(:m) = [1:2, 1:2]
 end
 
+# A function returning a record, for the whole-record equation tests below.
+make_pair(a, b) = Pair2(a, b)
+@register_symbolic make_pair(a, b)::Pair2
+
 @testset "declaration and field access" begin
     @variables s(t)::Pair2 n(t)::Nested
 
@@ -51,6 +55,31 @@ end
     # Nesting composes, and leaf enumeration flattens through it in declaration order.
     @test isequal(Symbolics.unwrap(n.f.x), collect(Symbolics.SymStruct{Nested}(Symbolics.unwrap(n)))[2])
     @test length(Symbolics.SymStruct{Nested}(Symbolics.unwrap(n))) == 3
+end
+
+@testset "a record takes a shift index" begin
+    @variables s(t)::Pair2
+    k = ShiftIndex(Clock(0.25))
+    for shifted in (s, Symbolics.unwrap(s)), steps in (0, -1, 1)
+        result = shifted(k + steps)
+        # the wrapped record gives a wrapped record, and the raw one a raw one
+        @test (result isa Symbolics.SymStruct{Pair2}) == (shifted isa Symbolics.SymStruct)
+        raw = Symbolics.unwrap(result)
+        @test Symbolics.symtype(raw) === Pair2
+        if steps == 0
+            var = raw
+        else
+            @test operation(raw) isa Shift
+            @test operation(raw).steps == steps
+            var = only(arguments(raw))
+        end
+        @test Symbolics.getmetadata(var, ModelingToolkitBase.VariableTimeDomain) == k.clock
+    end
+    # two one-tick delays are one two-tick delay, for the record and for its fields
+    for sig in (s, Symbolics.unwrap(s), s.x)
+        @test isequal(sig(k - 1)(k - 1), sig(k - 2))
+    end
+    @test isequal(operation(Symbolics.unwrap(s(k - 1).x(k - 1))).t, Symbolics.unwrap(t))
 end
 
 @testset "flat record integrates" begin
@@ -461,4 +490,86 @@ end
     @test Symbolics.symtype(val) === Pair2
     # Fully concrete leaves still build the real value.
     @test ModelingToolkitBase.record_node_value(root, root, Any[1.0, 2.0]) == Pair2(1.0, 2.0)
+end
+
+@testset "whole-record equations expand per field" begin
+    @variables p(t)::Pair2 q(t)::Pair2
+    # `q ~ p` stands for one equation per leaf. A record has no `-`, so the split has to
+    # happen before the system is canonicalized into residual form.
+    sys = mtkcompile(System([D(p.x) ~ -p.x, D(p.y) ~ -2p.y, q ~ p], t, [p, q], []; name = :a))
+    @test issetequal(unknowns(sys), Symbolics.unwrap.([p.x, p.y]))
+    @test issetequal([eq.lhs for eq in ModelingToolkitBase.observed(sys)], Symbolics.unwrap.([q.x, q.y]))
+
+    prob = ODEProblem(sys, [p.x => 1.0, p.y => 1.0], (0.0, 1.0))
+    sol = solve(prob, Tsit5())
+    @test SciMLBase.successful_retcode(sol)
+    @test sol[q.x][end] ≈ exp(-1) rtol = 1.0e-5
+    @test sol[q.y][end] ≈ exp(-2) rtol = 1.0e-5
+end
+
+@testset "whole-record equation from a literal" begin
+    @variables p(t)::Pair2 q(t)::Pair2
+    # The literal folds, so each leaf equation gets the matching argument.
+    sys = mtkcompile(
+        System(
+            [D(p.x) ~ -p.x, D(p.y) ~ -2p.y, q ~ Pair2(p.y, p.x)], t, [p, q], []; name = :b
+        )
+    )
+    prob = ODEProblem(sys, [p.x => 1.0, p.y => 1.0], (0.0, 1.0))
+    sol = solve(prob, Tsit5())
+    @test sol[q.x][end] ≈ exp(-2) rtol = 1.0e-5
+    @test sol[q.y][end] ≈ exp(-1) rtol = 1.0e-5
+end
+
+@testset "whole-record equation from a function" begin
+    @variables z(t) s(t)::Pair2
+    # `make_pair(...)` is an expression, not a name: its fields are projected out of the
+    # call, and `z` is found by searching through it.
+    sys = mtkcompile(System([D(z) ~ -z, s ~ make_pair(z, 2z)], t, [z, s], []; name = :c))
+    @test issetequal(unknowns(sys), Symbolics.unwrap.([z]))
+    prob = ODEProblem(sys, [z => 1.0], (0.0, 1.0))
+    sol = solve(prob, Tsit5())
+    @test sol[s.x][end] ≈ exp(-1) rtol = 1.0e-5
+    @test sol[s.y][end] ≈ 2exp(-1) rtol = 1.0e-5
+end
+
+@testset "whole-record equations nest and cross connectors" begin
+    @variables n(t)::Nested m(t)::Nested
+    sys = mtkcompile(
+        System(
+            [D(n.x) ~ -n.x, D(n.f.x) ~ -n.f.x, D(n.f.y) ~ -n.f.y, m ~ n],
+            t, [n, m], []; name = :d
+        )
+    )
+    @test length(unknowns(sys)) == 3
+    @test issetequal([eq.lhs for eq in ModelingToolkitBase.observed(sys)], Symbolics.unwrap.([m.x, m.f.x, m.f.y]))
+
+    # The same, with the source reached through a connector member.
+    @connector function NestPort(; name)
+        @variables v(t)::Nested [output = true]
+        System(Equation[], t, [v], []; name)
+    end
+    @named o = NestPort()
+    @variables w(t)::Nested
+    csys = mtkcompile(
+        System(
+            [w ~ o.v, D(o.v.x) ~ -o.v.x, o.v.f.x ~ 1.0, o.v.f.y ~ 2.0],
+            t, [w], []; systems = [o], name = :e
+        )
+    )
+    prob = ODEProblem(csys, [o.v.x => 1.0], (0.0, 1.0))
+    sol = solve(prob, Tsit5())
+    @test sol[w.x][end] ≈ exp(-1) rtol = 1.0e-5
+    @test sol[w.f.x][end] == 1.0
+    @test sol[w.f.y][end] == 2.0
+end
+
+@testset "a record equation needs matching record types" begin
+    @variables p(t)::Pair2 n(t)::Nested
+    # Differing field lists would otherwise pair up by position and produce nonsense.
+    @test_throws ArgumentError mtkcompile(
+        System(
+            [D(p.x) ~ -p.x, D(p.y) ~ -p.y, n ~ p], t, [p, n], []; name = :f
+        )
+    )
 end
