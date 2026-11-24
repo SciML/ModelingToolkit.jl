@@ -84,6 +84,9 @@ function inputs_to_parameters!(state::TearingState, inputsyms::OrderedSet{Symbol
 
     binds = copy(parent(bindings(sys)))
     for var in inputsyms
+        # Only floating point parameters can be solved for during initialization. The
+        # value of a non-floating point input (e.g. `Bool` or `Int`) must be provided.
+        MTKBase.is_variable_floatingpoint(var) || continue
         binds[split_indexed_var(var)[1]] = COMMON_MISSING
     end
     @set! sys.unknowns = setdiff(unknowns(sys), inputsyms)
@@ -231,6 +234,7 @@ function _mtkcompile!(
         inputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
         outputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
         disturbance_inputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
+        input_parameters::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
         eliminate_mm_zeros = true,
         verbose::MTKVerbosity = MTKVerbosity(),
         kwargs...
@@ -246,6 +250,13 @@ function _mtkcompile!(
     union!(inputs, disturbance_inputs)
     state = inputs_to_parameters!(state, discrete_inputs, OrderedSet{SymbolicT}())
     state = inputs_to_parameters!(state, inputs, outputs)
+    # Parameters that already represent inputs of the system are registered as such, so
+    # that later passes treat them like the parameters the inputs above are turned into.
+    if !isempty(input_parameters)
+        sys = state.sys
+        @set! sys.inputs = union(MTKBase.get_inputs(sys), input_parameters)
+        state.sys = sys
+    end
     eliminate_perfect_aliases!(state; verbose)
     StateSelection.trivial_tearing!(state)
     sys, mm = alias_elimination!(state; fully_determined, verbose, kwargs...)
