@@ -586,6 +586,15 @@ end
     @test sol[y] ≈ 2 / 3 atol = 1.0e-10
 end
 
+@testset "NonlinearSystem conversion: whole-array derivative" begin
+    @independent_variables t
+    @variables x(t)[1:2]
+    D = Differential(t)
+    @named sys = System([D(x) ~ [1.0, 2.0] .- x], t, [x], [])
+    eq = only(equations(NonlinearSystem(complete(sys))))
+    @test isequal(eq.lhs, SU.Const{VartypeT}(zeros(2)))
+end
+
 @testset "NonlinearSystem conversion: unknown-shape array unknown" begin
     @independent_variables t
     D = Differential(t)
