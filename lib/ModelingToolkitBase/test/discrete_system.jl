@@ -374,3 +374,18 @@ SU.isbinop(::LatestValue) = false
     @test isequal(MTKBase.distribute_shift(Shift(t, -1)(Shift(t, 1)(x))), x)
     @test isequal(MTKBase.distribute_shift(Shift(t, -1)(Differential(t)(x))), Differential(t)(Shift(t, -1)(x)))
 end
+
+@testset "`remake` of an integer `DiscreteProblem` with initialization data accepts fractions" begin
+    # The integer `u0` of a `DiscreteProblem` without initialization data (e.g. a pure-jump
+    # `JumpProblem`'s) is kept by `remake`; with initialization data, `u0` may become a float.
+    k = ShiftIndex(t)
+    @variables a(t) b(t)
+    @parameters c
+    @mtkcompile sys = System([a ~ a(k - 1) + 1, b ~ b(k - 1) + 1], t, [a, b], [c])
+    prob = DiscreteProblem(sys, [a(k - 1) => 1, b(k - 1) => 2, c => 1.0], (0, 10); u0_eltype = Int)
+    @test prob.f.initialization_data !== nothing
+    x1 = unknowns(sys)[1]
+    prob2 = remake(prob; u0 = [x1 => 5.5])
+    @test prob2[x1] == 5.5
+    @test eltype(state_values(prob2)) == Float64
+end

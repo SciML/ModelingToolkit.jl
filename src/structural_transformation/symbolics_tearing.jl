@@ -55,7 +55,7 @@ function large_linear_sccs(state::TearingState, structure, max_size::Int)
     (; graph) = structure
     big_linear_vars = BitSet()
     big_linear_eqs = BitSet()
-    matching = complete(maximal_matching(graph), ndsts(graph))
+    matching = complete(maximal_matching(graph), ModelingToolkit.nsrcs(graph))
     scc_vars = BitSet()
     scc_symbols = Set{SymbolicT}()
     for scc in StateSelection.find_var_sccs(graph, matching)

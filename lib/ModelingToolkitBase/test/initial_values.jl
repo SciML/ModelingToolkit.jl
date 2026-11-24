@@ -557,3 +557,37 @@ end
     @test narrowed[2][1] === big
     @test eltype(narrowed[2]) == Int
 end
+
+@testset "Operating point values are converted to declared integer types" begin
+    @variables x(t)
+    @parameters b::Bool n::Int v[1:2]::Bool p
+    @named sys = System([D(x) ~ ifelse(b, n * p, -p)], t)
+    sys = complete(sys)
+
+    # `[x => 0.0, b => false]` promotes `false` to `0.0`
+    op = ModelingToolkitBase.operating_point_preprocess(
+        sys, [x => 0.0, b => false, n => 2.0, v => [1.0, 0.0], p => 1]
+    )
+    @test op[b] === false
+    @test op[n] === 2
+    @test op[v] == [true, false] && eltype(op[v]) == Bool
+    # values for non-integer declared types are untouched
+    @test op[x] === 0.0
+    @test op[p] === 1
+
+    @test_throws "cannot be converted to its declared type `Bool`" ModelingToolkitBase.operating_point_preprocess(
+        sys, [x => 0.0, b => 0.5]
+    )
+    @test_throws "cannot be converted to its declared type `$Int`" ModelingToolkitBase.operating_point_preprocess(
+        sys, [x => 0.0, n => 2.5]
+    )
+
+    # an initial condition evaluated with the promoted values would compute `0.0 | 1.0`
+    @parameters c::Bool d::Bool
+    @variables y(t) = ifelse(c | d, 1.0, -1.0)
+    @named sys = System([D(y) ~ -y], t)
+    sys = complete(sys)
+    prob = ODEProblem(sys, [c => false, d => 1.0], (0.0, 1.0))
+    @test prob[y] == 1.0
+    @test prob.ps[c] === false
+end
