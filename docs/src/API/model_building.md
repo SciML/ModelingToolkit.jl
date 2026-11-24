@@ -234,8 +234,8 @@ affect before it is put in its callback. `role` is one of `:affect`, `:affect_ne
 `:initialize` and `:finalize`, and the transform runs once per role even when an event uses
 the same affect for both edges. It runs only for the slots an event defines; a slot without
 an affect keeps the placeholder its callback uses (e.g. `EMPTY_AFFECT`), which callbacks
-recognize by identity. `save_discretes = false` builds the callbacks without saving the
-discrete parameters they update.
+recognize by identity. `save_discretes = false`, which the problem passes to `solve`, turns
+off saving the discrete parameters the events update.
 
 A compiled `ImperativeAffect` is a `FunctionalAffect`. `without_parameter_hooks` removes the
 integrator-only hooks from its setters, after which it reads and writes only through
@@ -255,13 +255,14 @@ end
     discrete_events = [ModelingToolkit.SymbolicDiscreteCallback(0.1, tick; discrete_parameters = [h])]
 )
 
+stripped = []
 function strip_hooks(affect, event, sys; role)
-    return affect isa ModelingToolkit.FunctionalAffect ?
-        ModelingToolkit.without_parameter_hooks(affect) : affect
+    affect isa ModelingToolkit.FunctionalAffect || return affect
+    push!(stripped, ModelingToolkit.without_parameter_hooks(affect))
+    return last(stripped)
 end
 prob = ODEProblem(sys, [], (0.0, 1.0); affect_transform = strip_hooks, save_discretes = false)
-affect = only(prob.kwargs[:callback].discrete_callbacks).affect!.affect!
-isbits(affect) # true
+isbits(only(stripped)) # true
 ```
 
 ```@docs
