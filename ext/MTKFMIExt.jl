@@ -9,7 +9,7 @@ import ModelingToolkitBase as MTKBase
 import SciMLBase
 import SymbolicUtils
 import FMIImport as FMI
-using ModelingToolkitBase: ForwardDiff
+import ForwardDiff
 
 # Spelled as `const` rather than `t_nounits as t`, because ExplicitImports reports a
 # renaming import as stale (it tracks the pre-rename name, which never appears in use).
