@@ -57,6 +57,31 @@ make_pair(a, b) = Pair2(a, b)
     @test length(Symbolics.SymStruct{Nested}(Symbolics.unwrap(n))) == 3
 end
 
+@testset "a record takes a shift index" begin
+    @variables s(t)::Pair2
+    k = ShiftIndex(Clock(0.25))
+    for shifted in (s, Symbolics.unwrap(s)), steps in (0, -1, 1)
+        result = shifted(k + steps)
+        # the wrapped record gives a wrapped record, and the raw one a raw one
+        @test (result isa Symbolics.SymStruct{Pair2}) == (shifted isa Symbolics.SymStruct)
+        raw = Symbolics.unwrap(result)
+        @test Symbolics.symtype(raw) === Pair2
+        if steps == 0
+            var = raw
+        else
+            @test operation(raw) isa Shift
+            @test operation(raw).steps == steps
+            var = only(arguments(raw))
+        end
+        @test Symbolics.getmetadata(var, ModelingToolkitBase.VariableTimeDomain) == k.clock
+    end
+    # two one-tick delays are one two-tick delay, for the record and for its fields
+    for sig in (s, Symbolics.unwrap(s), s.x)
+        @test isequal(sig(k - 1)(k - 1), sig(k - 2))
+    end
+    @test isequal(operation(Symbolics.unwrap(s(k - 1).x(k - 1))).t, Symbolics.unwrap(t))
+end
+
 @testset "flat record integrates" begin
     @variables s(t)::Pair2
     # s.x' = -s.x, s.y' = s.x  =>  s.x = e^-t, s.y = 1 - e^-t
