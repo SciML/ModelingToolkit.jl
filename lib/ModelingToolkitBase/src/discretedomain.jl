@@ -143,7 +143,8 @@ function (xn::SymbolicT)(k::ShiftIndex)
     if length(arguments(var)) != 1
         error(lazy"Cannot shift an expression with multiple independent variables $x.")
     end
-    t = only(arguments(var))
+    # `var` is a `Shift` term when `x` is already shifted: its `t` is that of the signal
+    t = iv_from_nested_derivative(var, Shift)
 
     # d, _ = propagate_time_domain(xn)
     # if d != clock # this is only required if the variable has another clock
@@ -154,7 +155,8 @@ function (xn::SymbolicT)(k::ShiftIndex)
     if steps == 0
         return xn # x(k) needs no shift operator if the step of k is 0
     end
-    return Shift(t, steps)(xn) # a shift of k steps
+    # a shift of k steps, added to any shift `xn` already carries
+    return simplify_shifts(Shift(t, steps)(xn))
 end
 
 function (xn::Symbolics.Arr)(k::ShiftIndex)
@@ -173,7 +175,7 @@ function (xn::Symbolics.Arr)(k::ShiftIndex)
     if length(arguments(var)) != 1
         error(lazy"Cannot shift an expression with multiple independent variables $x.")
     end
-    t = only(arguments(var))
+    t = iv_from_nested_derivative(var, Shift)
 
     # d, _ = propagate_time_domain(xn)
     # if d != clock # this is only required if the variable has another clock

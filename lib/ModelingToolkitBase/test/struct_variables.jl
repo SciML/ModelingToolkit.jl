@@ -75,6 +75,11 @@ end
         end
         @test Symbolics.getmetadata(var, ModelingToolkitBase.VariableTimeDomain) == k.clock
     end
+    # two one-tick delays are one two-tick delay, for the record and for its fields
+    for sig in (s, Symbolics.unwrap(s), s.x)
+        @test isequal(sig(k - 1)(k - 1), sig(k - 2))
+    end
+    @test isequal(operation(Symbolics.unwrap(s(k - 1).x(k - 1))).t, Symbolics.unwrap(t))
 end
 
 @testset "flat record integrates" begin

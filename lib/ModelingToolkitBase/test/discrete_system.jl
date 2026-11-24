@@ -31,6 +31,23 @@ end
     end
 end
 
+@testset "A shift index applied to a shifted signal adds the offsets" begin
+    k = ShiftIndex(t)
+    @variables p(t)::ShiftedPhase x(t) u(t)[1:2]
+    for sig in (p, Symbolics.unwrap(p), x, u, u[1])
+        @test isequal(sig(k - 1)(k - 1), sig(k - 2))
+        @test isequal(sig(k - 2)(k + 1), sig(k - 1))
+        @test isequal(sig(k - 1)(k + 1), sig(k))
+        @test isequal(sig(k - 1)(k), sig(k - 1))
+    end
+    # a projection of a shifted signal is shifted along the signal's independent variable
+    @test isequal(operation(Symbolics.unwrap(u(k - 1)[1](k - 1))).t, Symbolics.unwrap(t))
+
+    twice = System([p(k) ~ p(k - 1)(k - 1)], t; name = :phase)
+    once = System([p(k) ~ p(k - 2)], t; name = :phase)
+    @test isequal(equations(twice), equations(once))
+end
+
 # Make sure positive shifts error
 @variables x(t)
 k = ShiftIndex(t)
