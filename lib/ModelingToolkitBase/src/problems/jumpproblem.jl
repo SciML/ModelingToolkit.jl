@@ -149,8 +149,6 @@ coupled to an ODE, and the others run much slower. Passing a specialization othe
     cbs = process_events(
         sys; callback, eval_expression, eval_module, op = op_processed, reset_jumps = true,
         tspan, mtk_verbosity = _problem_verbosity(kwargs), checkbounds, affect_transform,
-        # `save_discretes` also stays in `kwargs`, which forward it to the solve
-        save_discretes = something(get(kwargs, :save_discretes, nothing), true),
         event_codegen_kwargs(kwargs)...
     )
 

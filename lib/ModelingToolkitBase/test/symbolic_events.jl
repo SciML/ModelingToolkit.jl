@@ -2373,6 +2373,23 @@ SymbolicIndexingInterface.current_time(s::AffectStandIn) = s.time
     @test isempty(sol.ps[g])
     @test isempty(sol.ps[h])
 
+    # the problem stores `save_discretes` as a solve option and builds the callbacks as usual,
+    # so a value passed to `solve` takes precedence over it
+    prob = ODEProblem(sys, [], (0.0, 1.0); save_discretes = false)
+    @test prob.kwargs[:save_discretes] === false
+    sol = solve(prob, Tsit5(); abstol = 1.0e-10, reltol = 1.0e-10)
+    @test isempty(sol.ps[g])
+    @test isempty(sol.ps[h])
+    sol = solve(prob, Tsit5(); abstol = 1.0e-10, reltol = 1.0e-10, save_discretes = true)
+    @test sol.ps[g] == ref.ps[g]
+    @test sol.ps[h] == ref.ps[h]
+    sol = solve(
+        ODEProblem(sys, [], (0.0, 1.0)), Tsit5();
+        abstol = 1.0e-10, reltol = 1.0e-10, save_discretes = false
+    )
+    @test isempty(sol.ps[g])
+    @test isempty(sol.ps[h])
+
     # `save_discretes` is forwarded to the solve, so it also applies to callbacks that are
     # not built from symbolic events (the integrator applies it to the saves after an affect,
     # not to the save at initialization, hence `initialize_save_discretes = false` here)
@@ -2528,13 +2545,16 @@ end
         record(aff, ev, sys; role) = (push!(roles, role); aff)
         jprob = JumpProblem(jsys, [], (0.0, 1.0); affect_transform = record, save_discretes = false)
         @test roles == [:affect]
-        cb = only(jprob.kwargs[:callback].discrete_callbacks)
-        @test isempty(cb.saved_clock_partitions)
-        @test !cb.initialize_save_discretes
-        @test isempty(solve(jprob, alg).ps[c])
         jref = JumpProblem(jsys, [], (0.0, 1.0))
-        @test !isempty(only(jref.kwargs[:callback].discrete_callbacks).saved_clock_partitions)
-        @test length(solve(jref, alg).ps[c]) > 1
+        nref = length(solve(jref, alg).ps[c])
+        @test nref > 1
+        if alg isa SSAStepper
+            # `SSAStepper` does not read `save_discretes`, and does not accept it in `solve`
+            @test_broken isempty(solve(jprob, alg).ps[c])
+        else
+            @test isempty(solve(jprob, alg).ps[c])
+            @test length(solve(jprob, alg; save_discretes = true).ps[c]) == nref
+        end
     end
 
     # a transformed `initialize` and `finalize` is the one the callback runs, for every kind

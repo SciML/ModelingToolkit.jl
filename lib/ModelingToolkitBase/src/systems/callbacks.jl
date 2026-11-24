@@ -1204,15 +1204,14 @@ Initialize/finalize are wrapped in [`VectorOptionalAffect`](@ref) via
 [`wrap_vector_optional_affect`](@ref).
 """
 function generate_callback(
-        cbs::Vector{SymbolicContinuousCallback}, sys; affect_transform = nothing,
-        save_discretes::Bool = true, kwargs...
+        cbs::Vector{SymbolicContinuousCallback}, sys; affect_transform = nothing, kwargs...
     )
     eqs = map(cb -> flatten_equations(equations(cb)), cbs)
     num_eqs = length.(eqs)
     (isempty(eqs) || sum(num_eqs) == 0) && return nothing
     if sum(num_eqs) == 1
         cb_ind = findfirst(>(0), num_eqs)
-        return generate_callback(cbs[cb_ind], sys; affect_transform, save_discretes, kwargs...)
+        return generate_callback(cbs[cb_ind], sys; affect_transform, kwargs...)
     end
 
     if is_split(sys)
@@ -1224,8 +1223,6 @@ function generate_callback(
         cbs, sys, unknowns(sys), parameters(sys; initial_parameters = true); kwargs...
     )
     compiled = compile_vector_callback_affects(cbs, sys, ic; affect_transform, kwargs...)
-    saved_clock_partitions = save_discretes ? compiled.saved_clock_partitions : Vector{Int}[]
-    initialize_save_discretes = save_discretes && cbs[1].initialize_save_discretes
 
     # Build eq→affect index map: condition equation i maps to the affect for the callback
     # that owns it (a callback with k equations contributes k entries to this map).
@@ -1241,7 +1238,8 @@ function generate_callback(
         return VectorContinuousCallback(
             trigger, affect, affect_neg, length(eqs); initialize, finalize,
             rootfind = cbs[1].rootfind, initializealg = cbs[1].reinitializealg,
-            saved_clock_partitions, initialize_save_discretes
+            saved_clock_partitions = compiled.saved_clock_partitions,
+            initialize_save_discretes = cbs[1].initialize_save_discretes
         )
     else
         affect = VectorAffect(eq2affect, compiled.affects, compiled.affect_negs)
@@ -1251,7 +1249,8 @@ function generate_callback(
         return VectorContinuousCallback(
             trigger, affect, length(eqs); initialize, finalize,
             rootfind = cbs[1].rootfind, initializealg = cbs[1].reinitializealg,
-            saved_clock_partitions, initialize_save_discretes
+            saved_clock_partitions = compiled.saved_clock_partitions,
+            initialize_save_discretes = cbs[1].initialize_save_discretes
         )
     end
 end
@@ -1323,8 +1322,7 @@ to adapt the `f(integrator)` signature to the `(cb, u, t, integrator)` SciMLBase
 - `tspan`: required for `PeriodicCallback` phase computation; may be `nothing` otherwise
 """
 function generate_callback(
-        cb, sys; tspan = nothing, affect_transform = nothing, save_discretes::Bool = true,
-        kwargs...
+        cb, sys; tspan = nothing, affect_transform = nothing, kwargs...
     )
     is_timed = is_timed_condition(conditions(cb))
     dvs = unknowns(sys)
@@ -1352,18 +1350,17 @@ function generate_callback(
     initialize = isnothing(cb.initialize) ? init : InitFinalizeWrapper(init)
     finalize = isnothing(cb.finalize) ? final : InitFinalizeWrapper(final)
 
-    saved_clock_partitions = if save_discretes && is_split(sys)
+    saved_clock_partitions = if is_split(sys)
         get(get_index_cache(sys).callback_to_clocks, cb, ())
     else
         ()
     end
-    initialize_save_discretes = save_discretes && cb.initialize_save_discretes
     if is_discrete(cb)
         if is_timed && conditions(cb) isa AbstractVector
             return PresetTimeCallback(
                 trigger, affect; initialize,
                 finalize, initializealg = cb.reinitializealg, saved_clock_partitions,
-                initialize_save_discretes
+                initialize_save_discretes = cb.initialize_save_discretes
             )
         elseif is_timed && trigger isa SciMLBase.TimeDomain
             trigger_at_init = iszero((tspan[1] - trigger.phase) % trigger.dt)
@@ -1371,25 +1368,25 @@ function generate_callback(
                 affect, trigger.dt; phase = trigger.phase, initial_affect = trigger_at_init,
                 initialize, finalize,
                 initializealg = cb.reinitializealg, saved_clock_partitions,
-                initialize_save_discretes = save_discretes && trigger_at_init
+                initialize_save_discretes = trigger_at_init
             )
         elseif is_timed
             return PeriodicCallback(
                 affect, trigger; initialize, finalize, initializealg = cb.reinitializealg,
-                saved_clock_partitions, initialize_save_discretes
+                saved_clock_partitions, initialize_save_discretes = cb.initialize_save_discretes
             )
         else
             return DiscreteCallback(
                 trigger, affect; initialize,
                 finalize, initializealg = cb.reinitializealg, saved_clock_partitions,
-                initialize_save_discretes
+                initialize_save_discretes = cb.initialize_save_discretes
             )
         end
     else
         return ContinuousCallback(
             trigger, affect, affect_neg; initialize, finalize,
             rootfind = cb.rootfind, initializealg = cb.reinitializealg, saved_clock_partitions,
-            initialize_save_discretes
+            initialize_save_discretes = cb.initialize_save_discretes
         )
     end
 end

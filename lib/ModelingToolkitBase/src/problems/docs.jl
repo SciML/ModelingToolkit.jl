@@ -88,12 +88,14 @@ const TIME_DEPENDENT_PROBLEM_KWARGS = """
   callbacks themselves (event timing, root finding, reinitialization) are built as usual.
   See also `without_parameter_hooks` and `functional_affect_parts`.
 - `save_discretes`: Whether events save the values of the discrete parameters they update,
-  as the timeseries of `sol.ps[...]`. `false` disables it, e.g. when the parameter object is
-  not one the host-side saving can read. Their timeseries are then empty, and reading a
-  value that needs one of them at some time (e.g. `sol[z]` or `sol(t; idxs = z)` for an
-  observed `z` that depends on one) throws an error. It is also stored on the problem and
-  passed to `solve` as the integrator option of the same name, which applies it to the
-  callbacks passed with `callback`.
+  as the timeseries of `sol.ps[...]`. It is stored on the problem and passed to `solve` as
+  the integrator option of the same name, so a value passed to `solve` takes precedence; the
+  callbacks are built the same way either way. `false` disables the saving, e.g. when the
+  parameter object is not one the host-side saving can read. Their timeseries are then
+  empty, and reading a value that needs one of them at some time (e.g. `sol[z]` or
+  `sol(t; idxs = z)` for an observed `z` that depends on one) throws an error. The option
+  also applies to the callbacks passed with `callback`. It needs a solver that supports it:
+  JumpProcesses' `SSAStepper` does not, and saves the discretes anyway.
 """
 
 const PROBLEM_INTERNALS_HEADER = """
