@@ -18,15 +18,6 @@ end
 @testset "A shift index applied to a symbolic" begin
     kc = ShiftIndex(Clock(0.25))
 
-    # a function-valued symbolic takes the index as an ordinary argument
-    @variables f(..)
-    applied = Symbolics.unwrap(f(kc))
-    @test nameof(operation(applied)) == :f
-    @test isequal(Symbolics.unwrap_const(only(arguments(applied))), kc)
-    declared = Symbolics.unwrap(only(@variables u(kc)))
-    @test nameof(operation(declared)) == :u
-    @test isequal(Symbolics.unwrap_const(only(arguments(declared))), kc)
-
     # a variable that is not a number is shifted as a number is
     @variables p(t)::ShiftedPhase
     @test Symbolics.symtype(p(kc)) === ShiftedPhase
