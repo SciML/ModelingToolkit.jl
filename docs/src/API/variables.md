@@ -339,14 +339,22 @@ ModelingToolkit.MTKVariableTypeCtx
 ModelingToolkit.isparameter
 ```
 
-The `@parameters` and `@brownians` macros set this metadata on the variables they declare.
-The same can be done to an existing symbolic variable, which is useful when generating
-variables programmatically.
+The `@parameters`, `@brownians` and `@poissonians` macros set this metadata on the variables
+they declare. The same can be done to an existing symbolic variable, which is useful when
+generating variables programmatically.
 
 ```@docs
 ModelingToolkitBase.toparam
 ModelingToolkitBase.tovar
 ModelingToolkitBase.tobrownian
+ModelingToolkitBase.topoissonian
+```
+
+A poissonian also stores its rate expression as metadata, which can be queried with
+`getpoissonianrate`.
+
+```@docs
+ModelingToolkitBase.getpoissonianrate
 ```
 
 ## Miscellaneous metadata
@@ -414,6 +422,11 @@ ModelingToolkit makes heavy use of "operators". These are custom functions that 
 to symbolic variables. The most common operator is the
 [Differential operator](https://docs.sciml.ai/Symbolics/stable/manual/derivatives/), defined
 in Symbolics.jl.
+
+With Symbolics.jl 7.49 or later, ModelingToolkit and ModelingToolkitBase also re-export
+`Curl`, `Divergence`, `Grad`, `Laplacian`, and `NormalDerivative`.
+See the [Symbolics.jl derivative reference](https://docs.sciml.ai/Symbolics/stable/manual/derivatives/)
+for their definitions and examples.
 
 ModelingToolkit also defines a plethora of custom operators.
 
