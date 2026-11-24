@@ -994,6 +994,8 @@ function generate_control_function(
         append!(d, du)
     end
 
+    # `d` keeps the opened variables as given, so an analysis point on an array
+    # contributes the whole array as one disturbance argument entry.
     return ModelingToolkitBase.generate_control_function(
         system_modifier(sys), u, d; known_disturbance_inputs = kd, kwargs...
     )

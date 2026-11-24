@@ -214,6 +214,28 @@ function group_disturbance_arrays(disturbances)
     return unique!(grouped)
 end
 
+function array_origin(arr)
+    return Tuple((first(SU.stable_eachindex(arr))::SU.StableIndex{Int}).idxs)
+end
+
+"""
+    with_array_origin(arr, value)
+
+Wrap `value` in the registered `offset_array` transform unless `arr` has one-based
+axes, so a value substituted for `arr` keeps the array's index origin and whole-array
+uses of `arr` index it with the original axes.
+"""
+function with_array_origin(arr, value)
+    origin = array_origin(arr)
+    all(isone, origin) && return value
+    arg = value isa SymbolicT ? value : SU.Const{VartypeT}(value)
+    return SU.Term{VartypeT}(
+        offset_array,
+        SU.ArgsT{VartypeT}((SU.Const{VartypeT}(origin), arg));
+        type = symtype(arr), shape = SU.shape(arr)
+    )
+end
+
 # Build control function
 
 """
@@ -326,13 +348,10 @@ function generate_control_function(
     inputs_set = Set{SymbolicT}(inputs)
     for v in inputs
         arr, isarr = split_indexed_var(v)
-        if isarr
-            push!(inputs_set, arr)
-            continue
-        end
-        SU.is_array_shape(SU.shape(v)) && symbolic_has_known_size(v) || continue
-        for i in SU.stable_eachindex(v)
-            push!(inputs_set, v[i])
+        isarr && push!(inputs_set, arr)
+        if SU.is_array_shape(SU.shape(v))
+            # a whole array supplied as an input covers each of its elements
+            foreach(i -> push!(inputs_set, v[i]), SU.stable_eachindex(v))
         end
     end
     ps = setdiff(ps, inputs_set)
@@ -352,7 +371,8 @@ function generate_control_function(
         partial_arrays = Set{SymbolicT}()
         for disturbance in group_disturbance_arrays(unknown_disturbances)
             if SU.is_array_shape(SU.shape(disturbance))
-                subs[disturbance] = zeros(eltype(symtype(disturbance)), size(disturbance))
+                arr = zeros(eltype(symtype(disturbance)), size(disturbance))
+                subs[disturbance] = with_array_origin(disturbance, arr)
                 for i in SU.stable_eachindex(disturbance)
                     subs[disturbance[i]] = zero(symtype(disturbance[i]))
                 end
@@ -365,24 +385,15 @@ function generate_control_function(
         for parent in partial_arrays
             elements = map(i -> parent[i], SU.stable_eachindex(parent))
             all(in(inputs_set), elements) || continue
-            origins = Tuple(first(SU.stable_eachindex(parent)).idxs)
             literal_args = SU.ArgsT{VartypeT}((SU.Const{VartypeT}(size(parent)),))
             for element in elements
                 # Keep direct references to measured elements bound to their argument slots.
                 push!(literal_args, get!(subs, element, element))
             end
-            reconstructed = SU.Term{VartypeT}(
-                SU.array_literal, literal_args;
-                type = symtype(parent), shape = SU.shape(parent)
+            literal = SU.Term{VartypeT}(
+                SU.array_literal, literal_args; type = symtype(parent), shape = SU.shape(parent)
             )
-            if !all(isone, origins)
-                reconstructed = SU.Term{VartypeT}(
-                    offset_array,
-                    SU.ArgsT{VartypeT}((SU.Const{VartypeT}(origins), reconstructed));
-                    type = symtype(parent), shape = SU.shape(parent)
-                )
-            end
-            subs[parent] = reconstructed
+            subs[parent] = with_array_origin(parent, literal)
         end
         eqs = [eq.lhs ~ substitute(eq.rhs, subs) for eq in eqs]
     end
