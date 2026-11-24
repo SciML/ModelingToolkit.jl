@@ -56,23 +56,52 @@ end
         ], t
     )
 
-    @testset "$interface" for (interface, args, kwargs) in (
-            ("keyword", (sys.u,), (; known_disturbance_inputs = [sys.d])),
-            ("positional", (sys.u, sys.d), (; disturbance_argument = true)),
+    @testset "$interface" for (interface, args, kwargs, warg) in (
+            (
+                "keyword", (sys.u,), (; known_disturbance_inputs = [sys.d]),
+                ([4.0, 5.0], [5.0, 5.0], [4.0, 6.0]),
+            ),
+            (
+                "positional", (sys.u, sys.d), (; disturbance_argument = true),
+                ([[4.0, 5.0]], [[5.0, 5.0]], [[4.0, 6.0]]),
+            ),
         )
         (; f, ps, io_sys) = ModelingToolkit.generate_control_function(
             sys, args...; split, kwargs...
         )
         @test isempty(ps)
         p = ModelingToolkit.get_p(io_sys, ModelingToolkit.inputs(io_sys) .=> 0.0)
-        @test f[1]([2.0], [3.0], p, 0.0, [4.0, 5.0]) == [36.0]
-        @test f[1]([2.0], [3.0], p, 0.0, [5.0, 5.0]) == [33.0]
-        @test f[1]([2.0], [3.0], p, 0.0, [4.0, 6.0]) == [43.0]
+        @test f[1]([2.0], [3.0], p, 0.0, warg[1]) == [36.0]
+        @test f[1]([2.0], [3.0], p, 0.0, warg[2]) == [33.0]
+        @test f[1]([2.0], [3.0], p, 0.0, warg[3]) == [43.0]
     end
 end
 
 energy(v) = sum(abs2, v)
 @register_symbolic energy(v::AbstractVector)
+
+@testset "Positional known array disturbance with a whole-array consumer (split = $split)" for split in (true, false)
+    @variables x(t) c(t) [input = true] control_source(t) [output = true]
+    @variables (w(t))[1:2] [input = true] (load_source(t))[1:2] [output = true]
+    @named sys = System(
+        [
+            control_source ~ 0, load_source ~ [0.0, 0.0],
+            connect(control_source, :control_ap, c), connect(load_source, :load_ap, w),
+            D(x) ~ 5c + energy(w),
+        ], t
+    )
+
+    (; f, ps, io_sys) = ModelingToolkit.generate_control_function(
+        sys, sys.control_ap, sys.load_ap; disturbance_argument = true, split
+    )
+    @test isempty(ps)
+    p = ModelingToolkit.get_p(io_sys, ModelingToolkit.inputs(io_sys) .=> 0.0)
+    @test f[1]([0.0], [3.0], p, 0.0, [[4.0, 5.0]]) == [56.0]
+    @test f[1]([0.0], [3.0], p, 0.0, [[1.0, 2.0]]) == [20.0]
+    dx = [NaN]
+    f[2](dx, [0.0], [3.0], p, 0.0, [[4.0, 5.0]])
+    @test dx == [56.0]
+end
 
 @testset "Array-valued unknown disturbance at an analysis point (split = $split)" for split in (true, false)
     @variables x(t) c(t) [input = true] control_source(t) [output = true]
@@ -90,17 +119,24 @@ energy(v) = sum(abs2, v)
     @test f[1]([0.0], [3.0], p, 0.0) == [15.0]
 end
 
+weighted_flags(v::AbstractVector{Bool}) = 2v[1] + 3v[2] + 18
+@register_symbolic weighted_flags(v::AbstractVector{Bool})
+
+asym(v::AbstractVector) = 2v[1] + 3v[2]
+@register_symbolic asym(v::AbstractVector)
+
 @testset "Mixed disturbances at array elements (split = $split)" for split in (true, false)
     @variables x(t) c(t) [input = true] control_source(t) [output = true]
     @variables (w(t))[1:2] [input = true, disturbance = true] load_source(t) [output = true]
-    @testset "Known elements $indices" for (indices, load, indexed_expected, array_expected) in (
-            ((1,), [4.0], 17.0, 31.0),
-            ((2,), [4.0], -23.0, 31.0),
-            ((2, 1), [4.0, 6.0], -5.0, 67.0),
+    @testset "Known elements $indices" for (indices, load, indexed_expected, array_expected, asym_expected) in (
+            ((1,), [4.0], 17.0, 31.0, 23.0),
+            ((2,), [4.0], -23.0, 31.0, 27.0),
+            ((2, 1), [4.0, 6.0], -5.0, 67.0, 39.0),
         )
         @testset "$consumer" for (consumer, rhs, control, expected) in (
                 ("Indexed", 5c + 3w[1] - 7w[2], [1.0], indexed_expected),
                 ("Whole array", 5c + energy(w), [3.0], array_expected),
+                ("Asymmetric whole array", 5c + asym(w), [3.0], asym_expected),
             )
             @named sys = System(
                 [
@@ -121,6 +157,52 @@ end
             @test dx == [expected]
         end
     end
+end
+
+@testset "Measured Boolean disturbance elements substitute false (split = $split)" for split in (true, false)
+    @variables x(t) c(t) [input = true] control_source(t) [output = true]
+    @variables (w(t))[1:2]::Bool [input = true, disturbance = true] load_source(t) [output = true]
+    @named sys = System(
+        [
+            control_source ~ 0, load_source ~ false,
+            connect(control_source, :control_ap, c), connect(load_source, :load_ap, w[2]),
+            D(x) ~ 5c + weighted_flags(w),
+        ], t
+    )
+
+    (; f, ps, io_sys) = ModelingToolkit.generate_control_function(
+        sys, sys.control_ap; known_disturbance_inputs = [sys.load_ap], split
+    )
+    @test isempty(ps)
+    p = ModelingToolkit.get_p(io_sys, ModelingToolkit.inputs(io_sys) .=> 0.0)
+    @test f[1]([0.0], [1.0], p, 0.0, [true]) == [26.0]
+    @test f[1]([0.0], [1.0], p, 0.0, [false]) == [23.0]
+end
+
+offset_mixer(v::AbstractVector) = 3v[0] - 7v[1]
+@register_symbolic offset_mixer(v::AbstractVector)
+
+@testset "Partially measured offset disturbance keeps its axes (split = $split)" for split in (true, false)
+    @variables x(t) c(t) [input = true] control_source(t) [output = true]
+    @variables (w(t))[0:1] [input = true, disturbance = true] load_source(t) [output = true]
+    @named sys = System(
+        [
+            control_source ~ 0, load_source ~ 0,
+            connect(control_source, :control_ap, c), connect(load_source, :load_ap, w[1]),
+            D(x) ~ 5c + offset_mixer(w),
+        ], t
+    )
+
+    (; f, ps, io_sys) = ModelingToolkit.generate_control_function(
+        sys, sys.control_ap; known_disturbance_inputs = [sys.load_ap], split
+    )
+    @test isempty(ps)
+    # the system has no parameters, so the parameter object is empty
+    @test f[1]([0.0], [1.0], (), 0.0, [5.0]) == [-30.0]
+    @test f[1]([0.0], [1.0], (), 0.0, [2.0]) == [-9.0]
+    dx = [NaN]
+    f[2](dx, [0.0], [1.0], (), 0.0, [5.0])
+    @test dx == [-30.0]
 end
 
 indexof(sym, syms) = findfirst(isequal(sym), syms)

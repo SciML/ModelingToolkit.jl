@@ -326,8 +326,14 @@ function generate_control_function(
     inputs_set = Set{SymbolicT}(inputs)
     for v in inputs
         arr, isarr = split_indexed_var(v)
-        isarr || continue
-        push!(inputs_set, arr)
+        if isarr
+            push!(inputs_set, arr)
+            continue
+        end
+        SU.is_array_shape(SU.shape(v)) && symbolic_has_known_size(v) || continue
+        for i in SU.stable_eachindex(v)
+            push!(inputs_set, v[i])
+        end
     end
     ps = setdiff(ps, inputs_set)
 
@@ -348,10 +354,10 @@ function generate_control_function(
             if SU.is_array_shape(SU.shape(disturbance))
                 subs[disturbance] = zeros(eltype(symtype(disturbance)), size(disturbance))
                 for i in SU.stable_eachindex(disturbance)
-                    subs[disturbance[i]] = 0
+                    subs[disturbance[i]] = zero(symtype(disturbance[i]))
                 end
             else
-                subs[disturbance] = 0
+                subs[disturbance] = zero(symtype(disturbance))
                 parent, indexed = split_indexed_var(disturbance)
                 indexed && symbolic_has_known_size(parent) && push!(partial_arrays, parent)
             end
@@ -359,14 +365,24 @@ function generate_control_function(
         for parent in partial_arrays
             elements = map(i -> parent[i], SU.stable_eachindex(parent))
             all(in(inputs_set), elements) || continue
+            origins = Tuple(first(SU.stable_eachindex(parent)).idxs)
             literal_args = SU.ArgsT{VartypeT}((SU.Const{VartypeT}(size(parent)),))
             for element in elements
                 # Keep direct references to measured elements bound to their argument slots.
                 push!(literal_args, get!(subs, element, element))
             end
-            subs[parent] = SU.Term{VartypeT}(
-                SU.array_literal, literal_args; type = symtype(parent), shape = SU.shape(parent)
+            reconstructed = SU.Term{VartypeT}(
+                SU.array_literal, literal_args;
+                type = symtype(parent), shape = SU.shape(parent)
             )
+            if !all(isone, origins)
+                reconstructed = SU.Term{VartypeT}(
+                    offset_array,
+                    SU.ArgsT{VartypeT}((SU.Const{VartypeT}(origins), reconstructed));
+                    type = symtype(parent), shape = SU.shape(parent)
+                )
+            end
+            subs[parent] = reconstructed
         end
         eqs = [eq.lhs ~ substitute(eq.rhs, subs) for eq in eqs]
     end

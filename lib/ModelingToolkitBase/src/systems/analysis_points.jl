@@ -995,6 +995,6 @@ function generate_control_function(
     end
 
     return ModelingToolkitBase.generate_control_function(
-        system_modifier(sys), u, scalarized_vars(d); known_disturbance_inputs = kd, kwargs...
+        system_modifier(sys), u, d; known_disturbance_inputs = kd, kwargs...
     )
 end
