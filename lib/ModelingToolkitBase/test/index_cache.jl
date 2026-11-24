@@ -111,12 +111,22 @@ end
             "discovered" => System(eqs, t; name = :sys),
             "listed" => System(eqs, t, [x], [a[3], b, a[1]]; name = :sys),
         ]
-        @test isequal(parameters(sys), [a[3], b, a[1]])
-        @test isequal(parameters(complete(sys; split = false)), [a[3], b, a[1]])
+        # Discovery order follows the term ordering of the equations, which varies
+        # across Julia versions.
+        ps = parameters(sys)
+        if name == "listed"
+            @test isequal(ps, [a[3], b, a[1]])
+        else
+            @test issetequal(ps, [a[3], b, a[1]])
+        end
+        @test isequal(parameters(complete(sys; split = false)), ps)
         sys = complete(sys)
-        @test isequal(parameters(sys), [a, b])
-        @test vec(parameter_index(sys, a).idx) == 1:3
-        @test parameter_index(sys, a[2]).idx == 2
+        a_first = findfirst(!isequal(b), ps) < findfirst(isequal(b), ps)
+        @test isequal(parameters(sys), a_first ? [a, b] : [b, a])
+        a_offset = a_first ? 0 : 1
+        @test vec(parameter_index(sys, a).idx) == a_offset .+ (1:3)
+        @test parameter_index(sys, a[2]).idx == a_offset + 2
+        @test parameter_index(sys, b).idx == (a_first ? 4 : 1)
         prob = ODEProblem(sys, [x => 0.0, b => 4.0, a => [1.0, 2.0, 3.0]], (0.0, 1.0))
         @test prob.f(prob.u0, prob.p, 0.0) == [35.0]
         @test prob.ps[a[2]] == 2.0
