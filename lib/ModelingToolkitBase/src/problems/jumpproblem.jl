@@ -17,6 +17,7 @@ coupled to an ODE, and the others run much slower. Passing a specialization othe
         callback = nothing, rng = nothing, save_positions = (true, true), kwargs...
     ) where {iip, spec}
     check_complete(sys, JumpProblem)
+    check_no_array_unknowns(sys)
     check_compatibility && check_compatible_system(JumpProblem, sys)
     if spec !== SciMLBase.FullSpecialize
         Base.depwarn(
@@ -157,6 +158,24 @@ coupled to an ODE, and the others run much slower. Passing a specialization othe
         prob, aggregator, jset; dep_graph = jtoj, vartojumps_map = vtoj,
         jumptovars_map = jtov, nocopy = true,
         callback = cbs, save_positions, _solver_kwargs(JumpProblem, kwargs)...
+    )
+end
+
+# The jump dependency maps and the compiled affects and event conditions index the state by
+# position in `unknowns(sys)`, which is wrong for the flat state of an unscalarized array
+# unknown and gave silently incorrect results, so such systems are rejected. See
+# SciML/ModelingToolkit.jl#5428.
+function check_no_array_unknowns(sys::System)
+    arrays = filter(Symbolics.isarraysymbolic, unknowns(sys))
+    isempty(arrays) && return nothing
+    throw(
+        ArgumentError(
+            "`JumpProblem` does not support array unknowns, and the system has " *
+                "$(join(arrays, ", ")). Scalarize them when building the system, for example " *
+                "by passing `[A; collect(X)]` instead of `[A, X]` as its unknowns. If a jump " *
+                "rate or affect uses a whole array, also write it in terms of the elements, " *
+                "for example `X[1] + X[2]` for a two-element `sum(X)`."
+        )
     )
 end
 
