@@ -124,7 +124,7 @@ function (xn::SymbolicT)(k::ShiftIndex)
     # A function-valued symbolic, such as the `f` of `@variables f(..)`, is applied to `k`
     # as to any other argument
     if SU.symtype(xn) <: SU.FnType
-        return invoke(xn, Tuple{Vararg{Any}}, k)
+        return invoke(xn, Tuple{Vararg{Any}}, k)::SymbolicT
     end
     @unpack clock, steps = k
     x = xn
