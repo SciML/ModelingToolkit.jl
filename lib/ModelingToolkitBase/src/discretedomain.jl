@@ -115,9 +115,19 @@ struct ShiftIndex
     ShiftIndex(::Num, steps::Int) = new(IntegerSequence(), steps)
 end
 
-function (xn::Num)(k::ShiftIndex)
+(xn::Num)(k::ShiftIndex) = Num(unwrap(xn)(k))
+function (xn::Symbolics.SymStruct{T})(k::ShiftIndex) where {T}
+    return Symbolics.SymStruct{T}(unwrap(xn)(k))
+end
+
+function (xn::SymbolicT)(k::ShiftIndex)
+    # A function-valued symbolic, such as the `f` of `@variables f(..)`, is applied to `k`
+    # as to any other argument
+    if SU.symtype(xn) <: SU.FnType
+        return invoke(xn, Tuple{Vararg{Any}}, k)::SymbolicT
+    end
     @unpack clock, steps = k
-    x = unwrap(xn)
+    x = xn
     # Verify that the independent variables of k and x match and that the expression doesn't have multiple variables
     vars = Set{SymbolicT}()
     SU.search_variables!(vars, x)
@@ -133,7 +143,8 @@ function (xn::Num)(k::ShiftIndex)
     if length(arguments(var)) != 1
         error(lazy"Cannot shift an expression with multiple independent variables $x.")
     end
-    t = only(arguments(var))
+    # `var` is a `Shift` term when `x` is already shifted: its `t` is that of the signal
+    t = iv_from_nested_derivative(var, Shift)
 
     # d, _ = propagate_time_domain(xn)
     # if d != clock # this is only required if the variable has another clock
@@ -144,7 +155,8 @@ function (xn::Num)(k::ShiftIndex)
     if steps == 0
         return xn # x(k) needs no shift operator if the step of k is 0
     end
-    return Shift(t, steps)(xn) # a shift of k steps
+    # a shift of k steps, added to any shift `xn` already carries
+    return simplify_shifts(Shift(t, steps)(xn))
 end
 
 function (xn::Symbolics.Arr)(k::ShiftIndex)
@@ -163,7 +175,7 @@ function (xn::Symbolics.Arr)(k::ShiftIndex)
     if length(arguments(var)) != 1
         error(lazy"Cannot shift an expression with multiple independent variables $x.")
     end
-    t = only(arguments(var))
+    t = iv_from_nested_derivative(var, Shift)
 
     # d, _ = propagate_time_domain(xn)
     # if d != clock # this is only required if the variable has another clock
@@ -305,6 +317,50 @@ Returns true if the expression or equation `O` contains [`Hold`](@ref) terms.
 """
 hashold(O) = recursive_hasoperator(Hold, unwrap(O))
 
+"""
+    ZeroCrossing(expr; name = gensym(), up = true, down = true, kwargs...)
+
+Construct a [`SymbolicContinuousCallback`](@ref) that detects when `expr` crosses zero.
+Include the callback in the `continuous_events` vector of a [`System`](@ref).
+By default, a crossing leaves the model state unchanged.
+
+!!! warning "Internal API"
+
+    `ZeroCrossing` is an internal helper and is not part of the public API.
+
+# Arguments
+
+- `expr` is the scalar symbolic expression whose sign determines the crossing direction.
+
+# Keyword Arguments
+
+- `name::Symbol` identifies the callback for `SciMLBase.Clocks.EventClock(callback)`.
+  It defaults to a freshly generated symbol and overrides any `zero_crossing_id`
+  supplied in `kwargs...`.
+- `up::Bool = true` installs the affect for crossings from negative to positive.
+- `down::Bool = true` sets the default affect for crossings from positive to negative.
+  An explicit `affect_neg` in `kwargs...` overrides this default, even when `down = false`.
+- `kwargs...` are forwarded to [`SymbolicContinuousCallback`](@ref).
+
+The solver can still save a time point at a crossing with its affect disabled.
+
+# Examples
+
+```jldoctest
+julia> using ModelingToolkitBase
+
+julia> using ModelingToolkitBase: ZeroCrossing, t_nounits as t, D_nounits as D
+
+julia> @variables x(t);
+
+julia> crossing = ZeroCrossing(x - 1; name = :threshold, down = false);
+
+julia> @named sys = System([D(x) ~ 1], t; continuous_events = [crossing]);
+
+julia> length(continuous_events(sys))
+1
+```
+"""
 function ZeroCrossing(expr; name = gensym(), up = true, down = true, kwargs...)
     return SymbolicContinuousCallback(
         [expr ~ 0], up ? ImperativeAffect(Returns(nothing)) : nothing;
