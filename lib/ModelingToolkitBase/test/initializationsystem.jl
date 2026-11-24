@@ -242,6 +242,80 @@ end
     ) === nothing
 end
 
+@testset "Underdetermined init message names parameters with missing value" begin
+    @parameters pm
+    msg = ModelingToolkitBase.initialization_structure_error_message(
+        :ExtraVariablesSystemException, "The system is unbalanced.", (1, 2), ["pm"]
+    )
+    @test occursin("`pm` has a value of `missing`", msg)
+    # The example value is a placeholder, so it is valid for array parameters too
+    @test occursin("pm => value", msg)
+    @test !occursin("pm => 1.0", msg)
+
+    msg = ModelingToolkitBase.initialization_structure_error_message(
+        :ExtraVariablesSystemException, "The system is unbalanced.", (1, 2)
+    )
+    @test !occursin("`missing`", msg)
+
+    old = ModelingToolkitBase.show_api_guidance!(false)
+    try
+        msg = ModelingToolkitBase.initialization_structure_error_message(
+            :ExtraVariablesSystemException, "The system is unbalanced.", (1, 2), ["pm"]
+        )
+        # The name stays; only the guidance naming ModelingToolkit API is left out
+        @test occursin("`pm` has a value of `missing`", msg)
+        @test !occursin("ODEProblem", msg)
+        @test !occursin("initialization_eqs", msg)
+    finally
+        ModelingToolkitBase.show_api_guidance!(old)
+    end
+end
+
+@testset "Issue #5405" begin
+    @variables x(t) = 0
+    @parameters p = missing [guess = 0.0]
+    @named sys = System([D(x) ~ ifelse(p > 0.5, 1.0, 0.0)], t)
+    ssys = mtkcompile(sys)
+    err = try
+        ODEProblem(ssys, [], (0.0, 1.0); fully_determined = true)
+        nothing
+    catch e
+        e
+    end
+    @test err isa ERRMOD.ExtraVariablesSystemException
+    @test occursin("`p` has a value of `missing`", sprint(showerror, err))
+end
+
+@testset "Hint does not single out a parameter already set by initialization_eqs" begin
+    @variables x(t) = 0
+    @parameters p = missing [guess = 0.0] q = missing [guess = 0.0]
+    @named sys = System([D(x) ~ p + q], t)
+    ssys = mtkcompile(sys)
+    err = try
+        ODEProblem(
+            ssys, [], (0.0, 1.0);
+            initialization_eqs = [p ~ 4.0], fully_determined = true
+        )
+        nothing
+    catch e
+        e
+    end
+    @test err isa ERRMOD.ExtraVariablesSystemException
+    msg = sprint(showerror, err)
+    # Both bindings are listed, but the example doesn't name one of them
+    @test occursin("`p`", msg)
+    @test occursin("`q`", msg)
+    @test occursin("name => value", msg)
+    @test !occursin("p => value", msg)
+    # Supplying only the undetermined one is enough
+    prob = ODEProblem(
+        ssys, [q => 2.0], (0.0, 1.0);
+        initialization_eqs = [p ~ 4.0], fully_determined = true
+    )
+    @test prob.ps[p] == 4.0
+    @test prob.ps[q] == 2.0
+end
+
 @connector function Port(; name, p = nothing, dm = 0)
     vars = @variables begin
         p(t) = p

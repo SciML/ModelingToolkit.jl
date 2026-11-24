@@ -115,9 +115,19 @@ struct ShiftIndex
     ShiftIndex(::Num, steps::Int) = new(IntegerSequence(), steps)
 end
 
-function (xn::Num)(k::ShiftIndex)
+(xn::Num)(k::ShiftIndex) = Num(unwrap(xn)(k))
+function (xn::Symbolics.SymStruct{T})(k::ShiftIndex) where {T}
+    return Symbolics.SymStruct{T}(unwrap(xn)(k))
+end
+
+function (xn::SymbolicT)(k::ShiftIndex)
+    # A function-valued symbolic, such as the `f` of `@variables f(..)`, is applied to `k`
+    # as to any other argument
+    if SU.symtype(xn) <: SU.FnType
+        return invoke(xn, Tuple{Vararg{Any}}, k)::SymbolicT
+    end
     @unpack clock, steps = k
-    x = unwrap(xn)
+    x = xn
     # Verify that the independent variables of k and x match and that the expression doesn't have multiple variables
     vars = Set{SymbolicT}()
     SU.search_variables!(vars, x)
@@ -133,7 +143,8 @@ function (xn::Num)(k::ShiftIndex)
     if length(arguments(var)) != 1
         error(lazy"Cannot shift an expression with multiple independent variables $x.")
     end
-    t = only(arguments(var))
+    # `var` is a `Shift` term when `x` is already shifted: its `t` is that of the signal
+    t = iv_from_nested_derivative(var, Shift)
 
     # d, _ = propagate_time_domain(xn)
     # if d != clock # this is only required if the variable has another clock
@@ -144,7 +155,8 @@ function (xn::Num)(k::ShiftIndex)
     if steps == 0
         return xn # x(k) needs no shift operator if the step of k is 0
     end
-    return Shift(t, steps)(xn) # a shift of k steps
+    # a shift of k steps, added to any shift `xn` already carries
+    return simplify_shifts(Shift(t, steps)(xn))
 end
 
 function (xn::Symbolics.Arr)(k::ShiftIndex)
@@ -163,7 +175,7 @@ function (xn::Symbolics.Arr)(k::ShiftIndex)
     if length(arguments(var)) != 1
         error(lazy"Cannot shift an expression with multiple independent variables $x.")
     end
-    t = only(arguments(var))
+    t = iv_from_nested_derivative(var, Shift)
 
     # d, _ = propagate_time_domain(xn)
     # if d != clock # this is only required if the variable has another clock
