@@ -2391,8 +2391,7 @@ SymbolicIndexingInterface.current_time(s::AffectStandIn) = s.time
     @test isempty(sol.ps[h])
 
     # `save_discretes` is forwarded to the solve, so it also applies to callbacks that are
-    # not built from symbolic events (the integrator applies it to the saves after an affect,
-    # not to the save at initialization, hence `initialize_save_discretes = false` here)
+    # not built from symbolic events, at initialization and after an affect
     @mtkcompile csys = System(
         [D(x) ~ -k * x + 0.01 * h], t, [x], [k, h];
         continuous_events = [SymbolicContinuousCallback([x ~ 0.6], down; discrete_parameters = [h])]
@@ -2400,7 +2399,7 @@ SymbolicIndexingInterface.current_time(s::AffectStandIn) = s.time
     hparts = ODEProblem(csys, [], (0.0, 1.0)).kwargs[:callback].saved_clock_partitions
     plain = SciMLBase.DiscreteCallback(
         (u, t, integ) -> t == 0.25, integ -> nothing;
-        saved_clock_partitions = hparts, initialize_save_discretes = false
+        saved_clock_partitions = hparts
     )
     nh = length(solve(ODEProblem(csys, [], (0.0, 1.0)), Tsit5()).ps[h])
     cprob = ODEProblem(csys, [], (0.0, 1.0); callback = plain)
@@ -2549,8 +2548,12 @@ end
         nref = length(solve(jref, alg).ps[c])
         @test nref > 1
         if alg isa SSAStepper
-            # `SSAStepper` does not read `save_discretes`, and does not accept it in `solve`
-            @test_broken isempty(solve(jprob, alg).ps[c])
+            # `SSAStepper` ignores the `save_discretes` stored on the problem, and does not
+            # accept it in `solve`
+            jsol = solve(jprob, alg)
+            @test SciMLBase.successful_retcode(jsol)
+            @test_broken isempty(jsol.ps[c])
+            @test_throws MethodError solve(jprob, alg; save_discretes = true)
         else
             @test isempty(solve(jprob, alg).ps[c])
             @test length(solve(jprob, alg; save_discretes = true).ps[c]) == nref

@@ -94,8 +94,11 @@ const TIME_DEPENDENT_PROBLEM_KWARGS = """
   parameter object is not one the host-side saving can read. Their timeseries are then
   empty, and reading a value that needs one of them at some time (e.g. `sol[z]` or
   `sol(t; idxs = z)` for an observed `z` that depends on one) throws an error. The option
-  also applies to the callbacks passed with `callback`. It needs a solver that supports it:
-  JumpProcesses' `SSAStepper` does not, and saves the discretes anyway.
+  also applies to the callbacks passed with `callback`. It needs a solver that supports it.
+  OrdinaryDiffEq does, though before OrdinaryDiffEqCore 4.19 it still saves the discretes at
+  initialization. JumpProcesses' `SSAStepper` ignores the value stored on the
+  problem, so it saves the discretes anyway, and throws a `MethodError` when it is passed to
+  `solve`.
 """
 
 const PROBLEM_INTERNALS_HEADER = """
