@@ -383,9 +383,10 @@ function check_bindings(atomic_ps::AtomicArraySet{Dict{SymbolicT, Nothing}}, bin
     for p in atomic_ps
         val = get(bindings, p, COMMON_NOTHING)
         val === COMMON_NOTHING && continue
-        # A dense `Array` keeps its shape when substituted; any other declared-shape
-        # (`shaped_parameter`) value does not, so it is rejected whatever its value.
-        if has_declared_opaque_shape(p) && !(symtype(p) <: Array)
+        # A dense `Array` keeps its shape when substituted; any other `shaped_parameter`
+        # value does not, so it is rejected whatever its value. Parameters declared
+        # without `shaped_parameter` are left to the size check below.
+        if is_shaped_parameter(p) && !(symtype(p) <: Array)
             throw(
                 ArgumentError(
                     "binding for $p: bindings of shaped opaque parameters are not supported " *

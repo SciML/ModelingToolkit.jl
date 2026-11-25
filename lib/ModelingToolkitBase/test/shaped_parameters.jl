@@ -163,6 +163,29 @@ end
     end
 end
 
+@testset "shape-preserving bindings of parameters declared without shaped_parameter still work" begin
+    A = sparse([1.0 2 3; 4 5 6])
+    sym = SymbolicUtils.Sym{SymbolicUtils.SymReal}(
+        :K; type = SparseMatrixCSC{Float64, Int},
+        shape = SymbolicUtils.ShapeVecT([1:2, 1:3])
+    )
+    K = Symbolics.wrap(ModelingToolkitBase.toparam(sym))
+    @variables u(t)[1:3] w(t)[1:2]
+    sys = System([w ~ K * u], t, [u, w], [K]; bindings = [K => A], name = :legacy)
+    @test sys isa System
+    @test_throws "has size (3, 3), but K has size (2, 3)" System(
+        [w ~ K * u], t, [u, w], [K]; bindings = [K => sparse(ones(3, 3))], name = :wrongsize
+    )
+end
+
+@testset "shaped_parameter systems cannot be completed unsplit" begin
+    @variables u(t)[1:6]
+    Kop = shaped_parameter(:Kop, BlockOp, 4, 6)
+    @named sys = System([zeros(6) ~ D(u) + u], t, [u], [Kop])
+    @test_throws "split = false" complete(sys; split = false)
+    @test complete(sys) isa System
+end
+
 struct VecFn end
 (::VecFn)(x) = [x, 2x]
 Base.size(::VecFn) = (5,)

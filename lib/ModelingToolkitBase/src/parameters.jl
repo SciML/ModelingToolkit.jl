@@ -117,10 +117,19 @@ macro parameters(xs...)
 end
 
 """
+    $TYPEDEF
+
+Symbolic metadata key marking a parameter created by [`shaped_parameter`](@ref).
+"""
+struct ShapedParameter end
+
+is_shaped_parameter(x) = x isa SymbolicT && getmetadata(x, ShapedParameter, false)::Bool
+
+"""
     $(TYPEDSIGNATURES)
 
-Create a parameter `name` of the (non-`Real`) type `T` that is declared to have the array
-shape `dims`, one `Int` or `AbstractUnitRange` per dimension. `@parameters K::T` leaves the
+Create a parameter `name` of the non-`Number` type `T` that is declared to have the array
+shape `dims`, one `Int` or `AbstractUnitRange{Int}` per dimension. `@parameters K::T` leaves the
 shape unknown, so `K * u` takes the shape of `u`, and `@parameters K[1:m, 1:n]::T` builds an
 array of `T`. This is the way to declare a rectangular opaque operator, for example a
 `SparseMatrixCSC` or a user-defined struct used through `@register_array_symbolic`:
@@ -133,9 +142,10 @@ end
 ```
 
 `T` must be a concrete type, every dimension must be positive, a range must start at 1, and
-the number of dimensions must match the rank of an array `T`. The parameter is a constant, not tunable (`tunable = true` throws). Values are
-supplied through the problem `op` map, not through `bindings`, which reject shaped opaque
-parameters.
+the number of dimensions must match the rank of an array `T`. The parameter is a constant, not
+tunable (`tunable = true` throws). Values are supplied through the problem `op` map. `bindings`
+are rejected unless `T <: Array`, and systems containing a `shaped_parameter` cannot be
+completed with `split = false`, because unsplit parameter vectors cannot check the declared shape.
 """
 function shaped_parameter(
         name::Symbol, T::Type, dims::Union{Int, AbstractUnitRange{Int}}...;
@@ -162,6 +172,7 @@ function shaped_parameter(
     shape = SymbolicUtils.ShapeVecT(map(d -> d isa Int ? (1:d) : UnitRange{Int}(d), dims))
     sym = SymbolicUtils.Sym{SymReal}(name; type = T, shape)
     sym = setmetadata(sym, VariableTunable, false)
+    sym = setmetadata(sym, ShapedParameter, true)
     return wrap(toparam(sym))
 end
 

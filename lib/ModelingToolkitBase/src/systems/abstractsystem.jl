@@ -669,6 +669,14 @@ function complete(
             @set! newsys.parent = complete(sys; split = false, flatten = false)::T
         end
         sys = newsys
+        if !split && any(is_shaped_parameter, parameters(sys))
+            throw(
+                ArgumentError(
+                    "systems with `shaped_parameter`s cannot be completed with `split = false`: " *
+                        "unsplit parameter vectors do not validate the declared shape."
+                )
+            )
+        end
         allow_parameter_eqs || check_no_parameter_equations(sys)
         _unhack_sys = reverse_all_default_reversible_transformations(sys)
         if add_initial_parameters
