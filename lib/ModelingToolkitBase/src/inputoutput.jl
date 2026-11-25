@@ -215,7 +215,7 @@ function group_disturbance_arrays(disturbances)
 end
 
 function array_origin(arr)
-    return Tuple((first(SU.stable_eachindex(arr))::SU.StableIndex{Int}).idxs)
+    return map(first, axes(arr))
 end
 
 """

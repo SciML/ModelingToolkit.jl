@@ -105,6 +105,19 @@ offset_consumer(v::AbstractVector) = 3v[0] - 7v[1]
     @test f[1]([0.0], [3.0], p, 0.0) == [15.0]
 end
 
+empty_disturbance_signal(v) = 3sum(v) + length(v)
+@register_symbolic empty_disturbance_signal(v::AbstractVector)
+
+@testset "Empty array disturbance in a scheduled system" begin
+    @variables x(t) u(t) [input = true]
+    @parameters w[1:0]
+    @named sys = System([D(x) ~ -2x + 5u + empty_disturbance_signal(w)], t)
+    io_sys = mtkcompile(sys; inputs = [u], split = false)
+
+    (; f) = ModelingToolkit.generate_control_function(io_sys, [u], [w]; split = false)
+    @test f[1]([2.0], [3.0], Float64[], 0.0) == [11.0]
+end
+
 @testset "Mixed disturbances at array elements (split = $split)" for split in (true, false)
     @variables x(t) c(t) [input = true] control_source(t) [output = true]
     @variables (w(t))[1:2] [input = true, disturbance = true] load_source(t) [output = true]
