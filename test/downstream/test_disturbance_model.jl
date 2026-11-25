@@ -12,6 +12,216 @@ using ModelingToolkit: connect
 
 using ModelingToolkit: t_nounits as t, D_nounits as D
 
+@testset "Symbolic known disturbances with an analysis point" begin
+    @variables x(t) = 0.0 source(t) [output = true] control(t) [input = true] w(t) [input = true]
+    @named sys = System([source ~ 0, connect(source, :u, control), D(x) ~ -x + control + w], t)
+
+    @testset "Control input $(typeof(input))" for input in (:u, sys.u)
+        (; f, io_sys) = ModelingToolkit.generate_control_function(
+            sys, input; known_disturbance_inputs = [w], split = false
+        )
+        op = ModelingToolkit.inputs(io_sys) .=> 0.0
+        p = ModelingToolkit.get_p(io_sys, op)
+        @test f[1]([0.0], [0.0], p, 0.0, [2.0]) == [2.0]
+    end
+end
+
+@testset "Marked known disturbance at an analysis point" begin
+    @variables x(t) control(t) [input = true] control_source(t) [output = true]
+    @variables w(t) [input = true, disturbance = true] disturbance_source(t) [output = true]
+    @variables unknown_disturbance(t) [disturbance = true]
+    @named sys = System(
+        [
+            control_source ~ 0, disturbance_source ~ 0,
+            connect(control_source, :u, control), connect(disturbance_source, :d, w),
+            D(x) ~ -x + 5control - 3w + unknown_disturbance,
+        ], t
+    )
+
+    (; f, io_sys) = ModelingToolkit.generate_control_function(
+        sys, sys.u; known_disturbance_inputs = [sys.d], split = false
+    )
+    p = ModelingToolkit.get_p(io_sys, ModelingToolkit.inputs(io_sys) .=> 0.0)
+    @test f[1]([2.0], [3.0], p, 0.0, [4.0]) == [1.0]
+end
+
+@testset "Array-valued known disturbance at an analysis point (split = $split)" for split in (true, false)
+    @variables x(t) control(t) [input = true] control_source(t) [output = true]
+    @variables (w(t))[1:2] [input = true] (disturbance_source(t))[1:2] [output = true]
+    @named sys = System(
+        [
+            control_source ~ 0, disturbance_source ~ [0.0, 0.0],
+            connect(control_source, :u, control), connect(disturbance_source, :d, w),
+            D(x) ~ -x + 5control - 3w[1] + 7w[2],
+        ], t
+    )
+
+    @testset "$interface" for (interface, args, kwargs, loads) in (
+            (
+                "keyword", (sys.u,), (; known_disturbance_inputs = [sys.d]),
+                ([4.0, 5.0], [5.0, 5.0], [4.0, 6.0]),
+            ),
+            (
+                "positional", (sys.u, sys.d), (; disturbance_argument = true),
+                ([[4.0, 5.0]], [[5.0, 5.0]], [[4.0, 6.0]]),
+            ),
+        )
+        (; f, ps, io_sys) = ModelingToolkit.generate_control_function(
+            sys, args...; split, kwargs...
+        )
+        @test isempty(ps)
+        p = ModelingToolkit.get_p(io_sys, ModelingToolkit.inputs(io_sys) .=> 0.0)
+        @test f[1]([2.0], [3.0], p, 0.0, loads[1]) == [36.0]
+        @test f[1]([2.0], [3.0], p, 0.0, loads[2]) == [33.0]
+        @test f[1]([2.0], [3.0], p, 0.0, loads[3]) == [43.0]
+    end
+end
+
+energy(v) = sum(abs2, v)
+@register_symbolic energy(v::AbstractVector)
+
+weighted_energy(v) = 3abs2(v[1]) + 7abs2(v[2])
+@register_symbolic weighted_energy(v::AbstractVector)
+
+weighted_flags(v::AbstractVector{Bool}) = 3v[1] + 7v[2]
+@register_symbolic weighted_flags(v::AbstractVector{Bool})
+
+offset_consumer(v::AbstractVector) = 3v[0] - 7v[1]
+@register_symbolic offset_consumer(v::AbstractVector)
+
+@testset "Array-valued unknown disturbance at an analysis point (split = $split)" for split in (true, false)
+    @variables x(t) c(t) [input = true] control_source(t) [output = true]
+    @variables (w(t))[1:2] [input = true] (load_source(t))[1:2] [output = true]
+    @named sys = System(
+        [
+            control_source ~ 0, load_source ~ [0.0, 0.0],
+            connect(control_source, :control_ap, c), connect(load_source, :load_ap, w),
+            D(x) ~ 5c + energy(w),
+        ], t
+    )
+
+    (; f, io_sys) = ModelingToolkit.generate_control_function(sys, sys.control_ap, sys.load_ap; split)
+    p = ModelingToolkit.get_p(io_sys, ModelingToolkit.inputs(io_sys) .=> 0.0)
+    @test f[1]([0.0], [3.0], p, 0.0) == [15.0]
+end
+
+empty_disturbance_signal(v) = 3sum(v) + length(v)
+@register_symbolic empty_disturbance_signal(v::AbstractVector)
+
+@testset "Empty array disturbance in a scheduled system" begin
+    @variables x(t) u(t) [input = true]
+    @parameters w[1:0]
+    @named sys = System([D(x) ~ -2x + 5u + empty_disturbance_signal(w)], t)
+    io_sys = mtkcompile(sys; inputs = [u], split = false)
+
+    (; f) = ModelingToolkit.generate_control_function(io_sys, [u], [w]; split = false)
+    @test f[1]([2.0], [3.0], Float64[], 0.0) == [11.0]
+end
+
+@testset "Mixed disturbances at array elements (split = $split)" for split in (true, false)
+    @variables x(t) c(t) [input = true] control_source(t) [output = true]
+    @variables (w(t))[1:2] [input = true, disturbance = true] load_source(t) [output = true]
+    @testset "Known elements $indices" for (indices, load, indexed_expected, array_expected) in (
+            ((1,), [4.0], 17.0, 63.0),
+            ((2,), [4.0], -23.0, 127.0),
+            ((2, 1), [4.0, 6.0], -5.0, 235.0),
+        )
+        @testset "$consumer" for (consumer, rhs, control, expected) in (
+                ("Indexed", 5c + 3w[1] - 7w[2], [1.0], indexed_expected),
+                ("Whole array", 5c + weighted_energy(w), [3.0], array_expected),
+            )
+            @named sys = System(
+                [
+                    control_source ~ 0, load_source ~ 0,
+                    connect(control_source, :control_ap, c), connect(load_source, :load_ap, w[first(indices)]),
+                    D(x) ~ rhs,
+                ], t
+            )
+
+            known_disturbances = [sys.load_ap, (w[i] for i in Base.tail(indices))...]
+            (; f, io_sys) = ModelingToolkit.generate_control_function(
+                sys, sys.control_ap; known_disturbance_inputs = known_disturbances, split
+            )
+            p = ModelingToolkit.get_p(io_sys, ModelingToolkit.inputs(io_sys) .=> 0.0)
+            @test f[1]([0.0], control, p, 0.0, load) == [expected]
+            dx = [NaN]
+            f[2](dx, [0.0], control, p, 0.0, load)
+            @test dx == [expected]
+        end
+    end
+end
+
+@testset "Positional array disturbance argument keeps the nested layout (split = $split)" for split in (true, false)
+    @variables x(t) c(t) [input = true] control_source(t) [output = true]
+    @variables (w(t))[1:2] [input = true] (load_source(t))[1:2] [output = true]
+    @parameters k = 2.0
+    @named sys = System(
+        [
+            control_source ~ 0, load_source ~ [0.0, 0.0],
+            connect(control_source, :control_ap, c), connect(load_source, :load_ap, w),
+            D(x) ~ -k * x + 5c + 3w[1] - 7w[2],
+        ], t
+    )
+    (; f, ps, io_sys) = ModelingToolkit.generate_control_function(
+        sys, sys.control_ap, sys.load_ap; disturbance_argument = true, split,
+        checkbounds = true
+    )
+    @test length(ps) == 1 && isequal(only(ps), k)
+    op = [k => 2.0; ModelingToolkit.inputs(io_sys) .=> 0.0]
+    p = ModelingToolkit.get_p(io_sys, op)
+    @test f[1]([0.0], [3.0], p, 0.0, [[4.0, 5.0]]) == [-8.0]
+    @test f[1]([2.0], [3.0], p, 0.0, [[4.0, 5.0]]) == [-12.0]
+    @test f[1]([2.0], [3.0], p, 0.0, [[5.0, 5.0]]) == [-9.0]
+    dx = [NaN]
+    f[2](dx, [0.0], [3.0], p, 0.0, [[4.0, 5.0]])
+    @test dx == [-8.0]
+end
+
+@testset "Boolean-valued disturbance elements keep their type (split = $split)" for split in (true, false)
+    @variables x(t) c(t) [input = true] control_source(t) [output = true]
+    @variables (w(t))[1:2]::Bool [input = true, disturbance = true] load_source(t) [output = true]
+    @named sys = System(
+        [
+            control_source ~ 0, load_source ~ false,
+            connect(control_source, :control_ap, c), connect(load_source, :load_ap, w[1]),
+            D(x) ~ 5c + weighted_flags(w),
+        ], t
+    )
+    (; f, ps, io_sys) = ModelingToolkit.generate_control_function(
+        sys, sys.control_ap; known_disturbance_inputs = [sys.load_ap], split,
+        checkbounds = true
+    )
+    @test isempty(ps)
+    p = ModelingToolkit.get_p(io_sys, ModelingToolkit.inputs(io_sys) .=> 0.0)
+    @test f[1]([0.0], [3.0], p, 0.0, [true]) == [18.0]
+    dx = [NaN]
+    f[2](dx, [0.0], [3.0], p, 0.0, [false])
+    @test dx == [15.0]
+end
+
+@testset "Offset-indexed disturbance elements keep the array origin (split = $split)" for split in (true, false)
+    @variables x(t) c(t) [input = true] control_source(t) [output = true]
+    @variables (w(t))[0:1] [input = true, disturbance = true] load_source(t) [output = true]
+    @named sys = System(
+        [
+            control_source ~ 0, load_source ~ 0,
+            connect(control_source, :control_ap, c), connect(load_source, :load_ap, w[1]),
+            D(x) ~ 5c + offset_consumer(w),
+        ], t
+    )
+    (; f, ps, io_sys) = ModelingToolkit.generate_control_function(
+        sys, sys.control_ap; known_disturbance_inputs = [sys.load_ap], split,
+        checkbounds = true
+    )
+    @test isempty(ps)
+    # the model has no parameters, and `get_p` does not support offset-indexed inputs
+    p = split ? () : Float64[]
+    @test f[1]([0.0], [3.0], p, 0.0, [5.0]) == [-20.0]
+    dx = [NaN]
+    f[2](dx, [0.0], [3.0], p, 0.0, [6.0])
+    @test dx == [-27.0]
+end
+
 indexof(sym, syms) = findfirst(isequal(sym), syms)
 
 ## Build the system model ======================================================
@@ -197,6 +407,30 @@ f, x_sym,
     model_with_disturbance, [:u], [:d1, :d2, :dy],
     disturbance_argument = true, split = false
 )
+
+@testset "Known analysis-point disturbances ($(eltype(disturbance_inputs)))" for (control_inputs, disturbance_inputs) in (
+        ([:u], [:d1, :d2]),
+        ([model_with_disturbance.u], [model_with_disturbance.d1, model_with_disturbance.d2]),
+    )
+    (; f, dvs, io_sys) = ModelingToolkit.generate_control_function(
+        model_with_disturbance, control_inputs;
+        known_disturbance_inputs = disturbance_inputs, split = false
+    )
+    @test length(ModelingToolkit.inputs(io_sys)) == length(control_inputs) + length(disturbance_inputs)
+    op = ModelingToolkit.inputs(io_sys) .=> 0
+    x0 = ModelingToolkit.get_u0(io_sys, op)
+    p = ModelingToolkit.get_p(io_sys, op)
+    u = zeros(length(control_inputs))
+    @test f[1](x0, u, p, 0.0, zeros(length(disturbance_inputs))) == zeros(length(x0))
+    inertia1_velocity = io_sys.system_model.inertia1.w
+    inertia2_velocity = io_sys.system_model.inertia2.w
+    integrator_state = io_sys.disturbance_model.x[1]
+    expected_d1 = [isequal(x, inertia1_velocity) || isequal(x, integrator_state) for x in dvs]
+    expected_d2 = [isequal(x, inertia2_velocity) for x in dvs]
+    @test f[1](x0, u, p, 0.0, [1.0, 0.0]) == expected_d1
+    @test f[1](x0, u, p, 0.0, [0.0, 2.0]) == 2 .* expected_d2
+    @test f[1](x0, u, p, 0.0, [1.0, 2.0]) == expected_d1 + 2 .* expected_d2
+end
 
 measurement = ModelingToolkit.build_explicit_observed_function(
     io_sys, outputs, inputs = ModelingToolkit.inputs(io_sys)[1:1]

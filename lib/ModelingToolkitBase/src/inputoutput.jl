@@ -196,6 +196,46 @@ end
 
 has_var(ex, x) = x ∈ Set(get_variables(ex))
 
+function group_disturbance_arrays(disturbances)
+    isempty(disturbances) && return disturbances
+    provided = Set(disturbances)
+    complete_arrays = Dict{SymbolicT, Bool}()
+    grouped = map(disturbances) do disturbance
+        parent, indexed = split_indexed_var(disturbance)
+        indexed || return disturbance
+        complete = get!(complete_arrays, parent) do
+            parent in provided || (
+                symbolic_has_known_size(parent) &&
+                    all(i -> parent[i] in provided, SU.stable_eachindex(parent))
+            )
+        end
+        return complete ? parent : disturbance
+    end
+    return unique!(grouped)
+end
+
+function array_origin(arr)
+    return map(first, axes(arr))
+end
+
+"""
+    with_array_origin(arr, value)
+
+Wrap `value` in the registered `offset_array` transform unless `arr` has one-based
+axes, so a value substituted for `arr` keeps the array's index origin and whole-array
+uses of `arr` index it with the original axes.
+"""
+function with_array_origin(arr, value)
+    origin = array_origin(arr)
+    all(isone, origin) && return value
+    arg = value isa SymbolicT ? value : SU.Const{VartypeT}(value)
+    return SU.Term{VartypeT}(
+        offset_array,
+        SU.ArgsT{VartypeT}((SU.Const{VartypeT}(origin), arg));
+        type = symtype(arr), shape = SU.shape(arr)
+    )
+end
+
 # Build control function
 
 """
@@ -284,15 +324,17 @@ function generate_control_function(
         disturbance_inputs = nothing
     end
 
-    # Collect all disturbance inputs for mtkcompile
-    all_disturbances = vcat(
-        disturbance_inputs === nothing ? [] : disturbance_inputs,
-        known_disturbance_inputs === nothing ? [] : known_disturbance_inputs
-    )
+    unknown_disturbances = disturbance_inputs === nothing ?
+        SymbolicT[] : vec(unwrap_vars(disturbance_inputs))
+    known_disturbances = known_disturbance_inputs === nothing ?
+        SymbolicT[] : vec(unwrap_vars(known_disturbance_inputs))
+    all_disturbances = vcat(unknown_disturbances, known_disturbances)
 
     if !isscheduled(sys)
+        # Compilation needs complete arrays in index order, while the generated argument follows the caller's order.
+        compile_disturbances = group_disturbance_arrays(all_disturbances)
         sys = mtkcompile(
-            sys; inputs, disturbance_inputs = all_disturbances, split, simplify, verbose
+            sys; inputs, disturbance_inputs = compile_disturbances, split, simplify, verbose
         )
     end
 
@@ -306,27 +348,53 @@ function generate_control_function(
     inputs_set = Set{SymbolicT}(inputs)
     for v in inputs
         arr, isarr = split_indexed_var(v)
-        isarr || continue
-        push!(inputs_set, arr)
+        isarr && push!(inputs_set, arr)
+        if SU.is_array_shape(SU.shape(v))
+            # a whole array supplied as an input covers each of its elements
+            foreach(i -> push!(inputs_set, v[i]), SU.stable_eachindex(v))
+        end
     end
     ps = setdiff(ps, inputs_set)
 
     # Remove unknown disturbances from inputs (we don't want them as actual inputs to the dynamics)
     if disturbance_inputs !== nothing
-        inputs = setdiff(inputs, disturbance_inputs)
+        inputs = setdiff(inputs, unknown_disturbances)
     end
 
     inputs = map(value, inputs)
-
-    # Prepare disturbance arrays for substitution and function arguments
-    unknown_disturbances = disturbance_inputs === nothing ? [] : unwrap.(disturbance_inputs)
-    known_disturbances = known_disturbance_inputs === nothing ? [] : unwrap.(known_disturbance_inputs)
 
     eqs = [eq for eq in full_equations(sys)]
 
     # Set unknown disturbance inputs to zero (we just want to keep the disturbance state)
     if !isempty(unknown_disturbances)
-        subs = Dict(unknown_disturbances .=> 0)
+        subs = Dict{SymbolicT, SymbolicT}()
+        partial_arrays = Set{SymbolicT}()
+        for disturbance in group_disturbance_arrays(unknown_disturbances)
+            if SU.is_array_shape(SU.shape(disturbance))
+                arr = zeros(eltype(symtype(disturbance)), size(disturbance))
+                subs[disturbance] = with_array_origin(disturbance, arr)
+                for i in SU.stable_eachindex(disturbance)
+                    subs[disturbance[i]] = zero(symtype(disturbance[i]))
+                end
+            else
+                subs[disturbance] = zero(symtype(disturbance))
+                parent, indexed = split_indexed_var(disturbance)
+                indexed && symbolic_has_known_size(parent) && push!(partial_arrays, parent)
+            end
+        end
+        for parent in partial_arrays
+            elements = map(i -> parent[i], SU.stable_eachindex(parent))
+            all(in(inputs_set), elements) || continue
+            literal_args = SU.ArgsT{VartypeT}((SU.Const{VartypeT}(size(parent)),))
+            for element in elements
+                # Keep direct references to measured elements bound to their argument slots.
+                push!(literal_args, get!(subs, element, element))
+            end
+            literal = SU.Term{VartypeT}(
+                SU.array_literal, literal_args; type = symtype(parent), shape = SU.shape(parent)
+            )
+            subs[parent] = with_array_origin(parent, literal)
+        end
         eqs = [eq.lhs ~ substitute(eq.rhs, subs) for eq in eqs]
     end
     check_operator_variables(eqs, Differential)
@@ -362,6 +430,6 @@ function generate_control_function(
         ),
     }(f...)
     # Return parameters excluding both control inputs and all disturbances
-    ps = setdiff(parameters(sys), inputs, all_disturbances)
+    ps = setdiff(parameters(sys), inputs_set)
     return (; f = (f, f), dvs, ps, io_sys = sys)
 end
