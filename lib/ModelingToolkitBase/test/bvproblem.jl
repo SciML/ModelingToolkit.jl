@@ -149,7 +149,7 @@ function test_solvers(
     )
     for solver in solvers
         println("Solver: $solver")
-        sol = solve(prob, solver(), dt = dt)
+        sol = solve(prob, solver(); dt)
         @test SciMLBase.successful_retcode(sol.retcode)
         p = prob.p
         t = sol.t

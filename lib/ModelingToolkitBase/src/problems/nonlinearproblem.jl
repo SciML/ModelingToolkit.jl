@@ -69,10 +69,10 @@ function SciMLBase.NonlinearFunction{iip, spec}(
     end
 
     kwargs = (;
-        sys = sys,
+        sys,
         jac = _jac,
         observed = observedfun,
-        analytic = analytic,
+        analytic,
         jac_prototype,
         resid_prototype,
         initialization_data,

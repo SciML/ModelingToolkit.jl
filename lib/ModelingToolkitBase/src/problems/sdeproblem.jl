@@ -68,14 +68,14 @@ function SciMLBase.SDEFunction{iip, spec}(
     W_prototype = calculate_W_prototype(_W_sparsity; u0, sparse)
 
     kwargs = (;
-        sys = sys,
+        sys,
         jac = _jac,
         tgrad = _tgrad,
         mass_matrix = _M,
         jac_prototype = W_prototype,
         observed = observedfun,
         sparsity = sparsity ? _W_sparsity : nothing,
-        analytic = analytic,
+        analytic,
         initialization_data,
     )
     args = (; f, g)

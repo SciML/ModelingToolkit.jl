@@ -520,7 +520,7 @@ end
     obsfn = ObservedFunctionCache(
         sys; eval_expression, eval_module, checkbounds = get(kwargs, :checkbounds, false)
     )
-    fn = remake(fn; sys = sys, observed = obsfn)
+    fn = remake(fn; sys, observed = obsfn)
 
     denominator = build_explicit_observed_function(
         sys2, denoms, GeneratedFunctionOptions(; expression = Val{false})

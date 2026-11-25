@@ -100,8 +100,8 @@ end
         ref = Constant(k = 0.25) # Concentration reference
         ff_gain = Gain(k = 1) # To allow turning ff off
         controller = PI(k = 10, T = 500)
-        tank = MixingTank(xc = c_start, xT = T_start, c0 = c0, T0 = T0)
-        inverse_tank = MixingTank(xc = nothing, xT = T_start, c0 = c0, T0 = T0)
+        tank = MixingTank(; xc = c_start, xT = T_start, c0, T0)
+        inverse_tank = MixingTank(; xc = nothing, xT = T_start, c0, T0)
         feedback = Feedback()
         add = Add()
         filter = RefFilter()

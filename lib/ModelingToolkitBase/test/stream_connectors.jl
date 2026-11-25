@@ -19,7 +19,7 @@ import SymbolicUtils as SU
         P(t) = P
     end
 
-    System(Equation[], t, vars, pars; name = name)
+    System(Equation[], t, vars, pars; name)
 end
 
 @connector function TwoPhaseFluid(; name, R, B, V)
@@ -63,7 +63,7 @@ function MassFlowSource_h(;
     push!(eqns, port.m_flow ~ -m_flow_in)
     push!(eqns, port.h_outflow ~ h_in)
 
-    return compose(System(eqns, t, vars, pars; name = name), subs)
+    return compose(System(eqns, t, vars, pars; name), subs)
 end
 
 # Simplified components.
@@ -82,7 +82,7 @@ function AdiabaticStraightPipe(;
     eqns = Equation[]
 
     push!(eqns, connect(port_a, port_b))
-    sys = System(eqns, t, vars, pars; name = name)
+    sys = System(eqns, t, vars, pars; name)
     return sys = compose(sys, subs)
 end
 
@@ -107,7 +107,7 @@ function SmallBoundary_Ph(;
     push!(eqns, port1.P ~ P)
     push!(eqns, port1.h_outflow ~ h)
 
-    return compose(System(eqns, t, vars, pars; name = name), subs)
+    return compose(System(eqns, t, vars, pars; name), subs)
 end
 
 # N1M1 model and test code.
@@ -118,7 +118,7 @@ function N1M1(;
         kwargs...
     )
     @named port_a = TwoPhaseFluidPort()
-    @named source = SmallBoundary_Ph(P_in = P_in, h_in = h_in)
+    @named source = SmallBoundary_Ph(; P_in, h_in)
 
     subs = [port_a; source]
 
@@ -126,7 +126,7 @@ function N1M1(;
 
     push!(eqns, connect(source.port1, port_a))
 
-    sys = System(eqns, t, [], [], name = name)
+    sys = System(eqns, t, [], []; name)
     return sys = compose(sys, subs)
 end
 
@@ -215,7 +215,7 @@ function N1M2(;
     @named port_a = TwoPhaseFluidPort()
     @named port_b = TwoPhaseFluidPort()
 
-    @named source = SmallBoundary_Ph(P_in = P_in, h_in = h_in)
+    @named source = SmallBoundary_Ph(; P_in, h_in)
 
     subs = [port_a; port_b; source]
 
@@ -224,7 +224,7 @@ function N1M2(;
     push!(eqns, connect(source.port1, port_a))
     push!(eqns, connect(source.port1, port_b))
 
-    sys = System(eqns, t, [], [], name = name)
+    sys = System(eqns, t, [], []; name)
     return sys = compose(sys, subs)
 end
 
@@ -274,7 +274,7 @@ function N2M2(;
     push!(eqns, connect(port_a, pipe.port_a))
     push!(eqns, connect(pipe.port_b, port_b))
 
-    sys = System(eqns, t, [], [], name = name)
+    sys = System(eqns, t, [], []; name)
     return sys = compose(sys, subs)
 end
 
@@ -310,7 +310,7 @@ sys_exp = expand_connections(compose(sys, [sp1, sp2]))
 # array var
 @connector function VecPin(; name)
     sts = @variables v(t)[1:2] = [1.0, 0.0] i(t)[1:2] = ones(2) [connect = Flow]
-    System(Equation[], t, [sts...;], []; name = name)
+    System(Equation[], t, [sts...;], []; name)
 end
 
 @named vp1 = VecPin()
@@ -333,7 +333,7 @@ sys = expand_connections(compose(simple, [vp1, vp2, vp3]))
 
 @connector function VectorHeatPort(; name, N = 100, T0 = 0.0, Q0 = 0.0)
     @variables (T(t))[1:N] = T0 * ones(N) (Q(t))[1:N] = Q0 * ones(N) [connect = Flow]
-    System(Equation[], t, [T; Q], []; name = name)
+    System(Equation[], t, [T; Q], []; name)
 end
 
 @test_nowarn @named a = VectorHeatPort()
@@ -580,11 +580,11 @@ end
             md(t), [connect = Flow, guess = 0.0, description = "Mass flow, kg/s"]
             x(t)[1:Ns], [connect = Stream, guess = ones(Ns) / Ns, description = "Mass fractions, -"]
         end
-        System(Equation[], t, vars, []; name = name)
+        System(Equation[], t, vars, []; name)
     end
 
     @component function PressureBoundary(; name, Ns = 1, p_set = 101325.0)
-        @named a = FluidPort(Ns = Ns)
+        @named a = FluidPort(; Ns)
         x_p = ones(Ns) ./ Ns
         pars = @parameters begin
             p = p_set
@@ -594,11 +594,11 @@ end
             a.p ~ p
             a.x ~ x
         ]
-        compose(System(eqs, t, [], pars; name = name), a)
+        compose(System(eqs, t, [], pars; name), a)
     end
 
     @component function PressureReference(; name, Ns = 1, p_set = 101325.0)
-        @named a = FluidPort(Ns = Ns)
+        @named a = FluidPort(; Ns)
         x_p = ones(Ns) ./ Ns
         pars = @parameters begin
             p = p_set
@@ -609,12 +609,12 @@ end
             a.md ~ 0.0
             a.x ~ x
         ]
-        compose(System(eqs, t, [], pars; name = name), a)
+        compose(System(eqs, t, [], pars; name), a)
     end
 
     @component function PumpFixed(; name, md_set = 1.0, x_set = [1])
         Ns = length(x_set)
-        @named a = FluidPort(Ns = Ns)
+        @named a = FluidPort(; Ns)
         pars = @parameters begin
             md = md_set, [description = "Specified mass flow rate"]
             x[1:Ns] = x_set, [description = "Specified mass fractions"]
@@ -625,12 +625,12 @@ end
             # Define the stream variables for the port
             a.x ~ x,
         ]
-        compose(System(eqs, t, [], pars; name = name), a)
+        compose(System(eqs, t, [], pars; name), a)
     end
 
     @component function Valve(; name, Ns = 1, Kv = 1.0)
-        @named a = FluidPort(Ns = Ns)
-        @named b = FluidPort(Ns = Ns)
+        @named a = FluidPort(; Ns)
+        @named b = FluidPort(; Ns)
         pars = @parameters begin
             # Units must be (mass flow) / (pressure^0.5)
             K = Kv, [description = "Flow coefficient"]
@@ -650,14 +650,14 @@ end
             a.x ~ instream(b.x)
             b.x ~ instream(a.x)
         ]
-        compose(System(eqs, t, vars, pars; name = name), a, b)
+        compose(System(eqs, t, vars, pars; name), a, b)
     end
 
     @component function Tank(; name, Ap = 1.0, rho_p = 1000.0, m0 = [1])
         Ns = length(m0)
         m0 = abs.(m0) .+ 1.0e-9 # Prevent zero initial mass
-        @named a = FluidPort(Ns = Ns) # Top Port (Headspace)
-        @named b = FluidPort(Ns = Ns) # Bottom Port (Drain)
+        @named a = FluidPort(; Ns) # Top Port (Headspace)
+        @named b = FluidPort(; Ns) # Bottom Port (Drain)
         gp = 9.81
         pars = @parameters begin
             A = Ap
@@ -685,7 +685,7 @@ end
             # --- Dynamics ---
             D(m) ~ a.md * xa + b.md * xb
         ]
-        compose(System(eqs, t, vars, pars; name = name), a, b)
+        compose(System(eqs, t, vars, pars; name), a, b)
     end
     m0_1 = [2, 1]
     Ns = length(m0_1)
@@ -696,9 +696,9 @@ end
     rho = 1000.0
     K_12 = 0.1
     @named mp_1 = PumpFixed(; md_set = md_in_1, x_set = x_in_1)
-    @named pr_1 = PressureReference(; Ns = Ns, p_set = p_a)
-    @named pb_1 = PressureBoundary(; Ns = Ns, p_set = p_a)
-    @named va_1e = Valve(; Ns = Ns, Kv = K_12)
+    @named pr_1 = PressureReference(; Ns, p_set = p_a)
+    @named pb_1 = PressureBoundary(; Ns, p_set = p_a)
+    @named va_1e = Valve(; Ns, Kv = K_12)
     @named tnk_1 = Tank(; Ap = A_1, rho_p = rho, m0 = m0_1)
 
     eqs = [

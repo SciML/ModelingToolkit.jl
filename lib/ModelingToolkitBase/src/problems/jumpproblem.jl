@@ -92,7 +92,7 @@ coupled to an ODE, and the others run much slower. Passing a specialization othe
         )
 
         df = DiscreteFunction{true, true}(
-            f; sys = sys, observed = observedfun,
+            f; sys, observed = observedfun,
             initialization_data = get(_f.kwargs, :initialization_data, nothing)
         )
         prob = DiscreteProblem(

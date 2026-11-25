@@ -54,8 +54,8 @@ end
     end
 
     systems = @named begin
-        component1 = Resistor(R = R)
-        component2 = Capacitor(C = C, v = 0.0)
+        component1 = Resistor(; R)
+        component2 = Capacitor(; C, v = 0.0)
         source = Voltage()
         constant = Constant(k = V)
         ground = Ground()

@@ -77,7 +77,7 @@ be wrong mid-sweep.
         shadow, λ; eval_expression, eval_module, checkbounds, cse
     )
     swept_f = SciMLBase.NonlinearFunction{_iip}(
-        hf; sys = f.sys, observed = f.observed, resid_prototype = f.resid_prototype
+        hf; f.sys, f.observed, f.resid_prototype
     )
 
     kwargs = process_kwargs(sys; kwargs...)

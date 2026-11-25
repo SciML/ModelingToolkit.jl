@@ -136,7 +136,7 @@ function _linearization_wrap_odeproblem_f(@nospecialize(prob::ODEProblem), ::Typ
     u0 = prob.u0 === nothing ? T[] : T.(prob.u0)
     t = T(prob.tspan[1])
     f = SciMLBase.wrapfun_iip(f, (u0, u0, prob.p, t))
-    odef = remake(prob.f; f = f)
+    odef = remake(prob.f; f)
     return remake(prob; f = odef)
 end
 
@@ -709,7 +709,7 @@ function (linfun::LinearizationFunction)(u, p, t)
             success = true
         else
             integ = MockIntegrator{true}(u, p, t, fun, integ_cache, nothing)
-            prob = remake(linfun.prob; u0 = u, p = p)
+            prob = remake(linfun.prob; u0 = u, p)
             u, p,
                 success = SciMLBase.get_initial_values(
                 prob, integ, fun, linfun.initializealg, Val(true);
@@ -1287,7 +1287,7 @@ function plant(; name)
         D(x) ~ -x + u
         y ~ x
     ]
-    return System(eqs, t; name = name)
+    return System(eqs, t; name)
 end
 
 function ref_filt(; name)
@@ -1297,7 +1297,7 @@ function ref_filt(; name)
         D(x) ~ -2 * x + u
         y ~ x
     ]
-    return System(eqs, t, name = name)
+    return System(eqs, t; name)
 end
 
 function controller(kp; name)
@@ -1306,7 +1306,7 @@ function controller(kp; name)
     eqs = [
         u ~ kp * (r - y),
     ]
-    return System(eqs, t; name = name)
+    return System(eqs, t; name)
 end
 
 @named f = ref_filt()

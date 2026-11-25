@@ -188,10 +188,10 @@ if @isdefined(ModelingToolkit)
     # This old definition of MatrixGain will work because the parameter space does not include K (an Array term)
     # @component function MatrixGainAlt(K::AbstractArray; name)
     #     nout, nin = size(K, 1), size(K, 2)
-    #     @named input = RealInput(; nin = nin)
-    #     @named output = RealOutput(; nout = nout)
+    #     @named input = RealInput(; nin)
+    #     @named output = RealOutput(; nout)
     #     eqs = [output.u[i] ~ sum(K[i, j] * input.u[j] for j in 1:nin) for i in 1:nout]
-    #     compose(System(eqs, t, [], []; name = name), [input, output])
+    #     compose(System(eqs, t, [], []; name), [input, output])
     # end
 
     @named state_feedback = MatrixGain(K = -L) # Build negative feedback into the feedback matrix

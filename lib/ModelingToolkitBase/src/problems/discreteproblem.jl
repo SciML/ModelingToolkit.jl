@@ -45,9 +45,9 @@ function SciMLBase.DiscreteFunction{iip, spec}(
     observedfun = ObservedFunctionCache(sys, codegen_opts)
 
     kwargs = (;
-        sys = sys,
+        sys,
         observed = observedfun,
-        analytic = analytic,
+        analytic,
         initialization_data,
     )
     args = (; f)

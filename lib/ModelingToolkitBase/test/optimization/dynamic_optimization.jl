@@ -984,7 +984,7 @@ end
     nominal_values = Dict(x(t) => 10.0, v(t) => 1.0)
     iprob = InfiniteOptDynamicOptProblem(
         block, [u0map; parammap], tspan; dt = 0.01,
-        nominal_values = nominal_values
+        nominal_values
     )
     isol = solve(iprob, InfiniteOptCollocation(Ipopt.Optimizer))
     @test ≈(isol.sol[x(t)][end], 0.25, rtol = 1.0e-3)
@@ -997,7 +997,7 @@ end
     # Nominal values kwarg passes through JuMP without error
     jprob = JuMPDynamicOptProblem(
         block, [u0map; parammap], tspan; dt = 0.01,
-        nominal_values = nominal_values
+        nominal_values
     )
     jsol = solve(jprob, JuMPCollocation(Ipopt.Optimizer, ExplicitTableaus.Verner8()))
     @test ≈(jsol.sol[x(t)][end], 0.25, rtol = 1.0e-3)
@@ -1005,7 +1005,7 @@ end
     if ENABLE_CASADI
         cprob = CasADiDynamicOptProblem(
             block, [u0map; parammap], tspan; dt = 0.01,
-            nominal_values = nominal_values
+            nominal_values
         )
         csol = solve(cprob, CasADiCollocation("ipopt", ExplicitTableaus.Verner8()))
         @test ≈(csol.sol[x(t)][end], 0.25, rtol = 1.0e-3)
@@ -1016,7 +1016,7 @@ end
     # directly that it reaches the dynamics constraint.
     function dynamics_constraint_strings(nominal_values)
         prob = InfiniteOptDynamicOptProblem(
-            block, [u0map; parammap], tspan; dt = 0.5, nominal_values = nominal_values
+            block, [u0map; parammap], tspan; dt = 0.5, nominal_values
         )
         m = prob.wrapped_model.model
         strs = String[]

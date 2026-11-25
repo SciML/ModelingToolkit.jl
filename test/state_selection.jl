@@ -30,13 +30,13 @@ let
         sts = @variables p(t) [guess = p] m(t) [guess = m, connect = Flow] T(t) [
             guess = T, connect = Stream,
         ]
-        System(Equation[], t, sts, []; name = name)
+        System(Equation[], t, sts, []; name)
     end
 
     #this one is for latter
     @connector function Heat_port(; name, Q = 0.0, T = 293.15)
         sts = @variables T(t) [guess = T] Q(t) [guess = Q, connect = Flow]
-        System(Equation[], t, sts, []; name = name)
+        System(Equation[], t, sts, []; name)
     end
 
     # like ground but for fluid systems (fluid_port.m is expected to be zero in closed loop)
@@ -47,7 +47,7 @@ let
             fluid_port.p ~ p
             fluid_port.T ~ T_back
         ]
-        return compose(System(eqs, t, [], ps; name = name), fluid_port)
+        return compose(System(eqs, t, [], ps; name), fluid_port)
     end
 
     function Source(; name, delta_p = 100, T_feed = 293.15)
@@ -60,7 +60,7 @@ let
             supply_port.T ~ instream(supply_port.T)
             return_port.T ~ T_feed
         ]
-        return compose(System(eqs, t, [], ps; name = name), [supply_port, return_port])
+        return compose(System(eqs, t, [], ps; name), [supply_port, return_port])
     end
 
     function Substation(; name, T_return = 343.15)
@@ -73,7 +73,7 @@ let
             supply_port.T ~ instream(supply_port.T)
             return_port.T ~ T_return
         ]
-        return compose(System(eqs, t, [], ps; name = name), [supply_port, return_port])
+        return compose(System(eqs, t, [], ps; name), [supply_port, return_port])
     end
 
     function Pipe(; name, L = 1000, d = 0.1, N = 100, rho = 1000, f = 1)
@@ -89,14 +89,14 @@ let
             dp_z ~ abs(v) * v * 0.5 * rho * L / d * f  # pressure loss
             D(v) * rho * L ~ (fluid_port_a.p - fluid_port_b.p - dp_z)
         ]
-        return compose(System(eqs, t, sts, ps; name = name), [fluid_port_a, fluid_port_b])
+        return compose(System(eqs, t, sts, ps; name), [fluid_port_a, fluid_port_b])
     end
     function HydraulicSystem(; name, L = 10.0)
         @named compensator = Compensator()
         @named source = Source()
         @named substation = Substation()
-        @named supply_pipe = Pipe(L = L)
-        @named return_pipe = Pipe(L = L)
+        @named supply_pipe = Pipe(; L)
+        @named return_pipe = Pipe(; L)
         subs = [compensator, source, substation, supply_pipe, return_pipe]
         ps = @parameters L = L
         eqs = [
@@ -106,7 +106,7 @@ let
             connect(substation.return_port, return_pipe.fluid_port_b)
             connect(return_pipe.fluid_port_a, source.return_port)
         ]
-        return compose(System(eqs, t, [], ps; name = name), subs)
+        return compose(System(eqs, t, [], ps; name), subs)
     end
 
     @named system = HydraulicSystem(L = 10)

@@ -71,7 +71,7 @@ eqs1 = [
     u ~ x + y - z,
 ]
 
-lorenz = name -> System(eqs1, t, name = name)
+lorenz = name -> System(eqs1, t; name)
 lorenz1 = lorenz(:lorenz1)
 state = TearingState(lorenz1)
 @test isempty(setdiff(state.fullvars, [D(x), F, y, x, D(y), u, z, D(z)]))

@@ -47,7 +47,7 @@ bprob = BifurcationProblem(
     u0_guess,
     p_start,
     bif_par;
-    plot_var = plot_var,
+    plot_var,
     jac = false
 )
 ```
@@ -117,7 +117,7 @@ bprob = BifurcationProblem(
     u0_guess,
     p_start,
     bif_par;
-    plot_var = plot_var,
+    plot_var,
     jac = false
 )
 

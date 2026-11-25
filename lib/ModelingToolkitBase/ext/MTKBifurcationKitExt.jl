@@ -125,7 +125,7 @@ function BifurcationKit.BifurcationProblem(
     @set! nsys.index_cache = nothing # force usage of a parameter vector instead of `MTKParameters`
     nsys = complete(nsys; split = false)
     # Creates F and J functions.
-    ofun = NonlinearFunction(nsys; jac = jac)
+    ofun = NonlinearFunction(nsys; jac)
     F = let f = ofun.f
         _f(resid, u, p) = (f(resid, u, p); resid)
         _f(u, p) = f(u, p)
@@ -180,8 +180,8 @@ function BifurcationKit.BifurcationProblem(
         p_vals,
         (BifurcationKit.@optic _[bif_idx]),
         args...;
-        record_from_solution = record_from_solution,
-        J = J,
+        record_from_solution,
+        J,
         inplace = true,
         kwargs...
     )

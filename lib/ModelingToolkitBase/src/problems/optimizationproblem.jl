@@ -79,10 +79,10 @@ function SciMLBase.OptimizationFunction{iip}(
 
     args = (; f, ad = adtype)
     kwargs = (;
-        sys = sys,
+        sys,
         grad = _grad,
         hess = _hess,
-        hess_prototype = hess_prototype,
+        hess_prototype,
         constraint_fields...,
         expr = obj_expr,
         observed = observedfun,
@@ -177,10 +177,10 @@ function SciMLBase.MultiObjectiveOptimizationFunction{iip}(
 
     args = (; f, ad = adtype)
     kwargs = (;
-        sys = sys,
+        sys,
         jac = _jac,
         hess = _hess,
-        hess_prototype = hess_prototype,
+        hess_prototype,
         constraint_fields...,
         expr = obj_expr,
         observed = observedfun,

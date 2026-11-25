@@ -1359,7 +1359,7 @@ end
         # pass. This test group really only cares about the types being correct. This is only
         # required for MTKBase since MTK eliminates the derivative as an observed.
         if !@isdefined(ModelingToolkit)
-            prob = remake(prob; p = prob.p)
+            prob = remake(prob; prob.p)
         end
         @test is_variable(prob.f.initialization_data.initializeprob, q)
         ps = prob.p
@@ -1523,13 +1523,13 @@ if @isdefined(ModelingToolkit)
             @named ref = Blocks.Step(height = 0.2, start_time = 0)
             @named pi_controller = Blocks.LimPI(k = 1.1, T = 0.035, u_max = 10, Ta = 0.035)
             @named feedback = Blocks.Feedback()
-            @named R1 = Resistor(R = R)
-            @named L1 = Inductor(L = L)
-            @named emf = EMF(k = k)
+            @named R1 = Resistor(; R)
+            @named L1 = Inductor(; L)
+            @named emf = EMF(; k)
             @named fixed = MR.Fixed()
             @named load = MR.Torque()
             @named load_step = Blocks.Step(height = tau_L_step, start_time = 3)
-            @named inertia = MR.Inertia(J = J)
+            @named inertia = MR.Inertia(; J)
             @named friction = MR.Damper(d = f)
             @named speed_sensor = MR.SpeedSensor()
 
@@ -1575,7 +1575,7 @@ if @isdefined(ModelingToolkit)
 
         prob = ODEProblem(sys, [sys.L1.i => 0.0, sys.emf.flange.phi => 0.0], (0, 6.0))
 
-        @test_nowarn remake(prob, p = prob.p)
+        @test_nowarn remake(prob; prob.p)
     end
 end
 
@@ -1970,7 +1970,7 @@ end
     # is only expected to pass with FullSpecialize.
     prob = ODEProblem{true, SciMLBase.FullSpecialize}(complete(sys), [], (0.0, 1))
     if VERSION < v"1.13-" || VERSION >= v"1.13.0"
-        @inferred remake(prob; u0 = 2 .* prob.u0, p = prob.p)
+        @inferred remake(prob; u0 = 2 .* prob.u0, prob.p)
         @inferred solve(prob)
     end
 end
@@ -2214,7 +2214,7 @@ end
     @testset "Guesses of initialization problem copied to algebraic variables" begin
         prob.f.initialization_data.initializeprob[x] = 1.0
         prob2 = DiffEqBase.get_updated_symbolic_problem(
-            pend, prob; u0 = prob.u0, p = prob.p
+            pend, prob; prob.u0, prob.p
         )
         @test prob2[x] ≈ 1.0
     end
@@ -2227,7 +2227,7 @@ end
         sol = solve(prob, FBDF())
         @test SciMLBase.successful_retcode(sol)
         prob3 = DiffEqBase.get_updated_symbolic_problem(
-            pend, prob2; u0 = prob2.u0, p = prob2.p
+            pend, prob2; prob2.u0, prob2.p
         )
         @test prob3[D(y)] ≈ 0.0
     end

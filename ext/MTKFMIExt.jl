@@ -853,7 +853,7 @@ function (wrapper::Union{FMI2InstanceWrapper, FMI3InstanceWrapper})(
     # propagate inputs to the FMU consistently. I have no idea why.
     instance(;
         x = states, u = inputs, u_refs = wrapper.input_value_references,
-        p = params, p_refs = wrapper.param_value_references, t = t
+        p = params, p_refs = wrapper.param_value_references, t
     )
     # the spec requires completing the step before getting updated derivative/output values
     partiallyCompleteIntegratorStep(wrapper)

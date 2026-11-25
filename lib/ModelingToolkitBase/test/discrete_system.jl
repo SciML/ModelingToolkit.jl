@@ -236,7 +236,7 @@ RHS2 = RHS
 #     num = hash(f) ⊻ length(u0) ⊻ length(p0)
 #     buffername = Symbol(:fmi_buffer_, num)
 
-#     Δ = DiscreteUpdate(t; dt = dt)
+#     Δ = DiscreteUpdate(t; dt)
 #     us = map(s -> (@variables $s(t))[1], syms)
 #     ps = map(s -> (@variables $s(t))[1], syms_p)
 #     buffer, = @variables $buffername[1:length(u0)]
@@ -253,9 +253,9 @@ RHS2 = RHS
 #         Δ(us[i]) ~ dummy_identity(buffer[i], us[i])
 #     end
 
-#     @mtkcompile sys = System(eqs, t, us, ps; defaults = defs, preface = preface)
+#     @mtkcompile sys = System(eqs, t, us, ps; defaults = defs, preface)
 #     prob = DiscreteProblem(sys, [], (0.0, 1.0))
-#     sol = solve(prob, FunctionMap(); dt = dt)
+#     sol = solve(prob, FunctionMap(); dt)
 #     @test c[1] + 1 == length(sol)
 # end
 
@@ -296,7 +296,7 @@ if @isdefined(ModelingToolkit)
         return System(eqs, t; name)
     end
     function DiscSystem(; name, buffer)
-        @named y_sys = SampledData(; buffer = buffer)
+        @named y_sys = SampledData(; buffer)
         pars = @parameters begin
             α = 0.5, [description = "alpha"]
             β = 0.5, [description = "beta"]
@@ -309,7 +309,7 @@ if @isdefined(ModelingToolkit)
             y(k - 1) ~ α * y(k - 2) + (β * y(k) + y_shk(k - 1))
         ]
 
-        return System(eqs, t, vars, pars; systems = [y_sys], name = name)
+        return System(eqs, t, vars, pars; systems = [y_sys], name)
     end
 
     @test_nowarn @mtkcompile sys = DiscSystem(; buffer = ones(10))

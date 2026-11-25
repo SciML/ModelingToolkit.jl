@@ -75,7 +75,7 @@ function SemilinearODEFunction{iip, specialize}(
 
     args = (; f1, f2)
     kwargs = (;
-        sys = sys,
+        sys,
         jac = _jac,
         mass_matrix = _M,
         jac_prototype = W_prototype,

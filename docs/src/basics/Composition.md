@@ -21,7 +21,7 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 function decay(; name)
     @parameters a
     @variables x(t) f(t)
-    return System([D(x) ~ -a * x + f], t; name = name)
+    return System([D(x) ~ -a * x + f], t; name)
 end
 
 @named decay1 = decay()

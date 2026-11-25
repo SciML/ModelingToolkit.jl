@@ -52,9 +52,9 @@ function SciMLBase.ImplicitDiscreteFunction{iip, spec}(
 
     args = (; f)
     kwargs = (;
-        sys = sys,
+        sys,
         observed = observedfun,
-        analytic = analytic,
+        analytic,
         initialization_data,
         resid_prototype,
     )

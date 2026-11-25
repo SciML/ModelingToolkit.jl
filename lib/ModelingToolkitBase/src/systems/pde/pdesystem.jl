@@ -181,7 +181,7 @@ function Base.getproperty(
         end
     end
     # Fall through to AbstractSystem's getvar for variable lookup (sys.x pattern)
-    return wrap(getvar(x, sym; namespace = namespace))
+    return wrap(getvar(x, sym; namespace))
 end
 
 # Accessor bridges: PDESystem stores dependent variables as `dvs` and independent

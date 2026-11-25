@@ -28,7 +28,7 @@ end
     )
     data = prob.f.initialization_data
     initprob = data.initializeprob
-    loss(u) = sum(abs2, data.initializeprobmap(ProblemState(; u, p = initprob.p, t = 0.0)))
+    loss(u) = sum(abs2, data.initializeprobmap(ProblemState(; u, initprob.p, t = 0.0)))
     @test only(Zygote.gradient(loss, initprob.u0)) ≈ ForwardDiff.gradient(loss, initprob.u0)
 
     function parameter_loss(p)

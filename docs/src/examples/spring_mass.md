@@ -39,8 +39,8 @@ k = 1.0e4
 l = 1.0
 center = [0.0, 0.0]
 g = [0.0, -9.81]
-@named mass = Mass(m = m, xy = xy)
-@named spring = Spring(k = k, l = l)
+@named mass = Mass(; m, xy)
+@named spring = Spring(; k, l)
 
 eqs = [
     connect_spring(spring, mass.pos, center)
@@ -121,8 +121,8 @@ k = 1.0e4
 l = 1.0
 center = [0.0, 0.0]
 g = [0.0, -9.81]
-@named mass = Mass(m = m, xy = xy)
-@named spring = Spring(k = k, l = l)
+@named mass = Mass(; m, xy)
+@named spring = Spring(; k, l)
 ```
 
 We can now create the equations describing this system, by connecting `spring` to `mass` and a fixed point.

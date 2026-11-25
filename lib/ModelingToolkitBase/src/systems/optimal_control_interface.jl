@@ -353,16 +353,16 @@ function SciMLBase.ODEInputFunction{iip, specialize}(
 
     return ODEInputFunction{iip, specialize}(
         f;
-        sys = sys,
+        sys,
         jac = _jac === nothing ? nothing : _jac,
         controljac = _cjac === nothing ? nothing : _cjac,
         tgrad = _tgrad === nothing ? nothing : _tgrad,
         mass_matrix = _M,
         jac_prototype = W_prototype,
-        controljac_prototype = controljac_prototype,
+        controljac_prototype,
         observed = observedfun,
         sparsity = sparsity ? _W_sparsity : nothing,
-        analytic = analytic,
+        analytic,
         initialization_data
     )
 end

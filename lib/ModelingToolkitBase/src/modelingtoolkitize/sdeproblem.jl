@@ -25,7 +25,7 @@ function modelingtoolkitize(
     # just create the equivalent ODEProblem, `modelingtoolkitize` that
     # and add on the noise
     odefn = ODEFunction{SciMLBase.isinplace(prob)}(
-        prob.f.f; mass_matrix = prob.f.mass_matrix, sys = prob.f.sys
+        prob.f.f; prob.f.mass_matrix, prob.f.sys
     )
     odeprob = ODEProblem(odefn, prob.u0, prob.tspan, prob.p)
     sys, vars,

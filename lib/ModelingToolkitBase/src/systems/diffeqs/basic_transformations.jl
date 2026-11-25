@@ -647,14 +647,14 @@ function stochastic_integral_transform(sys::System, correction_factor)
     # use the general interface
     if noise_eqs isa Vector
         _eqs = reduce(vcat, [eqs[i].lhs ~ noise_eqs[i] for i in eachindex(dvs)])
-        de = System(_eqs, get_iv(sys), dvs, ps, name = name, checks = false)
+        de = System(_eqs, get_iv(sys), dvs, ps; name, checks = false)
 
         jac = calculate_jacobian(de, sparse = false, simplify = false)
         ∇σσ′ = simplify.(jac * noise_eqs)
     else
         dimunknowns, m = size(noise_eqs)
         _eqs = reduce(vcat, [eqs[i].lhs ~ noise_eqs[i] for i in eachindex(dvs)])
-        de = System(_eqs, get_iv(sys), dvs, ps, name = name, checks = false)
+        de = System(_eqs, get_iv(sys), dvs, ps; name, checks = false)
 
         jac = calculate_jacobian(de, sparse = false, simplify = false)
         ∇σσ′ = simplify.(jac * noise_eqs[:, 1])
@@ -666,7 +666,7 @@ function stochastic_integral_transform(sys::System, correction_factor)
                         for i in eachindex(dvs)
                 ]
             )
-            de = System(__eqs, get_iv(sys), dvs, dvs, name = name, checks = false)
+            de = System(__eqs, get_iv(sys), dvs, dvs; name, checks = false)
 
             jac = calculate_jacobian(de, sparse = false, simplify = false)
             ∇σσ′ = ∇σσ′ + simplify.(jac * noise_eqs[:, k])
@@ -1318,7 +1318,7 @@ function truncate_constant_floats(sys::System, ::Type{FloatType}) where {FloatTy
         obs[i] = rw(obs[i].lhs) ~ rw(obs[i].rhs)
     end
 
-    return ConstructionBase.setproperties(sys; eqs = eqs, observed = obs)
+    return ConstructionBase.setproperties(sys; eqs, observed = obs)
 end
 
 """
