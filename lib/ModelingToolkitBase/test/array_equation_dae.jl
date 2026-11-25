@@ -430,12 +430,15 @@ end
         prob.f(out, duv, uv, prob.p, 0.0)
         return out
     end
+    # The code is read off the expression `DAEProblem` itself builds, so it only fuses if
+    # the constructor forwards the keyword to the codegen.
     iip_code(; kwargs...) = string(
-        ModelingToolkitBase.generate_rhs(
-            sys; implicit_dae = true, expression = Val{true}, kwargs...
-        )[2]
+        DAEProblem(
+            sys, op, (0.0, 1.0); build_initializeprob = false,
+            expression = Val{true}, kwargs...
+        )
     )
-    # `DAEProblem` hands the keyword to Symbolics' codegen options. Fusion needs Symbolics'
+    # Fusion needs Symbolics'
     # `fuse_broadcasts` option and a SymbolicUtils with fused broadcast codegen.
     fuses = hasfield(Symbolics.CodegenFunctionOptions, :fuse_broadcasts) &&
         isdefined(Symbolics.SymbolicUtils.Code, :FUSE_BROADCASTS_KEY)
