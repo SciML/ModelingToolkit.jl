@@ -38,6 +38,14 @@ end
 make_pair(a, b) = Pair2(a, b)
 @register_symbolic make_pair(a, b)::Pair2
 
+# Functions taking a whole record, for the record-argument tests below.
+pair_sum(r::Pair2) = r.x + r.y
+@register_symbolic pair_sum(r::Pair2)
+pair_scaled(r::Pair2, c) = r.x * c
+@register_symbolic pair_scaled(r::Pair2, c)
+nested_sum(r::Nested) = r.x + r.f.x + r.f.y
+@register_symbolic nested_sum(r::Nested)
+
 @testset "declaration and field access" begin
     @variables s(t)::Pair2 n(t)::Nested
 
@@ -55,6 +63,31 @@ make_pair(a, b) = Pair2(a, b)
     # Nesting composes, and leaf enumeration flattens through it in declaration order.
     @test isequal(Symbolics.unwrap(n.f.x), collect(Symbolics.SymStruct{Nested}(Symbolics.unwrap(n)))[2])
     @test length(Symbolics.SymStruct{Nested}(Symbolics.unwrap(n))) == 3
+end
+
+@testset "a record takes a shift index" begin
+    @variables s(t)::Pair2
+    k = ShiftIndex(Clock(0.25))
+    for shifted in (s, Symbolics.unwrap(s)), steps in (0, -1, 1)
+        result = shifted(k + steps)
+        # the wrapped record gives a wrapped record, and the raw one a raw one
+        @test (result isa Symbolics.SymStruct{Pair2}) == (shifted isa Symbolics.SymStruct)
+        raw = Symbolics.unwrap(result)
+        @test Symbolics.symtype(raw) === Pair2
+        if steps == 0
+            var = raw
+        else
+            @test operation(raw) isa Shift
+            @test operation(raw).steps == steps
+            var = only(arguments(raw))
+        end
+        @test Symbolics.getmetadata(var, ModelingToolkitBase.VariableTimeDomain) == k.clock
+    end
+    # two one-tick delays are one two-tick delay, for the record and for its fields
+    for sig in (s, Symbolics.unwrap(s), s.x)
+        @test isequal(sig(k - 1)(k - 1), sig(k - 2))
+    end
+    @test isequal(operation(Symbolics.unwrap(s(k - 1).x(k - 1))).t, Symbolics.unwrap(t))
 end
 
 @testset "flat record integrates" begin
@@ -547,4 +580,60 @@ end
             [D(p.x) ~ -p.x, D(p.y) ~ -p.y, n ~ p], t, [p, n], []; name = :f
         )
     )
+end
+
+@testset "a record passed to a function" begin
+    @variables s(t)::Pair2
+    # The leaves are the unknowns, the record is not. The call keeps the record and
+    # codegen rebuilds it from them.
+    sys = mtkcompile(System([D(s.x) ~ -s.x, D(s.y) ~ pair_sum(s)], t, [s], []; name = :a))
+    @test issetequal(unknowns(sys), Symbolics.unwrap.([s.x, s.y]))
+    @test any(eq -> isequal(eq.rhs, Symbolics.unwrap(pair_sum(s))), equations(sys))
+
+    # x' = -x, y' = x + y with x(0)=1, y(0)=0 has y = sinh(t).
+    prob = ODEProblem(sys, [s.x => 1.0, s.y => 0.0], (0.0, 1.0))
+    sol = solve(prob, Tsit5())
+    @test SciMLBase.successful_retcode(sol)
+    @test sol[s.y][end] ≈ sinh(1) rtol = 1.0e-5
+    # The record is a symbol of the system, so an expression over it can be observed.
+    @test sol[pair_sum(s)][end] ≈ sol[s.x][end] + sol[s.y][end] rtol = 1.0e-10
+end
+
+@testset "a record argument beside scalar arguments" begin
+    @variables s(t)::Pair2
+    sys = mtkcompile(System([D(s.x) ~ -s.x, D(s.y) ~ pair_scaled(s, 3.0)], t, [s], []; name = :b))
+    prob = ODEProblem(sys, [s.x => 1.0, s.y => 0.0], (0.0, 1.0))
+    sol = solve(prob, Tsit5())
+    @test sol[s.y][end] ≈ 3(1 - exp(-1)) rtol = 1.0e-5
+end
+
+@testset "a nested record passed to a function" begin
+    @variables n(t)::Nested
+    sys = mtkcompile(
+        System(
+            [D(n.x) ~ -n.x, D(n.f.x) ~ -n.f.x, D(n.f.y) ~ nested_sum(n)], t, [n], []; name = :c
+        )
+    )
+    @test issetequal(unknowns(sys), Symbolics.unwrap.([n.x, n.f.x, n.f.y]))
+    prob = ODEProblem(sys, [n.x => 1.0, n.f.x => 1.0, n.f.y => 0.0], (0.0, 1.0))
+    @test SciMLBase.successful_retcode(solve(prob, Tsit5()))
+end
+
+@testset "a record argument in an observed equation" begin
+    @variables s(t)::Pair2 w(t) z(t)
+    sys = mtkcompile(
+        System(
+            [D(s.x) ~ -s.x, D(s.y) ~ -s.y, w ~ pair_sum(s), D(z) ~ w], t, [s, z, w], []; name = :d
+        )
+    )
+    prob = ODEProblem(sys, [s.x => 1.0, s.y => 1.0, z => 0.0], (0.0, 1.0))
+    sol = solve(prob, Tsit5())
+    @test sol[w][1] == 2.0
+end
+
+@testset "projections are left alone" begin
+    @variables s(t)::Pair2
+    # A projection is a leaf, and a leaf is an unknown.
+    sys = mtkcompile(System([D(s.x) ~ -s.x, D(s.y) ~ s.x + s.y], t, [s], []; name = :e))
+    @test issetequal(unknowns(sys), Symbolics.unwrap.([s.x, s.y]))
 end

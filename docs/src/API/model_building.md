@@ -218,6 +218,12 @@ section of the documentation. User-defined functions can be used via `Imperative
 ModelingToolkit.ImperativeAffect
 ```
 
+### Internal event helper
+
+```@docs
+ModelingToolkitBase.ZeroCrossing
+```
+
 ## Jump processes
 
 Systems can contain jumps, which are handled by
