@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Symbolic Calculations and Building Fast Parallel Functions · ModelingToolkit.jl</title><link rel="canonical" href="https://mtk.sciml.ai/stable/tutorials/symbolic_functions/"/><link href="https://fonts.googleapis.com/css?family=Lato|Roboto+Mono" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.11.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.11.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.11.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.11.1/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link href="../../assets/favicon.ico" rel="icon" type="image/x-icon"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><a class="docs-logo" href="../../"><img src="../../assets/logo.png" alt="ModelingToolkit.jl logo"/></a><div class="docs-package-name"><span class="docs-autofit">ModelingToolkit.jl</span></div><form class="docs-search" action="../../search/"><input class="docs-search-query" id="documenter-search-query" name="q" type="text" placeholder="Search docs"/></form><ul class="docs-menu"><li><a class="tocitem" href="../../">Home</a></li><li><span class="tocitem">Tutorials</span><ul><li class="is-active"><a class="tocitem" href>Symbolic Calculations and Building Fast Parallel Functions</a><ul class="internal"><li><a class="tocitem" href="#Building-Functions-1"><span>Building Functions</span></a></li><li><a class="tocitem" href="#Building-Non-Allocating-Parallel-Functions-for-Sparse-Matrices-1"><span>Building Non-Allocating Parallel Functions for Sparse Matrices</span></a></li><li><a class="tocitem" href="#Derivatives-1"><span>Derivatives</span></a></li><li><a class="tocitem" href="#Simplification-and-Substitution-1"><span>Simplification and Substitution</span></a></li><li><a class="tocitem" href="#Non-Interactive-Development-(No-Macro-Version)-1"><span>Non-Interactive Development (No Macro Version)</span></a></li><li><a class="tocitem" href="#Syms-and-callable-Syms-1"><span><code>Sym</code>s and callable <code>Sym</code>s</span></a></li><li><a class="tocitem" href="#Registering-Functions-1"><span>Registering Functions</span></a></li></ul></li><li><a class="tocitem" href="../ode_modeling/">Component-Based Modeling with Ordinary Differential Equations</a></li><li><a class="tocitem" href="../higher_order/">Automatic Transformation of Nth Order ODEs to 1st Order ODEs</a></li><li><a class="tocitem" href="../nonlinear/">Solving Nonlinear Systems with NLsolve</a></li><li><a class="tocitem" href="../modelingtoolkitize/">Symbolic Extensions to ODEProblem via Modelingtoolkize</a></li><li><a class="tocitem" href="../auto_parallel/">Automated Sparse Parallelism of ODEs via Tracing</a></li><li><a class="tocitem" href="../converting_to_C/">Automatic Conversion of Julia Code to C Functions</a></li></ul></li><li><span class="tocitem">Systems</span><ul><li><a class="tocitem" href="../../systems/AbstractSystem/">The AbstractSystem Interface</a></li><li><a class="tocitem" href="../../systems/ODESystem/">ODESystem</a></li><li><a class="tocitem" href="../../systems/SDESystem/">SDESystem</a></li><li><a class="tocitem" href="../../systems/JumpSystem/">JumpSystem</a></li><li><a class="tocitem" href="../../systems/NonlinearSystem/">NonlinearSystem</a></li><li><a class="tocitem" href="../../systems/OptimizationSystem/">OptimizationSystem</a></li><li><a class="tocitem" href="../../systems/ControlSystem/">ControlSystem</a></li><li><a class="tocitem" href="../../systems/ReactionSystem/">ReactionSystem</a></li><li><a class="tocitem" href="../../systems/PDESystem/">PDESystem</a></li><li><a class="tocitem" href="../../systems/DependencyGraphs/">Dependency Graphs</a></li></ul></li><li><a class="tocitem" href="../../comparison/">Comparison Against SymPy</a></li><li><a class="tocitem" href="../../highlevel/">High Level API</a></li><li><a class="tocitem" href="../../build_function/">Function Building and Compilation (build_function)</a></li><li><a class="tocitem" href="../../IR/">ModelingToolkit IR</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Tutorials</a></li><li class="is-active"><a href>Symbolic Calculations and Building Fast Parallel Functions</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Symbolic Calculations and Building Fast Parallel Functions</a></li></ul></nav><div class="docs-right"><a class="docs-edit-link" href="https://github.com/SciML/ModelingToolkit.jl/blob/master/docs/src/tutorials/symbolic_functions.md" title="Edit on GitHub"><span class="docs-icon fab"></span><span class="docs-label is-hidden-touch">Edit on GitHub</span></a><a class="docs-settings-button fas fa-cog" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-sidebar-button fa fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a></div></header><article class="content" id="documenter-page"><h1 id="Symbolic-Calculations-and-Building-Fast-Parallel-Functions-1"><a class="docs-heading-anchor" href="#Symbolic-Calculations-and-Building-Fast-Parallel-Functions-1">Symbolic Calculations and Building Fast Parallel Functions</a><a class="docs-heading-anchor-permalink" href="#Symbolic-Calculations-and-Building-Fast-Parallel-Functions-1" title="Permalink"></a></h1><p>ModelingToolkit.jl is first and foremost a symbolic modeling language. The way to define symbolic variables is via the <code>@variables</code> macro:</p><pre><code class="language-julia">@variables x y</code></pre><p>After defining variables as symbolic, symbolic expressions, which we call a <code>Term</code>, can be generated by utilizing Julia expressions. For example:</p><pre><code class="language-julia">z = x^2 + y</code></pre><p>Here, <code>z</code> is the <code>Term</code> for &quot;square <code>x</code> and add <code>y</code>&quot;. To make an array of symbolic expressions, simply make an array of symbolic expressions:</p><pre><code class="language-julia">A = [x^2+y 0 2x
+     0     0 2y
+     y^2+x 0 0]
+
+3×3 Array{Num,2}:
+  x ^ 2 + y  0  2x
+  0  0  2y
+  y ^ 2 + x  0  0</code></pre><p>Note that by default, <code>@variables</code> returns <code>Sym</code> or <code>Term</code> objects wrapped in <code>Num</code> in order to make them behave like subtypes of <code>Real</code>. Any operation on these <code>Num</code> objects will return a new <code>Num</code> object, wrapping the result of computing symbolically on the underlying values.</p><p>To better view the results, we can use <a href="https://github.com/korsbo/Latexify.jl">Latexify.jl</a>. ModelingToolkit.jl comes with Latexify recipes so it works automatically:</p><pre><code class="language-julia">using Latexify
+latexify(A)</code></pre><div>\[\begin{equation}
+\left[
+\begin{array}{ccc}
+(x ^ 2) + y &amp; 0 &amp; 2 * x \\
+0 &amp; 0 &amp; 2 * y \\
+(y ^ 2) + x &amp; 0 &amp; 0 \\
+\end{array}
+\right]
+\end{equation}\]</div><p>Normal Julia functions work on ModelingToolkit expressions, so if we want to create the sparse version of <code>A</code> we would just call <code>sparse</code>:</p><pre><code class="language-julia">using SparseArrays
+spA = sparse(A)
+
+3×3 SparseMatrixCSC{Num,Int64} with 4 stored entries:
+  [1, 1]  =  (x ^ 2) + y
+  [3, 1]  =  (y ^ 2) + x
+  [1, 3]  =  2 * x
+  [2, 3]  =  2 * y</code></pre><p>We can thus use normal Julia functions as generators for sparse expressions. For example, here we will define</p><pre><code class="language-julia">function f(u)
+  [u[1]-u[3],u[1]^2-u[2],u[3]+u[2]]
+end
+f([x,y,z]) # Recall that z = x^2 + y
+
+3-element Array{Num,1}:
+ x - (x ^ 2 + y)
+       x ^ 2 - y
+ (x ^ 2 + y) + y</code></pre><p>Or we can build array variables and use these to trace:</p><pre><code class="language-julia">@variables u[1:3]
+f(u)
+
+3-element Array{Num,1}:
+     u₁ - u₃
+ u₁ ^ 2 - u₂
+     u₃ + u₂</code></pre><h2 id="Building-Functions-1"><a class="docs-heading-anchor" href="#Building-Functions-1">Building Functions</a><a class="docs-heading-anchor-permalink" href="#Building-Functions-1" title="Permalink"></a></h2><p>The function for building functions is the aptly-named <code>build_function</code>. The first argument is the symbolic expression or the array of symbolic expressions to compile, and the trailing arguments are the arguments for the function. For example:</p><pre><code class="language-julia">to_compute = [x^2 + y, y^2 + x]
+f_expr = build_function(to_compute,[x,y])</code></pre><p>gives back two codes. The first is a function <code>f([x,y])</code> that computes and builds an output vector <code>[x^2 + y, y^2 + x]</code>. Because this tool was made to be used by all the cool kids writing fast Julia codes, it is specialized to Julia and supports features like StaticArrays. For example:</p><pre><code class="language-julia">myf = eval(f_expr[1])
+myf(SA[2.0,3.0])
+
+2-element SArray{Tuple{2},Float64,1,2} with indices SOneTo(2):
+  7.0
+ 11.0</code></pre><p>The second function is an in-place non-allocating mutating function which mutates its first value:</p><pre><code class="language-julia">f_expr[2]
+
+:((var&quot;##MTIIPVar#292&quot;, var&quot;##MTKArg#290&quot;)-&gt;begin
+          @inbounds begin
+                  let (x, y) = (var&quot;##MTKArg#290&quot;[1], var&quot;##MTKArg#290&quot;[2])
+                      var&quot;##MTIIPVar#292&quot;[1] = (getproperty(Base, :+))(x ^ 2, y)
+                      var&quot;##MTIIPVar#292&quot;[2] = (getproperty(Base, :+))(y ^ 2, x)
+                  end
+              end
+          nothing
+      end)</code></pre><p>Thus we&#39;d use it like the following:</p><pre><code class="language-julia">myf! = eval(f_expr[2])
+out = zeros(2)
+myf!(out,[2.0,3.0])
+out
+
+2-element Array{Float64,1}:
+  7.0
+ 11.0</code></pre><p>To save the symbolic calculations for later, we can take this expression and save it out to a file:</p><pre><code class="language-julia">write(&quot;function.jl&quot;, string(f_expr[2]))</code></pre><p>Note that if we need to avoid <code>eval</code>, for example to avoid world-age issues, one could do <code>expression = Val{false}</code>:</p><pre><code class="language-julia">build_function(to_compute,[x,y],expression=Val{false})</code></pre><p>which will use <a href="https://github.com/thautwarm/GeneralizedGenerated.jl">GeneralizedGenerated.jl</a> to build Julia functions which avoid world-age issues.</p><h2 id="Building-Non-Allocating-Parallel-Functions-for-Sparse-Matrices-1"><a class="docs-heading-anchor" href="#Building-Non-Allocating-Parallel-Functions-for-Sparse-Matrices-1">Building Non-Allocating Parallel Functions for Sparse Matrices</a><a class="docs-heading-anchor-permalink" href="#Building-Non-Allocating-Parallel-Functions-for-Sparse-Matrices-1" title="Permalink"></a></h2><p>Now let&#39;s show off a little bit. <code>build_function</code> is kind of like if  <a href="https://docs.sympy.org/latest/modules/utilities/lambdify.html"><code>lambdify</code></a>  ate its spinach. To show this, <strong>let&#39;s build a non-allocating function that fills sparse matrices in a multithreaded manner</strong>. To do this, we just have to represent the operation that we&#39;re turning into a function via a sparse matrix. For example:</p><pre><code class="language-julia">N = 8
+A = sparse(Tridiagonal([x^i for i in 1:N-1],[x^i * y^(8-i) for i in 1:N], [y^i for i in 1:N-1]))
+
+8×8 SparseMatrixCSC{Num,Int64} with 22 stored entries:
+  [1, 1]  =  x ^ 1 * y ^ 7
+  [2, 1]  =  x ^ 1
+  [1, 2]  =  y ^ 1
+  [2, 2]  =  x ^ 2 * y ^ 6
+  [3, 2]  =  x ^ 2
+  [2, 3]  =  y ^ 2
+  [3, 3]  =  x ^ 3 * y ^ 5
+  [4, 3]  =  x ^ 3
+  [3, 4]  =  y ^ 3
+  ⋮
+  [5, 5]  =  x ^ 5 * y ^ 3
+  [6, 5]  =  x ^ 5
+  [5, 6]  =  y ^ 5
+  [6, 6]  =  x ^ 6 * y ^ 2
+  [7, 6]  =  x ^ 6
+  [6, 7]  =  y ^ 6
+  [7, 7]  =  x ^ 7 * y ^ 1
+  [8, 7]  =  x ^ 7
+  [7, 8]  =  y ^ 7
+  [8, 8]  =  x ^ 8 * y ^ 0</code></pre><p>Now we call <code>build_function</code>:</p><pre><code class="language-julia">build_function(A,[x,y],parallel=ModelingToolkit.MultithreadedForm())[2]</code></pre><p>which generates the code:</p><pre><code class="language-julia">(var&quot;##MTIIPVar#317&quot;, var&quot;##MTKArg#315&quot;)-&gt;begin
+        @inbounds begin
+                @sync begin
+                        let (x, y) = (var&quot;##MTKArg#315&quot;[1], var&quot;##MTKArg#315&quot;[2])
+                            begin
+                                Threads.@spawn begin
+                                        (var&quot;##MTIIPVar#317&quot;).nzval[1] = (getproperty(Base, :*))((getproperty(Base, :^))(x, 1), (getproperty(Base, :^))(y, 7))
+                                        (var&quot;##MTIIPVar#317&quot;).nzval[2] = (getproperty(Base, :^))(x, 1)
+                                        (var&quot;##MTIIPVar#317&quot;).nzval[3] = (getproperty(Base, :^))(y, 1)
+                                        (var&quot;##MTIIPVar#317&quot;).nzval[4] = (getproperty(Base, :*))((getproperty(Base, :^))(x, 2), (getproperty(Base, :^))(y, 6))
+                                        (var&quot;##MTIIPVar#317&quot;).nzval[5] = (getproperty(Base, :^))(x, 2)
+                                        (var&quot;##MTIIPVar#317&quot;).nzval[6] = (getproperty(Base, :^))(y, 2)
+                                    end
+                            end
+                            begin
+                                Threads.@spawn begin
+                                        (var&quot;##MTIIPVar#317&quot;).nzval[7] = (getproperty(Base, :*))((getproperty(Base, :^))(x, 3), (getproperty(Base, :^))(y, 5))
+                                        (var&quot;##MTIIPVar#317&quot;).nzval[8] = (getproperty(Base, :^))(x, 3)
+                                        (var&quot;##MTIIPVar#317&quot;).nzval[9] = (getproperty(Base, :^))(y, 3)
+                                        (var&quot;##MTIIPVar#317&quot;).nzval[10] = (getproperty(Base, :*))((getproperty(Base, :^))(x, 4), (getproperty(Base, :^))(y, 4))
+                                        (var&quot;##MTIIPVar#317&quot;).nzval[11] = (getproperty(Base, :^))(x, 4)
+                                        (var&quot;##MTIIPVar#317&quot;).nzval[12] = (getproperty(Base, :^))(y, 4)
+                                    end
+                            end
+                            begin
+                                Threads.@spawn begin
+                                        (var&quot;##MTIIPVar#317&quot;).nzval[13] = (getproperty(Base, :*))((getproperty(Base, :^))(x, 5), (getproperty(Base, :^))(y, 3))
+                                        (var&quot;##MTIIPVar#317&quot;).nzval[14] = (getproperty(Base, :^))(x, 5)
+                                        (var&quot;##MTIIPVar#317&quot;).nzval[15] = (getproperty(Base, :^))(y, 5)
+                                        (var&quot;##MTIIPVar#317&quot;).nzval[16] = (getproperty(Base, :*))((getproperty(Base, :^))(x, 6), (getproperty(Base, :^))(y, 2))
+                                        (var&quot;##MTIIPVar#317&quot;).nzval[17] = (getproperty(Base, :^))(x, 6)
+                                        (var&quot;##MTIIPVar#317&quot;).nzval[18] = (getproperty(Base, :^))(y, 6)
+                                    end
+                            end
+                            begin
+                                Threads.@spawn begin
+                                        (var&quot;##MTIIPVar#317&quot;).nzval[19] = (getproperty(Base, :*))((getproperty(Base, :^))(x, 7), (getproperty(Base, :^))(y, 1))
+                                        (var&quot;##MTIIPVar#317&quot;).nzval[20] = (getproperty(Base, :^))(x, 7)
+                                        (var&quot;##MTIIPVar#317&quot;).nzval[21] = (getproperty(Base, :^))(y, 7)
+                                        (var&quot;##MTIIPVar#317&quot;).nzval[22] = (getproperty(Base, :*))((getproperty(Base, :^))(x, 8), (getproperty(Base, :^))(y, 0))
+                                    end
+                            end
+                        end
+                    end
+            end
+        nothing
+    end</code></pre><p>Let&#39;s unpack what that&#39;s doing. It&#39;s using <code>A.nzval</code> in order to linearly index through the sparse matrix, avoiding the <code>A[i,j]</code> form because that is a more expensive way to index a sparse matrix if you know exactly the order that the data is stored. Then, it&#39;s splitting up the calculation into Julia threads so they can be operated on in parallel. It synchronizes after spawning all of the tasks so the computation is ensured to be complete before moving on. And it does this with all in-place operations to the original matrix instead of generating arrays. This is the fanciest way you could fill a sparse matrix, and ModelingToolkit makes this dead simple.</p><p>(Note: this example may be slower with multithreading due to the thread spawning overhead, but the full version was not included in the documentation for brevity. It will be the faster version if <code>N</code> is sufficiently large!)</p><h2 id="Derivatives-1"><a class="docs-heading-anchor" href="#Derivatives-1">Derivatives</a><a class="docs-heading-anchor-permalink" href="#Derivatives-1" title="Permalink"></a></h2><p>One common thing to compute in a symbolic system is derivatives. In ModelingToolkit.jl, derivatives are represented lazily via operations, just like any other function. To build a differential operator, use <code>@derivatives</code> like:</p><pre><code class="language-julia">@variables t
+@derivatives D&#39;~t</code></pre><p>This is the differential operator <span>$D = \frac{\partial}{\partial t}$</span>: the number of <code>&#39;</code> is the order of the derivative and the second variable is the variable we&#39;re differentiating by. Now let&#39;s write down the derivative of some expression:</p><pre><code class="language-julia">z = t + t^2
+D(z) # derivative(t + t ^ 2, t)</code></pre><p>Notice that this hasn&#39;t computed anything yet: <code>D</code> is a lazy operator because it lets us symbolically represent &quot;The derivative of z with respect to t&quot;, which is useful for example when representing our favorite thing in the world, differential equations. However, if we want to expand the derivative operators, we&#39;d use <code>expand_derivatives</code>:</p><pre><code class="language-julia">expand_derivatives(D(z)) # 1 + 2t</code></pre><p>We can also have simplified functions for multivariable calculus. For example, we can compute the Jacobian of an array of expressions like:</p><pre><code class="language-julia">ModelingToolkit.jacobian([x+x*y,x^2+y],[x,y])
+
+2×2 Array{Num,2}:
+ 1 + y            x
+    2x  Constant(1)</code></pre><p>and similarly we can do Hessians, gradients, and define whatever other derivatives you want.</p><h2 id="Simplification-and-Substitution-1"><a class="docs-heading-anchor" href="#Simplification-and-Substitution-1">Simplification and Substitution</a><a class="docs-heading-anchor-permalink" href="#Simplification-and-Substitution-1" title="Permalink"></a></h2><p>ModelingToolkit interfaces with <a href="https://github.com/JuliaSymbolics/SymbolicUtils.jl">SymbolicUtils.jl</a> to allow for simplifying symbolic expressions. This is done simply through the <code>simplify</code> command:</p><pre><code class="language-julia">simplify(t+t) # 2t</code></pre><p>This can be applied to arrays by using Julia&#39;s broadcast mechanism:</p><pre><code class="language-julia">B = simplify.([t^2+t+t^2  2t+4t
+           x+y+y+2t   x^2 - x^2 + y^2])
+
+2×2 Array{Num,2}:
+  2 * t ^ 2 + t     6t
+x + 2 * (t + y)  y ^ 2</code></pre><p>We can then use <code>substitute</code> to change values of an expression around:</p><pre><code class="language-julia">simplify.(substitute.(B,[x=&gt;y^2]))
+
+2×2 Array{Num,2}:
+       2 * t ^ 2 + t     6t
+ y ^ 2 + 2 * (t + y)  y ^ 2</code></pre><p>and we can use this to interactively evaluate expressions without generating and compiling Julia functions:</p><pre><code class="language-julia">substitute.(B,([x=&gt;2.0,y=&gt;3.0,t=&gt;4.0],))
+
+2×2 Array{ModelingToolkit.Constant,2}:
+ Constant(36.0)  Constant(24.0)
+ Constant(16.0)   Constant(9.0)</code></pre><p>Where we can reference the values via:</p><pre><code class="language-julia">ModelingToolkit.Constant(2.0).value # 2.0</code></pre><h2 id="Non-Interactive-Development-(No-Macro-Version)-1"><a class="docs-heading-anchor" href="#Non-Interactive-Development-(No-Macro-Version)-1">Non-Interactive Development (No Macro Version)</a><a class="docs-heading-anchor-permalink" href="#Non-Interactive-Development-(No-Macro-Version)-1" title="Permalink"></a></h2><p>Note that the macros are for the high-level case where you&#39;re doing symbolic computation on your own code. If you want to do symbolic computation on someone else&#39;s code, like in a macro, you may not want to do <code>@variables x</code> because you might want the name &quot;x&quot; to come from the user&#39;s code. For these cases, ModelingToolkit.jl allows for fully macro-free usage. For example:</p><pre><code class="language-julia">x = Num(Sym{Float64}(:x))
+y = Num(Sym{Float64}(:y))
+x+y^2.0 # isa Num</code></pre><p>Does what you&#39;d expect. The reference documentation shows how to define any of the quantities in such a way that the names can come from runtime values.</p><p>If we need to use this to generate new Julia code, we can simply convert the output to an <code>Expr</code>:</p><pre><code class="language-julia">toexpr(x+y^2)</code></pre><h2 id="Syms-and-callable-Syms-1"><a class="docs-heading-anchor" href="#Syms-and-callable-Syms-1"><code>Sym</code>s and callable <code>Sym</code>s</a><a class="docs-heading-anchor-permalink" href="#Syms-and-callable-Syms-1" title="Permalink"></a></h2><p>In the definition</p><pre><code class="language-julia">@variables t x(t) y(t)</code></pre><p><code>t</code> is of type <code>Sym{Real}</code> but the name <code>x</code> refers to an object that represents the <code>Term</code> <code>x(t)</code>. The operation of this expression is itself the object <code>Sym{FnType{Tuple{Real}, Real}}(:x)</code>. The type <code>Sym{FnType{...}}</code> represents a callable object. In this case specifically it&#39;s a function that takes 1 Real argument (noted by <code>Tuple{Real}</code>) and returns a <code>Real</code> result. You can call such a callable <code>Sym</code> with either a number or a symbolic expression of a permissible type.</p><p>this expression also defines <code>t</code> as a dependent variable while <code>x(t)</code> and <code>y(t)</code> are independent variables. This is accounted for in differentiation:</p><pre><code class="language-julia">z = x + y*t
+expand_derivatives(D(z)) # derivative(x(t), t) + y(t) + derivative(y(t), t) * t</code></pre><p>Since <code>x</code> and <code>y</code> are time-dependent, they are not automatically eliminated from the expression and thus the <code>D(x)</code> and <code>D(y)</code> operations still exist in the expanded derivatives for correctness.</p><p>We can also define unrestricted functions:</p><pre><code class="language-julia">@variables g(..)</code></pre><p>Here <code>g</code> is a variable that is a function of other variables. Any time that we reference <code>g</code> we have to utilize it as a function:</p><pre><code class="language-julia">z = g(x) + g(y)</code></pre><h2 id="Registering-Functions-1"><a class="docs-heading-anchor" href="#Registering-Functions-1">Registering Functions</a><a class="docs-heading-anchor-permalink" href="#Registering-Functions-1" title="Permalink"></a></h2><p>One of the benefits of a one-language Julia symbolic stack is that the primitives are all written in Julia, and therefore it&#39;s trivially extendable from Julia itself. By default, new functions are traced to the primitives and the symbolic expressions are written on the primitives. However, we can expand the allowed primitives by registering new functions. For example, let&#39;s register a new function <code>h</code>:</p><pre><code class="language-julia">h(x,y) = x^2 + y
+@register h(x,y)</code></pre><p>Now when we use <code>h(x,y)</code>, it is a symbolic expression and doesn&#39;t expand:</p><pre><code class="language-julia">h(x,y) + y^2</code></pre><p>In order to use it with the differentiation system, we need to register its derivatives. We would do it like this:</p><pre><code class="language-julia"># Derivative w.r.t. the first argument
+ModelingToolkit.derivative(::typeof(h), args::NTuple{2,Any}, ::Val{1}) = 2args[1]
+# Derivative w.r.t. the second argument
+ModelingToolkit.derivative(::typeof(h), args::NTuple{2,Any}, ::Val{2}) = 1</code></pre><p>and now it works with the rest of the system:</p><pre><code class="language-julia">@derivatives Dx&#39;~x Dy&#39;~y
+expand_derivatives(Dx(h(x,y) + y^2)) # 2x
+expand_derivatives(Dy(h(x,y) + y^2)) # 1 + 2y</code></pre></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../../">« Home</a><a class="docs-footer-nextpage" href="../ode_modeling/">Component-Based Modeling with Ordinary Differential Equations »</a></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> on <span class="colophon-date" title="Saturday 28 November 2020 09:56">Saturday 28 November 2020</span>. Using Julia version 1.4.2.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
