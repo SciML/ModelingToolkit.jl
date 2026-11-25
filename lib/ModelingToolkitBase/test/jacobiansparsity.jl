@@ -265,6 +265,12 @@ end
         @test nlprob.f.jac_prototype isa SparseMatrixCSC
         @test size(nlprob.f.jac_prototype) == (1, 1)
 
+        # the residual is `rhs - lhs`, so a dependence through the lhs is in the pattern
+        @named lhssys = System([x ~ 1], [x], [])
+        lhssys = complete(lhssys)
+        lhsprob = NonlinearProblem(lhssys, [x => 2.0]; jac = false, sparse = true)
+        @test nnz(lhsprob.f.jac_prototype) == 1
+
         # a registered call with a derivative rule is differentiated
         ruled(x) = [x, 2x]
         Symbolics.@register_array_symbolic ruled(x::Real) begin
