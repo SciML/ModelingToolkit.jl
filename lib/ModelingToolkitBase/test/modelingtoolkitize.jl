@@ -13,7 +13,7 @@ limit(a, N) = ModelingToolkitBase.ifelse(a == N + 1, 1, ModelingToolkitBase.ifel
 function brusselator_2d_loop(du, u, p, t)
     A, B, alpha, dx = p
     alpha = alpha / dx^2
-    return @inbounds for I in CartesianIndices((N, N))
+    @inbounds for I in CartesianIndices((N, N))
         i, j = Tuple(I)
         x, y = xyd_brusselator[I[1]], xyd_brusselator[I[2]]
         ip1, im1, jp1,
@@ -39,6 +39,7 @@ function brusselator_2d_loop(du, u, p, t)
         ) +
             A * u[i, j, 1] - u[i, j, 1]^2 * u[i, j, 2]
     end
+    return
 end
 
 # Test with tuple parameters
@@ -170,7 +171,8 @@ function SIRD_ac!(du, u, p, t)
     @. dI = Λ * S - ((1 - δ) * λ_R + δ * λ_D) * I
     @. dR = λ_R * (1 - δ) * I
     @. dD = λ_D * δ * I
-    return @. dD_tot = dD[1] + dD[2] + dD[3] + dD[4]
+    @. dD_tot = dD[1] + dD[2] + dD[3] + dD[4]
+    return
 end;
 
 # create problem and check it works
@@ -193,7 +195,8 @@ rv0 = ArrayPartition(r0, v0)
 f = function (dy, y, μ, t)
     r = sqrt(sum(y[1, :] .^ 2))
     dy[1, :] = y[2, :]
-    return dy[2, :] .= -μ .* y[1, :] / r^3
+    dy[2, :] .= -μ .* y[1, :] / r^3
+    return
 end
 
 prob = ODEProblem(f, rv0, (0.0, Δt), μ)
@@ -250,7 +253,8 @@ sys = modelingtoolkitize(prob)
 
 function ode_prob(du, u, p::NamedTuple, t)
     du[1] = u[1] + p.α * u[2]
-    return du[2] = u[2] + p.β * u[1]
+    du[2] = u[2] + p.β * u[1]
+    return
 end
 params = (α = 1, β = 1)
 prob = ODEProblem(ode_prob, [1 1], (0, 1), params)
@@ -260,7 +264,8 @@ sys = modelingtoolkitize(prob)
 function ode_prob(du, u, p::Tuple, t)
     α, β = p
     du[1] = u[1] + α * u[2]
-    return du[2] = u[2] + β * u[1]
+    du[2] = u[2] + β * u[1]
+    return
 end
 
 params = (1, 1)
@@ -314,18 +319,22 @@ sys = modelingtoolkitize(prob)
     function fn(du, u, p::NamedTuple, t)
         du[1] = u[1] + p.a * u[2]
         du[2] = u[2] + p.b * u[1]
+        return
     end
     function fn(du, u, p::AbstractDict, t)
         du[1] = u[1] + p[:a] * u[2]
         du[2] = u[2] + p[:b] * u[1]
+        return
     end
     function fn(du, u, p, t)
         du[1] = u[1] + p[1] * u[2]
         du[2] = u[2] + p[2] * u[1]
+        return
     end
     function fn(du, u, p::Real, t)
         du[1] = u[1] + p * u[2]
         du[2] = u[2] + p * u[1]
+        return
     end
     function nl_fn(u, p::NamedTuple)
         [u[1] + p.a * u[2], u[2] + p.b * u[1]]
@@ -476,7 +485,8 @@ end
 function nlls!(du, u, p)
     du[1] = 2u[1] - 2
     du[2] = u[1] - 4u[2]
-    return du[3] = 0
+    du[3] = 0
+    return
 end
 u0 = [0.0, 0.0]
 prob = NonlinearLeastSquaresProblem(
@@ -491,6 +501,7 @@ sys = modelingtoolkitize(prob)
         du[1] = 0.3 * u[1]
         du[2] = 0.3 * u[2]
         du[3] = 0.3 * u[3]
+        return
     end
     function sdef!(du, u, p, t)
         x, y, z = u
@@ -498,6 +509,7 @@ sys = modelingtoolkitize(prob)
         du[1] = sigma * (y - x)
         du[2] = x * (rho - z) - y
         du[3] = x * y - beta * z
+        return
     end
     u0 = [1.0, 0.0, 0.0]
     tspan = (0.0, 100.0)

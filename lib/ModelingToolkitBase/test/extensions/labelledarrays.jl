@@ -67,7 +67,8 @@ function SIR!(du, u, p, t)
     du[1] = (μ * N - λ * S - μ * S + ω * R)
     du[2] = (λ * S - σ * I - μ * I)
     du[3] = (σ * I - μ * R - ω * R)
-    return du[4] = (σ * I) # cumulative incidence
+    du[4] = (σ * I) # cumulative incidence
+    return
 end
 
 # Solver settings

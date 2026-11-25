@@ -802,7 +802,8 @@ function partiallyCompleteIntegratorStep(wrapper::FMI3InstanceWrapper)
         wrapper.instance, FMI.fmi3False, enterEventMode, terminateSimulation
     )
     @assert enterEventMode[] == FMI.fmi3False
-    return @assert terminateSimulation[] == FMI.fmi3False
+    @assert terminateSimulation[] == FMI.fmi3False
+    return
 end
 
 """
@@ -812,7 +813,8 @@ function reset_instance!(wrapper::FMI3InstanceWrapper)
     wrapper.instance === nothing && return
     FMI.fmi3Terminate(wrapper.instance)
     FMI.fmi3FreeInstance!(wrapper.instance)
-    return wrapper.instance = nothing
+    wrapper.instance = nothing
+    return
 end
 
 @register_array_symbolic (fn::FMI2InstanceWrapper)(
