@@ -3500,9 +3500,9 @@ version = "1.2.5"
 
 [[deps.SparseMatrixColorings]]
 deps = ["ADTypes", "DocStringExtensions", "LinearAlgebra", "PrecompileTools", "Random", "SparseArrays"]
-git-tree-sha1 = "0730f14b07c68fd3b3a6fae89a829a5124a7ae7e"
+git-tree-sha1 = "7143e58a1ce776485bc0e2c1df746b098f0b9381"
 uuid = "0a514795-09f3-496d-8182-132a7b665d35"
-version = "0.4.29"
+version = "0.4.30"
 
     [deps.SparseMatrixColorings.extensions]
     SparseMatrixColoringsAMDGPUExt = "AMDGPU"
