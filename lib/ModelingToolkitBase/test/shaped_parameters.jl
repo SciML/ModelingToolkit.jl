@@ -183,6 +183,7 @@ end
     Kop = shaped_parameter(:Kop, BlockOp, 4, 6)
     @named sys = System([zeros(6) ~ D(u) + u], t, [u], [Kop])
     @test_throws "split = false" complete(sys; split = false)
+    @test_throws "split = false" complete(sys; split = false, flatten = false)
     @test complete(sys) isa System
 end
 
