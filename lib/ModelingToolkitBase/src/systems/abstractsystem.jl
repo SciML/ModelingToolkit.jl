@@ -293,6 +293,19 @@ function _all_ts_idxs!(ts_idxs, ::NotSymbolic, sys, sym)
         push!(ts_idxs, timeseries_parameter_index(sys, sym).timeseries_idx)
     end
 end
+"""
+    $(TYPEDSIGNATURES)
+
+The symbols to test for timeseries membership on behalf of `v`. A record whose leaves are
+all unknowns is in the index cache, so it resolves on its own. Only a partially present
+one has to fall back to its leaves.
+"""
+function timeseries_candidates(sys::AbstractSystem, v::SymbolicT)
+    Symbolics.issymstruct(v) || return (v,)
+    is_variable(sys, v) && return (v,)
+    return Iterators.flatten(((v,), record_leaves(v)))
+end
+
 # Need this to avoid ambiguity with the array case
 for traitT in [
         ScalarSymbolic,
@@ -301,8 +314,7 @@ for traitT in [
     @eval function _all_ts_idxs!(ts_idxs, ::$traitT, sys, sym)
         allsyms = Set{SymbolicT}()
         SU.search_variables!(allsyms, sym; is_atomic = OperatorIsAtomic{SU.Operator}())
-        for s in allsyms
-            s = unwrap(s)
+        for v in allsyms, s in timeseries_candidates(sys, v)
             if is_variable(sys, s) || is_independent_variable(sys, s)
                 push!(ts_idxs, ContinuousTimeseries())
             elseif is_timeseries_parameter(sys, s)
