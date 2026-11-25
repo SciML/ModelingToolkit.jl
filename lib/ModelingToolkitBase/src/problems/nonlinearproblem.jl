@@ -63,11 +63,13 @@ function SciMLBase.NonlinearFunction{iip, spec}(
     observedfun = ObservedFunctionCache(sys, codegen_opts; steady_state = false)
 
     if sparse
-        # Without a symbolic Jacobian only the pattern is needed, which does not require
-        # differentiating the equations (and so works for opaque operators).
-        pattern = if jac
+        pattern = try
             calculate_jacobian(sys; sparse)
-        else
+        catch err
+            # Only a pattern is needed, so with `jac = false` an equation that cannot be
+            # differentiated (an opaque operator) falls back to the structural pattern of the
+            # residual `rhs - lhs`, which is conservative for array-derived terms.
+            (!jac && err isa ArgumentError) || rethrow()
             Symbolics.jacobian_sparsity(
                 [eq.rhs - eq.lhs for eq in full_equations(sys)], flat_unknowns(sys)
             )

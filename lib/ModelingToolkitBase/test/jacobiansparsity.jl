@@ -263,13 +263,23 @@ end
         nlsys = complete(nlsys)
         nlprob = NonlinearProblem(nlsys, [x => 2.0]; jac = false, sparse = true)
         @test nlprob.f.jac_prototype isa SparseMatrixCSC
-        @test size(nlprob.f.jac_prototype) == (1, 1)
+        @test collect(zip(findnz(nlprob.f.jac_prototype)[1:2]...)) == [(1, 1)]
 
         # the residual is `rhs - lhs`, so a dependence through the lhs is in the pattern
         @named lhssys = System([x ~ 1], [x], [])
         lhssys = complete(lhssys)
         lhsprob = NonlinearProblem(lhssys, [x => 2.0]; jac = false, sparse = true)
         @test nnz(lhsprob.f.jac_prototype) == 1
+
+        # array-derived residuals keep their exact (diagonal) pattern
+        @variables v[1:n]
+        arr = 2v
+        @named diagsys = System([0 ~ arr[i] - 1 for i in 1:n], [v], [])
+        diagsys = complete(diagsys)
+        diagprob = NonlinearProblem(
+            diagsys, [v => ones(n)]; jac = false, sparse = true
+        )
+        @test nnz(diagprob.f.jac_prototype) == n
 
         # a registered call with a derivative rule is differentiated
         ruled(x) = [x, 2x]
