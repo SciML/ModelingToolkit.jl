@@ -887,6 +887,18 @@ end
 """
     $(TYPEDSIGNATURES)
 
+Whether `vars` holds the variable `k` or, if `k` is an array, any of its elements.
+"""
+function _contains_variable(vars::Set{SymbolicT}, k::SymbolicT)
+    k in vars && return true
+    shape = SU.shape(k)
+    (shape isa SU.Unknown || isempty(shape)) && return false
+    return any(x -> unwrap(x) in vars, Symbolics.scalarize(wrap(k)))
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
 Return a `prob -> problem` callable producing the `SCCNonlinearProblem` that a
 `SteadyStateProblem` built on `sys` lowers to: the `NonlinearSystem`
 steady-state residual of the original (uncompiled) model is `mtkcompile`d and
@@ -935,13 +947,22 @@ function MTKBase.steady_state_sccprob(sys::System, op; kwargs...)
         )
         # The ODE's operating point contains symbols the residual system lacks (derivative
         # unknowns, `Initial(D(x))`), which its initialization would treat as solvable.
-        known = Set{SymbolicT}()
-        for var in Iterators.flatten((unknowns(ref[]), (eq.lhs for eq in observed(ref[]))))
-            push!(known, var)
-            push!(known, first(split_indexed_var(var)))
-        end
+        known = Set{SymbolicT}(unknowns(ref[]))
+        union!(known, observables(ref[]))
+        rsys = ref[]
         filter!(op) do (k, _)
-            is_parameter(ref[], k) || k in known || first(split_indexed_var(k)) in known
+            is_parameter(rsys, k) || _contains_variable(known, k)
+        end
+        # Seeds of ODE observed variables are expressions that may refer to the symbols
+        # filtered out above, so read their values from the ODE problem.
+        derived = Set{SymbolicT}(observables(prob.f.sys))
+        seeds = filter(collect(keys(op))) do k
+            !is_parameter(rsys, k) && _contains_variable(derived, k)
+        end
+        if !isempty(seeds)
+            for (k, val) in zip(seeds, getu(prob, seeds)(prob))
+                op[k] = SU.Const{VartypeT}(val)
+            end
         end
         return SCCNonlinearProblem(ref[], op)
     end

@@ -552,7 +552,6 @@ end
 end
 
 @testset "SteadyStateProblem SCC lowering regressions" begin
-    # https://github.com/SciML/ModelingToolkit.jl/issues/5270
     @parameters a = 1.0 b = 1.0 c = 1.0 d = 2.0
     @variables p(t) = 0.0 h(t) = 0.0
     @mtkcompile sys = System(
@@ -583,6 +582,43 @@ end
     sol = solve(remake(SteadyStateProblem(sys, []); u0 = [q => [-0.9, -0.8]]), NewtonRaphson())
     @test SciMLBase.successful_retcode(sol)
     @test sol[q] ≈ [-1.0, -1.0] atol = 1.0e-8
+
+    # The ODE observes `y` through the dummy derivative `wˍt`, and the residual
+    # system solves for `y`, so its seed must be evaluated by the ODE problem.
+    @parameters a = 1.0 b = 1.0 c = 1.0 d = 2.0
+    @variables x(t) = 0.9 z(t) = 0.5 w(t) = 0.75
+    @variables y(t) [state_priority = 10]
+    @named raw = System(
+        [
+            a * D(z) + b * D(w) ~ z - 1,
+            c * D(z) + d * D(w) ~ w - 2,
+            D(x) ~ y - x,
+            y ~ D(z) + x^3,
+        ], t
+    )
+    sccprob = SCCNonlinearProblem(SteadyStateProblem(mtkcompile(raw), []))
+    @test getu(sccprob, y)(sccprob) ≈ 0.979
+    sol = solve(sccprob, NewtonRaphson())
+    @test SciMLBase.successful_retcode(sol)
+    @test sol[[x, y, z, w]] ≈ [1, 1, 1, 2] atol = 1.0e-8
+
+    @variables r(t)[1:2] = [0.9, 1.9]
+    @mtkcompile sys = System([D(r[1]) ~ r[1]^2 - 1, D(r[2]) ~ r[2]^2 - 4], t)
+    prob = remake(SteadyStateProblem(sys, []); u0 = [r => [-0.9, -1.9]])
+    sol = solve(SCCNonlinearProblem(prob), NewtonRaphson())
+    @test SciMLBase.successful_retcode(sol)
+    @test sol[r] ≈ [-1, -2] atol = 1.0e-8
+
+    @parameters k = 2.0
+    @variables q(t)[1:3]
+    @mtkcompile sys = System(
+        [D(q[1]) ~ q[1]^2 + q[2]^2 - k, D(q[2]) ~ q[1] - q[2], q[3] ~ q[1] + q[2]], t
+    )
+    prob = SteadyStateProblem(sys, [q[1] => 0.9, q[2] => 0.8])
+    prob = remake(prob; u0 = [q[1] => -0.9, q[2] => -0.8], p = [k => 8.0])
+    sol = solve(SCCNonlinearProblem(prob), NewtonRaphson())
+    @test SciMLBase.successful_retcode(sol)
+    @test sol[[q[1], q[2], q[3]]] ≈ [-2, -2, -4] atol = 1.0e-8
 
     # https://github.com/SciML/ModelingToolkit.jl/issues/5162
     @parameters α = 1.3 β = 0.9 γ = 0.8 δ = 1.8
