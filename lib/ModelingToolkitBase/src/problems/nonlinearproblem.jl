@@ -63,7 +63,10 @@ function SciMLBase.NonlinearFunction{iip, spec}(
     observedfun = ObservedFunctionCache(sys, codegen_opts; steady_state = false)
 
     if sparse
-        jac_prototype = similar(calculate_jacobian(sys; sparse), eltype(u0))
+        # Without a symbolic Jacobian only the pattern is needed, which does not require
+        # differentiating the equations (and so works for opaque operators).
+        pattern = jac ? calculate_jacobian(sys; sparse) : jacobian_sparsity(sys)
+        jac_prototype = similar(pattern, eltype(u0))
     else
         jac_prototype = nothing
     end

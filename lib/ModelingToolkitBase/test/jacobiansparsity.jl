@@ -256,6 +256,15 @@ end
         @test all(ModelingToolkitBase.jacobian_sparsity(opsys) .== true)
         @test_nowarn ODEProblem(opsys, opop, (0.0, 1.0); sparse = true)
 
+        # `jac = false` with `sparse = true` only needs a sparsity pattern, not a Jacobian
+        opaque_scalar(x) = x * x
+        Symbolics.@register_symbolic opaque_scalar(x::Real)
+        @named nlsys = System([0 ~ opaque_scalar(x) - 1], [x], [])
+        nlsys = complete(nlsys)
+        nlprob = NonlinearProblem(nlsys, [x => 2.0]; jac = false, sparse = true)
+        @test nlprob.f.jac_prototype isa SparseMatrixCSC
+        @test size(nlprob.f.jac_prototype) == (1, 1)
+
         # a registered call with a derivative rule is differentiated
         ruled(x) = [x, 2x]
         Symbolics.@register_array_symbolic ruled(x::Real) begin
