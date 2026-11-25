@@ -70,7 +70,8 @@ constructor as follows:
 
 ```julia
 event = SymbolicDiscreteCallback(
-    [t == 1] => [x ~ Pre(x) + 1, y ~ Pre(y)], discrete_parameters = [p])
+    [t == 1] => [x ~ Pre(x) + 1, y ~ Pre(y)], discrete_parameters = [p]
+)
 ```
 
 This way, we enforce that `y` will remain the same, and `p` will change.
@@ -129,10 +130,12 @@ using ModelingToolkit, OrdinaryDiffEq, Plots
 using ModelingToolkit: t_nounits as t, D_nounits as D
 
 function UnitMassWithFriction(k; name)
-    @variables x(t)=0 v(t)=0
-    eqs = [D(x) ~ v
-           D(v) ~ sin(t) - k * sign(v)]
-    System(eqs, t; continuous_events = [v ~ 0], name) # when v = 0 there is a discontinuity
+    @variables x(t) = 0 v(t) = 0
+    eqs = [
+        D(x) ~ v
+        D(v) ~ sin(t) - k * sign(v)
+    ]
+    return System(eqs, t; continuous_events = [v ~ 0], name) # when v = 0 there is a discontinuity
 end
 @mtkcompile m = UnitMassWithFriction(0.7)
 prob = ODEProblem(m, Pair[], (0, 10pi))
@@ -149,19 +152,23 @@ an `affect!` on the state. We can model the same system using ModelingToolkit
 like this
 
 ```@example events
-@variables x(t)=1 v(t)=0
+@variables x(t) = 1 v(t) = 0
 
 root_eqs = [x ~ 0]  # the event happens at the ground x(t) = 0
 affect = [v ~ -Pre(v)] # the effect is that the velocity changes sign
 
 @mtkcompile ball = System(
-    [D(x) ~ v
-     D(v) ~ -9.8], t; continuous_events = root_eqs => affect) # equation => affect
+    [
+        D(x) ~ v
+        D(v) ~ -9.8
+    ],
+    t; continuous_events = root_eqs => affect
+) # equation => affect
 
 tspan = (0.0, 5.0)
 prob = ODEProblem(ball, Pair[], tspan)
 sol = solve(prob, Tsit5())
-@assert 0 <= minimum(sol[x]) <= 1e-10 # the ball never went through the floor but got very close
+@assert 0 <= minimum(sol[x]) <= 1.0e-10 # the ball never went through the floor but got very close
 plot(sol)
 ```
 
@@ -170,24 +177,28 @@ plot(sol)
 Multiple events? No problem! This example models a bouncing ball in 2D that is enclosed by two walls at $y = \pm 1.5$.
 
 ```@example events
-@variables x(t)=1 y(t)=0 vx(t)=0 vy(t)=2
+@variables x(t) = 1 y(t) = 0 vx(t) = 0 vy(t) = 2
 
-continuous_events = [[x ~ 0] => [vx ~ -Pre(vx)]
-                     [y ~ -1.5, y ~ 1.5] => [vy ~ -Pre(vy)]]
+continuous_events = [
+    [x ~ 0] => [vx ~ -Pre(vx)]
+    [y ~ -1.5, y ~ 1.5] => [vy ~ -Pre(vy)]
+]
 
 @mtkcompile ball = System(
     [
         D(x) ~ vx,
         D(y) ~ vy,
         D(vx) ~ -9.8 - 0.1vx, # gravity + some small air resistance
-        D(vy) ~ -0.1vy
-    ], t; continuous_events)
+        D(vy) ~ -0.1vy,
+    ],
+    t; continuous_events
+)
 
 tspan = (0.0, 10.0)
 prob = ODEProblem(ball, Pair[], tspan)
 
 sol = solve(prob, Tsit5())
-@assert 0 <= minimum(sol[x]) <= 1e-10 # the ball never went through the floor but got very close
+@assert 0 <= minimum(sol[x]) <= 1.0e-10 # the ball never went through the floor but got very close
 @assert minimum(sol[y]) >= -1.5 # check wall conditions
 @assert maximum(sol[y]) <= 1.5  # check wall conditions
 
@@ -246,8 +257,10 @@ affect interface:
 ```@example events
 sts = @variables x(t), v(t)
 par = @parameters g = 9.8
-bb_eqs = [D(x) ~ v
-          D(v) ~ -g]
+bb_eqs = [
+    D(x) ~ v
+    D(v) ~ -g
+]
 
 function bb_affect!(mod, obs, integ, ctx)
     return (; v = -mod.v)
@@ -255,8 +268,10 @@ end
 
 reflect = [x ~ 0] => (bb_affect!, (; v))
 
-@mtkcompile bb_sys = System(bb_eqs, t, sts, par,
-    continuous_events = reflect)
+@mtkcompile bb_sys = System(
+    bb_eqs, t, sts, par,
+    continuous_events = reflect
+)
 
 u0 = [v => 0.0, x => 1.0]
 
@@ -343,12 +358,15 @@ injection = (t == tinject) => [N ~ Pre(N) + M]
 
 # at time tkill we turn off production of cells
 killing = ModelingToolkit.SymbolicDiscreteCallback(
-    (t == tkill) => [α ~ 0.0]; discrete_parameters = α, iv = t)
+    (t == tkill) => [α ~ 0.0]; discrete_parameters = α, iv = t
+)
 
 tspan = (0.0, 30.0)
 p = [α => 100.0, tinject => 10.0, M => 50, tkill => 20.0]
-@mtkcompile osys = System(eqs, t, [N], [α, M, tinject, tkill];
-    discrete_events = [injection, killing])
+@mtkcompile osys = System(
+    eqs, t, [N], [α, M, tinject, tkill];
+    discrete_events = [injection, killing]
+)
 oprob = ODEProblem(osys, u0, tspan, p)
 sol = solve(oprob, Tsit5(); tstops = [10.0, 20.0])
 plot(sol)
@@ -373,11 +391,14 @@ As such, our last example with treatment and killing could instead be modeled by
 ```@example events
 injection = [10.0] => [N ~ Pre(N) + M]
 killing = ModelingToolkit.SymbolicDiscreteCallback(
-    [20.0] => [α ~ 0.0], discrete_parameters = α, iv = t)
+    [20.0] => [α ~ 0.0], discrete_parameters = α, iv = t
+)
 
 p = [α => 100.0, M => 50]
-@mtkcompile osys = System(eqs, t, [N], [α, M];
-    discrete_events = [injection, killing])
+@mtkcompile osys = System(
+    eqs, t, [N], [α, M];
+    discrete_events = [injection, killing]
+)
 oprob = ODEProblem(osys, u0, tspan, p)
 sol = solve(oprob, Tsit5())
 plot(sol)
@@ -415,9 +436,11 @@ example:
 @discretes c(t)
 
 ev = ModelingToolkit.SymbolicDiscreteCallback(
-    1.0 => [c ~ Pre(c) + 1], discrete_parameters = c, iv = t)
+    1.0 => [c ~ Pre(c) + 1], discrete_parameters = c, iv = t
+)
 @mtkcompile sys = System(
-    D(x) ~ c * cos(x), t, [x], [c]; discrete_events = [ev])
+    D(x) ~ c * cos(x), t, [x], [c]; discrete_events = [ev]
+)
 
 prob = ODEProblem(sys, [x => 0.0, c => 1.0], (0.0, 2pi))
 sol = solve(prob, Tsit5())
@@ -453,11 +476,11 @@ Bang-bang control of a heater connected to a leaky plant requires hysteresis in 
 
 ```@example events
 @variables temp(t)
-@parameters furnace_on_threshold=0.5 furnace_off_threshold=0.7 furnace_power=1.0 leakage=0.1
+@parameters furnace_on_threshold = 0.5 furnace_off_threshold = 0.7 furnace_power = 1.0 leakage = 0.1
 @discretes furnace_on(t)::Bool = false
 params = [furnace_on_threshold, furnace_off_threshold, furnace_power, leakage, furnace_on]
 eqs = [
-    D(temp) ~ furnace_on * furnace_power - temp^2 * leakage
+    D(temp) ~ furnace_on * furnace_power - temp^2 * leakage,
 ]
 ```
 
@@ -475,12 +498,14 @@ furnace_disable = ModelingToolkit.SymbolicContinuousCallback(
     [temp ~ furnace_off_threshold],
     ModelingToolkit.ImperativeAffect(modified = (; furnace_on)) do x, o, c, i
         @set! x.furnace_on = false
-    end)
+    end
+)
 furnace_enable = ModelingToolkit.SymbolicContinuousCallback(
     [temp ~ furnace_on_threshold],
     ModelingToolkit.ImperativeAffect(modified = (; furnace_on)) do x, o, c, i
         @set! x.furnace_on = true
-    end)
+    end
+)
 ```
 
 We're using the explicit form of `SymbolicContinuousCallback` here, though
@@ -488,9 +513,11 @@ so far we aren't using anything that's not possible with the implicit interface.
 You can also write
 
 ```julia
-[temp ~
- furnace_off_threshold] => ModelingToolkit.ImperativeAffect(modified = (;
-    furnace_on)) do x, o, i, c
+[
+    temp ~ furnace_off_threshold,
+] => ModelingToolkit.ImperativeAffect(
+    modified = (; furnace_on)
+) do x, o, i, c
     @set! x.furnace_on = false
 end
 ```
@@ -530,13 +557,16 @@ to the system.
 
 ```@example events
 @named sys = System(
-    eqs, t, [temp], params; continuous_events = [furnace_disable, furnace_enable])
+    eqs, t, [temp], params; continuous_events = [furnace_disable, furnace_enable]
+)
 ss = mtkcompile(sys)
 prob = ODEProblem(ss, [temp => 0.0, furnace_on => true], (0.0, 10.0))
 sol = solve(prob, Tsit5())
 plot(sol)
-hline!([sol.ps[furnace_off_threshold], sol.ps[furnace_on_threshold]],
-    l = (:black, 1), primary = false)
+hline!(
+    [sol.ps[furnace_off_threshold], sol.ps[furnace_on_threshold]],
+    l = (:black, 1), primary = false
+)
 ```
 
 Here we see exactly the desired hysteresis. The heater starts on until the temperature hits
@@ -553,9 +583,11 @@ from each sensor and the old values and decodes them into the direction that the
 
 ```@example events
 @variables theta(t) omega(t)
-params = @parameters qA=0 qB=0 hA=0 hB=0 cnt::Int=0
-eqs = [D(theta) ~ omega
-       omega ~ 1.0]
+params = @parameters qA = 0 qB = 0 hA = 0 hB = 0 cnt::Int = 0
+eqs = [
+    D(theta) ~ omega
+    omega ~ 1.0
+]
 ```
 
 Our continuous-time system is extremely simple. We have two unknown variables `theta` for the angle of the shaft
@@ -568,13 +600,13 @@ We'll then implement the decoder as a simple Julia function.
 function decoder(oldA, oldB, newA, newB)
     state = (oldA, oldB, newA, newB)
     if state == (0, 0, 1, 0) || state == (1, 0, 1, 1) || state == (1, 1, 0, 1) ||
-       state == (0, 1, 0, 0)
+            state == (0, 1, 0, 0)
         return 1
     elseif state == (0, 0, 0, 1) || state == (0, 1, 1, 1) || state == (1, 1, 1, 0) ||
-           state == (1, 0, 0, 0)
+            state == (1, 0, 0, 0)
         return -1
     elseif state == (0, 0, 0, 0) || state == (0, 1, 0, 1) || state == (1, 0, 1, 0) ||
-           state == (1, 1, 1, 1)
+            state == (1, 1, 1, 1)
         return 0
     else
         return 0 # err is interpreted as no movement
@@ -599,7 +631,8 @@ For sensor A, we're using the edge detection method. By providing a different af
 In our encoder, we interpret this as occlusion or nonocclusion of the sensor, update the internal state, and tick the decoder.
 
 ```@example events
-qAevt = ModelingToolkit.SymbolicContinuousCallback([cos(100 * theta) ~ 0],
+qAevt = ModelingToolkit.SymbolicContinuousCallback(
+    [cos(100 * theta) ~ 0],
     ModelingToolkit.ImperativeAffect((; qA, hA, hB, cnt), (; qB)) do x, o, c, i
         @set! x.hA = x.qA
         @set! x.hB = o.qB
@@ -608,13 +641,15 @@ qAevt = ModelingToolkit.SymbolicContinuousCallback([cos(100 * theta) ~ 0],
         x
     end,
     affect_neg = ModelingToolkit.ImperativeAffect(
-        (; qA, hA, hB, cnt), (; qB)) do x, o, c, i
+        (; qA, hA, hB, cnt), (; qB)
+    ) do x, o, c, i
         @set! x.hA = x.qA
         @set! x.hB = o.qB
         @set! x.qA = 0
         @set! x.cnt += decoder(x.hA, x.hB, x.qA, o.qB)
         x
-    end)
+    end
+)
 ```
 
 The other way we can implement a sensor is by changing the root find.
@@ -623,14 +658,16 @@ the root is crossed. This makes it trickier to figure out what the new state is.
 Instead, we can use right root finding:
 
 ```@example events
-qBevt = ModelingToolkit.SymbolicContinuousCallback([cos(100 * theta - π / 2) ~ 0],
+qBevt = ModelingToolkit.SymbolicContinuousCallback(
+    [cos(100 * theta - π / 2) ~ 0],
     ModelingToolkit.ImperativeAffect((; qB, hA, hB, cnt), (; qA, theta)) do x, o, c, i
         @set! x.hA = o.qA
         @set! x.hB = x.qB
         @set! x.qB = clamp(sign(cos(100 * o.theta - π / 2)), 0.0, 1.0)
         @set! x.cnt += decoder(x.hA, x.hB, o.qA, x.qB)
         x
-    end; rootfind = SciMLBase.RightRootFind)
+    end; rootfind = SciMLBase.RightRootFind
+)
 ```
 
 Here, sensor B is located `π / 2` behind sensor A in angular space, so we're adjusting our
@@ -643,7 +680,8 @@ We can now simulate the encoder.
 
 ```@example events
 @named sys = System(
-    eqs, t, [theta, omega], params; continuous_events = [qAevt, qBevt])
+    eqs, t, [theta, omega], params; continuous_events = [qAevt, qBevt]
+)
 ss = mtkcompile(sys)
 prob = ODEProblem(ss, [theta => 0.0], (0.0, pi))
 sol = solve(prob, Tsit5(); dtmax = 0.01)

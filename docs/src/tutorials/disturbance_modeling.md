@@ -37,9 +37,7 @@ function SystemModel(; name, m1 = 1, m2 = 1, k = 10, c = 3)
         connect(inertia2.flange_a, spring.flange_b, damper.flange_b)
     ]
 
-    System(eqs, t, [], [m1, m2, k, c];
-        systems,
-        name)
+    return System(eqs, t, [], [m1, m2, k, c]; systems, name)
 end
 ```
 
@@ -69,9 +67,7 @@ function ModelWithInputs(; name)
         connect(disturbance_torque2.flange, system_model.inertia2.flange_b)
     ]
 
-    System(eqs, t;
-        systems,
-        name)
+    return System(eqs, t; systems, name)
 end
 ```
 
@@ -90,8 +86,10 @@ A thing to note in the specification of `ModelWithInputs` is the presence of thr
 
 ```@example DISTURBANCE_MODELING
 using ControlSystemsBase, ControlSystemsMTK # ControlSystemsMTK provides the high-level function named_ss and ControlSystemsBase provides the bodeplot function
-P = named_ss(model, [ssys.u, ssys.d1, ssys.d2],
-    [ssys.system_model.inertia1.w, ssys.system_model.inertia2.w])
+P = named_ss(
+    model, [ssys.u, ssys.d1, ssys.d2],
+    [ssys.system_model.inertia1.w, ssys.system_model.inertia2.w]
+)
 bodeplot(P, plotphase = false)
 ```
 
@@ -159,7 +157,7 @@ function IntegratingDisturbance(; name)
         w ~ input.u
         output.u ~ x
     ]
-    System(eqs, t, [x, w], []; systems, name)
+    return System(eqs, t, [x, w], []; systems, name)
 end
 
 # Define a system model with disturbance model
@@ -183,9 +181,7 @@ function SystemModelWithDisturbanceModel(; name)
         connect(disturbance_torque2.flange, system_model.inertia2.flange_b)
     ]
 
-    System(eqs, t;
-        systems,
-        name)
+    return System(eqs, t; systems, name)
 end
 
 @named model_with_disturbance = SystemModelWithDisturbanceModel()
@@ -213,13 +209,11 @@ disturbance_inputs = [ssys.d1, ssys.d2]
 P = ssys.system_model
 outputs = [P.inertia1.phi, P.inertia2.phi, P.inertia1.w, P.inertia2.w]
 
-(f_oop, f_ip), x_sym,
-p_sym,
-io_sys = ModelingToolkit.generate_control_function(
-    model_with_disturbance, inputs; known_disturbance_inputs = disturbance_inputs)
+(f_oop, f_ip), x_sym, p_sym, io_sys = ModelingToolkit.generate_control_function(
+    model_with_disturbance, inputs; known_disturbance_inputs = disturbance_inputs
+)
 
-g = ModelingToolkit.build_explicit_observed_function(
-    io_sys, outputs; inputs)
+g = ModelingToolkit.build_explicit_observed_function(io_sys, outputs; inputs)
 
 op = ModelingToolkit.inputs(io_sys) .=> 0
 x0 = ModelingToolkit.get_u0(io_sys, op)

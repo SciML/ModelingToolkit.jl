@@ -41,7 +41,7 @@ k = ShiftIndex(clock)
 
 eqs = [
     x(k) ~ 0.5x(k - 1) + u(k - 1),
-    y ~ x
+    y ~ x,
 ]
 ```
 
@@ -66,7 +66,7 @@ An alternative and *equivalent* way of writing the same system is
 ```@example clocks
 eqs = [
     x(k + 1) ~ 0.5x(k) + u(k),
-    y(k) ~ x(k)
+    y(k) ~ x(k),
 ]
 ```
 
@@ -75,7 +75,7 @@ but the use of positive time shifts is not yet supported. Instead, we *shifted a
 ```@example clocks
 eqs = [
     x(k) ~ 0.5x(k - 1) + u(k),
-    y ~ x
+    y ~ x,
 ]
 ```
 
@@ -103,7 +103,7 @@ t = ModelingToolkit.t_nounits
 @variables y(t) [description = "Output"] u(t) [description = "Input"]
 k = ShiftIndex(Clock(dt))
 eqs = [
-    a2 * y(k) + a1 * y(k - 1) + a0 * y(k - 2) ~ b2 * u(k) + b1 * u(k - 1) + b0 * u(k - 2)
+    a2 * y(k) + a1 * y(k - 1) + a0 * y(k - 2) ~ b2 * u(k) + b1 * u(k - 1) + b0 * u(k - 2),
 ]
 ```
 
@@ -154,37 +154,45 @@ clock = Clock(dt)
 k = ShiftIndex(clock)
 
 function plant(; name)
-    @variables x(t)=1 u(t)=0 y(t)=0
-    eqs = [D(x) ~ -x + u
-           y ~ x]
-    System(eqs, t; name = name)
+    @variables x(t) = 1 u(t) = 0 y(t) = 0
+    eqs = [
+        D(x) ~ -x + u
+        y ~ x
+    ]
+    return System(eqs, t; name)
 end
 
 function filt(; name) # Reference filter
-    @variables x(t)=0 u(t)=0 y(t)=0
+    @variables x(t) = 0 u(t) = 0 y(t) = 0
     a = 1 / exp(dt)
-    eqs = [x(k) ~ a * x(k - 1) + (1 - a) * u(k)
-           y ~ x]
-    System(eqs, t, name = name)
+    eqs = [
+        x(k) ~ a * x(k - 1) + (1 - a) * u(k)
+        y ~ x
+    ]
+    return System(eqs, t; name)
 end
 
 function controller(kp; name)
-    @variables y(t)=0 r(t)=0 ud(t)=0 yd(t)=0
+    @variables y(t) = 0 r(t) = 0 ud(t) = 0 yd(t) = 0
     @parameters kp = kp
-    eqs = [yd ~ Sample(y)
-           ud ~ kp * (r - yd)]
-    System(eqs, t; name = name)
+    eqs = [
+        yd ~ Sample(y)
+        ud ~ kp * (r - yd)
+    ]
+    return System(eqs, t; name)
 end
 
 @named f = filt()
 @named c = controller(1)
 @named p = plant()
 
-connections = [r ~ sin(t)          # reference signal
-               f.u ~ r             # reference to filter input
-               f.y ~ c.r           # filtered reference to controller reference
-               Hold(c.ud) ~ p.u    # controller output to plant input (zero-order-hold)
-               p.y ~ c.y]          # plant output to controller feedback
+connections = [
+    r ~ sin(t)          # reference signal
+    f.u ~ r             # reference to filter input
+    f.y ~ c.r           # filtered reference to controller reference
+    Hold(c.ud) ~ p.u    # controller output to plant input (zero-order-hold)
+    p.y ~ c.y           # plant output to controller feedback
+]
 
 @named cl = System(connections, t, systems = [f, c, p])
 ```

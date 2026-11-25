@@ -28,13 +28,13 @@ Let's showcase this framework by modelling a chaotic bistable dynamical system t
 using ModelingToolkit
 using ModelingToolkit: t_nounits as t, D_nounits as D
 
-@variables x(t)=-4.0 y(t)=5.0 z(t)=0.0
-@parameters a=5.0 b=0.1
+@variables x(t) = -4.0 y(t) = 5.0 z(t) = 0.0
+@parameters a = 5.0 b = 0.1
 
 eqs = [
     D(x) ~ y - x,
     D(y) ~ -x * z + b * abs(z),
-    D(z) ~ x * y - a
+    D(z) ~ x * y - a,
 ]
 ```
 
@@ -75,14 +75,15 @@ To use this technique, we first need to create a tessellation of the state space
 grid = (
     range(-15.0, 15.0; length = 150), # x
     range(-20.0, 20.0; length = 150), # y
-    range(-20.0, 20.0; length = 150) # z
+    range(-20.0, 20.0; length = 150), # z
 )
 ```
 
 which we then give as input to the `AttractorsViaRecurrences` mapper along with the dynamical system
 
 ```@example Attractors
-mapper = AttractorsViaRecurrences(ds, grid;
+mapper = AttractorsViaRecurrences(
+    ds, grid;
     consecutive_recurrences = 1000,
     consecutive_lost_steps = 100
 )

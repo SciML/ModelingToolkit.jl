@@ -32,7 +32,8 @@ The fluid medium setter for `HydralicPort` may be defined as `HydraulicFluid` wi
         density = 997,
         bulk_modulus = 2.09e9,
         viscosity = 0.0010016,
-        name)
+        name
+    )
     pars = @parameters begin
         ρ = density
         β = bulk_modulus
@@ -44,7 +45,7 @@ The fluid medium setter for `HydralicPort` may be defined as `HydraulicFluid` wi
     end
 
     eqs = [
-        dm ~ 0
+        dm ~ 0,
     ]
 
     System(eqs, t, vars, pars; name, bindings = [dm => 0])
@@ -85,9 +86,11 @@ end
     dm = port.dm
     p = port.p
 
-    eqs = [D(rho) ~ drho
-           rho ~ port.ρ * (1 + p / port.β)
-           dm ~ drho * vol]
+    eqs = [
+        D(rho) ~ drho
+        rho ~ port.ρ * (1 + p / port.β)
+        dm ~ drho * vol
+    ]
 
     System(eqs, t, vars, pars; name, systems)
 end
@@ -99,14 +102,16 @@ When the system is defined we can generate a fluid component and connect it to t
 ```@example domain
 @component function HydraulicSystem(; name)
     systems = @named begin
-        src = FixedPressure(; p = 200e5)
-        vol = FixedVolume(; vol = 0.1, p_int = 200e5)
+        src = FixedPressure(; p = 200.0e5)
+        vol = FixedVolume(; vol = 0.1, p_int = 200.0e5)
 
         fluid = HydraulicFluid(; density = 876)
     end
 
-    eqs = [connect(fluid, src.port)
-           connect(src.port, vol.port)]
+    eqs = [
+        connect(fluid, src.port)
+        connect(src.port, vol.port)
+    ]
 
     System(eqs, t, [], []; systems, name)
 end
@@ -145,11 +150,13 @@ If we have a more complicated system, for example a hydraulic actuator, with a s
         ddx(t) = 0
     end
 
-    eqs = [D(x) ~ dx
-           D(dx) ~ ddx
-           mass * ddx ~ (port_a.p - port_b.p) * area
-           port_a.dm ~ +(port_a.ρ) * dx * area
-           port_b.dm ~ -(port_b.ρ) * dx * area]
+    eqs = [
+        D(x) ~ dx
+        D(dx) ~ ddx
+        mass * ddx ~ (port_a.p - port_b.p) * area
+        port_a.dm ~ +(port_a.ρ) * dx * area
+        port_b.dm ~ -(port_b.ρ) * dx * area
+    ]
 
     System(eqs, t, vars, pars; name, systems)
 end
@@ -161,18 +168,20 @@ A system with 2 different fluids is defined and connected to each separate domai
 ```@example domain
 @component function ActuatorSystem2(; name)
     systems = @named begin
-        src_a = FixedPressure(; p = 200e5)
-        src_b = FixedPressure(; p = 200e5)
-        act = Actuator(; p_int = 200e5, mass = 1000, area = 0.1)
+        src_a = FixedPressure(; p = 200.0e5)
+        src_b = FixedPressure(; p = 200.0e5)
+        act = Actuator(; p_int = 200.0e5, mass = 1000, area = 0.1)
 
         fluid_a = HydraulicFluid(; density = 876)
         fluid_b = HydraulicFluid(; density = 999)
     end
 
-    eqs = [connect(fluid_a, src_a.port)
-           connect(fluid_b, src_b.port)
-           connect(src_a.port, act.port_a)
-           connect(src_b.port, act.port_b)]
+    eqs = [
+        connect(fluid_a, src_a.port)
+        connect(fluid_b, src_b.port)
+        connect(src_a.port, act.port_a)
+        connect(src_b.port, act.port_b)
+    ]
 
     System(eqs, t, [], []; systems, name)
 end
@@ -186,17 +195,19 @@ After running `mtkcompile()` on `actsys2`, the defaults will show that `act.port
 ```@example domain
 @component function ActuatorSystem1(; name)
     systems = @named begin
-        src_a = FixedPressure(; p = 200e5)
-        src_b = FixedPressure(; p = 200e5)
-        act = Actuator(; p_int = 200e5, mass = 1000, area = 0.1)
+        src_a = FixedPressure(; p = 200.0e5)
+        src_b = FixedPressure(; p = 200.0e5)
+        act = Actuator(; p_int = 200.0e5, mass = 1000, area = 0.1)
 
         fluid = HydraulicFluid(; density = 876)
     end
 
-    eqs = [connect(fluid, src_a.port)
-           connect(fluid, src_b.port)
-           connect(src_a.port, act.port_a)
-           connect(src_b.port, act.port_b)]
+    eqs = [
+        connect(fluid, src_a.port)
+        connect(fluid, src_b.port)
+        connect(src_a.port, act.port_a)
+        connect(src_b.port, act.port_b)
+    ]
 
     System(eqs, t, [], []; systems, name)
 end
@@ -221,8 +232,10 @@ In some cases a component will be defined with 2 connectors of the same domain, 
         port_b = HydraulicPort(; p_int)
     end
 
-    eqs = [port_a.dm ~ (port_a.p - port_b.p) * K
-           0 ~ port_a.dm + port_b.dm]
+    eqs = [
+        port_a.dm ~ (port_a.p - port_b.p) * K
+        0 ~ port_a.dm + port_b.dm
+    ]
 
     System(eqs, t, [], pars; systems, name)
 end
@@ -234,16 +247,18 @@ Adding the `Restrictor` to the original system example will cause a break in the
 ```@example domain
 @component function RestrictorSystem(; name)
     systems = @named begin
-        src = FixedPressure(; p = 200e5)
-        res = Restrictor(; p_int = 200e5)
-        vol = FixedVolume(; vol = 0.1, p_int = 200e5)
+        src = FixedPressure(; p = 200.0e5)
+        res = Restrictor(; p_int = 200.0e5)
+        vol = FixedVolume(; vol = 0.1, p_int = 200.0e5)
 
         fluid = HydraulicFluid(; density = 876)
     end
 
-    eqs = [connect(fluid, src.port)
-           connect(src.port, res.port_a)
-           connect(res.port_b, vol.port)]
+    eqs = [
+        connect(fluid, src.port)
+        connect(src.port, res.port_a)
+        connect(res.port_b, vol.port)
+    ]
 
     System(eqs, t, [], []; systems, name)
 end
@@ -274,9 +289,11 @@ To ensure that the `Restrictor` component does not disrupt the domain network, t
         port_b = HydraulicPort(; p_int)
     end
 
-    eqs = [domain_connect(port_a, port_b) # <-- connect the domain network
-           port_a.dm ~ (port_a.p - port_b.p) * K
-           0 ~ port_a.dm + port_b.dm]
+    eqs = [
+        domain_connect(port_a, port_b) # <-- connect the domain network
+        port_a.dm ~ (port_a.p - port_b.p) * K
+        0 ~ port_a.dm + port_b.dm
+    ]
 
     System(eqs, t, [], pars; systems, name)
 end

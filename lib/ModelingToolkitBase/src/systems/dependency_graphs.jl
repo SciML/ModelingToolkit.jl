@@ -73,8 +73,10 @@ Example:
 Continuing the example started in [`equation_dependencies`](@ref)
 
 ```julia
-digr = asgraph(equation_dependencies(jumpsys),
-               Dict(s => i for (i, s) in enumerate(unknowns(jumpsys))))
+digr = asgraph(
+    equation_dependencies(jumpsys),
+    Dict(s => i for (i, s) in enumerate(unknowns(jumpsys)))
+)
 ```
 """
 function asgraph(eqdeps, vtois)
@@ -96,8 +98,10 @@ end
 # could be made to directly generate graph and save memory
 """
 ```julia
-asgraph(sys::AbstractSystem; variables = unknowns(sys),
-        variablestoids = Dict(convert(Variable, v) => i for (i, v) in enumerate(variables)))
+asgraph(
+    sys::AbstractSystem; variables = unknowns(sys),
+    variablestoids = Dict(convert(Variable, v) => i for (i, v) in enumerate(variables))
+)
 ```
 
 Convert an `AbstractSystem` to a
@@ -130,8 +134,10 @@ end
 
 """
 ```julia
-variable_dependencies(sys::AbstractSystem; variables = unknowns(sys),
-                      variablestoids = nothing)
+variable_dependencies(
+    sys::AbstractSystem; variables = unknowns(sys),
+    variablestoids = nothing
+)
 ```
 
 For each variable, determine the equations that modify it and return a
@@ -180,8 +186,10 @@ end
 
 """
 ```julia
-asdigraph(g::BipartiteGraph, sys::AbstractSystem; variables = unknowns(sys),
-          equationsfirst = true)
+asdigraph(
+    g::BipartiteGraph, sys::AbstractSystem; variables = unknowns(sys),
+    equationsfirst = true
+)
 ```
 
 Convert a
@@ -233,8 +241,10 @@ end
 
 """
 ```julia
-eqeq_dependencies(eqdeps::BipartiteGraph{T},
-                  vardeps::BipartiteGraph{T}) where {T <: Integer}
+eqeq_dependencies(
+    eqdeps::BipartiteGraph{T},
+    vardeps::BipartiteGraph{T}
+) where {T <: Integer}
 ```
 
 Calculate a `LightGraph.SimpleDiGraph` that maps each equation to equations they depend on.
@@ -272,9 +282,11 @@ end
 
 """
 ```julia
-function varvar_dependencies(eqdeps::BipartiteGraph{T},
-                             vardeps::BipartiteGraph{T}) where {T <: Integer}
-    eqeq_dependencies(vardeps, eqdeps)
+function varvar_dependencies(
+        eqdeps::BipartiteGraph{T},
+        vardeps::BipartiteGraph{T}
+    ) where {T <: Integer}
+    return eqeq_dependencies(vardeps, eqdeps)
 end
 ```
 

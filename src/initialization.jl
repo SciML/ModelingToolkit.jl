@@ -59,7 +59,7 @@ function MTKBase.get_initialization_problem_type(
 end
 
 """
-    analyze_initialization_jacobian(prob; rtol = 1e-8, atol = 0.0, threshold = 1e-3, verbose = true, autodiff = nothing)
+    analyze_initialization_jacobian(prob; rtol = 1.0e-8, atol = 0.0, threshold = 1.0e-3, verbose = true, autodiff = nothing)
 
 Diagnose rank deficiency of a system's initialization problem by inspecting the singular
 value decomposition of its residual Jacobian, and report both the **unknowns** that span

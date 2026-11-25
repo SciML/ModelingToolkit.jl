@@ -617,7 +617,7 @@ end
 ## System interface
 
 """
-    tunable_parameters(sys, p = parameters(sys; initial_parameters = true); default=true)
+    tunable_parameters(sys, p = parameters(sys; initial_parameters = true); default = true)
 
 Get all parameters of `sys` that are marked as `tunable`.
 

@@ -22,12 +22,14 @@ The `linearize` function expects the user to specify the inputs ``u`` and the ou
 ```@example LINEARIZE
 using ModelingToolkit
 using ModelingToolkit: t_nounits as t, D_nounits as D
-@variables x(t)=0 y(t) u(t) r(t)=0
+@variables x(t) = 0 y(t) u(t) r(t) = 0
 @parameters kp = 1
 
-eqs = [u ~ kp * (r - y) # P controller
-       D(x) ~ -x + u    # First-order plant
-       y ~ x]           # Output equation
+eqs = [
+    u ~ kp * (r - y) # P controller
+    D(x) ~ -x + u    # First-order plant
+    y ~ x            # Output equation
+]
 
 @named sys = System(eqs, t) # Do not call @mtkcompile when linearizing
 matrices, simplified_sys = linearize(sys, [r], [y]) # Linearize from r to y
@@ -67,16 +69,18 @@ One approach to batch linearization would be to call `linearize` in a loop, prov
 using ModelingToolkitStandardLibrary
 using ModelingToolkitStandardLibrary.Blocks
 
-@parameters k=10 k3=2 c=1
-@variables x(t)=0 [bounds = (-0.5, 1.5)]
+@parameters k = 10 k3 = 2 c = 1
+@variables x(t) = 0 [bounds = (-0.5, 1.5)]
 @variables v(t) = 0
 
 @named y = Blocks.RealOutput()
 @named u = Blocks.RealInput()
 
-eqs = [D(x) ~ v
-       D(v) ~ -k * x - k3 * x^3 - c * v + 10u.u
-       y.u ~ x]
+eqs = [
+    D(x) ~ v
+    D(v) ~ -k * x - k3 * x^3 - c * v + 10u.u
+    y.u ~ x
+]
 
 @named duffing = System(eqs, t, systems = [y, u], initial_conditions = [u.u => 0])
 
@@ -106,7 +110,7 @@ setter! = setu(linprob, x)
 
 function fast_linearize!(problem, setter!, value)
     setter!(problem, value)
-    solve(problem)
+    return solve(problem)
 end
 
 println(fast_linearize!(linprob, setter!, 1.0))

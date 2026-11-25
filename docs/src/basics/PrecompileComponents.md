@@ -97,8 +97,10 @@ Pass the subsystems list as an explicit `System[]` rather than omitting it or pa
 array (`[]`). This removes ambiguity about the element type:
 
 ```julia
-return System(eqs, t_nounits, vars, params;
-    systems = System[], initial_conditions, guesses, name)
+return System(
+    eqs, t_nounits, vars, params;
+    systems = System[], initial_conditions, guesses, name
+)
 ```
 
 ## Complete example
@@ -111,7 +113,8 @@ using ModelingToolkit
 using ModelingToolkit: SymbolicT
 
 @component function LotkaVolterra(;
-        name, α = 1.3, β = 0.9, γ = 0.8, δ = 1.8)
+        name, α = 1.3, β = 0.9, γ = 0.8, δ = 1.8
+    )
     @parameters begin
         α = α
         β = β
@@ -142,8 +145,10 @@ using ModelingToolkit: SymbolicT
     push!(eqs, D_nounits(x) ~ α * x - β * x * y)
     push!(eqs, D_nounits(y) ~ -δ * y + γ * x * y)
 
-    return System(eqs, t_nounits, vars, params;
-        systems = System[], initial_conditions, guesses, name)
+    return System(
+        eqs, t_nounits, vars, params;
+        systems = System[], initial_conditions, guesses, name
+    )
 end
 ```
 

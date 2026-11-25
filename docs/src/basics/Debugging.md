@@ -168,8 +168,10 @@ once for each unbalanced connector type, for that connector:
 ```julia
 @connector function Pin(; name)
     @variables v(t) w(t) i(t) [connect = Flow]
-    System(Equation[], t, [v, w, i], []; name,
-        verbose = MTKVerbosity(unbalanced_connector = Silent))
+    System(
+        Equation[], t, [v, w, i], []; name,
+        verbose = MTKVerbosity(unbalanced_connector = Silent)
+    )
 end
 ```
 

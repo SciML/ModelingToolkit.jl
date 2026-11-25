@@ -20,9 +20,11 @@ using ModelingToolkit, NonlinearSolve
 # Define a nonlinear system
 @variables x y z
 @parameters σ ρ β
-eqs = [0 ~ σ * (y - x)
-       0 ~ x * (ρ - z) - y
-       0 ~ x * y - β * z]
+eqs = [
+    0 ~ σ * (y - x)
+    0 ~ x * (ρ - z) - y
+    0 ~ x * y - β * z
+]
 @mtkcompile ns = System(eqs)
 
 guesses = [x => 1.0, y => 0.0, z => 0.0]

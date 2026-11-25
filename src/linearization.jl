@@ -1031,13 +1031,15 @@ function CommonSolve.solve(prob::LinearizationProblem; allow_input_derivatives =
 end
 
 """
-    matrices, simplified_sys = linearize_symbolic(sys::AbstractSystem, inputs, outputs;
+    matrices, simplified_sys = linearize_symbolic(
+        sys::AbstractSystem, inputs, outputs;
         simplify = false,
         allow_input_derivatives = false,
         eval_expression = false,
         eval_module = @__MODULE__,
         split = true,
-        kwargs...)
+        kwargs...
+    )
 
 Symbolically linearize `sys` between `inputs` and `outputs`.
 
@@ -1085,8 +1087,10 @@ using ModelingToolkit
 using ModelingToolkit: t_nounits as t, D_nounits as D
 
 @variables x(t) = 1.0 u(t) = 0.0 y(t) = 0.0
-eqs = [D(x) ~ -x + u,
-       y ~ x]
+eqs = [
+    D(x) ~ -x + u,
+    y ~ x,
+]
 @named sys = System(eqs, t)
 
 matrices, simplified_sys = ModelingToolkit.linearize_symbolic(sys, [u], [y])
@@ -1278,36 +1282,42 @@ using ModelingToolkit
 using ModelingToolkit: t_nounits as t, D_nounits as D
 function plant(; name)
     @variables x(t) = 1
-    @variables u(t)=0 y(t)=0
-    eqs = [D(x) ~ -x + u
-           y ~ x]
-    System(eqs, t; name = name)
+    @variables u(t) = 0 y(t) = 0
+    eqs = [
+        D(x) ~ -x + u
+        y ~ x
+    ]
+    return System(eqs, t; name = name)
 end
 
 function ref_filt(; name)
-    @variables x(t)=0 y(t)=0
-    @variables u(t)=0 [input = true]
-    eqs = [D(x) ~ -2 * x + u
-           y ~ x]
-    System(eqs, t, name = name)
+    @variables x(t) = 0 y(t) = 0
+    @variables u(t) = 0 [input = true]
+    eqs = [
+        D(x) ~ -2 * x + u
+        y ~ x
+    ]
+    return System(eqs, t, name = name)
 end
 
 function controller(kp; name)
-    @variables y(t)=0 r(t)=0 u(t)=0
+    @variables y(t) = 0 r(t) = 0 u(t) = 0
     @parameters kp = kp
     eqs = [
         u ~ kp * (r - y),
     ]
-    System(eqs, t; name = name)
+    return System(eqs, t; name = name)
 end
 
 @named f = ref_filt()
 @named c = controller(1)
 @named p = plant()
 
-connections = [f.y ~ c.r # filtered reference to controller reference
-               c.u ~ p.u # controller output to plant input
-               p.y ~ c.y]
+connections = [
+    f.y ~ c.r # filtered reference to controller reference
+    c.u ~ p.u # controller output to plant input
+    p.y ~ c.y
+]
 
 @named cl = System(connections, t, systems = [f, c, p])
 
@@ -1484,7 +1494,7 @@ function linearize(
 end
 
 """
-    (; Ã, B̃, C̃, D̃) = similarity_transform(sys, T; unitary=false)
+    (; Ã, B̃, C̃, D̃) = similarity_transform(sys, T; unitary = false)
 
 Transform the state coordinates of a linear state-space model.
 
@@ -1512,8 +1522,10 @@ D̃ = D
 # Examples
 
 ```julia
-sys = (; A = [-1.0 0.0; 0.0 -2.0], B = [1.0; 0.0;;],
-       C = [0.0 1.0], D = zeros(1, 1))
+sys = (;
+    A = [-1.0 0.0; 0.0 -2.0], B = [1.0; 0.0;;],
+    C = [0.0 1.0], D = zeros(1, 1),
+)
 T = [0.0 1.0; 1.0 0.0]
 
 transformed = ModelingToolkit.similarity_transform(sys, T; unitary = true)

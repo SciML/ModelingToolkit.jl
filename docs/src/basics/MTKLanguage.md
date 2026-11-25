@@ -157,7 +157,7 @@ end
   - Along with creating parameters and variables, keyword arguments of same name with default value `nothing` are created.
   - Whenever a parameter or variable has initial value, for example `v(t) = 0.0`, a symbolic variable named `v` with initial value 0.0 and a keyword argument `v`, with default value `nothing` are created. <br> This way, users can optionally pass new value of `v` while creating a component.
 
-```julia
+```julia-repl
 julia> @mtkcompile model_c1 = ModelC(; v = 2.0);
 
 julia> ModelingToolkit.getdefault(model_c1.v)
@@ -430,11 +430,10 @@ Refer the following example for different ways to define symbolic arrays.
     @parameters begin
         p1[1:4]
         p2[1:N]
-        p3[1:N,
-        1:M] = 10,
-        [description = "A multi-dimensional array of arbitrary length with description"]
+        p3[1:N, 1:M] = 10,
+            [description = "A multi-dimensional array of arbitrary length with description"]
         (p4[1:N, 1:M] = 10),
-        [description = "An alternate syntax for p3 to match the syntax of vanilla parameters macro"]
+            [description = "An alternate syntax for p3 to match the syntax of vanilla parameters macro"]
     end
     @variables begin
         v1(t)[1:2] = 10, [description = "An array of variable `v1`"]
@@ -582,7 +581,7 @@ sys = mtkcompile(model)
 Pass keyword arguments to `mtkcompile` using the following syntax:
 
 ```julia
-@mtkcompile sys=CustomModel() fully_determined=false
+@mtkcompile sys = CustomModel() fully_determined = false
 ```
 
 This is equivalent to:

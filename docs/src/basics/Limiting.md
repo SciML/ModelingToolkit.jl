@@ -115,15 +115,19 @@ using OrdinaryDiffEqSDIRK
 import OrdinaryDiffEqNonlinearSolve
 
 @variables v(t) = 0.0
-@parameters Is = 1e-14 Vt = 0.025 C = 1e-6 R = 1e3 Vsrc = 5.0
+@parameters Is = 1.0e-14 Vt = 0.025 C = 1.0e-6 R = 1.0e3 Vsrc = 5.0
 vcrit = 0.71
-rc = [D(v) ~ ((Vsrc - v) / R -
-              Is * (exp(limited(v, pnjlim(limitnew, limitold, Vt, vcrit)) / Vt) - 1)) / C]
+rc = [
+    D(v) ~ (
+        (Vsrc - v) / R -
+            Is * (exp(limited(v, pnjlim(limitnew, limitold, Vt, vcrit)) / Vt) - 1)
+    ) / C,
+]
 @mtkcompile rcsys = System(rc, t)
 
-prob = ODEProblem(rcsys, [], (0.0, 1e-4); nlstep = true)
+prob = ODEProblem(rcsys, [], (0.0, 1.0e-4); nlstep = true)
 alg = ImplicitEuler(nlsolve = OrdinaryDiffEqNonlinearSolve.NonlinearSolveAlg())
-sol = solve(prob, alg; dt = 1e-6, adaptive = false)
+sol = solve(prob, alg; dt = 1.0e-6, adaptive = false)
 sol[v, end]
 ```
 

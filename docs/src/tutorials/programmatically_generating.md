@@ -21,8 +21,10 @@ using ModelingToolkit # reexports Symbolics
 @independent_variables t
 @variables x(t) y(t) # Define variables
 D = Differential(t)
-eqs = [D(x) ~ y
-       D(y) ~ x] # Define an array of equations
+eqs = [
+    D(x) ~ y
+    D(y) ~ x
+] # Define an array of equations
 ```
 
 However, ModelingToolkit has many higher-level features which will make scripting ModelingToolkit systems more convenient.

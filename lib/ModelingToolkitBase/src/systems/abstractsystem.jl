@@ -2989,7 +2989,7 @@ end
         y[1:10] = foo(x)
         z = foo(x)
     end # returns `[y; z]`
-    @named y 1:10 i -> foo(x*i)  # This is not recommended
+    @named y 1:10 i -> foo(x * i)  # This is not recommended
 
 Pass the LHS name to the model. When it's calling anything that's not an
 AbstractSystem, it wraps all keyword arguments in `default_to_parentscope` so
@@ -3836,8 +3836,8 @@ using ModelingToolkitBase
 using ModelingToolkitBase: t_nounits as t, D_nounits as D
 @parameters p d
 @variables X(t)
-eq1 = D(X) ~ p - d*X
-eq2 = 0 ~ p - d*X
+eq1 = D(X) ~ p - d * X
+eq2 = 0 ~ p - d * X
 
 is_diff_equation(eq1) # true
 is_diff_equation(eq2) # false
@@ -3864,8 +3864,8 @@ using ModelingToolkitBase
 using ModelingToolkitBase: t_nounits as t, D_nounits as D
 @parameters p d
 @variables X(t)
-eq1 = D(X) ~ p - d*X
-eq2 = 0 ~ p - d*X
+eq1 = D(X) ~ p - d * X
+eq2 = 0 ~ p - d * X
 
 is_alg_equation(eq1) # false
 is_alg_equation(eq2) # true
@@ -3887,8 +3887,8 @@ using ModelingToolkitBase
 using ModelingToolkitBase: t_nounits as t, D_nounits as D
 @parameters p d
 @variables X(t)
-eq1 = D(X) ~ p - d*X
-eq2 = 0 ~ p - d*X
+eq1 = D(X) ~ p - d * X
+eq2 = 0 ~ p - d * X
 @named osys = System([eq1, eq2], t)
 
 alg_equations(osys) # returns `[0 ~ p - d*X(t)]`.
@@ -3907,8 +3907,8 @@ using ModelingToolkitBase
 using ModelingToolkitBase: t_nounits as t, D_nounits as D
 @parameters p d
 @variables X(t)
-eq1 = D(X) ~ p - d*X
-eq2 = 0 ~ p - d*X
+eq1 = D(X) ~ p - d * X
+eq2 = 0 ~ p - d * X
 @named osys = System([eq1, eq2], t)
 
 diff_equations(osys) # returns `[Differential(t)(X(t)) ~ p - d*X(t)]`.
@@ -3928,8 +3928,8 @@ using ModelingToolkitBase
 using ModelingToolkitBase: t_nounits as t, D_nounits as D
 @parameters p d
 @variables X(t)
-eq1 = D(X) ~ p - d*X
-eq2 = 0 ~ p - d*X
+eq1 = D(X) ~ p - d * X
+eq2 = 0 ~ p - d * X
 @named osys1 = System([eq1], t)
 @named osys2 = System([eq2], t)
 
@@ -3950,8 +3950,8 @@ using ModelingToolkitBase
 using ModelingToolkitBase: t_nounits as t, D_nounits as D
 @parameters p d
 @variables X(t)
-eq1 = D(X) ~ p - d*X
-eq2 = 0 ~ p - d*X
+eq1 = D(X) ~ p - d * X
+eq2 = 0 ~ p - d * X
 @named osys1 = System([eq1], t)
 @named osys2 = System([eq2], t)
 
@@ -3973,8 +3973,8 @@ using ModelingToolkitBase
 using ModelingToolkitBase: t_nounits as t, D_nounits as D
 @parameters p d
 @variables X(t)
-eq1 = D(X) ~ p - d*X
-eq2 = 0 ~ p - d*X
+eq1 = D(X) ~ p - d * X
+eq2 = 0 ~ p - d * X
 @named osys1 = ([eq1], t)
 @named osys2 = ([eq2], t)
 osys12 = compose(sys1, [osys2])
@@ -3998,8 +3998,8 @@ using ModelingToolkitBase
 using ModelingToolkitBase: t_nounits as t, D_nounits as D
 @parameters p d
 @variables X(t)
-eq1 = D(X) ~ p - d*X
-eq2 = 0 ~ p - d*X
+eq1 = D(X) ~ p - d * X
+eq2 = 0 ~ p - d * X
 @named osys1 = tem([eq1], t)
 @named osys2 = tem([eq2], t)
 osys12 = compose(osys1, [osys2])
@@ -4023,8 +4023,8 @@ using ModelingToolkitBase
 using ModelingToolkitBase: t_nounits as t, D_nounits as D
 @parameters p d
 @variables X(t)
-eq1 = D(X) ~ p - d*X
-eq2 = 0 ~ p - d*X
+eq1 = D(X) ~ p - d * X
+eq2 = 0 ~ p - d * X
 @named osys1 = System([eq1], t)
 @named osys2 = System([eq2], t)
 osys12 = compose(osys1, [osys2])
@@ -4049,8 +4049,8 @@ using ModelingToolkitBase
 using ModelingToolkitBase: t_nounits as t, D_nounits as D
 @parameters p d
 @variables X(t)
-eq1 = D(X) ~ p - d*X
-eq2 = 0 ~ p - d*X
+eq1 = D(X) ~ p - d * X
+eq2 = 0 ~ p - d * X
 @named osys1 = tem([eq1], t)
 @named osys2 = tem([eq2], t)
 osys12 = compose(osys1, [osys2])

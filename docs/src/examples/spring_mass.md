@@ -11,37 +11,41 @@ using Symbolics: scalarize
 
 function Mass(; name, m = 1.0, xy = [0.0, 0.0], u = [0.0, 0.0])
     ps = @parameters m = m
-    sts = @variables pos(t)[1:2]=xy v(t)[1:2]=u
+    sts = @variables pos(t)[1:2] = xy v(t)[1:2] = u
     eqs = scalarize(D.(pos) .~ v)
-    System(eqs, t, [pos..., v...], ps; name)
+    return System(eqs, t, [pos..., v...], ps; name)
 end
 
-function Spring(; name, k = 1e4, l = 1.0)
-    ps = @parameters k=k l=l
+function Spring(; name, k = 1.0e4, l = 1.0)
+    ps = @parameters k = k l = l
     @variables x(t), dir(t)[1:2]
-    System(Equation[], t, [x, dir...], ps; name)
+    return System(Equation[], t, [x, dir...], ps; name)
 end
 
 function connect_spring(spring, a, b)
-    [spring.x ~ norm(scalarize(a .- b))
-     scalarize(spring.dir .~ scalarize(a .- b))]
+    return [
+        spring.x ~ norm(scalarize(a .- b))
+        scalarize(spring.dir .~ scalarize(a .- b))
+    ]
 end
 
 function spring_force(spring)
-    -spring.k .* scalarize(spring.dir) .* (spring.x - spring.l) ./ spring.x
+    return -spring.k .* scalarize(spring.dir) .* (spring.x - spring.l) ./ spring.x
 end
 
 m = 1.0
 xy = [1.0, -1.0]
-k = 1e4
+k = 1.0e4
 l = 1.0
 center = [0.0, 0.0]
 g = [0.0, -9.81]
 @named mass = Mass(m = m, xy = xy)
 @named spring = Spring(k = k, l = l)
 
-eqs = [connect_spring(spring, mass.pos, center)
-       scalarize(D.(mass.v) .~ spring_force(spring) / mass.m .+ g)]
+eqs = [
+    connect_spring(spring, mass.pos, center)
+    scalarize(D.(mass.v) .~ spring_force(spring) / mass.m .+ g)
+]
 
 @named _model = System(eqs, t, [spring.x; spring.dir; mass.pos], [])
 @named model = compose(_model, mass, spring)
@@ -61,9 +65,9 @@ For each component, we use a Julia function that returns an `System`. At the top
 ```@example component
 function Mass(; name, m = 1.0, xy = [0.0, 0.0], u = [0.0, 0.0])
     ps = @parameters m = m
-    sts = @variables pos(t)[1:2]=xy v(t)[1:2]=u
+    sts = @variables pos(t)[1:2] = xy v(t)[1:2] = u
     eqs = scalarize(D.(pos) .~ v)
-    System(eqs, t, [pos..., v...], ps; name)
+    return System(eqs, t, [pos..., v...], ps; name)
 end
 ```
 
@@ -82,10 +86,10 @@ Or using the `@named` helper macro
 Next, we build the spring component. It is characterized by the spring constant `k` and the length `l` of the spring when no force is applied to it. The state of a spring is defined by its current length and direction.
 
 ```@example component
-function Spring(; name, k = 1e4, l = 1.0)
-    ps = @parameters k=k l=l
+function Spring(; name, k = 1.0e4, l = 1.0)
+    ps = @parameters k = k l = l
     @variables x(t), dir(t)[1:2]
-    System(Equation[], t, [x, dir...], ps; name)
+    return System(Equation[], t, [x, dir...], ps; name)
 end
 ```
 
@@ -93,8 +97,10 @@ We now define functions that help construct the equations for a mass-spring syst
 
 ```@example component
 function connect_spring(spring, a, b)
-    [spring.x ~ norm(scalarize(a .- b))
-     scalarize(spring.dir .~ scalarize(a .- b))]
+    return [
+        spring.x ~ norm(scalarize(a .- b))
+        scalarize(spring.dir .~ scalarize(a .- b))
+    ]
 end
 ```
 
@@ -102,7 +108,7 @@ Lastly, we define the `spring_force` function that takes a `spring` and returns 
 
 ```@example component
 function spring_force(spring)
-    -spring.k .* scalarize(spring.dir) .* (spring.x - spring.l) ./ spring.x
+    return -spring.k .* scalarize(spring.dir) .* (spring.x - spring.l) ./ spring.x
 end
 ```
 
@@ -111,7 +117,7 @@ To create our system, we will first create the components: a mass and a spring. 
 ```@example component
 m = 1.0
 xy = [1.0, -1.0]
-k = 1e4
+k = 1.0e4
 l = 1.0
 center = [0.0, 0.0]
 g = [0.0, -9.81]
@@ -122,8 +128,10 @@ g = [0.0, -9.81]
 We can now create the equations describing this system, by connecting `spring` to `mass` and a fixed point.
 
 ```@example component
-eqs = [connect_spring(spring, mass.pos, center)
-       scalarize(D.(mass.v) .~ spring_force(spring) / mass.m .+ g)]
+eqs = [
+    connect_spring(spring, mass.pos, center)
+    scalarize(D.(mass.v) .~ spring_force(spring) / mass.m .+ g)
+]
 ```
 
 Finally, we can build the model using these equations and components.
