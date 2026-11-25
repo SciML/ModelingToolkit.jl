@@ -538,6 +538,12 @@ function calculate_jacobian(
 end
 
 """
+Prefix of the `ArgumentError` message thrown by [`check_jacobian_differentiable`](@ref), which
+callers use to tell it apart from other `ArgumentError`s.
+"""
+const OPAQUE_JACOBIAN_ERROR_PREFIX = "Cannot symbolically differentiate equation"
+
+"""
     $(TYPEDSIGNATURES)
 
 Throw an `ArgumentError` if an entry of `jac` still contains an unexpanded `Differential`
@@ -558,7 +564,7 @@ function check_jacobian_differentiable(sys::System, jac, rhs, dvs)
         throw(
             ArgumentError(
                 """
-                Cannot symbolically differentiate equation `$(rhs[i])` with respect to `$(dvs[j])`: \
+                $OPAQUE_JACOBIAN_ERROR_PREFIX `$(rhs[i])` with respect to `$(dvs[j])`: \
                 it contains a call to a function with no derivative rule for the argument that \
                 depends on the unknowns, so the Jacobian entry would be wrong. Register a derivative \
                 with `Symbolics.@register_derivative`, or supply your own Jacobian by passing \

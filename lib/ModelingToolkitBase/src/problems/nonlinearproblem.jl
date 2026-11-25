@@ -69,7 +69,8 @@ function SciMLBase.NonlinearFunction{iip, spec}(
             # Only a pattern is needed, so with `jac = false` an equation that cannot be
             # differentiated (an opaque operator) falls back to the structural pattern of the
             # residual `rhs - lhs`, which is conservative for array-derived terms.
-            (!jac && err isa ArgumentError) || rethrow()
+            (!jac && err isa ArgumentError && startswith(err.msg, OPAQUE_JACOBIAN_ERROR_PREFIX)) ||
+                rethrow()
             Symbolics.jacobian_sparsity(
                 [eq.rhs - eq.lhs for eq in full_equations(sys)], flat_unknowns(sys)
             )

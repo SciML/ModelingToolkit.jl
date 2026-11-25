@@ -271,6 +271,26 @@ end
         lhsprob = NonlinearProblem(lhssys, [x => 2.0]; jac = false, sparse = true)
         @test nnz(lhsprob.f.jac_prototype) == 1
 
+        # the opaque operator on the rhs with a variable only on the lhs forces the fallback
+        @variables y2(t)
+        @named lhsopsys = System([y2 ~ opaque_scalar(x), x ~ 1], [x, y2], [])
+        lhsopsys = complete(lhsopsys)
+        lhsopprob = NonlinearProblem(
+            lhsopsys, [x => 2.0, y2 => 1.0]; jac = false, sparse = true
+        )
+        lhsopidx = findfirst(
+            v -> isequal(v, SU.unwrap(y2)), ModelingToolkitBase.flat_unknowns(lhsopsys)
+        )
+        @test (1, lhsopidx) in zip(findnz(lhsopprob.f.jac_prototype)[1:2]...)
+
+        # other `ArgumentError`s, such as `SymbolicADDisallowed`, are not swallowed
+        nlsys_noad = SU.setmetadata(
+            nlsys, ModelingToolkitBase.SymbolicADDisallowed, "test reason"
+        )
+        @test_throws ArgumentError NonlinearProblem(
+            nlsys_noad, [x => 2.0]; jac = false, sparse = true
+        )
+
         # array-derived residuals keep their exact (diagonal) pattern
         @variables v[1:n]
         arr = 2v
