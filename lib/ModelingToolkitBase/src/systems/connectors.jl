@@ -879,9 +879,12 @@ end
 function _flow_equations_from_idxs!(sys::AbstractSystem, eqs::Vector{Equation}, cset::Vector{ConnectionVertex}, representative::SymbolicT)
     len = length(representative)::Int
     iszero(len) && return
-    if SU.is_array_shape(SU.shape(representative)) && all(cset) do cvert
+    sh = SU.shape(representative)::SU.ShapeVecT
+    # `array_residual_maker` reads a vector residual from index 1.
+    offset_vector = length(sh) == 1 && first(only(sh)) != 1
+    if SU.is_array_shape(sh) && !offset_vector && all(cset) do cvert
             v = variable_from_vertex(sys, cvert)::SymbolicT
-            isequal(SU.shape(v), SU.shape(representative))
+            isequal(SU.shape(v), sh)
         end
         terms = map(cset) do cvert
             v = Symbolics.wrap(variable_from_vertex(sys, cvert)::SymbolicT)

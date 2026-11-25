@@ -1,6 +1,6 @@
 using ModelingToolkitBase, Symbolics, SciMLBase, Test
 using FillArrays: Fill, Zeros
-using LinearAlgebra: diag, rank
+using LinearAlgebra: Diagonal, diag, rank
 using ModelingToolkitBase: t_nounits as t, D_nounits as D
 
 @connector function ArrayFlowPort(; name, rows = 1, columns = 1, dynamic = false, flow_axes = (1:rows, 1:columns))
@@ -10,8 +10,8 @@ using ModelingToolkitBase: t_nounits as t, D_nounits as D
     return System(eqs, t, vars, []; name)
 end
 
-@connector function ScalarPotentialArrayFlowPort(; name)
-    vars = @variables p(t) f(t)[1:2] [connect = Flow]
+@connector function ScalarPotentialArrayFlowPort(; name, flow_axis = 1:2)
+    vars = @variables p(t) f(t)[flow_axis] [connect = Flow]
     return System(Equation[], t, vars, []; name)
 end
 
@@ -115,6 +115,18 @@ end
         prob = ODEProblem(mtkcompile(network), [x => 3.0], (0.0, 1.0))
         @test prob.f(prob.u0, prob.p, 0.0) == [-3.0]
     end
+end
+
+@testset "Offset vector flow residuals" begin
+    @named port = ScalarPotentialArrayFlowPort(; flow_axis = 0:1)
+    @named net = System([D(port.p) ~ port.f[1] - 2 * port.p], t, [], []; systems = [port])
+    f = ODEFunction(complete(net); checkbounds = true)
+    u = [3.0, 1.0, 2.0]
+    @test f.mass_matrix == Diagonal([1, 0, 0])
+    @test f(u, [], 0.0) == [-4.0, 1.0, 2.0]
+    out = fill(NaN, 3)
+    f(out, u, [], 0.0)
+    @test out == [-4.0, 1.0, 2.0]
 end
 
 @testset "Offset flow axes survive scalarization" begin
