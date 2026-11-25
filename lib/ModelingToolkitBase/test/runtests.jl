@@ -60,6 +60,7 @@ end
             @safetestset "StaticArrays Test" include("static_arrays.jl")
             @safetestset "Components Test" include("components.jl")
             @safetestset "Struct Variables Test" include("struct_variables.jl")
+            @safetestset "Record Arguments Test" include("record_arguments.jl")
             @safetestset "Error Handling" include("error_handling.jl")
             @safetestset "Basic transformations" include("basic_transformations.jl")
             @safetestset "Change of variables" include("changeofvariables.jl")

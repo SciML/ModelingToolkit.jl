@@ -116,6 +116,41 @@ function IndexCache(sys::AbstractSystem)
             unk_idxs[arrsym] = idxs
             unk_idxs[rsym] = idxs
         end
+        # record whose leaves are all unknowns maps to their indices, so
+        # `is_variable` resolves it. Every ancestor is registered, so nested fields work.
+        found_record_syms = Set{SymbolicT}()
+        for sym in unks
+            is_symstruct_field(sym) || continue
+            node = sym
+            while true
+                base = Moshi.Match.@match node begin
+                    BSImpl.Term(; f, args) && if f isa Symbolics.SymbolicGetproperty ||
+                            f === getindex
+                    end => args[1]::SymbolicT
+                    _ => nothing
+                end
+                base === nothing && break
+                node = base
+                Symbolics.issymstruct(node) || continue
+                node in found_record_syms && continue
+                push!(found_record_syms, node)
+
+                leaves = record_leaves(node)
+                idxs = Vector{Int}(undef, length(leaves))
+                valid_record = true
+                for (i, leaf) in enumerate(leaves)
+                    leafidx = get(unk_idxs, leaf, nothing)
+                    if !(leafidx isa Int)
+                        valid_record = false
+                        break
+                    end
+                    idxs[i] = leafidx
+                end
+                valid_record || continue
+                unk_idxs[node] = idxs
+                unk_idxs[renamespace(sys, node)] = idxs
+            end
+        end
     end
 
     tunable_pars = SymbolicT[]

@@ -140,7 +140,7 @@ end
     )
 
     kwargs = process_kwargs(
-        sys; expression, callback, eval_expression, eval_module,
+        sys, DAEProblem; expression, callback, eval_expression, eval_module,
         op, tspan, kwargs...
     )
 
