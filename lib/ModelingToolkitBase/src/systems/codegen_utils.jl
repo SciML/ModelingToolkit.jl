@@ -535,6 +535,71 @@ function array_variable_assignments(
     return array_variable_buffer_idxs_to_assignments(var_to_arridxs; argument_name, buffer_offset, filter_vars)
 end
 
+function find_recordvars_is_atomic(ex::SymbolicT)
+    return SU.default_is_atomic(ex) && Symbolics.issymstruct(ex)
+end
+
+function find_recordvars_recurse(ex::SymbolicT)
+    return iscall(ex) && !is_symstruct_field(ex) && find_arrvars_recurse(ex)
+end
+
+function search_record_arguments!(buffer, expr)
+    SU.search_variables!(
+        buffer, expr; is_atomic = find_recordvars_is_atomic, recurse = find_recordvars_recurse
+    )
+    return nothing
+end
+
+function substitute_record_arguments(ir, expr, rules)
+    isempty(rules) && return expr
+    return SU.IRSubstituter{false}(ir, rules; filterer = find_recordvars_recurse)(expr)
+end
+
+function expand_codegen_record!(rules, active, ir, record, supplied, obs_subber)
+    root, _ = record_key_root(record)
+    (haskey(rules, record) || record in supplied || root in supplied) && return
+    record in active && throw(ArgumentError(lazy"Cyclic dependencies in the leaves of $record."))
+    push!(active, record)
+
+    value = obs_subber(record_as_literal(record))
+    dependencies = Set{SymbolicT}()
+    search_record_arguments!(SU.IRStructureSearchBuffer(ir, dependencies), value)
+    for dependency in dependencies
+        expand_codegen_record!(rules, active, ir, dependency, supplied, obs_subber)
+    end
+    rules[record] = substitute_record_arguments(ir, value, rules)
+    delete!(active, record)
+    return nothing
+end
+
+function lower_codegen_record_arguments(ir, expr, args::Vector{Any}, extra_assignments, pref, obs_subber)
+    records = Set{SymbolicT}()
+    search = SU.IRStructureSearchBuffer(ir, records)
+    search_record_arguments!(search, expr)
+    isempty(records) && return expr
+
+    supplied = Set{SymbolicT}()
+    for arg in args
+        if arg isa SymbolicT
+            push!(supplied, arg)
+        elseif arg isa AbstractArray{SymbolicT}
+            union!(supplied, arg)
+        end
+    end
+    for assignment in Iterators.flatten((extra_assignments, something(pref, ())))
+        assignment isa Assignment || continue
+        lhs = assignment.lhs
+        lhs isa SymbolicT && push!(supplied, lhs)
+    end
+
+    rules = Dict{SymbolicT, SymbolicT}()
+    active = Set{SymbolicT}()
+    for record in records
+        expand_codegen_record!(rules, active, ir, record, supplied, obs_subber)
+    end
+    return substitute_record_arguments(ir, expr, rules)
+end
+
 """
     $(TYPEDSIGNATURES)
 
@@ -1103,10 +1168,12 @@ Base.@nospecializeinfer function build_function_wrapper(
 
     ir_info = get_ir_info(sys)
     ir = get_irstructure(sys)
+    pref = has_preface(sys) ? preface(sys) : nothing
     expr = ir_info.obs_subber(expr)
     if has_array_literal_observed(sys)
         expr = compress_array_literals(expr, args, u_argument_name)
     end
+    expr = lower_codegen_record_arguments(ir, expr, args, extra_assignments, pref, ir_info.obs_subber)
     stmts = SU.IRStructureSearchBuffer(ir, Set{SymbolicT}())
     SU.search_variables!(stmts, expr; is_atomic = Returns(true))
     for subexpr in stmts
@@ -1118,7 +1185,7 @@ Base.@nospecializeinfer function build_function_wrapper(
     # function. The chunked in-place function requires that `out` does not alias any input.
     if chunk_size != 0 && opts.codegen.iip_config == (true, true) && !wrap_delays &&
             !create_bindings && isempty(compress_args) && isempty(extra_assignments) &&
-            !(has_preface(sys) && preface(sys) !== nothing) &&
+            pref === nothing &&
             all(==(identity), opts.codegen.wrap_code) && opts.codegen.outputidxs === nothing &&
             mkarray === nothing && _is_plain_array_type(output_type) &&
             _is_plain_array_type(opts.codegen.similarto)
@@ -1193,6 +1260,7 @@ Base.@nospecializeinfer function build_function_wrapper(
         other_assigns = array_variable_assignments(args...; ignore_vars = keys(param_var_to_arridxs), filter_vars = required_arrvars, argument_name = u_argument_name, ignore_arg_idxs = p_start:p_end)
         append!(assignments, other_assigns)
     end
+
     append!(assignments, extra_assignments)
 
     for (i, arg) in enumerate(args)
@@ -1226,7 +1294,7 @@ Base.@nospecializeinfer function build_function_wrapper(
     end
 
     # add preface assignments
-    if has_preface(sys) && (pref = preface(sys)) !== nothing
+    if pref !== nothing
         append!(assignments, pref)
     end
 
