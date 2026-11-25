@@ -533,6 +533,7 @@ const set_scalar_metadata = setmetadata
 @public SymbolicADDisallowed, check_symbolic_ad_allowed
 @public getpoissonianrate, topoissonian
 @public canonical_constraints, constraint_residual
+@public preserve_array_equations_supported
 @public tobrownian, toparam, tovar
 @public ProblemTypeCtx
 @public HomotopyCtx, homotopy_enabled, strip_homotopy
