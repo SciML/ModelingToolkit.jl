@@ -13,6 +13,41 @@ else
     MissingGuessValue.Constant(1.0)
 end
 
+@enum ShiftedPhase rising falling
+
+@testset "A shift index applied to a symbolic" begin
+    kc = ShiftIndex(Clock(0.25))
+
+    # a variable that is not a number is shifted as a number is
+    @variables p(t)::ShiftedPhase
+    @test Symbolics.symtype(p(kc)) === ShiftedPhase
+    @test Symbolics.getmetadata(p(kc), ModelingToolkitBase.VariableTimeDomain) == kc.clock
+    for steps in (-1, 1)
+        shifted = p(kc + steps)
+        @test Symbolics.symtype(shifted) === ShiftedPhase
+        @test operation(shifted) isa Shift
+        @test operation(shifted).steps == steps
+        @test Symbolics.getmetadata(only(arguments(shifted)), ModelingToolkitBase.VariableTimeDomain) == kc.clock
+    end
+end
+
+@testset "A shift index applied to a shifted signal adds the offsets" begin
+    k = ShiftIndex(t)
+    @variables p(t)::ShiftedPhase x(t) u(t)[1:2]
+    for sig in (p, Symbolics.unwrap(p), x, u, u[1])
+        @test isequal(sig(k - 1)(k - 1), sig(k - 2))
+        @test isequal(sig(k - 2)(k + 1), sig(k - 1))
+        @test isequal(sig(k - 1)(k + 1), sig(k))
+        @test isequal(sig(k - 1)(k), sig(k - 1))
+    end
+    # a projection of a shifted signal is shifted along the signal's independent variable
+    @test isequal(operation(Symbolics.unwrap(u(k - 1)[1](k - 1))).t, Symbolics.unwrap(t))
+
+    twice = System([p(k) ~ p(k - 1)(k - 1)], t; name = :phase)
+    once = System([p(k) ~ p(k - 2)], t; name = :phase)
+    @test isequal(equations(twice), equations(once))
+end
+
 # Make sure positive shifts error
 @variables x(t)
 k = ShiftIndex(t)
