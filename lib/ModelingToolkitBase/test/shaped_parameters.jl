@@ -185,6 +185,12 @@ end
     @test_throws "split = false" complete(sys; split = false)
     @test_throws "split = false" complete(sys; split = false, flatten = false)
     @test complete(sys) isa System
+    # the internal split = false snapshots of the parent and initialization system are not checked
+    @variables x[1:6]
+    @named init = System([zeros(6) ~ x], [x], [Kop]; is_initializesystem = true)
+    @named isys = System([zeros(6) ~ D(u) + u], t, [u], [Kop]; initializesystem = init)
+    @test complete(isys; split = true) isa System
+    @test_throws "split = false" complete(isys; split = false)
 end
 
 struct VecFn end

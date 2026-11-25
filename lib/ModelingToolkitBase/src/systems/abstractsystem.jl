@@ -774,7 +774,7 @@ function complete(
     if has_initializesystem(sys)
         isys = get_initializesystem(sys)
         if isys isa T
-            @set! sys.initializesystem = complete(isys::T; split)
+            @set! sys.initializesystem = complete(isys::T; split, check_shaped)
         end
     end
     sys = toggle_namespacing(sys, false; safe = true)
