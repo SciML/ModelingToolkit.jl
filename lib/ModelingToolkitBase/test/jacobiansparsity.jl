@@ -215,6 +215,68 @@ if @isdefined(ModelingToolkit)
     end
 end
 
+# The fallback cases need an opaque scalar call whose symbolic derivative stays unexpanded,
+# which the probe below detects through the guard; the others hold on any Symbolics version.
+@testset "Sparse nonlinear prototype with jac = false" begin
+    t = ModelingToolkitBase.t_nounits
+    n = 4
+    @variables x(t) y2(t) v[1:n]
+
+    opaque_scalar(x) = x * x
+    Symbolics.@register_symbolic opaque_scalar(x::Real)
+
+    # the residual is `rhs - lhs`, so a dependence through the lhs is in the pattern
+    @named lhssys = System([x ~ 1], [x], [])
+    lhssys = complete(lhssys)
+    lhsprob = NonlinearProblem(lhssys, [x => 2.0]; jac = false, sparse = true)
+    @test nnz(lhsprob.f.jac_prototype) == 1
+
+    # array-derived residuals keep their exact (diagonal) pattern
+    arr = 2v
+    @named diagsys = System([0 ~ arr[i] - 1 for i in 1:n], [v], [])
+    diagsys = complete(diagsys)
+    diagprob = NonlinearProblem(diagsys, [v => ones(n)]; jac = false, sparse = true)
+    @test nnz(diagprob.f.jac_prototype) == n
+
+    @named nlsys = System([0 ~ opaque_scalar(x) - 1], [x], [])
+    nlsys = complete(nlsys)
+
+    # `SymbolicADDisallowed` is never swallowed
+    nlsys_noad = SU.setmetadata(
+        nlsys, ModelingToolkitBase.SymbolicADDisallowed, "test reason"
+    )
+    @test_throws ArgumentError NonlinearProblem(
+        nlsys_noad, [x => 2.0]; jac = false, sparse = true
+    )
+
+    guard_fires = try
+        calculate_jacobian(nlsys)
+        false
+    catch err
+        err isa ArgumentError
+    end
+    if guard_fires
+        # only a pattern is needed, not a Jacobian
+        nlprob = NonlinearProblem(nlsys, [x => 2.0]; jac = false, sparse = true)
+        @test nlprob.f.jac_prototype isa SparseMatrixCSC
+        @test collect(zip(findnz(nlprob.f.jac_prototype)[1:2]...)) == [(1, 1)]
+        @test_throws ArgumentError NonlinearProblem(nlsys, [x => 2.0]; jac = true)
+
+        # the opaque operator on the rhs with a variable only on the lhs
+        @named lhsopsys = System([y2 ~ opaque_scalar(x), x ~ 1], [x, y2], [])
+        lhsopsys = complete(lhsopsys)
+        lhsopprob = NonlinearProblem(
+            lhsopsys, [x => 2.0, y2 => 1.0]; jac = false, sparse = true
+        )
+        lhsopidx = findfirst(
+            v -> isequal(v, SU.unwrap(y2)), ModelingToolkitBase.flat_unknowns(lhsopsys)
+        )
+        @test (1, lhsopidx) in zip(findnz(lhsopprob.f.jac_prototype)[1:2]...)
+    else
+        @test_skip guard_fires
+    end
+end
+
 # Needs the opaque array operator handling of Symbolics.jl PR #2118; without it Symbolics
 # returns zeros for these Jacobian entries, which is detected by the probe below.
 @testset "Opaque array operators without derivative rules are an error" begin
@@ -255,51 +317,6 @@ end
         # without a symbolic Jacobian the conservative dense pattern is still available
         @test all(ModelingToolkitBase.jacobian_sparsity(opsys) .== true)
         @test_nowarn ODEProblem(opsys, opop, (0.0, 1.0); sparse = true)
-
-        # `jac = false` with `sparse = true` only needs a sparsity pattern, not a Jacobian
-        opaque_scalar(x) = x * x
-        Symbolics.@register_symbolic opaque_scalar(x::Real)
-        @named nlsys = System([0 ~ opaque_scalar(x) - 1], [x], [])
-        nlsys = complete(nlsys)
-        nlprob = NonlinearProblem(nlsys, [x => 2.0]; jac = false, sparse = true)
-        @test nlprob.f.jac_prototype isa SparseMatrixCSC
-        @test collect(zip(findnz(nlprob.f.jac_prototype)[1:2]...)) == [(1, 1)]
-
-        # the residual is `rhs - lhs`, so a dependence through the lhs is in the pattern
-        @named lhssys = System([x ~ 1], [x], [])
-        lhssys = complete(lhssys)
-        lhsprob = NonlinearProblem(lhssys, [x => 2.0]; jac = false, sparse = true)
-        @test nnz(lhsprob.f.jac_prototype) == 1
-
-        # the opaque operator on the rhs with a variable only on the lhs forces the fallback
-        @variables y2(t)
-        @named lhsopsys = System([y2 ~ opaque_scalar(x), x ~ 1], [x, y2], [])
-        lhsopsys = complete(lhsopsys)
-        lhsopprob = NonlinearProblem(
-            lhsopsys, [x => 2.0, y2 => 1.0]; jac = false, sparse = true
-        )
-        lhsopidx = findfirst(
-            v -> isequal(v, SU.unwrap(y2)), ModelingToolkitBase.flat_unknowns(lhsopsys)
-        )
-        @test (1, lhsopidx) in zip(findnz(lhsopprob.f.jac_prototype)[1:2]...)
-
-        # other `ArgumentError`s, such as `SymbolicADDisallowed`, are not swallowed
-        nlsys_noad = SU.setmetadata(
-            nlsys, ModelingToolkitBase.SymbolicADDisallowed, "test reason"
-        )
-        @test_throws ArgumentError NonlinearProblem(
-            nlsys_noad, [x => 2.0]; jac = false, sparse = true
-        )
-
-        # array-derived residuals keep their exact (diagonal) pattern
-        @variables v[1:n]
-        arr = 2v
-        @named diagsys = System([0 ~ arr[i] - 1 for i in 1:n], [v], [])
-        diagsys = complete(diagsys)
-        diagprob = NonlinearProblem(
-            diagsys, [v => ones(n)]; jac = false, sparse = true
-        )
-        @test nnz(diagprob.f.jac_prototype) == n
 
         # a registered call with a derivative rule is differentiated
         ruled(x) = [x, 2x]
