@@ -13,6 +13,41 @@ else
     MissingGuessValue.Constant(1.0)
 end
 
+@enum ShiftedPhase rising falling
+
+@testset "A shift index applied to a symbolic" begin
+    kc = ShiftIndex(Clock(0.25))
+
+    # a variable that is not a number is shifted as a number is
+    @variables p(t)::ShiftedPhase
+    @test Symbolics.symtype(p(kc)) === ShiftedPhase
+    @test Symbolics.getmetadata(p(kc), ModelingToolkitBase.VariableTimeDomain) == kc.clock
+    for steps in (-1, 1)
+        shifted = p(kc + steps)
+        @test Symbolics.symtype(shifted) === ShiftedPhase
+        @test operation(shifted) isa Shift
+        @test operation(shifted).steps == steps
+        @test Symbolics.getmetadata(only(arguments(shifted)), ModelingToolkitBase.VariableTimeDomain) == kc.clock
+    end
+end
+
+@testset "A shift index applied to a shifted signal adds the offsets" begin
+    k = ShiftIndex(t)
+    @variables p(t)::ShiftedPhase x(t) u(t)[1:2]
+    for sig in (p, Symbolics.unwrap(p), x, u, u[1])
+        @test isequal(sig(k - 1)(k - 1), sig(k - 2))
+        @test isequal(sig(k - 2)(k + 1), sig(k - 1))
+        @test isequal(sig(k - 1)(k + 1), sig(k))
+        @test isequal(sig(k - 1)(k), sig(k - 1))
+    end
+    # a projection of a shifted signal is shifted along the signal's independent variable
+    @test isequal(operation(Symbolics.unwrap(u(k - 1)[1](k - 1))).t, Symbolics.unwrap(t))
+
+    twice = System([p(k) ~ p(k - 1)(k - 1)], t; name = :phase)
+    once = System([p(k) ~ p(k - 2)], t; name = :phase)
+    @test isequal(equations(twice), equations(once))
+end
+
 # Make sure positive shifts error
 @variables x(t)
 k = ShiftIndex(t)
@@ -373,4 +408,19 @@ SU.isbinop(::LatestValue) = false
     @test isequal(MTKBase.distribute_shift(Shift(t, -1)(Sample(Clock(0.1))(x) + Hold(y))), Sample(Clock(0.1))(x) + Hold(y))
     @test isequal(MTKBase.distribute_shift(Shift(t, -1)(Shift(t, 1)(x))), x)
     @test isequal(MTKBase.distribute_shift(Shift(t, -1)(Differential(t)(x))), Differential(t)(Shift(t, -1)(x)))
+end
+
+@testset "`remake` of an integer `DiscreteProblem` with initialization data accepts fractions" begin
+    # The integer `u0` of a `DiscreteProblem` without initialization data (e.g. a pure-jump
+    # `JumpProblem`'s) is kept by `remake`; with initialization data, `u0` may become a float.
+    k = ShiftIndex(t)
+    @variables a(t) b(t)
+    @parameters c
+    @mtkcompile sys = System([a ~ a(k - 1) + 1, b ~ b(k - 1) + 1], t, [a, b], [c])
+    prob = DiscreteProblem(sys, [a(k - 1) => 1, b(k - 1) => 2, c => 1.0], (0, 10); u0_eltype = Int)
+    @test prob.f.initialization_data !== nothing
+    x1 = unknowns(sys)[1]
+    prob2 = remake(prob; u0 = [x1 => 5.5])
+    @test prob2[x1] == 5.5
+    @test eltype(state_values(prob2)) == Float64
 end

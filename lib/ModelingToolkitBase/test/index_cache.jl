@@ -74,6 +74,68 @@ ic = ModelingToolkitBase.get_index_cache(sys)
     end
 end
 
+@testset "`complete` gathers array parameter elements into the array" begin
+    @parameters p[1:2, 1:2] q r[1:3]
+    P = collect(p)
+    R = collect(r)
+    @testset "$name" for (name, ps) in [
+            "row-major" => [vec(permutedims(P)); q; R],
+            "reversed" => [reverse(vec(P)); q; reverse(R)],
+            "interleaved" => [P[1, 1], q, R[3], P[2, 1], R[1], P[1, 2], P[2, 2], R[2]],
+            "partial" => [P[1, 1], q, R[3], P[2, 1]],
+        ]
+        @named sys = System(Equation[], t, [], ps)
+        sys = complete(sys)
+        @test isequal(parameters(sys), [p, q, r])
+        @test isequal(tunable_parameters(sys), [p, q, r])
+        offset = 1
+        for par in tunable_parameters(sys)
+            idx = parameter_index(sys, par)
+            @test idx.portion isa SciMLStructures.Tunable
+            if Symbolics.isarraysymbolic(par)
+                @test vec(idx.idx) == offset:(offset + length(par) - 1)
+                @test all(parameter_index(sys, par[i]).idx == idx.idx[i] for i in eachindex(par))
+            else
+                @test idx.idx == offset
+            end
+            offset += length(par)
+        end
+        sys2 = complete(sys)
+        @test all(parameter_index(sys2, par) == parameter_index(sys, par) for par in [p, q, r])
+    end
+
+    @variables x(t)
+    @parameters a[1:3] b
+    eqs = [D(x) ~ a[1] + 10a[3] + b]
+    @testset "$name" for (name, sys) in [
+            "discovered" => System(eqs, t; name = :sys),
+            "listed" => System(eqs, t, [x], [a[3], b, a[1]]; name = :sys),
+        ]
+        # Discovery order follows the term ordering of the equations, which varies
+        # across Julia versions.
+        ps = parameters(sys)
+        if name == "listed"
+            @test isequal(ps, [a[3], b, a[1]])
+        else
+            @test issetequal(ps, [a[3], b, a[1]])
+        end
+        @test isequal(parameters(complete(sys; split = false)), ps)
+        sys = complete(sys)
+        a_first = findfirst(!isequal(b), ps) < findfirst(isequal(b), ps)
+        @test isequal(parameters(sys), a_first ? [a, b] : [b, a])
+        a_offset = a_first ? 0 : 1
+        @test vec(parameter_index(sys, a).idx) == a_offset .+ (1:3)
+        @test parameter_index(sys, a[2]).idx == a_offset + 2
+        @test parameter_index(sys, b).idx == (a_first ? 4 : 1)
+        prob = ODEProblem(sys, [x => 0.0, b => 4.0, a => [1.0, 2.0, 3.0]], (0.0, 1.0))
+        @test prob.f(prob.u0, prob.p, 0.0) == [35.0]
+        @test prob.ps[a[2]] == 2.0
+        @test_throws ["Could not evaluate", "a[2]"] ODEProblem(
+            sys, [x => 0.0, b => 4.0, a[1] => 1.0, a[3] => 3.0], (0.0, 1.0)
+        )
+    end
+end
+
 @testset "reorder_dimension_by_tunables" begin
     @parameters p q[1:3] r[1:2, 1:2] s [tunable = false]
     @named sys = System(Equation[], t, [], [p, q, r, s])

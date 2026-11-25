@@ -184,7 +184,7 @@ Base.@nospecializeinfer function _ode_problem(
     end
 
     kwargs = process_kwargs(
-        sys; expression, callback, eval_expression, eval_module, op, _skip_events, tspan, kwargs...
+        sys, ODEProblem; expression, callback, eval_expression, eval_module, op, _skip_events, tspan, kwargs...
     )
 
     ptype = getmetadata(sys, ProblemTypeCtx, StandardODEProblem())

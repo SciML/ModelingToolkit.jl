@@ -200,6 +200,14 @@ function MTKParameters(
             end
         end
         if !SU.isconst(val)
+            unspecified, unevaluated = unresolved_array_elements(op, sym)
+            if !isempty(unspecified)
+                msg = "Could not evaluate value of parameter $sym. Missing values for elements $(join(unspecified, ", "))."
+                if !isempty(unevaluated)
+                    msg *= " Missing values for variables in the values of elements $(join(unevaluated, ", "))."
+                end
+                error(msg)
+            end
             error(lazy"Could not evaluate value of parameter $sym. Missing values for variables in expression $val.")
         end
         if ctype <: FnType
@@ -1262,6 +1270,31 @@ const MISSING_PARAMETERS_MESSAGE = """
 Some parameters are missing from the variable map.
 Please provide a value or default for the following variables:
 """
+
+"""
+    $(TYPEDSIGNATURES)
+
+Classify the elements of the array parameter `sym` that the operating point `op` leaves
+unresolved, for an array with values for only some elements. Return `(unspecified,
+unevaluated)`: the elements with no value, and the elements whose value still contains
+variables. Both are empty when `sym` is a scalar or `op` has no entry for it.
+"""
+function unresolved_array_elements(op, sym::SymbolicT)
+    unspecified = SymbolicT[]
+    unevaluated = SymbolicT[]
+    SU.is_array_shape(SU.shape(sym)) || return unspecified, unevaluated
+    val = get(op, sym, nothing)
+    val isa SymbolicT && SU.is_array_shape(SU.shape(val)) || return unspecified, unevaluated
+    for i in SU.stable_eachindex(val)
+        el = val[i]
+        if el === COMMON_NOTHING
+            push!(unspecified, sym[i])
+        elseif !SU.isconst(el)
+            push!(unevaluated, sym[i])
+        end
+    end
+    return unspecified, unevaluated
+end
 
 struct MissingParametersError <: Exception
     vars::Any
