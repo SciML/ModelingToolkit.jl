@@ -239,7 +239,9 @@ off saving the discrete parameters the events update.
 
 A compiled `ImperativeAffect` is a `FunctionalAffect`. `without_parameter_hooks` removes the
 integrator-only hooks from its setters, after which it reads and writes only through
-`state_values`, `parameter_values` and `current_time` of whatever it is called with:
+`state_values`, `parameter_values` and `current_time` of whatever it is called with
+in systems without delays. The readers returned by `functional_affect_parts` take
+`(u, p, t)` without delays or `(u, history, p, t)` on delay systems.
 
 ```julia
 using ModelingToolkit, OrdinaryDiffEq

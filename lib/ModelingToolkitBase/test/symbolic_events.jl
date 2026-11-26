@@ -2323,10 +2323,13 @@ struct AffectStandIn{U, P, T}
     state::U
     params::P
     time::T
+    hook_calls::Vector{Any}
 end
+AffectStandIn(u, p, t) = AffectStandIn(u, p, t, Any[])
 SymbolicIndexingInterface.state_values(s::AffectStandIn) = s.state
 SymbolicIndexingInterface.parameter_values(s::AffectStandIn) = s.params
 SymbolicIndexingInterface.current_time(s::AffectStandIn) = s.time
+SymbolicIndexingInterface.finalize_parameters_hook!(s::AffectStandIn, sym) = push!(s.hook_calls, sym)
 
 @testset "`affect_transform` and `save_discretes`" begin
     @variables x(t) = 1.0
@@ -2423,10 +2426,16 @@ SymbolicIndexingInterface.current_time(s::AffectStandIn) = s.time
     parts = ModelingToolkitBase.functional_affect_parts(hooked)
     @test parts.modified_names == (:h,)
     @test parts.observed_names == (:x,)
-    @test parts.setters isa NamedTuple{(:h,), <:Tuple{SymbolicIndexingInterface.SetParameterIndex}}
-    p = deepcopy(prob.p)
-    stripped(AffectStandIn([2.0], p, 0.5))
-    @test getp(sys, h)(p) ≈ 0.2
+    standin = AffectStandIn([2.0], deepcopy(prob.p), 0.5)
+    hooked(standin)
+    @test getp(sys, h)(standin) ≈ 0.2
+    @test length(standin.hook_calls) == 1
+    empty!(standin.hook_calls)
+    stripped(standin)
+    @test getp(sys, h)(standin) ≈ 0.4
+    parts.setters.h(standin, 0.5)
+    @test getp(sys, h)(standin) == 0.5
+    @test isempty(standin.hook_calls)
 
     # the vector continuous callback path
     @variables y(t) = 1.0
@@ -2513,27 +2522,32 @@ end
     @parameters k = 0.1
     @discretes g(t) = 0.0 h(t) = 0.0 c(t) = 0.0
 
-    # a grouped modification has one setter per element, each with its own hook
-    both = ModelingToolkitBase.ImperativeAffect(modified = (; gh = [g, h]), observed = (; x)) do m, o, ctx, integ
-        (; gh = [m.gh[1] + o.x, m.gh[2] + 1])
+    both = ModelingToolkitBase.ImperativeAffect(modified = (; ghx = [g, h, x], v)) do m, o, ctx, integ
+        (; ghx = [m.ghx[1] + 2, m.ghx[2] + 1, m.ghx[3] + 2], v = m.v + 3)
     end
     @mtkcompile gsys = System(
-        [D(x) ~ -x + 0.01 * (g + h)], t, [x], [g, h];
+        [D(x) ~ -x + v + 0.01 * (g + h), D(v) ~ -v], t, [x, v], [g, h];
         discrete_events = [SymbolicDiscreteCallback(0.1, both; discrete_parameters = [g, h])]
     )
     gprob = ODEProblem(gsys, [], (0.0, 1.0))
     hooked = only(gprob.kwargs[:callback].discrete_callbacks).affect!.affect!
     stripped = ModelingToolkitBase.without_parameter_hooks(hooked)
-    @test !occursin("ParameterHookWrapper", string(typeof(stripped)))
-    @test !occursin(
-        "ParameterHookWrapper",
-        string(typeof(ModelingToolkitBase.functional_affect_parts(hooked).setters))
-    )
     @test isbits(stripped)
-    p = deepcopy(gprob.p)
-    stripped(AffectStandIn([2.0], p, 0.5))
-    @test getp(gsys, g)(p) ≈ 2.0
-    @test getp(gsys, h)(p) ≈ 1.0
+    parts = ModelingToolkitBase.functional_affect_parts(hooked)
+    standin = AffectStandIn(copy(gprob.u0), deepcopy(gprob.p), 0.5)
+    hooked(standin)
+    @test getp(gsys, [g, h])(standin) == [2.0, 1.0]
+    @test getu(gsys, [x, v])(standin) == [3.0, 3.0]
+    @test length(standin.hook_calls) == 2
+    empty!(standin.hook_calls)
+    stripped(standin)
+    @test getp(gsys, [g, h])(standin) == [4.0, 2.0]
+    @test getu(gsys, [x, v])(standin) == [5.0, 6.0]
+    parts.setters.ghx(standin, (1.0, 2.0, 3.0))
+    parts.setters.v(standin, 4.0)
+    @test getp(gsys, [g, h])(standin) == [1.0, 2.0]
+    @test getu(gsys, [x, v])(standin) == [3.0, 4.0]
+    @test isempty(standin.hook_calls)
 
     # `JumpProblem` compiles its events itself, with and without equations
     tick = SymbolicDiscreteCallback(0.25, [c ~ Pre(c) + 1]; discrete_parameters = [c])
@@ -2542,26 +2556,25 @@ end
         @mtkcompile jsys = System(eqs, t, unks, [k, c]; jumps = [jump], discrete_events = [tick])
         roles = Symbol[]
         record(aff, ev, sys; role) = (push!(roles, role); aff)
-        jprob = JumpProblem(jsys, [], (0.0, 1.0); affect_transform = record, save_discretes = false)
+        tspan = (0.0, 0.9)
+        jprob = JumpProblem(jsys, [], tspan; affect_transform = record, save_discretes = false)
         @test roles == [:affect]
-        jref = JumpProblem(jsys, [], (0.0, 1.0))
-        nref = length(solve(jref, alg).ps[c])
-        @test nref > 1
+        jref = JumpProblem(jsys, [], tspan)
         if alg isa SSAStepper
-            # `SSAStepper` ignores the `save_discretes` stored on the problem, and does not
-            # accept it in `solve`
-            jsol = solve(jprob, alg)
+            jsol = solve(jprob, alg; rng = StableRNG(123))
             @test SciMLBase.successful_retcode(jsol)
-            @test_broken isempty(jsol.ps[c])
-            @test_throws MethodError solve(jprob, alg; save_discretes = true)
+            @test jsol.ps[c] == solve(jref, alg; rng = StableRNG(123)).ps[c] == [0.0, 1.0, 2.0, 3.0]
+            for save_discretes in (false, true)
+                @test_throws MethodError solve(jprob, alg; rng = StableRNG(123), save_discretes)
+            end
         else
+            nref = length(solve(jref, alg).ps[c])
+            @test nref > 1
             @test isempty(solve(jprob, alg).ps[c])
             @test length(solve(jprob, alg; save_discretes = true).ps[c]) == nref
         end
     end
 
-    # a transformed `initialize` and `finalize` is the one the callback runs, for every kind
-    # of callback (x = cos(t) crosses ±0.5 on (0, 2))
     noop = ModelingToolkitBase.ImperativeAffect(modified = (; c)) do m, o, ctx, integ
         (; c = m.c)
     end
@@ -2584,17 +2597,21 @@ end
             (continuous ? (; continuous_events = events) : (; discrete_events = events))...
         )
         built = Dict{Symbol, Int}()
-        ran = Dict{Symbol, Int}()
+        lifecycle_slots = Set{Tuple{Symbol, Any}}()
+        ran = Dict{Tuple{Symbol, Any}, Int}()
         function wrap(aff, ev, sys; role)
             built[role] = get(built, role, 0) + 1
             role in (:initialize, :finalize) || return aff
-            return (args...) -> (ran[role] = get(ran, role, 0) + 1; aff(args...))
+            slot = (role, ev)
+            push!(lifecycle_slots, slot)
+            return (args...) -> (ran[slot] = get(ran, slot, 0) + 1; aff(args...))
         end
         eprob = ODEProblem(esys, [], (0.0, 2.0); affect_transform = wrap)
         nev = length(events)
         @test built[:initialize] == built[:finalize] == built[:affect] == nev
         @test get(built, :affect_neg, 0) == (continuous ? nev : 0)
+        @test length(lifecycle_slots) == 2 * nev
         @test SciMLBase.successful_retcode(solve(eprob, Tsit5()))
-        @test ran == Dict(:initialize => nev, :finalize => nev)
+        @test ran == Dict(slot => 1 for slot in lifecycle_slots)
     end
 end

@@ -84,7 +84,7 @@ const NONPUBLIC_QUALIFIED_ACCESSES = (
     # SymbolicUtils.Code
     :create_array,
     # SymbolicIndexingInterface
-    :MultipleSetters, :ParameterHookWrapper, :supports_tuple_observed,
+    :supports_tuple_observed,
     # SciMLBase
     :allowedkeywords, :anyeltypedual, :diagnose_symbolic_instability,
     :DISCRETE_INPLACE_DEFAULT, :FINALIZE_DEFAULT, :INITIALIZE_DEFAULT,
