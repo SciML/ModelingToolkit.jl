@@ -437,7 +437,7 @@ export Equation
 export Term
 export SymScope, LocalScope, ParentScope, GlobalScope
 export independent_variable, equations, observed, full_equations, jumps, cost, costs,
-    brownians
+    brownians, poissonians
 export initialization_equations, guesses, bindings, initial_conditions, hierarchy
 export set_defaults
 export state_priorities, irreducibles, maybe_zeros
@@ -531,11 +531,13 @@ const set_scalar_metadata = setmetadata
 @public convert_bindings_for_time_independent_system, get_w
 @public Both
 @public SymbolicADDisallowed, check_symbolic_ad_allowed
+@public getpoissonianrate, topoissonian
 @public canonical_constraints, constraint_residual
 @public tobrownian, toparam, tovar
 @public ProblemTypeCtx
 @public HomotopyCtx, homotopy_enabled, strip_homotopy
 @public MTKVerbosityCtx
+@public expand_record_equations
 
 for prop in [SYS_PROPS; [:continuous_events, :discrete_events]]
     getter = Symbol(:get_, prop)
