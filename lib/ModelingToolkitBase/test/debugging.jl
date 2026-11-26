@@ -125,6 +125,11 @@ end
     @test occursin("(and 10 more of these)", msg)
 end
 
+struct UnprintableError <: Exception end
+Base.showerror(::IO, ::UnprintableError) = error("cannot print this error")
+throws_unprintable(x) = x < 0 ? throw(UnprintableError()) : x
+@register_symbolic throws_unprintable(x)
+
 @testset "Symbolic instability analysis does not throw" begin
     diagnose = ModelingToolkitBase.SciMLBase.diagnose_symbolic_instability
     @variables y(t) z(t)
@@ -137,7 +142,10 @@ end
     prob = ODEProblem(sys, [x => -1.0], (0.0, 10.0); build_initializeprob = false)
     sol = solve(prob, Tsit5(); maxiters = 1, verbose = DEVerbosity(SciMLLogging.None()))
     @test sol.retcode == ReturnCode.MaxIters
-    sol = solve(prob, Tsit5(); maxiters = 1, verbose = DEVerbosity())
+    # and rendering the error message logs no error of its own
+    sol = @test_logs min_level = Logging.Error solve(
+        prob, Tsit5(); maxiters = 1, verbose = DEVerbosity()
+    )
     @test sol.retcode == ReturnCode.MaxIters
 
     # the analysis goes on after an evaluation throws, and reports it once per equation
@@ -145,6 +153,10 @@ end
     msg = diagnose(sys2, [-1.0e-12], [-1.0e-12])
     @test count("threw DomainError", msg) == 2
     @test occursin("division by very small value x(t)", msg)
+
+    # an error whose message cannot be printed
+    @mtkcompile usys = System([D(x) ~ -x, y ~ throws_unprintable(x)], t)
+    @test occursin("threw UnprintableError", diagnose(usys, [-1.0], [-1.0]))
 end
 
 @testset "Symbolic instability analysis of array equations" begin
@@ -167,6 +179,21 @@ end
     @test occursin("([1]: base ≈ 2, power 2; [2]: base ≈ 2, power 2)", msg)
     msg = diagnose(array_system(q .^ -1), [0.0, 1.0], [0.0, 1.0])
     @test occursin("raised to negative powers with base going to 0 ([1]: base ≈ 0, power -1)", msg)
+    msg = diagnose(array_system(inv.(q)), [1.0, 0.0], [1.0, 0.0])
+    @test occursin("division by very small values of q(t) ([2]: 0)", msg)
+    # only the denominator needs a value
+    @parameters c
+    msg = diagnose(array_system(c ./ q), [0.0, 1.0], [0.0, 1.0])
+    @test occursin("division by very small values of q(t) ([1]: 0)", msg)
+
+    # an array unknown takes as many entries of the state as it has elements
+    @variables x(t)
+    @named xsys = System([D(q) ~ 1 ./ q, D(x) ~ 1 / x], t)
+    xsys = complete(xsys)
+    @test isequal(unknowns(xsys), [q, x])
+    msg = diagnose(xsys, [1.0, 0.0, 1.0], [1.0, 0.0, 1.0])
+    @test occursin("division by very small values of q(t) ([2]: 0)", msg)
+    @test !occursin("x(t) ≈", msg)
 
     # a term lists at most `DIAGNOSIS_MAX_ELEMENTS` of its elements
     n = ModelingToolkitBase.DIAGNOSIS_MAX_ELEMENTS + 3
@@ -182,6 +209,14 @@ end
     msg = diagnose(osys, [1.0, 2.0], [1.0, 2.0])
     @test count("division by very small value", msg) == 1
     @test occursin("(w(t))[1]", msg)
+
+    # the analysis does not grow the system's IR
+    ir = ModelingToolkitBase.get_irstructure(osys)
+    nir = length(ir)
+    for k in 1:5
+        diagnose(osys, [k, 2.0], [k, 2.0])
+    end
+    @test length(ir) == nir
 end
 
 @testset "Abbreviation keeps whole characters" begin
