@@ -2555,7 +2555,13 @@ end
     for (eqs, unks, alg) in (([D(x) ~ -x], [x, n], Tsit5()), (Equation[], [n], SSAStepper()))
         @mtkcompile jsys = System(eqs, t, unks, [k, c]; jumps = [jump], discrete_events = [tick])
         roles = Symbol[]
-        record(aff, ev, sys; role) = (push!(roles, role); aff)
+        times = Float64[]
+        # The wrapper logs when it runs, so the test fails if the transform's return value
+        # is not the affect that ends up in the callback.
+        function record(aff, ev, sys; role)
+            push!(roles, role)
+            return (integ, args...) -> (push!(times, integ.t); aff(integ, args...))
+        end
         tspan = (0.0, 0.9)
         jprob = JumpProblem(jsys, [], tspan; affect_transform = record, save_discretes = false)
         @test roles == [:affect]
@@ -2563,6 +2569,7 @@ end
         if alg isa SSAStepper
             jsol = solve(jprob, alg; rng = StableRNG(123))
             @test SciMLBase.successful_retcode(jsol)
+            @test times == [0.25, 0.5, 0.75]
             @test jsol.ps[c] == solve(jref, alg; rng = StableRNG(123)).ps[c] == [0.0, 1.0, 2.0, 3.0]
             for save_discretes in (false, true)
                 @test_throws MethodError solve(jprob, alg; rng = StableRNG(123), save_discretes)
@@ -2571,6 +2578,7 @@ end
             nref = length(solve(jref, alg).ps[c])
             @test nref > 1
             @test isempty(solve(jprob, alg).ps[c])
+            @test times == [0.25, 0.5, 0.75]
             @test length(solve(jprob, alg; save_discretes = true).ps[c]) == nref
         end
     end

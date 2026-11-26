@@ -234,8 +234,10 @@ affect before it is put in its callback. `role` is one of `:affect`, `:affect_ne
 `:initialize` and `:finalize`, and the transform runs once per role even when an event uses
 the same affect for both edges. It runs only for the slots an event defines; a slot without
 an affect keeps the placeholder its callback uses (e.g. `EMPTY_AFFECT`), which callbacks
-recognize by identity. `save_discretes = false`, which the problem passes to `solve`, turns
-off saving the discrete parameters the events update.
+recognize by identity. The problem passes `save_discretes` to `solve`. With a solver that
+supports it, `save_discretes = false` disables saving the discrete parameters that events
+update. JumpProcesses' `SSAStepper` ignores the stored option and rejects it when passed to
+`solve`.
 
 A compiled `ImperativeAffect` is a `FunctionalAffect`. `without_parameter_hooks` removes the
 integrator-only hooks from its setters, after which it reads and writes only through
