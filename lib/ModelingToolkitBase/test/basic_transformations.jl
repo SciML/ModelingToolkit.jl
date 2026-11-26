@@ -500,6 +500,23 @@ end
     @test sol[y][end] ≈ exp(-3.0) rtol = 1.0e-8
 end
 
+@testset "`respecialize` substitutes shared subexpressions once" begin
+    @parameters (f::AbstractFoo)(..) = Gain(2.0)
+    @variables x(t) = 1.0
+    # A DAG of ~60 nodes whose expression tree has ~2^21 nodes.
+    ex = f(x)
+    for _ in 1:20
+        ex = sin(ex) + cos(ex)
+    end
+    @named sys = System([D(x) ~ ex], t)
+    sys = complete(sys)
+    sys2 = respecialize(sys)
+    newf = only(filter(p -> string(p) == "f", ModelingToolkitBase.get_ps(sys2)))
+    @test symtype(newf) == FnType{Tuple, Real, Gain}
+    # Without caching, `substitute` walks the full tree and allocates over 1 GiB.
+    @test (@allocated respecialize(sys)) < 2^27
+end
+
 @testset "`truncate_constant_floats`" begin
     @variables x(t) y(t)
     eqs = [
