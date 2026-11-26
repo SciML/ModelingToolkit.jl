@@ -90,15 +90,15 @@ const TIME_DEPENDENT_PROBLEM_KWARGS = """
 - `save_discretes`: Whether events save the values of the discrete parameters they update,
   as the timeseries of `sol.ps[...]`. It is stored on the problem and passed to `solve` as
   the integrator option of the same name, so a value passed to `solve` takes precedence; the
-  callbacks are built the same way either way. `false` disables the saving, e.g. when the
-  parameter object is not one the host-side saving can read. Their timeseries are then
-  empty, and reading a value that needs one of them at some time (e.g. `sol[z]` or
-  `sol(t; idxs = z)` for an observed `z` that depends on one) throws an error. The option
-  also applies to the callbacks passed with `callback`. It needs a solver that supports it.
-  OrdinaryDiffEq does, though before OrdinaryDiffEqCore 4.19 it still saves the discretes at
-  initialization. JumpProcesses' `SSAStepper` ignores the value stored on the
-  problem, so it saves the discretes anyway, and throws a `MethodError` when it is passed to
-  `solve`.
+  callbacks are built the same way either way. `false` disables the saves the events make,
+  so the timeseries of the discretes are empty, and reading a value that needs one of them
+  at some time (e.g. `sol[z]` or `sol(t; idxs = z)` for an observed `z` that depends on
+  one) throws an error. Building the solution still reads and copies the parameter object
+  once, to set up those timeseries. The option also applies to the callbacks passed with
+  `callback`. It needs a solver that supports it. OrdinaryDiffEq does, though before
+  OrdinaryDiffEqCore 4.19 it still saves the discretes at initialization, as DelayDiffEq
+  does before 6.4.3. JumpProcesses' `SSAStepper` ignores the value stored on the problem,
+  so it saves the discretes anyway, and throws a `MethodError` when it is passed to `solve`.
 """
 
 const PROBLEM_INTERNALS_HEADER = """

@@ -2361,9 +2361,12 @@ SymbolicIndexingInterface.finalize_parameters_hook!(s::AffectStandIn, sym) = pus
     @test sol.ps[g] == ref.ps[g]
     @test sol.ps[h] == ref.ps[h]
     # only the slots the events define: neither has `initialize` or `finalize`
-    @test Set(first.(seen)) == Set([:affect, :affect_neg])
-    @test (:affect, SymbolicDiscreteCallback) in seen
-    @test (:affect_neg, SymbolicContinuousCallback) in seen
+    @test sort(seen; by = string) == sort(
+        [
+            (:affect, SymbolicContinuousCallback), (:affect_neg, SymbolicContinuousCallback),
+            (:affect, SymbolicDiscreteCallback),
+        ]; by = string
+    )
 
     # affects without their parameter hooks, and no discrete saving
     strip_hooks(aff, ev, sys; role) = aff isa ModelingToolkitBase.FunctionalAffect ?
@@ -2565,6 +2568,7 @@ end
         tspan = (0.0, 0.9)
         jprob = JumpProblem(jsys, [], tspan; affect_transform = record, save_discretes = false)
         @test roles == [:affect]
+        @test jprob.prob.kwargs[:save_discretes] === false
         jref = JumpProblem(jsys, [], tspan)
         if alg isa SSAStepper
             jsol = solve(jprob, alg; rng = StableRNG(123))

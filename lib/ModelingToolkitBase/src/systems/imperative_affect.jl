@@ -227,6 +227,10 @@ reads current modified and observed values from the integrator (through `state_v
 `parameter_values` and `current_time`), calls the user function, and writes back the
 returned values. Created by `compile_functional_affect`.
 
+On a delay system the generated readers also take the history function,
+`(u, history, p, t)`, which this callable does not pass, so calling it there throws a
+`MethodError`. Build the call from [`functional_affect_parts`](@ref) instead.
+
 # Fields
 - `user_affect`: the user-supplied function with signature `f(modified, observed, ctx, integ)`
 - `ctx`: user-supplied context object passed through to `user_affect`
@@ -278,8 +282,10 @@ The compiled `ImperativeAffect` `fa` with the hooks that the setters of its modi
 parameters carry stripped off. After a write, those hooks call
 `SymbolicIndexingInterface.finalize_parameters_hook!`, which on an integrator marks a
 derivative discontinuity. While the integrator steps, a callback already marks one before it
-runs its affect, so there the hooks change nothing. An affect that runs while the callback
-is initialized (a preset time or a periodic event at the initial time) is different: the
+runs its affect, so there the hooks change nothing, unless the user's function clears that
+mark (`derivative_discontinuity!(integ, false)`) and then returns parameter updates: the
+hooks mark it again, the hook-free setters leave it cleared. An affect that runs while the
+callback is initialized (a preset time or a periodic event at the initial time) is different: the
 integrator saves a second time at the initial time only when the discontinuity is marked,
 so without the hooks a parameter-only affect there is not followed by that save.
 
