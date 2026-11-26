@@ -306,9 +306,6 @@ const NONPUBLIC_QUALIFIED_ACCESSES = (
     # ModelingToolkit's own stub that MTKFMIExt implements; it is documented API but has
     # not been declared `public`, and an extension has no way to add a method unqualified.
     :FMIComponent,
-    # ForwardDiff: the FMI extension evaluates a Model Exchange FMU at dual numbers, which
-    # means taking a dual apart and building one; ForwardDiff declares none of that public.
-    :Dual, :npartials, :Partials, :partials, :tagtype, :value,
     # Base: `Base.RefValue` has no public spelling. `Iterators.map` only became `public` in
     # Julia 1.12, so it is still a finding on the `lts` half of the QA matrix; it is used
     # deliberately in alias elimination because a generator would build a closure.

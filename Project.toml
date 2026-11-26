@@ -48,6 +48,7 @@ TermInterface = "8ea1fca8-c5ef-4a55-8b96-4e9afe9c9a3c"
 UnPack = "3a884ed6-31ef-47d7-9d2a-63182c4928ed"
 
 [weakdeps]
+EzXML = "8f5d6c58-4d21-5cfd-889c-e3ad7ee6a615"
 FMIImport = "9fcbc62e-52a0-44e9-a616-1359a0008194"
 OrdinaryDiffEqBDF = "6ad6398a-0878-4a85-9266-38940aa047c8"
 OrdinaryDiffEqDefault = "50262376-6c5a-4cf5-baba-aaf4f84d72d7"
@@ -60,7 +61,7 @@ ModelingToolkitBase = {path = "lib/ModelingToolkitBase"}
 SciCompDSL = {path = "lib/SciCompDSL"}
 
 [extensions]
-MTKFMIExt = "FMIImport"
+MTKFMIExt = ["FMIImport", "EzXML"]
 MTKOrdinaryDiffEqBDFExt = "OrdinaryDiffEqBDF"
 MTKOrdinaryDiffEqDefaultExt = "OrdinaryDiffEqDefault"
 MTKOrdinaryDiffEqRosenbrockExt = "OrdinaryDiffEqRosenbrock"
@@ -83,6 +84,7 @@ DiffEqBase = "7.18.1"
 DiffEqNoiseProcess = "5.25.0"
 DifferentiationInterface = "0.7.13"
 DocStringExtensions = "0.9"
+EzXML = "1"
 FMIImport = "1"
 FillArrays = "1.13.0"
 ForwardDiff = "1"

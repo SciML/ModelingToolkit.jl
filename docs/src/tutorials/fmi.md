@@ -7,8 +7,10 @@ Draft = true
 ModelingToolkit is able to import FMUs following the [FMI Standard](https://fmi-standard.org/) versions 2 and 3.
 This integration is done through [FMI.jl](https://github.com/ThummeTo/FMI.jl) and requires importing it to
 enable the relevant functionality. Currently Model Exchange (ME) and CoSimulation (CS) FMUs are supported.
-Events, non-floating-point variables and array variables are not supported. Additionally, calculating the
-time derivatives of FMU states/outputs is not supported.
+Model Exchange supports time and state events, accepted-step events, and discrete input changes at accepted steps.
+Numeric scalar ports include floating-point, Boolean, enumeration and integer types up to 32 bits.
+Enumerations must be exactly representable as `Float64`. FMI 3 `Int64` and `UInt64` variables are
+omitted with a warning. Array variables are unsupported.
 
 !!! danger "Experimental"
 
@@ -73,9 +75,12 @@ same reference, and hence refer to the same quantity. Correspondingly, there is 
 initial_conditions(model)
 ```
 
-All parameters in the FMU are given a default equal to their start value, if present. Unknowns are not
-assigned defaults even if a start value is present, as this would conflict with ModelingToolkit's own
-initialization semantics.
+FMU parameters default to their start values. Supply continuous initial state values in the problem map or
+determine them with `initialization_eqs` on the enclosing system or problem. Alternatively, set
+`fmu_initial_states = true` on the component to obtain initial states from the FMU. Problem-map values
+take precedence over these defaults. Use the default `fmu_initial_states = false` when explicit
+initialization equations determine FMU states. A Co-Simulation FMU accepts writes only for states with
+a start value and computes states declared with `initial = "calculated"` itself.
 
 We can simulate this model like any other ModelingToolkit system.
 
@@ -108,7 +113,10 @@ CoSimulation FMUs are bundled with an integrator. As such, they do not function 
 a callback steps the FMU at periodic intervals in time and obtains the updated state. This state is held
 constant until the next time the callback triggers. The periodic interval must be specified through the
 `communication_step_size` keyword argument. A smaller step size typically leads to less error but is
-more computationally expensive.
+more computationally expensive. Co-Simulation communicates at the solve endpoint. An off-grid
+endpoint requires an FMU that declares support for variable communication steps. The
+`stop_time` keyword sets the FMU experiment limit, which defaults to the solve endpoint and can
+be set to any time at or after the solve endpoint.
 
 This model alone does not have any differential variables, and calling `mtkcompile` will lead
 to an `System` with no unknowns.
@@ -199,14 +207,13 @@ equations(sys)
 
 Note how the output `adder.out` is used in an algebraic equation of the system. We have also given
 `sys.c` a guess, expecting it to be solved for by initialization. ModelingToolkit is able to use
-FMUs in initialization to solve for initial states. As mentioned earlier, we cannot differentiate
-through an FMU. Thus, automatic differentiation has to be disabled for the solver.
+FMUs in initialization to solve for initial states. For solvers requiring derivatives through a Model Exchange FMU, explicitly select finite differences.
 
 ```@example fmi
 prob = ODEProblem(
     sys, [sys.adder.c => 2.0, sys.a => 1.0, sys.b => 1.0, sys.adder.value => 2.0],
     (0.0, 1.0))
-solve(prob, Rodas5P(autodiff = false))
+solve(prob, Rodas5P(autodiff = AutoFiniteDiff()))
 ```
 
 CoSimulation FMUs follow a nearly identical process. Since CoSimulation FMUs operate using callbacks,

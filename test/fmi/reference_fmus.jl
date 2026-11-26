@@ -18,7 +18,7 @@ const STEP = 0.01
 function reference_component(model, version, type; name = :fmu)
     fmu = reference_fmu(model, version; type)
     kwargs = type == :CS ? (; communication_step_size = STEP) : (;)
-    return MTK.FMIComponent(Val(version); fmu, type, name, kwargs...)
+    return MTK.FMIComponent(Val(version); fmu, type, name, fmu_initial_states = true, kwargs...)
 end
 
 # The values of the real variables `names` at each of `times`, from FMI.jl. Its
@@ -126,10 +126,19 @@ end
         given = solve(ODEProblem(sys, Dict(sys.x => 3.0), (0.0, 1.0)), Tsit5())
         @test given[sys.x][1] == 3.0
     end
+    @testset "SimpleAdder $type" for type in (:ME, :CS)
+        fmu = loadFMU(joinpath(@__DIR__, "fmus", "SimpleAdder.fmu"); type)
+        kwargs = type == :CS ? (; communication_step_size = STEP) : (;)
+        @named adder = MTK.FMIComponent(Val(2); fmu, type, fmu_initial_states = true, kwargs...)
+        @mtkcompile sys = System([adder.a ~ 1.0, adder.b ~ 2.0], t; systems = [adder])
+        sol = solve(ODEProblem(sys, Dict(), (0.0, 0.1)), Tsit5())
+        @test SciMLBase.successful_retcode(sol)
+        @test sol[sys.adder.c][1] == 1.0
+    end
     @testset "a state with no start value" begin
         # SimpleArrayModel's states are calculated by the FMU when it is initialized.
         path = joinpath(@__DIR__, "fmus", "SimpleArrayModel.fmu")
-        @named model = MTK.FMIComponent(Val(2); fmu = loadFMU(path; type = :ME), type = :ME)
+        @named model = MTK.FMIComponent(Val(2); fmu = loadFMU(path; type = :ME), type = :ME, fmu_initial_states = true)
         sys = mtkcompile(model)
         sol = solve(ODEProblem(sys, Dict(), (0.0, 1.0)), Tsit5())
         @test SciMLBase.successful_retcode(sol)
@@ -145,34 +154,41 @@ end
 end
 
 @testset "Solving again after changing a parameter" begin
-    # Each Model Exchange solve starts from a fresh FMU instance, so a parameter changed
-    # with `remake` reaches the FMU.
     @testset "$type" for type in (:ME, :CS)
-        fmu = loadFMU(joinpath(@__DIR__, "fmus", "SimpleAdder.fmu"); type)
-        kwargs = type == :CS ? (; communication_step_size = STEP) : (;)
-        @named adder = MTK.FMIComponent(Val(2); fmu, type, kwargs...)
-        @variables z(t) = 0.0
-        @mtkcompile sys = System(
-            [adder.a ~ 1.0, adder.b ~ 2.0, D(z) ~ 1.0], t; systems = [adder]
-        )
+        function component_system()
+            fmu = loadFMU(joinpath(@__DIR__, "fmus", "SimpleAdder.fmu"); type)
+            kwargs = type == :CS ? (; communication_step_size = STEP) : (;)
+            @named adder = MTK.FMIComponent(Val(2); fmu, type, kwargs...)
+            @variables z(t) = 0.0
+            @mtkcompile sys = System(
+                [adder.a ~ 1.0, adder.b ~ 2.0, D(z) ~ 1.0], t; systems = [adder]
+            )
+            return sys
+        end
+        sys = component_system()
         prob = ODEProblem(sys, Dict(sys.adder.c => 0.0), (0.0, 1.0))
-        before = solve(prob, Tsit5())[sys.adder.out2][end]
-        changed = solve(remake(prob; p = [sys.adder.value => 5.0]), Tsit5())[sys.adder.out2][end]
+        first_solve = solve(prob, Tsit5())
+        @test SciMLBase.successful_retcode(first_solve)
+        @test first_solve[sys.adder.out2][end] ≈ 8.0
+
+        changed = solve(remake(prob; p = [sys.adder.value => 5.0]), Tsit5())
+        fresh_sys = component_system()
         fresh = solve(
-            ODEProblem(sys, Dict(sys.adder.c => 0.0, sys.adder.value => 5.0), (0.0, 1.0)),
+            ODEProblem(fresh_sys, Dict(fresh_sys.adder.c => 0.0, fresh_sys.adder.value => 5.0), (0.0, 1.0)),
             Tsit5()
-        )[sys.adder.out2][end]
-        @test changed ≈ fresh
-        @test !(changed ≈ before)
+        )
+        @test SciMLBase.successful_retcode(changed)
+        @test SciMLBase.successful_retcode(fresh)
+        @test changed[sys.adder.out2][end] ≈ 16.0
+        @test changed[sys.adder.out2][end] ≈ fresh[fresh_sys.adder.out2][end]
     end
 end
 
 @testset "Solvers that need derivatives" begin
-    # A stiff solver differentiates the FMU with ForwardDiff, its default.
     @testset "$model" for model in ("VanDerPol", "BouncingBall")
         @mtkcompile sys = reference_component(model, 3, :ME)
         prob = ODEProblem(sys, Dict(), (0.0, 1.0))
-        stiff = solve(prob, Rodas5P(); reltol = 1.0e-8, abstol = 1.0e-10)
+        stiff = solve(prob, Rodas5P(autodiff = AutoFiniteDiff()); reltol = 1.0e-8, abstol = 1.0e-10)
         @test SciMLBase.successful_retcode(stiff)
         @test stiff.stats.njacs > 0
         explicit = solve(prob, Tsit5(); reltol = 1.0e-8, abstol = 1.0e-10)
