@@ -148,6 +148,22 @@ end
 
 const BlockIdxsT = typeof(BlockVector{Int}(undef_blocks, Int[]))
 
+"""
+    SCCDecomposition
+
+Block (strongly connected component) decomposition of the algebraic part of a compiled
+system, as returned by [`scc_decomposition`](@ref). Blocks are stored in the order in which
+they must be solved. For block `i`:
+
+- `var_sccs[i]`: indices of the block's unknowns into `unknowns(sys)`.
+- `eq_sccs[i]`: indices of the block's equations into `equations(sys)`. `eq_sccs[i][k]`
+  is not necessarily matched to `var_sccs[i][k]`.
+- `islinear[i]`: whether the block's equations are linear in the block's unknowns.
+  Unknowns of earlier blocks are treated as known.
+- `subsystems[i]`: a `System` containing only the block's unknowns and equations.
+
+The remaining fields are internal to [`SciMLBase.SCCNonlinearProblem`](@ref).
+"""
 struct SCCDecomposition
     subsystems::Vector{System}
     var_sccs::Vector{Vector{Int}}
@@ -179,7 +195,16 @@ function SCCDecomposition(
     final_decomposition = SCCDecomposition()
     available_vars = Set{SymbolicT}()
     ts = get_tearing_state(sys)::TearingState
-    icg = BipartiteGraphs.InducedCondensationGraph(ts.structure.graph, var_sccs)
+    graph = ts.structure.graph
+    # Variables outside every block (e.g. differential states) are assigned to block `0`,
+    # which is never active.
+    scc_assignment = zeros(Int, ndsts(graph))
+    for (i, vscc) in enumerate(var_sccs), v in vscc
+        scc_assignment[v] = i
+    end
+    icg = BipartiteGraphs.InducedCondensationGraph(
+        graph, Vector{Union{Int, Vector{Int}}}(var_sccs), scc_assignment
+    )
     active = Set{Int}()
     for (i, (escc, vscc)) in enumerate(zip(eq_sccs, var_sccs))
         nbors = Set{Int}(collect(Graphs.inneighbors(icg, i)))
@@ -210,6 +235,65 @@ function SCCDecomposition(
     end
 
     return final_decomposition
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Return the blocks `(var_sccs, eq_sccs)` stored in the schedule `sched` of a compiled
+system. Equations of a compiled system are sorted by block.
+"""
+function schedule_sccs(sched::Schedule)
+    var_sccs = map(copy, sched.var_sccs)
+    eq_sccs = Vector{Vector{Int}}(undef, length(var_sccs))
+    offset = 0
+    for (i, vscc) in enumerate(var_sccs)
+        eq_sccs[i] = collect((offset + 1):(offset + length(vscc)))
+        offset += length(vscc)
+    end
+    return var_sccs, eq_sccs
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Return the [`ModelingToolkit.SCCDecomposition`](@ref) of the algebraic equations of the
+compiled system `sys`: the blocks of algebraic unknowns and equations in solve order, and
+whether each block is linear. Blocks containing differential equations are skipped, so this
+works for both nonlinear and time-dependent systems. Unknown and equation indices refer to
+`unknowns(sys)` and `equations(sys)`.
+
+`sys` must be the result of `mtkcompile`. Throws an `ArgumentError` if it is not, or if
+it has no block schedule.
+
+# Keyword arguments
+
+- `merge_linear`: merge small independent linear blocks into larger ones, as
+  [`SciMLBase.SCCNonlinearProblem`](@ref) does with `combine_sccs = true`.
+"""
+function scc_decomposition(sys::System; merge_linear::Bool = true)
+    if !iscomplete(sys) || get_tearing_state(sys) === nothing ||
+            !has_schedule(sys) || get_schedule(sys) === nothing
+        throw(
+            ArgumentError(
+                "`scc_decomposition` requires a system with a block schedule. Call \
+                `mtkcompile` on the system first."
+            )
+        )
+    end
+    var_sccs, eq_sccs = schedule_sccs(get_schedule(sys)::Schedule)
+    eqs = equations(sys)
+    if (isempty(eq_sccs) ? 0 : last(last(eq_sccs))) != length(eqs)
+        throw(
+            ArgumentError(
+                "The block schedule of the system does not cover its equations."
+            )
+        )
+    end
+    isalgebraic = map(escc -> !any(i -> isdiffeq(eqs[i]), escc), eq_sccs)
+    return SCCDecomposition(
+        sys, var_sccs[isalgebraic], eq_sccs[isalgebraic]; combine_sccs = merge_linear
+    )
 end
 
 function copy_scc!(dst::SCCDecomposition, src::SCCDecomposition, tgt::Int)
@@ -570,13 +654,7 @@ function SciMLBase.SCCNonlinearProblem{iip, specialize}(
         var_sccs = var_sccs[toporder]
         eq_sccs = map(Base.Fix1(getindex, var_eq_matching), var_sccs)
     else
-        var_sccs = map(copy, sched.var_sccs)
-        # Equations are already in the order of SCCs
-        eq_sccs = length.(var_sccs)
-        cumsum!(eq_sccs, eq_sccs)
-        eq_sccs = map(enumerate(eq_sccs)) do (i, lasti)
-            i == 1 ? collect(1:lasti) : collect((eq_sccs[i - 1] + 1):lasti)
-        end
+        var_sccs, eq_sccs = schedule_sccs(sched)
     end
 
     if isempty(var_sccs)
