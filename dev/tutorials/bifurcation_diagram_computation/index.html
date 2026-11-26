@@ -4,8 +4,10 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 
 @variables x(t) y(t)
 @parameters μ α
-eqs = [0 ~ μ * x - x^3 + α * y,
-    0 ~ -y]
+eqs = [
+    0 ~ μ * x - x^3 + α * y,
+    0 ~ -y,
+]
 @mtkcompile nsys = System(eqs, [x, y], [μ, α])</code></pre><p class="math-container">\[ \begin{align}
 0 &amp;= x\left( t \right) ~ \mu - \left( x\left( t \right) \right)^{3}
 \end{align}
@@ -16,19 +18,23 @@ plot_var = x;</code></pre><p class="math-container">\[ \begin{equation}
 x\left( t \right)
 \end{equation}
  \]</p><p>For the initial state guess (<code>u0_guess</code>), typically any value can be provided, however, read BifurcatioKit&#39;s documentation for more details.</p><p>We can now create our <code>BifurcationProblem</code>, which can be provided as input to BifurcationKit&#39;s various functions.</p><pre><code class="language-julia hljs">using BifurcationKit
-bprob = BifurcationProblem(nsys,
+bprob = BifurcationProblem(
+    nsys,
     u0_guess,
     p_start,
     bif_par;
     plot_var = plot_var,
-    jac = false)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">┌─ Bifurcation problem with uType <span class="sgr36"><span class="sgr1">Vector{Float64}</span></span>
+    jac = false
+)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">┌─ Bifurcation problem with uType <span class="sgr36"><span class="sgr1">Vector{Float64}</span></span>
 ├─ Inplace: <span class="sgr36"><span class="sgr1">true</span></span>
 ├─ Dimension: <span class="sgr36"><span class="sgr1">1</span></span>
 ├─ Symmetric: <span class="sgr36"><span class="sgr1">false</span></span>
 └─ Parameter: <span class="sgr36"><span class="sgr1">p1</span></span></code></pre><p>Here, the <code>jac</code> argument (by default set to <code>true</code>) sets whenever to provide BifurcationKit with a Jacobian or not.</p><h3 id="Computing-a-bifurcation-diagram"><a class="docs-heading-anchor" href="#Computing-a-bifurcation-diagram">Computing a bifurcation diagram</a><a id="Computing-a-bifurcation-diagram-1"></a><a class="docs-heading-anchor-permalink" href="#Computing-a-bifurcation-diagram" title="Permalink"></a></h3><p>Let us consider the <code>BifurcationProblem</code> from the last section. If we wish to compute the corresponding bifurcation diagram we must first declare various settings used by BifurcationKit to compute the diagram. These are stored in a <code>ContinuationPar</code> structure (which also contain a <code>NewtonPar</code> structure).</p><pre><code class="language-julia hljs">p_span = (-4.0, 6.0)
-opts_br = ContinuationPar(nev = 2,
+opts_br = ContinuationPar(
+    nev = 2,
     p_min = p_span[1],
-    p_max = p_span[2])</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi"><span class="sgr34"><span class="sgr1">ContinuationPar{Float64, BifurcationKit.DefaultLS, BifurcationKit.DefaultEig{typeof(real)}}</span></span>
+    p_max = p_span[2]
+)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi"><span class="sgr34"><span class="sgr1">ContinuationPar{Float64, BifurcationKit.DefaultLS, BifurcationKit.DefaultEig{typeof(real)}}</span></span>
     ┌─ a = 0.5
     ├─ detect_bifurcation = 3
     ├─ detect_event = 0
@@ -73,18 +79,22 @@ opts_br = ContinuationPar(nev = 2,
 │  3 │ <span class="sgr1">  endpoint</span> │ +6.00000000 │                            │           │             │          │   81 │
 └────┴────────────┴─────────────┴────────────────────────────┴───────────┴─────────────┴──────────┴──────┘
 </code></pre><p>Here, the value <code>2</code> sets how sub-branches of the diagram that BifurcationKit should compute. Generally, for bifurcation diagrams, it is recommended to use the <code>bothside = Val(true)</code> argument.</p><pre><code class="language-julia hljs">using Plots
-plot(bf;
+plot(
+    bf;
     putspecialptlegend = false,
     markersize = 2,
     plotfold = false,
     xguide = &quot;μ&quot;,
-    yguide = &quot;x&quot;)</code></pre><img src="32d41df3.svg" alt="Example block output"/><p>Here, the system exhibits a pitchfork bifurcation at <em>μ=0.0</em>.</p><h3 id="Using-System-inputs"><a class="docs-heading-anchor" href="#Using-System-inputs">Using <code>System</code> inputs</a><a id="Using-System-inputs-1"></a><a class="docs-heading-anchor-permalink" href="#Using-System-inputs" title="Permalink"></a></h3><p>It is also possible to use <code>System</code>s (rather than <code>NonlinearSystem</code>s) as input to <code>BifurcationProblem</code>. Here follows a brief such example.</p><pre><code class="language-julia hljs">using BifurcationKit, ModelingToolkit, Plots
+    yguide = &quot;x&quot;
+)</code></pre><img src="ce72db01.svg" alt="Example block output"/><p>Here, the system exhibits a pitchfork bifurcation at <em>μ=0.0</em>.</p><h3 id="Using-System-inputs"><a class="docs-heading-anchor" href="#Using-System-inputs">Using <code>System</code> inputs</a><a id="Using-System-inputs-1"></a><a class="docs-heading-anchor-permalink" href="#Using-System-inputs" title="Permalink"></a></h3><p>It is also possible to use <code>System</code>s (rather than <code>NonlinearSystem</code>s) as input to <code>BifurcationProblem</code>. Here follows a brief such example.</p><pre><code class="language-julia hljs">using BifurcationKit, ModelingToolkit, Plots
 using ModelingToolkit: t_nounits as t, D_nounits as D
 
 @variables x(t) y(t)
 @parameters μ
-eqs = [D(x) ~ μ * x - y - x * (x^2 + y^2),
-    D(y) ~ x + μ * y - y * (x^2 + y^2)]
+eqs = [
+    D(x) ~ μ * x - y - x * (x^2 + y^2),
+    D(y) ~ x + μ * y - y * (x^2 + y^2),
+]
 @mtkcompile osys = System(eqs, t)
 
 bif_par = μ
@@ -92,31 +102,35 @@ plot_var = x
 p_start = [μ =&gt; 1.0]
 u0_guess = [x =&gt; 0.0, y =&gt; 0.0]
 
-bprob = BifurcationProblem(osys,
+bprob = BifurcationProblem(
+    osys,
     u0_guess,
     p_start,
     bif_par;
     plot_var = plot_var,
-    jac = false)
+    jac = false
+)
 
 p_span = (-3.0, 3.0)
-opts_br = ContinuationPar(nev = 2,
-    p_max = p_span[2], p_min = p_span[1])
+opts_br = ContinuationPar(nev = 2, p_max = p_span[2], p_min = p_span[1])
 
 bf = bifurcationdiagram(bprob, PALC(), 2, (args...) -&gt; opts_br; bothside = Val(true))
 using Plots
-plot(bf;
+plot(
+    bf;
     putspecialptlegend = false,
     markersize = 2,
     plotfold = false,
     xguide = &quot;μ&quot;,
-    yguide = &quot;x&quot;)</code></pre><img src="bd27ed95.svg" alt="Example block output"/><p>Here, the value of <code>x</code> in the steady state does not change, however, at <code>μ=0</code> a Hopf bifurcation occur and the steady state turn unstable.</p><p>We compute the branch of periodic orbits which is nearby the Hopf Bifurcation. We thus provide the branch <code>bf.γ</code>, the index of the Hopf point we want to branch from: 2 in this case and a method <code>Collocation(20, 5)</code> to compute periodic orbits.</p><pre><code class="language-julia hljs">br_po = continuation(bf.γ, 2, opts_br,
-    Collocation(20, 5);)
+    yguide = &quot;x&quot;
+)</code></pre><img src="af7c56fe.svg" alt="Example block output"/><p>Here, the value of <code>x</code> in the steady state does not change, however, at <code>μ=0</code> a Hopf bifurcation occur and the steady state turn unstable.</p><p>We compute the branch of periodic orbits which is nearby the Hopf Bifurcation. We thus provide the branch <code>bf.γ</code>, the index of the Hopf point we want to branch from: 2 in this case and a method <code>Collocation(20, 5)</code> to compute periodic orbits.</p><pre><code class="language-julia hljs">br_po = continuation(bf.γ, 2, opts_br, Collocation(20, 5))
 
-plot(bf; putspecialptlegend = false,
+plot(
+    bf; putspecialptlegend = false,
     markersize = 2,
     plotfold = false,
     xguide = &quot;μ&quot;,
-    yguide = &quot;x&quot;)
-plot!(br_po, xguide = &quot;μ&quot;, yguide = &quot;x&quot;, label = &quot;Maximum of periodic orbit&quot;)</code></pre><img src="8c9dbb9b.svg" alt="Example block output"/><p>Let&#39;s see how to plot the periodic solution we just computed:</p><pre><code class="language-julia hljs">sol = get_periodic_orbit(br_po, 10)
-plot(sol.t, sol[1, :], yguide = &quot;x&quot;, xguide = &quot;time&quot;, label = &quot;&quot;)</code></pre><img src="80a00366.svg" alt="Example block output"/></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../change_independent_variable/">« Changing the independent variable of ODEs</a><a class="docs-footer-nextpage" href="../attractors/">Multi- and Nonlocal- Continuation »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.20.0 on <span class="colophon-date" title="Wednesday 25 November 2026 19:26">Wednesday 25 November 2026</span>. Using Julia version 1.10.14.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+    yguide = &quot;x&quot;
+)
+plot!(br_po, xguide = &quot;μ&quot;, yguide = &quot;x&quot;, label = &quot;Maximum of periodic orbit&quot;)</code></pre><img src="13c7bb5f.svg" alt="Example block output"/><p>Let&#39;s see how to plot the periodic solution we just computed:</p><pre><code class="language-julia hljs">sol = get_periodic_orbit(br_po, 10)
+plot(sol.t, sol[1, :], yguide = &quot;x&quot;, xguide = &quot;time&quot;, label = &quot;&quot;)</code></pre><img src="b5e09356.svg" alt="Example block output"/></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../change_independent_variable/">« Changing the independent variable of ODEs</a><a class="docs-footer-nextpage" href="../attractors/">Multi- and Nonlocal- Continuation »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.20.0 on <span class="colophon-date" title="Thursday 26 November 2026 10:53">Thursday 26 November 2026</span>. Using Julia version 1.10.14.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>

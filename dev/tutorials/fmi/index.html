@@ -9,12 +9,14 @@ prob = ODEProblem(sys, [sys.mass__s =&gt; 0.5, sys.mass__v =&gt; 0.0], (0.0, 5.0
 sol = solve(prob, Tsit5())</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">&lt;&lt; @repl-block not executed in draft mode &gt;&gt;</code></pre><p>We can interpolate the solution object to obtain values at arbitrary time points in the solved interval, just like a normal solution.</p><pre><code class="language-julia hljs">sol(0.0:0.1:1.0; idxs = sys.mass__a)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">&lt;&lt; @repl-block not executed in draft mode &gt;&gt;</code></pre><p>FMUs following version 3 of the specification can be simulated with almost the same process. This time, we will create a model from a CoSimulation FMU.</p><pre><code class="language-julia hljs">fmu = loadFMU(&quot;SpringPendulum1D&quot;, &quot;Dymola&quot;, &quot;2023x&quot;, &quot;3.0&quot;; type = :CS)
 @named inner = ModelingToolkit.FMIComponent(
     Val(3); fmu, communication_step_size = 0.001, type = :CS,
-    reinitializealg = BrownFullBasicInit())
+    reinitializealg = BrownFullBasicInit()
+)
 nothing # hide</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">&lt;&lt; @example-block not executed in draft mode &gt;&gt;</code></pre><p>This FMU has fewer equations, partly due to missing aliasing variables and partly due to being a CS FMU. CoSimulation FMUs are bundled with an integrator. As such, they do not function like ME FMUs. Instead, a callback steps the FMU at periodic intervals in time and obtains the updated state. This state is held constant until the next time the callback triggers. The periodic interval must be specified through the <code>communication_step_size</code> keyword argument. A smaller step size typically leads to less error but is more computationally expensive.</p><p>This model alone does not have any differential variables, and calling <code>mtkcompile</code> will lead to an <code>System</code> with no unknowns.</p><pre><code class="language-julia hljs">mtkcompile(inner)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">&lt;&lt; @example-block not executed in draft mode &gt;&gt;</code></pre><p>Simulating this model will cause the OrdinaryDiffEq integrator to immediately finish, and will not trigger the callback. Thus, we wrap this system in a trivial system with a differential variable.</p><pre><code class="language-julia hljs">@variables x(t) = 1.0
 @mtkcompile sys = System([D(x) ~ x], t; systems = [inner])</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">&lt;&lt; @example-block not executed in draft mode &gt;&gt;</code></pre><p>We can now simulate <code>sys</code>.</p><pre><code class="language-julia hljs">prob = ODEProblem(sys, [sys.inner.mass__s =&gt; 0.5, sys.inner.mass__v =&gt; 0.0], (0.0, 5.0))
 sol = solve(prob, Tsit5())</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">&lt;&lt; @example-block not executed in draft mode &gt;&gt;</code></pre><p>The variables of the FMU are discrete, and their timeseries can be obtained at intervals of <code>communication_step_size</code>.</p><pre><code class="language-julia hljs">sol[sys.inner.mass__s]</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">&lt;&lt; @example-block not executed in draft mode &gt;&gt;</code></pre><h2 id="FMUs-of-components"><a class="docs-heading-anchor" href="#FMUs-of-components">FMUs of components</a><a id="FMUs-of-components-1"></a><a class="docs-heading-anchor-permalink" href="#FMUs-of-components" title="Permalink"></a></h2><p>FMUs can also be imported as individual components. For this example, we will use custom FMUs used in the test suite of ModelingToolkit.jl.</p><pre><code class="language-julia hljs">fmu = loadFMU(
     joinpath(@__DIR__, &quot;..&quot;, &quot;..&quot;, &quot;..&quot;, &quot;test&quot;, &quot;fmi&quot;, &quot;fmus&quot;, &quot;SimpleAdder.fmu&quot;);
-    type = :ME)
+    type = :ME
+)
 fmu.modelDescription.modelVariables</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">&lt;&lt; @example-block not executed in draft mode &gt;&gt;</code></pre><p>This FMU is equivalent to the following model:</p><pre><code class="language-julia hljs">@mtkmodel SimpleAdder begin
     @variables begin
         a(t)
@@ -32,31 +34,42 @@ fmu.modelDescription.modelVariables</code></pre><pre class="documenter-example-o
         out2 ~ 2c
     end
 end</code></pre><p><code>a</code> and <code>b</code> are inputs, <code>c</code> is a state, and <code>out</code> and <code>out2</code> are outputs of the component.</p><pre><code class="language-julia hljs">@named adder = ModelingToolkit.FMIComponent(
-    Val(2); fmu, type = :ME, reinitializealg = BrownFullBasicInit());
+    Val(2); fmu, type = :ME, reinitializealg = BrownFullBasicInit()
+);
 isinput(adder.a)
 isinput(adder.b)
 isoutput(adder.out)
 isoutput(adder.out2)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">&lt;&lt; @repl-block not executed in draft mode &gt;&gt;</code></pre><p>ModelingToolkit recognizes input and output variables of the component, and attaches the appropriate metadata. We can now use this component as a subcomponent of a larger system.</p><pre><code class="language-julia hljs">@variables a(t) b(t) c(t) [guess = 1.0];
 @mtkcompile sys = System(
-    [adder.a ~ a, adder.b ~ b, D(a) ~ t,
-        D(b) ~ adder.out + adder.c, c^2 ~ adder.out + adder.value],
+    [
+        adder.a ~ a, adder.b ~ b, D(a) ~ t,
+        D(b) ~ adder.out + adder.c, c^2 ~ adder.out + adder.value,
+    ],
     t;
-    systems = [adder])
+    systems = [adder]
+)
 equations(sys)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">&lt;&lt; @repl-block not executed in draft mode &gt;&gt;</code></pre><p>Note how the output <code>adder.out</code> is used in an algebraic equation of the system. We have also given <code>sys.c</code> a guess, expecting it to be solved for by initialization. ModelingToolkit is able to use FMUs in initialization to solve for initial states. As mentioned earlier, we cannot differentiate through an FMU. Thus, automatic differentiation has to be disabled for the solver.</p><pre><code class="language-julia hljs">prob = ODEProblem(
     sys, [sys.adder.c =&gt; 2.0, sys.a =&gt; 1.0, sys.b =&gt; 1.0, sys.adder.value =&gt; 2.0],
-    (0.0, 1.0))
+    (0.0, 1.0)
+)
 solve(prob, Rodas5P(autodiff = false))</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">&lt;&lt; @example-block not executed in draft mode &gt;&gt;</code></pre><p>CoSimulation FMUs follow a nearly identical process. Since CoSimulation FMUs operate using callbacks, after triggering the callbacks and altering the discrete state the algebraic equations may no longer be satisfied. To resolve for the values of algebraic variables, we use the <code>reinitializealg</code> keyword of <code>FMIComponent</code>. This is a DAE initialization algorithm to use at the end of every callback. Since CoSimulation FMUs are not directly involved in the RHS of the system - instead operating through callbacks - we can use a solver with automatic differentiation.</p><pre><code class="language-julia hljs">fmu = loadFMU(
     joinpath(@__DIR__, &quot;..&quot;, &quot;..&quot;, &quot;..&quot;, &quot;test&quot;, &quot;fmi&quot;, &quot;fmus&quot;, &quot;SimpleAdder.fmu&quot;);
-    type = :CS)
+    type = :CS
+)
 @named adder = ModelingToolkit.FMIComponent(
-    Val(2); fmu, type = :CS, communication_step_size = 1e-3,
-    reinitializealg = BrownFullBasicInit())
+    Val(2); fmu, type = :CS, communication_step_size = 1.0e-3,
+    reinitializealg = BrownFullBasicInit()
+)
 @mtkcompile sys = System(
-    [adder.a ~ a, adder.b ~ b, D(a) ~ t,
-        D(b) ~ adder.out + adder.c, c^2 ~ adder.out + adder.value],
+    [
+        adder.a ~ a, adder.b ~ b, D(a) ~ t,
+        D(b) ~ adder.out + adder.c, c^2 ~ adder.out + adder.value,
+    ],
     t;
-    systems = [adder])
+    systems = [adder]
+)
 prob = ODEProblem(
     sys, [sys.adder.c =&gt; 2.0, sys.a =&gt; 1.0, sys.b =&gt; 1.0, sys.adder.value =&gt; 2.0],
-    (0.0, 1.0))
-solve(prob, Rodas5P())</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">&lt;&lt; @example-block not executed in draft mode &gt;&gt;</code></pre></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../disturbance_modeling/">« Disturbance and input modeling</a><a class="docs-footer-nextpage" href="../../examples/higher_order/">Automatic Transformation of Nth Order ODEs to 1st Order ODEs »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.20.0 on <span class="colophon-date" title="Wednesday 25 November 2026 19:24">Wednesday 25 November 2026</span>. Using Julia version 1.10.14.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+    (0.0, 1.0)
+)
+solve(prob, Rodas5P())</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">&lt;&lt; @example-block not executed in draft mode &gt;&gt;</code></pre></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../disturbance_modeling/">« Disturbance and input modeling</a><a class="docs-footer-nextpage" href="../../examples/higher_order/">Automatic Transformation of Nth Order ODEs to 1st Order ODEs »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.20.0 on <span class="colophon-date" title="Thursday 26 November 2026 10:52">Thursday 26 November 2026</span>. Using Julia version 1.10.14.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>

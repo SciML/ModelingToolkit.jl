@@ -5,37 +5,41 @@ using Symbolics: scalarize
 
 function Mass(; name, m = 1.0, xy = [0.0, 0.0], u = [0.0, 0.0])
     ps = @parameters m = m
-    sts = @variables pos(t)[1:2]=xy v(t)[1:2]=u
+    sts = @variables pos(t)[1:2] = xy v(t)[1:2] = u
     eqs = scalarize(D.(pos) .~ v)
-    System(eqs, t, [pos..., v...], ps; name)
+    return System(eqs, t, [pos..., v...], ps; name)
 end
 
-function Spring(; name, k = 1e4, l = 1.0)
-    ps = @parameters k=k l=l
+function Spring(; name, k = 1.0e4, l = 1.0)
+    ps = @parameters k = k l = l
     @variables x(t), dir(t)[1:2]
-    System(Equation[], t, [x, dir...], ps; name)
+    return System(Equation[], t, [x, dir...], ps; name)
 end
 
 function connect_spring(spring, a, b)
-    [spring.x ~ norm(scalarize(a .- b))
-     scalarize(spring.dir .~ scalarize(a .- b))]
+    return [
+        spring.x ~ norm(scalarize(a .- b))
+        scalarize(spring.dir .~ scalarize(a .- b))
+    ]
 end
 
 function spring_force(spring)
-    -spring.k .* scalarize(spring.dir) .* (spring.x - spring.l) ./ spring.x
+    return -spring.k .* scalarize(spring.dir) .* (spring.x - spring.l) ./ spring.x
 end
 
 m = 1.0
 xy = [1.0, -1.0]
-k = 1e4
+k = 1.0e4
 l = 1.0
 center = [0.0, 0.0]
 g = [0.0, -9.81]
 @named mass = Mass(m = m, xy = xy)
 @named spring = Spring(k = k, l = l)
 
-eqs = [connect_spring(spring, mass.pos, center)
-       scalarize(D.(mass.v) .~ spring_force(spring) / mass.m .+ g)]
+eqs = [
+    connect_spring(spring, mass.pos, center)
+    scalarize(D.(mass.v) .~ spring_force(spring) / mass.m .+ g)
+]
 
 @named _model = System(eqs, t, [spring.x; spring.dir; mass.pos], [])
 @named model = compose(_model, mass, spring)
@@ -43,11 +47,11 @@ sys = mtkcompile(model)
 
 prob = ODEProblem(sys, [], (0.0, 3.0))
 sol = solve(prob, Rosenbrock23())
-plot(sol)</code></pre><img src="883a6d5d.svg" alt="Example block output"/><h2 id="Explanation"><a class="docs-heading-anchor" href="#Explanation">Explanation</a><a id="Explanation-1"></a><a class="docs-heading-anchor-permalink" href="#Explanation" title="Permalink"></a></h2><h3 id="Building-the-components"><a class="docs-heading-anchor" href="#Building-the-components">Building the components</a><a id="Building-the-components-1"></a><a class="docs-heading-anchor-permalink" href="#Building-the-components" title="Permalink"></a></h3><p>For each component, we use a Julia function that returns an <code>System</code>. At the top, we define the fundamental properties of a <code>Mass</code>: it has a mass <code>m</code>, a position <code>pos</code> and a velocity <code>v</code>. We also define that the velocity is the rate of change of position with respect to time.</p><pre><code class="language-julia hljs">function Mass(; name, m = 1.0, xy = [0.0, 0.0], u = [0.0, 0.0])
+plot(sol)</code></pre><img src="94b4e28e.svg" alt="Example block output"/><h2 id="Explanation"><a class="docs-heading-anchor" href="#Explanation">Explanation</a><a id="Explanation-1"></a><a class="docs-heading-anchor-permalink" href="#Explanation" title="Permalink"></a></h2><h3 id="Building-the-components"><a class="docs-heading-anchor" href="#Building-the-components">Building the components</a><a id="Building-the-components-1"></a><a class="docs-heading-anchor-permalink" href="#Building-the-components" title="Permalink"></a></h3><p>For each component, we use a Julia function that returns an <code>System</code>. At the top, we define the fundamental properties of a <code>Mass</code>: it has a mass <code>m</code>, a position <code>pos</code> and a velocity <code>v</code>. We also define that the velocity is the rate of change of position with respect to time.</p><pre><code class="language-julia hljs">function Mass(; name, m = 1.0, xy = [0.0, 0.0], u = [0.0, 0.0])
     ps = @parameters m = m
-    sts = @variables pos(t)[1:2]=xy v(t)[1:2]=u
+    sts = @variables pos(t)[1:2] = xy v(t)[1:2] = u
     eqs = scalarize(D.(pos) .~ v)
-    System(eqs, t, [pos..., v...], ps; name)
+    return System(eqs, t, [pos..., v...], ps; name)
 end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">Mass (generic function with 1 method)</code></pre><p>Note that this is an incompletely specified <code>System</code>. It cannot be simulated on its own, since the equations for the velocity <code>v[1:2](t)</code> are unknown. Notice the addition of a <code>name</code> keyword. This allows us to generate different masses with different names. A <code>Mass</code> can now be constructed as:</p><pre><code class="language-julia hljs">Mass(name = :mass1)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi"><span class="sgr1">Model mass1:</span>
 <span class="sgr1">Equations (2):</span>
   2 standard: see equations(mass1)
@@ -66,18 +70,20 @@ end</code></pre><pre class="documenter-example-output"><code class="nohighlight 
   (v(t))[<span class="sgr34">1</span>]
   (v(t))[<span class="sgr34">2</span>]
 <span class="sgr1">Parameters (1):</span> see parameters(mass1)
-  m</code></pre><p>Next, we build the spring component. It is characterized by the spring constant <code>k</code> and the length <code>l</code> of the spring when no force is applied to it. The state of a spring is defined by its current length and direction.</p><pre><code class="language-julia hljs">function Spring(; name, k = 1e4, l = 1.0)
-    ps = @parameters k=k l=l
+  m</code></pre><p>Next, we build the spring component. It is characterized by the spring constant <code>k</code> and the length <code>l</code> of the spring when no force is applied to it. The state of a spring is defined by its current length and direction.</p><pre><code class="language-julia hljs">function Spring(; name, k = 1.0e4, l = 1.0)
+    ps = @parameters k = k l = l
     @variables x(t), dir(t)[1:2]
-    System(Equation[], t, [x, dir...], ps; name)
+    return System(Equation[], t, [x, dir...], ps; name)
 end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">Spring (generic function with 1 method)</code></pre><p>We now define functions that help construct the equations for a mass-spring system. First, the <code>connect_spring</code> function connects a <code>spring</code> between two positions <code>a</code> and <code>b</code>. Note that <code>a</code> and <code>b</code> can be the <code>pos</code> of a <code>Mass</code>, or just a fixed position such as <code>[0., 0.]</code>. In that sense, the length of the spring <code>x</code> is given by the length of the vector <code>dir</code> joining <code>a</code> and <code>b</code>.</p><pre><code class="language-julia hljs">function connect_spring(spring, a, b)
-    [spring.x ~ norm(scalarize(a .- b))
-     scalarize(spring.dir .~ scalarize(a .- b))]
+    return [
+        spring.x ~ norm(scalarize(a .- b))
+        scalarize(spring.dir .~ scalarize(a .- b))
+    ]
 end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">connect_spring (generic function with 1 method)</code></pre><p>Lastly, we define the <code>spring_force</code> function that takes a <code>spring</code> and returns the force exerted by this spring.</p><pre><code class="language-julia hljs">function spring_force(spring)
-    -spring.k .* scalarize(spring.dir) .* (spring.x - spring.l) ./ spring.x
+    return -spring.k .* scalarize(spring.dir) .* (spring.x - spring.l) ./ spring.x
 end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">spring_force (generic function with 1 method)</code></pre><p>To create our system, we will first create the components: a mass and a spring. This is done as follows:</p><pre><code class="language-julia hljs">m = 1.0
 xy = [1.0, -1.0]
-k = 1e4
+k = 1.0e4
 l = 1.0
 center = [0.0, 0.0]
 g = [0.0, -9.81]
@@ -89,8 +95,10 @@ g = [0.0, -9.81]
   (dir(t))[<span class="sgr34">2</span>]
 <span class="sgr1">Parameters (2):</span> see parameters(spring)
   k
-  l</code></pre><p>We can now create the equations describing this system, by connecting <code>spring</code> to <code>mass</code> and a fixed point.</p><pre><code class="language-julia hljs">eqs = [connect_spring(spring, mass.pos, center)
-       scalarize(D.(mass.v) .~ spring_force(spring) / mass.m .+ g)]</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">5-element Vector{Equation}:
+  l</code></pre><p>We can now create the equations describing this system, by connecting <code>spring</code> to <code>mass</code> and a fixed point.</p><pre><code class="language-julia hljs">eqs = [
+    connect_spring(spring, mass.pos, center)
+    scalarize(D.(mass.v) .~ spring_force(spring) / mass.m .+ g)
+]</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">5-element Vector{Equation}:
  spring₊x(t) ~ LinearAlgebra.norm(SymbolicUtils.array_literal(<span class="sgr34">(2,)</span>, (mass₊pos(t))[<span class="sgr34">1</span>], (mass₊pos(t))[<span class="sgr34">2</span>]), <span class="sgr34">2</span>)
  (spring₊dir(t))[<span class="sgr34">1</span>] ~ (mass₊pos(t))[<span class="sgr34">1</span>]
  (spring₊dir(t))[<span class="sgr34">2</span>] ~ (mass₊pos(t))[<span class="sgr34">2</span>]
@@ -144,7 +152,7 @@ equations(sys)</code></pre><pre class="documenter-example-output"><code class="n
  Differential(t, 1)((mass₊pos(t))[<span class="sgr34">2</span>]) ~ (mass₊v(t))[<span class="sgr34">2</span>]
  Differential(t, 1)((mass₊pos(t))[<span class="sgr34">1</span>]) ~ (mass₊v(t))[<span class="sgr34">1</span>]</code></pre><p>This is done as follows:</p><pre><code class="language-julia hljs">prob = ODEProblem(sys, [], (0.0, 3.0))
 sol = solve(prob, Rosenbrock23())
-plot(sol)</code></pre><img src="650f8c4e.svg" alt="Example block output"/><p>What if we want the timeseries of a different variable? That information is not lost! Instead, <code>mtkcompile</code> simply changes unknown variables into <code>observed</code> variables.</p><pre><code class="language-julia hljs">observed(sys)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">4-element Vector{Equation}:
+plot(sol)</code></pre><img src="5f950dd5.svg" alt="Example block output"/><p>What if we want the timeseries of a different variable? That information is not lost! Instead, <code>mtkcompile</code> simply changes unknown variables into <code>observed</code> variables.</p><pre><code class="language-julia hljs">observed(sys)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">4-element Vector{Equation}:
  spring₊x(t) ~ LinearAlgebra.norm(SymbolicUtils.array_literal(<span class="sgr34">(2,)</span>, (mass₊pos(t))[<span class="sgr34">1</span>], (mass₊pos(t))[<span class="sgr34">2</span>]), <span class="sgr34">2</span>)
  (spring₊dir(t))[<span class="sgr34">1</span>] ~ (mass₊pos(t))[<span class="sgr34">1</span>]
  (spring₊dir(t))[<span class="sgr34">2</span>] ~ (mass₊pos(t))[<span class="sgr34">2</span>]
@@ -168,4 +176,4 @@ plot(sol)</code></pre><img src="650f8c4e.svg" alt="Example block output"/><p>Wha
  -0.28755906674364534
  -0.303205468562477
  -0.32578577554279287
- -0.32962036622208674</code></pre><p>We can also plot the path of the mass:</p><pre><code class="language-julia hljs">plot(sol, idxs = (mass.pos[1], mass.pos[2]))</code></pre><img src="a1bf316e.svg" alt="Example block output"/></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../higher_order/">« Automatic Transformation of Nth Order ODEs to 1st Order ODEs</a><a class="docs-footer-nextpage" href="../modelingtoolkitize_index_reduction/">Automated Index Reduction of DAEs »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.20.0 on <span class="colophon-date" title="Wednesday 25 November 2026 19:25">Wednesday 25 November 2026</span>. Using Julia version 1.10.14.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+ -0.32962036622208674</code></pre><p>We can also plot the path of the mass:</p><pre><code class="language-julia hljs">plot(sol, idxs = (mass.pos[1], mass.pos[2]))</code></pre><img src="320c0f5e.svg" alt="Example block output"/></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../higher_order/">« Automatic Transformation of Nth Order ODEs to 1st Order ODEs</a><a class="docs-footer-nextpage" href="../modelingtoolkitize_index_reduction/">Automated Index Reduction of DAEs »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.20.0 on <span class="colophon-date" title="Thursday 26 November 2026 10:53">Thursday 26 November 2026</span>. Using Julia version 1.10.14.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
