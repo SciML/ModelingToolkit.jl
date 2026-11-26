@@ -1,5 +1,6 @@
 using ModelingToolkitBase, OrdinaryDiffEq, StochasticDiffEq, SymbolicIndexingInterface
 import Logging
+import SciMLLogging
 using ModelingToolkitBase: t_nounits as t, D_nounits as D, ASSERTION_LOG_VARIABLE
 import DiffEqNoiseProcess
 import SparseConnectivityTracer as SCT
@@ -122,4 +123,67 @@ end
     msg = diagnose(qsys, fill(2.0, n), fill(2.0, n))
     @test count("raised to power", msg) == ModelingToolkitBase.DIAGNOSIS_MAX_FINDINGS
     @test occursin("(and 10 more of these)", msg)
+end
+
+@testset "Symbolic instability analysis does not throw" begin
+    diagnose = ModelingToolkitBase.SciMLBase.diagnose_symbolic_instability
+    @variables y(t) z(t)
+
+    # an unused observed variable that cannot be evaluated at the failing state
+    @mtkcompile sys = System([D(x) ~ -x, y ~ sqrt(x)], t)
+    msg = diagnose(sys, [-1.0], [-1.0])
+    @test occursin("evaluating sqrt(x(t)) at the failing state threw DomainError", msg)
+    # the solver's result is returned, not the error
+    prob = ODEProblem(sys, [x => -1.0], (0.0, 10.0); build_initializeprob = false)
+    sol = solve(prob, Tsit5(); maxiters = 1, verbose = DEVerbosity(SciMLLogging.None()))
+    @test sol.retcode == ReturnCode.MaxIters
+    sol = solve(prob, Tsit5(); maxiters = 1, verbose = DEVerbosity())
+    @test sol.retcode == ReturnCode.MaxIters
+
+    # the analysis goes on after an evaluation throws, and reports it once per equation
+    @mtkcompile sys2 = System([D(x) ~ 1 / x, y ~ sqrt(x), z ~ log(1 / sqrt(x))], t)
+    msg = diagnose(sys2, [-1.0e-12], [-1.0e-12])
+    @test count("threw DomainError", msg) == 2
+    @test occursin("division by very small value x(t)", msg)
+end
+
+@testset "Symbolic instability analysis of array equations" begin
+    diagnose = ModelingToolkitBase.SciMLBase.diagnose_symbolic_instability
+    @variables q(t)[1:2]
+    # array equations are not scalarized, so each is one term with a broadcast
+    function array_system(rhs)
+        @named asys = System([D(q) ~ rhs], t, collect(q), [])
+        return complete(asys)
+    end
+
+    msg = diagnose(array_system(1 ./ q), [0.0, 1.0], [0.0, 1.0])
+    @test occursin("division by very small values of q(t) ([1]: 0)", msg)
+    @test isempty(diagnose(array_system(1 ./ q), [1.0, 1.0], [1.0, 1.0]))
+    msg = diagnose(array_system(sqrt.(q)), [0.0, 1.0], [0.0, 1.0])
+    @test occursin("sqrt of q(t) ([1]: 0)", msg)
+    msg = diagnose(array_system(log.(q)), [1.0, 0.0], [1.0, 0.0])
+    @test occursin("log of q(t) ([2]: 0)", msg)
+    msg = diagnose(array_system(q .^ 2), [2.0, 2.0], [2.0, 2.0])
+    @test occursin("([1]: base ≈ 2, power 2; [2]: base ≈ 2, power 2)", msg)
+    msg = diagnose(array_system(q .^ -1), [0.0, 1.0], [0.0, 1.0])
+    @test occursin("raised to negative powers with base going to 0 ([1]: base ≈ 0, power -1)", msg)
+
+    # a term lists at most `DIAGNOSIS_MAX_ELEMENTS` of its elements
+    n = ModelingToolkitBase.DIAGNOSIS_MAX_ELEMENTS + 3
+    @variables p(t)[1:n]
+    @named psys = System([D(p) ~ 1 ./ p], t, collect(p), [])
+    msg = diagnose(complete(psys), zeros(n), zeros(n))
+    @test count("division by very small values", msg) == 1
+    @test occursin("; and 3 more)", msg)
+
+    # array-valued observed variables, after scalarization
+    @variables w(t)[1:2]
+    @mtkcompile osys = System([D(q) ~ 1 ./ w, w ~ q .- 1], t)
+    msg = diagnose(osys, [1.0, 2.0], [1.0, 2.0])
+    @test count("division by very small value", msg) == 1
+    @test occursin("(w(t))[1]", msg)
+end
+
+@testset "Abbreviation keeps whole characters" begin
+    @test isvalid(ModelingToolkitBase.abbreviated(repeat("λ", 99) * "€" * repeat("λ", 20)))
 end
