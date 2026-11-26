@@ -1061,7 +1061,9 @@ function respecialize(sys::AbstractSystem, mapping; all = false)
     final_defs = copy(defs)
     evaluate_varmap!(final_defs, Iterators.map(x -> x isa Pair ? x[1] : x, ps_to_specialize))
 
-    subrules = Dict()
+    # Concretely typed so that `substitute` can infer the symbolic type and cache
+    # shared subexpressions. With `Dict{Any, Any}` it walks the full expression tree.
+    subrules = Dict{SymbolicT, SymbolicT}()
 
     for element in ps_to_specialize
         if element isa Pair
