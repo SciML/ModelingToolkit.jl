@@ -21,18 +21,22 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 function decay(; name)
     @parameters a
     @variables x(t) f(t)
-    System([
-            D(x) ~ -a * x + f
-        ], t;
-        name = name)
+    return System([D(x) ~ -a * x + f], t; name = name)
 end
 
 @named decay1 = decay()
 @named decay2 = decay()
 
 connected = compose(
-    System([decay2.f ~ decay1.x
-            D(decay1.f) ~ 0], t; name = :connected), decay1, decay2)
+    System(
+        [
+            decay2.f ~ decay1.x
+            D(decay1.f) ~ 0
+        ],
+        t; name = :connected
+    ),
+    decay1, decay2
+)
 
 equations(connected)
 
@@ -50,11 +54,15 @@ equations(simplified_sys)
 Now we can solve the system:
 
 ```@example composition
-x0 = [decay1.x => 1.0
-      decay1.f => 0.0
-      decay2.x => 1.0]
-p = [decay1.a => 0.1
-     decay2.a => 0.2]
+x0 = [
+    decay1.x => 1.0
+    decay1.f => 0.0
+    decay2.x => 1.0
+]
+p = [
+    decay1.a => 0.1
+    decay2.a => 0.2
+]
 
 using OrdinaryDiffEq
 prob = ODEProblem(simplified_sys, [x0; p], (0.0, 100.0))
@@ -94,8 +102,10 @@ this is done, the initial conditions and parameters must be specified
 in their namespaced form. For example:
 
 ```julia
-u0 = [x => 2.0
-      subsys.x => 2.0]
+u0 = [
+    x => 2.0
+    subsys.x => 2.0
+]
 ```
 
 Note that any default values within the given subcomponent will be
@@ -123,11 +133,14 @@ With symbolic parameters, it is possible to set the default value of a parameter
 ```julia
 # ...
 sys = System(
-# ...
-# directly in the defaults argument
-    defaults = Pair{Num, Any}[x => u,
-y => σ,
-z => u - 0.1])
+    # ...
+    # directly in the defaults argument
+    defaults = Pair{Num, Any}[
+        x => u,
+        y => σ,
+        z => u - 0.1,
+    ]
+)
 # by assigning to the parameter
 sys.y = u * 1.1
 ```
@@ -208,17 +221,23 @@ sir = compose(
             seqn.I ~ ieqn.I,
             seqn.R ~ reqn.R,
             ieqn.R ~ reqn.R,
-            reqn.I ~ ieqn.I],
+            reqn.I ~ ieqn.I,
+        ],
         t,
         [S, I, R],
         [β, γ],
-        bindings = [seqn.β => β
-                    ieqn.β => β
-                    ieqn.γ => γ
-                    reqn.γ => γ], name = :sir),
+        bindings = [
+            seqn.β => β
+            ieqn.β => β
+            ieqn.γ => γ
+            reqn.γ => γ
+        ],
+        name = :sir
+    ),
     seqn,
     ieqn,
-    reqn)
+    reqn
+)
 ```
 
 Note that the unknowns are forwarded by an equality relationship, while
@@ -235,12 +254,16 @@ equations(sireqn_simple)
 ```@example compose
 ## User Code
 
-u0 = [seqn.S => 990.0,
+u0 = [
+    seqn.S => 990.0,
     ieqn.I => 10.0,
-    reqn.R => 0.0]
+    reqn.R => 0.0,
+]
 
-p = [β => 0.5
-     γ => 0.25]
+p = [
+    β => 0.5
+    γ => 0.25
+]
 
 tspan = (0.0, 40.0)
 prob = ODEProblem(sireqn_simple, u0, tspan, p, jac = true)

@@ -99,11 +99,13 @@ using ModelingToolkitStandardLibrary.Mechanical.Translational: Mass, Spring, Dam
 @named fix = Fixed()
 @named force = Force()          # `force.f` is left unconnected: it is the external input
 
-eqs = [connect(fix.flange, spring.flange_a)
-       connect(spring.flange_b, mass.flange)
-       connect(fix.flange, damper.flange_a)
-       connect(damper.flange_b, mass.flange)
-       connect(mass.flange, force.flange)]
+eqs = [
+    connect(fix.flange, spring.flange_a)
+    connect(spring.flange_b, mass.flange)
+    connect(fix.flange, damper.flange_a)
+    connect(damper.flange_b, mass.flange)
+    connect(mass.flange, force.flange)
+]
 @named model = System(eqs, t; systems = [mass, spring, damper, fix, force])
 
 sys = mtkcompile(model; inputs = [force.f.u])

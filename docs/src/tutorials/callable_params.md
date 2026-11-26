@@ -85,7 +85,8 @@ Note that the the following will not work:
 
 ```julia
 ODEProblem(
-    sys; [x => 0.0, interp => LinearInterpolation(0.0:0.1:1.0, 0.0:0.1:1.0)], (0.0, 1.0))
+    sys; [x => 0.0, interp => LinearInterpolation(0.0:0.1:1.0, 0.0:0.1:1.0)], (0.0, 1.0)
+)
 ```
 
 Since the type of the spline doesn't match.

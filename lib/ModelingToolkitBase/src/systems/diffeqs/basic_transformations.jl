@@ -196,15 +196,15 @@ Example:
 @independent_variables t
 @variables x(t)
 D = Differential(t)
-tspan = (0., 1.)
+tspan = (0.0, 1.0)
 
 α = 0.5
-eqs = (9*gamma(1 + α)/4) - (3*t^(4 - α/2)*gamma(5 + α/2)/gamma(5 - α/2))
-eqs += (gamma(9)*t^(8 - α)/gamma(9 - α)) + (3/2*t^(α/2)-t^4)^3 - x^(3/2)
+eqs = (9 * gamma(1 + α) / 4) - (3 * t^(4 - α / 2) * gamma(5 + α / 2) / gamma(5 - α / 2))
+eqs += (gamma(9) * t^(8 - α) / gamma(9 - α)) + (3 / 2 * t^(α / 2) - t^4)^3 - x^(3 / 2)
 sys = fractional_to_ordinary(eqs, x, α, 10^-7, 1)
 
 prob = ODEProblem(sys, [], tspan)
-sol = solve(prob, radau5(), abstol = 1e-10, reltol = 1e-10)
+sol = solve(prob, radau5(), abstol = 1.0e-10, reltol = 1.0e-10)
 ```
 """
 function fractional_to_ordinary(
@@ -329,15 +329,15 @@ Example:
 @independent_variables t
 @variables x_0(t)
 D = Differential(t)
-tspan = (0., 5000.)
+tspan = (0.0, 5000.0)
 
 function expect(t)
-    return sqrt(2) * sin(t + pi/4)
+    return sqrt(2) * sin(t + pi / 4)
 end
 
-sys = linear_fractional_to_ordinary([3, 2.5, 2, 1, .5, 0], [1, 1, 1, 4, 1, 4], 6*cos(t), 10^-5, 5000; initials=[1, 1, -1])
+sys = linear_fractional_to_ordinary([3, 2.5, 2, 1, 0.5, 0], [1, 1, 1, 4, 1, 4], 6 * cos(t), 10^-5, 5000; initials = [1, 1, -1])
 prob = ODEProblem(sys, [], tspan)
-sol = solve(prob, radau5(), abstol = 1e-5, reltol = 1e-5)
+sol = solve(prob, radau5(), abstol = 1.0e-5, reltol = 1.0e-5)
 ```
 """
 function linear_fractional_to_ordinary(

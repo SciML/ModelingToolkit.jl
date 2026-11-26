@@ -145,7 +145,7 @@ For example, let's say you were building ODEProblems in the loss function like:
 function loss(p)
     prob = ODEProblem(sys, [], [p1 => p[1], p2 => p[2]])
     sol = solve(prob, Tsit5())
-    sum(abs2, sol)
+    return sum(abs2, sol)
 end
 ```
 
@@ -159,7 +159,7 @@ prob = ODEProblem(sys, [], [p1 => p[1], p2 => p[2]])
 function loss(p)
     # update parameters
     sol = solve(prob, Tsit5())
-    sum(abs2, sol)
+    return sum(abs2, sol)
 end
 ```
 
@@ -174,7 +174,7 @@ setter! = setp(sys, [p1, p2])
 function loss(p)
     setter!(prob, p)
     sol = solve(prob, Tsit5())
-    sum(abs2, sol)
+    return sum(abs2, sol)
 end
 ```
 
@@ -190,7 +190,7 @@ prob = ODEProblem(sys, [], [p1 => p[1], p2 => p[2]])
 function loss(p)
     replace!(Tunable(), prob.p, p)
     sol = solve(prob, Tsit5())
-    sum(abs2, sol)
+    return sum(abs2, sol)
 end
 
 p, replace, alias = SciMLStructures.canonicalize(Tunable(), prob.p)
@@ -207,11 +207,13 @@ This error can come up after running `mtkcompile` on a system that generates dum
 using ModelingToolkit
 using ModelingToolkit: t_nounits as t, D_nounits as D
 
-sts = @variables x1(t)=0.0 x2(t)=0.0 x3(t)=0.0 x4(t)=0.0
-eqs = [x1 + x2 + 1 ~ 0
-       x1 + x2 + x3 + 2 ~ 0
-       x1 + D(x3) + x4 + 3 ~ 0
-       2 * D(D(x1)) + D(D(x2)) + D(D(x3)) + D(x4) + 4 ~ 0]
+sts = @variables x1(t) = 0.0 x2(t) = 0.0 x3(t) = 0.0 x4(t) = 0.0
+eqs = [
+    x1 + x2 + 1 ~ 0
+    x1 + x2 + x3 + 2 ~ 0
+    x1 + D(x3) + x4 + 3 ~ 0
+    2 * D(D(x1)) + D(D(x2)) + D(D(x3)) + D(x4) + 4 ~ 0
+]
 @named sys = System(eqs, t)
 sys = mtkcompile(sys)
 prob = ODEProblem(sys, [], (0, 1))

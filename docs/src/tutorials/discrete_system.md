@@ -9,20 +9,23 @@ using CommonSolve: solve
 using OrdinaryDiffEqFunctionMap: FunctionMap
 
 @inline function rate_to_proportion(r, t)
-    1 - exp(-r * t)
+    return 1 - exp(-r * t)
 end
 @parameters c δt β γ
 @constants h = 1
 @variables S(t) I(t) R(t)
 k = ShiftIndex(t)
 infection = rate_to_proportion(
-    β * c * I(k - 1) / (S(k - 1) * h + I(k - 1) + R(k - 1)), δt * h) * S(k - 1)
+    β * c * I(k - 1) / (S(k - 1) * h + I(k - 1) + R(k - 1)), δt * h
+) * S(k - 1)
 recovery = rate_to_proportion(γ * h, δt) * I(k - 1)
 
 # Equations
-eqs = [S(k) ~ S(k - 1) - infection * h,
+eqs = [
+    S(k) ~ S(k - 1) - infection * h,
     I(k) ~ I(k - 1) + infection - recovery,
-    R(k) ~ R(k - 1) + recovery]
+    R(k) ~ R(k - 1) + recovery,
+]
 @mtkcompile sys = System(eqs, t)
 
 u0 = [S(k - 1) => 990.0, I(k - 1) => 10.0, R(k - 1) => 0.0]

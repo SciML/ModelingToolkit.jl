@@ -39,10 +39,12 @@ The following example implements a simple first-order system with an input `u` a
 ```@example inputoutput
 using ModelingToolkit
 import ModelingToolkit: t_nounits as t, D_nounits as D
-@variables x(t)=0 u(t)=0 y(t)
+@variables x(t) = 0 u(t) = 0 y(t)
 @parameters k = 1
-eqs = [D(x) ~ -k * (x + u)
-       y ~ x]
+eqs = [
+    D(x) ~ -k * (x + u)
+    y ~ x
+]
 
 @named sys = System(eqs, t)
 (; f, dvs, ps, io_sys) = ModelingToolkit.generate_control_function(

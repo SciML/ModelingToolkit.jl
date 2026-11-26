@@ -199,8 +199,10 @@ has_var(ex, x) = x ∈ Set(get_variables(ex))
 # Build control function
 
 """
-    generate_control_function(sys, inputs = default_codegen_inputs(sys),
-        disturbance_inputs = disturbances(sys); kwargs...) -> (; f, dvs, ps, io_sys)
+    generate_control_function(
+            sys, inputs = default_codegen_inputs(sys),
+            disturbance_inputs = disturbances(sys); kwargs...
+        ) -> (; f, dvs, ps, io_sys)
 
 Generate the dynamics of an input-output system as callable functions of its state,
 inputs, parameters, and independent variable.

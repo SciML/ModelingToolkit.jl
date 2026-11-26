@@ -99,7 +99,8 @@ we will create a model from a CoSimulation FMU.
 fmu = loadFMU("SpringPendulum1D", "Dymola", "2023x", "3.0"; type = :CS)
 @named inner = ModelingToolkit.FMIComponent(
     Val(3); fmu, communication_step_size = 0.001, type = :CS,
-    reinitializealg = BrownFullBasicInit())
+    reinitializealg = BrownFullBasicInit()
+)
 nothing # hide
 ```
 
@@ -147,7 +148,8 @@ in the test suite of ModelingToolkit.jl.
 ```@example fmi
 fmu = loadFMU(
     joinpath(@__DIR__, "..", "..", "..", "test", "fmi", "fmus", "SimpleAdder.fmu");
-    type = :ME)
+    type = :ME
+)
 fmu.modelDescription.modelVariables
 ```
 
@@ -177,7 +179,8 @@ end
 
 ```@repl fmi
 @named adder = ModelingToolkit.FMIComponent(
-    Val(2); fmu, type = :ME, reinitializealg = BrownFullBasicInit());
+    Val(2); fmu, type = :ME, reinitializealg = BrownFullBasicInit()
+);
 isinput(adder.a)
 isinput(adder.b)
 isoutput(adder.out)
@@ -190,10 +193,13 @@ metadata. We can now use this component as a subcomponent of a larger system.
 ```@repl fmi
 @variables a(t) b(t) c(t) [guess = 1.0];
 @mtkcompile sys = System(
-    [adder.a ~ a, adder.b ~ b, D(a) ~ t,
-        D(b) ~ adder.out + adder.c, c^2 ~ adder.out + adder.value],
+    [
+        adder.a ~ a, adder.b ~ b, D(a) ~ t,
+        D(b) ~ adder.out + adder.c, c^2 ~ adder.out + adder.value,
+    ],
     t;
-    systems = [adder])
+    systems = [adder]
+)
 equations(sys)
 ```
 
@@ -205,7 +211,8 @@ through an FMU. Thus, automatic differentiation has to be disabled for the solve
 ```@example fmi
 prob = ODEProblem(
     sys, [sys.adder.c => 2.0, sys.a => 1.0, sys.b => 1.0, sys.adder.value => 2.0],
-    (0.0, 1.0))
+    (0.0, 1.0)
+)
 solve(prob, Rodas5P(autodiff = false))
 ```
 
@@ -219,17 +226,23 @@ callbacks - we can use a solver with automatic differentiation.
 ```@example fmi
 fmu = loadFMU(
     joinpath(@__DIR__, "..", "..", "..", "test", "fmi", "fmus", "SimpleAdder.fmu");
-    type = :CS)
+    type = :CS
+)
 @named adder = ModelingToolkit.FMIComponent(
-    Val(2); fmu, type = :CS, communication_step_size = 1e-3,
-    reinitializealg = BrownFullBasicInit())
+    Val(2); fmu, type = :CS, communication_step_size = 1.0e-3,
+    reinitializealg = BrownFullBasicInit()
+)
 @mtkcompile sys = System(
-    [adder.a ~ a, adder.b ~ b, D(a) ~ t,
-        D(b) ~ adder.out + adder.c, c^2 ~ adder.out + adder.value],
+    [
+        adder.a ~ a, adder.b ~ b, D(a) ~ t,
+        D(b) ~ adder.out + adder.c, c^2 ~ adder.out + adder.value,
+    ],
     t;
-    systems = [adder])
+    systems = [adder]
+)
 prob = ODEProblem(
     sys, [sys.adder.c => 2.0, sys.a => 1.0, sys.b => 1.0, sys.adder.value => 2.0],
-    (0.0, 1.0))
+    (0.0, 1.0)
+)
 solve(prob, Rodas5P())
 ```

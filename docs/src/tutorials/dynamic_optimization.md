@@ -20,9 +20,11 @@ end
 drag(h, v) = D_c * v^2 * exp(-h_c * (h - h₀) / h₀)
 gravity(h) = g₀ * (h₀ / h)
 
-eqs = [D(h(t)) ~ v(t),
+eqs = [
+    D(h(t)) ~ v(t),
     D(v(t)) ~ (T(t) - drag(h(t), v(t))) / m(t) - gravity(h(t)),
-    D(m(t)) ~ -T(t) / c]
+    D(m(t)) ~ -T(t) / c,
+]
 
 (ts, te) = (0.0, 0.2)
 costs = [-h(te)]
@@ -34,7 +36,8 @@ rocket = mtkcompile(rocket, inputs = [T(t)])
 u0map = [h(t) => h₀, m(t) => m₀, v(t) => 0]
 pmap = [
     g₀ => 1, m₀ => 1.0, h_c => 500, c => 0.5 * √(g₀ * h₀), D_c => 0.5 * 620 * m₀ / g₀,
-    Tₘ => 3.5 * g₀ * m₀, T(t) => 0.0, h₀ => 1, m_c => 0.6]
+    Tₘ => 3.5 * g₀ * m₀, T(t) => 0.0, h₀ => 1, m_c => 0.6,
+]
 ```
 
 What we would like to optimize here is the final height of the rocket. We do this by providing a vector of expressions corresponding to the costs. By default, the sense of the optimization is to minimize the provided cost. So to maximize the rocket height at the final time, we write `-h(te)` as the cost.
@@ -76,8 +79,10 @@ given a guess of the whole trajectory instead. The `initial_trajectory` keyword
 takes a map from states to symbolic expressions in the independent variable:
 
 ```@example dynamic_opt
-jprob_guess = JuMPDynamicOptProblem(rocket, [u0map; pmap], (ts, te); dt = 0.001,
-    initial_trajectory = Dict(h(t) => 1 + t, v(t) => 1.0))
+jprob_guess = JuMPDynamicOptProblem(
+    rocket, [u0map; pmap], (ts, te); dt = 0.001,
+    initial_trajectory = Dict(h(t) => 1 + t, v(t) => 1.0)
+)
 jsol_guess = solve(jprob_guess, JuMPCollocation(Ipopt.Optimizer));
 ```
 
@@ -90,8 +95,10 @@ Expressions may reference parameters, which are resolved from the operating poin
 the guess can be written in terms of the same quantities as the model:
 
 ```@example dynamic_opt
-jprob_guess2 = JuMPDynamicOptProblem(rocket, [u0map; pmap], (ts, te); dt = 0.001,
-    initial_trajectory = Dict(h(t) => h₀ + t, v(t) => t))
+jprob_guess2 = JuMPDynamicOptProblem(
+    rocket, [u0map; pmap], (ts, te); dt = 0.001,
+    initial_trajectory = Dict(h(t) => h₀ + t, v(t) => t)
+)
 jsol_guess2 = solve(jprob_guess2, JuMPCollocation(Ipopt.Optimizer));
 ```
 
@@ -117,8 +124,10 @@ magnitudes, and each dynamics constraint is divided by the corresponding value s
 all residuals are comparable in size:
 
 ```@example dynamic_opt
-iprob_scaled = InfiniteOptDynamicOptProblem(rocket, [u0map; pmap], (ts, te); dt = 0.001,
-    nominal_values = Dict(h(t) => 1.25, m(t) => 0.6))
+iprob_scaled = InfiniteOptDynamicOptProblem(
+    rocket, [u0map; pmap], (ts, te); dt = 0.001,
+    nominal_values = Dict(h(t) => 1.25, m(t) => 0.6)
+)
 isol_scaled = solve(iprob_scaled, InfiniteOptCollocation(Ipopt.Optimizer));
 ```
 
@@ -144,11 +153,13 @@ the state:
 end
 
 @named limited = System(
-    [D(z(t)) ~ w(t), power(t) ~ 2z(t)], t; costs = [-z(1.0)])
+    [D(z(t)) ~ w(t), power(t) ~ 2z(t)], t; costs = [-z(1.0)]
+)
 limited = mtkcompile(limited; inputs = [w(t)])
 
 lprob = JuMPDynamicOptProblem(
-    limited, [[z(t) => 0.0]; [w(t) => 0.0]], (0.0, 1.0); dt = 0.01)
+    limited, [[z(t) => 0.0]; [w(t) => 0.0]], (0.0, 1.0); dt = 0.01
+)
 lsol = solve(lprob, JuMPCollocation(Ipopt.Optimizer));
 lsol.sol[z(t)][end]  # 0.5, not 1.0: power = 2z ≤ 1 binds
 ```
@@ -192,7 +203,8 @@ constr = [v(tf) ~ 0, x(tf) ~ 0]
 cost = [tf] # Minimize time
 
 @named block = System(
-    [D(x(t)) ~ v(t), D(v(t)) ~ u(t)], t; costs = cost, constraints = constr)
+    [D(x(t)) ~ v(t), D(v(t)) ~ u(t)], t; costs = cost, constraints = constr
+)
 
 block = mtkcompile(block; inputs = [u(t)])
 
@@ -239,11 +251,13 @@ The dynamic optimization framework can also be used for parameter estimation. In
 Let's demonstrate this with the Lotka-Volterra equations. First, we'll generate some synthetic data by solving the system with known parameter values:
 
 ```@example dynamic_opt
-@parameters α = 1.5 β = 1.0 [tunable=false] γ = 3.0 δ = 1.0
+@parameters α = 1.5 β = 1.0 [tunable = false] γ = 3.0 δ = 1.0
 @variables x_pe(t) y_pe(t)
 
-eqs_pe = [D(x_pe) ~ α * x_pe - β * x_pe * y_pe,
-    D(y_pe) ~ -γ * y_pe + δ * x_pe * y_pe]
+eqs_pe = [
+    D(x_pe) ~ α * x_pe - β * x_pe * y_pe,
+    D(y_pe) ~ -γ * y_pe + δ * x_pe * y_pe,
+]
 
 @mtkcompile sys0_pe = System(eqs_pe, t)
 tspan_pe = (0.0, 1.0)
@@ -256,8 +270,8 @@ oprob_pe = ODEProblem(sys0_pe, [u0map_pe; parammap_pe], tspan_pe)
 osol_pe = solve(oprob_pe, Tsit5())
 
 # Generate synthetic data at 51 time points
-ts_pe = range(tspan_pe..., length=51)
-data_pe = osol_pe(ts_pe, idxs=x_pe).u
+ts_pe = range(tspan_pe..., length = 51)
+data_pe = osol_pe(ts_pe, idxs = x_pe).u
 ```
 
 Now we'll set up the parameter estimation problem. We use `EvalAt` to evaluate the state at specific time points and construct a least-squares cost function:
@@ -279,7 +293,7 @@ sys_pe′ = subset_tunables(sys_pe, [α, δ])
 Now we can solve the parameter estimation problem. Note the `tune_parameters=true` flag:
 
 ```@example dynamic_opt
-iprob_pe = InfiniteOptDynamicOptProblem(sys_pe′, u0map_pe, tspan_pe; dt=1/50, tune_parameters=true)
+iprob_pe = InfiniteOptDynamicOptProblem(sys_pe′, u0map_pe, tspan_pe; dt = 1 / 50, tune_parameters = true)
 isol_pe = solve(iprob_pe, InfiniteOptCollocation(Ipopt.Optimizer, InfiniteOpt.OrthogonalCollocation(3)))
 
 println("Estimated α = ", isol_pe.sol.ps[α], " (true value: 2.5)")

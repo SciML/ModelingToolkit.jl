@@ -368,7 +368,8 @@ Callback semantics have changed.
 
 ```julia
 event = SymbolicDiscreteCallback(
-    [t == 1] => [p ~ Pre(p) + 1], discrete_parameters = [p])
+    [t == 1] => [p ~ Pre(p) + 1], discrete_parameters = [p]
+)
 ```
 
 ## New `mtkcompile` and `@mtkcompile`

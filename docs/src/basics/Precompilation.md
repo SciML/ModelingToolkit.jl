@@ -22,8 +22,10 @@ using ModelingToolkit
 
 @variables x(ModelingToolkit.t_nounits)
 @named sys = System([ModelingToolkit.D_nounits(x) ~ -x + 1], ModelingToolkit.t_nounits)
-prob = ODEProblem(mtkcompile(sys), [x => 30.0], (0, 100), [],
-    eval_expression = true, eval_module = @__MODULE__)
+prob = ODEProblem(
+    mtkcompile(sys), [x => 30.0], (0, 100), [],
+    eval_expression = true, eval_module = @__MODULE__
+)
 
 end
 ```
@@ -40,7 +42,7 @@ and try to call it from within that same function, you will hit a world-age erro
 ```julia
 function worldageerror()
     f = eval(:((x) -> 2x))
-    f(2)
+    return f(2)
 end
 ```
 
@@ -65,6 +67,7 @@ simple as building an ODEProblem in a function and then using it would get a wor
 function wouldworldage()
     prob = ODEProblem(sys, [], (0.0, 1.0))
     sol = solve(prob)
+    return sol
 end
 ```
 
@@ -75,6 +78,7 @@ problem. That does mean that:
 ```julia
 function wouldworldage()
     prob = ODEProblem(sys, [], (0.0, 1.0))
+    return prob
 end
 sol = solve(prob)
 ```

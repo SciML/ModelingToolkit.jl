@@ -17,14 +17,16 @@ using ModelingToolkit, DynamicQuantities
 @parameters begin
     t, [unit = u"s"]
 end
-@variables(begin
-    x(t), [unit = u"m"],
-    g(t),
-    w(t), [unit = u"Hz"]
-end)
+@variables(
+    begin
+        x(t), [unit = u"m"],
+        g(t),
+        w(t), [unit = u"Hz"]
+    end
+)
 
 # Simultaneously set default value (use plain numbers, not quantities)
-@variables x=10 [unit = u"m"]
+@variables x = 10 [unit = u"m"]
 
 # Symbolic array: unit applies to all elements
 @variables x[1:3] [unit = u"m"]
@@ -46,8 +48,10 @@ using ModelingToolkit, DynamicQuantities
 @parameters τ [unit = u"ms"]
 @variables E(t) [unit = u"kJ"] P(t) [unit = u"MW"]
 D = Differential(t)
-eqs = [D(E) ~ P - E / τ,
-    0 ~ P]
+eqs = [
+    D(E) ~ P - E / τ,
+    0 ~ P,
+]
 ModelingToolkit.validate(eqs)
 ```
 
@@ -71,8 +75,10 @@ using ModelingToolkit, DynamicQuantities
 @parameters τ [unit = u"ms"]
 @variables E(t) [unit = u"J"] P(t) [unit = u"MW"]
 D = Differential(t)
-eqs = [D(E) ~ P - E / τ,
-    0 ~ P]
+eqs = [
+    D(E) ~ P - E / τ,
+    0 ~ P,
+]
 ModelingToolkit.validate(eqs) #Returns false while displaying a warning message
 ```
 
@@ -96,14 +102,15 @@ c = NewType(1)
 ModelingToolkit.get_unit(x::NewType) = ModelingToolkit.get_unit(x.f)
 function ModelingToolkit.get_unit(op::typeof(dummycomplex), args)
     argunits = ModelingToolkit.get_unit.(args)
-    ModelingToolkit.get_unit(-, args)
+    return ModelingToolkit.get_unit(-, args)
 end
 
-sts = @variables a(t)=0 [unit = u"cm"]
-ps = @parameters s=-1 [unit=u"cm"] c=c [unit=u"cm"]
+sts = @variables a(t) = 0 [unit = u"cm"]
+ps = @parameters s = -1 [unit = u"cm"] c = c [unit = u"cm"]
 eqs = [D(a) ~ dummycomplex(c, s);]
 sys = System(
-    eqs, t, [sts...;], [ps...;], name = :sys, checks = ~ModelingToolkit.CheckUnits)
+    eqs, t, [sts...;], [ps...;], name = :sys, checks = ~ModelingToolkit.CheckUnits
+)
 sys_simple = mtkcompile(sys)
 ```
 
@@ -161,7 +168,7 @@ Parameter and initial condition values are supplied to problem constructors as p
 
 ```julia
 function remove_units(p::Dict)
-    Dict(k => DynamicQuantities.ustrip(ModelingToolkit.get_unit(k), v) for (k, v) in p)
+    return Dict(k => DynamicQuantities.ustrip(ModelingToolkit.get_unit(k), v) for (k, v) in p)
 end
 add_units(p::Dict) = Dict(k => v * ModelingToolkit.get_unit(k) for (k, v) in p)
 ```

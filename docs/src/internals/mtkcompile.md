@@ -230,7 +230,7 @@ it is not the selected state. For example, the system
 ```julia
 eqs = [
     D(x) ~ t
-    D(x) ^ 2 + y^3 ~ 3
+    D(x)^2 + y^3 ~ 3
 ]
 ```
 
@@ -364,7 +364,7 @@ the concrete clock `clk`. This can then be used to shift variables with syntax
 
 ```julia
 @variables x(t)
-fibonacci_eq = [x(k) ~ x(k-1) + x(k-2)]
+fibonacci_eq = [x(k) ~ x(k - 1) + x(k - 2)]
 ```
 
 When a shift is thus applied to a variable, the result is a `Shift(t, n)(x)` where the

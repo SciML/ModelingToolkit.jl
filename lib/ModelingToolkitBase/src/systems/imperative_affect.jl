@@ -19,7 +19,7 @@ then the NamedTuple `(;x=2)` will be passed as `observed` to the affect function
 
 The NamedTuple returned from `f` includes the values to be written back to the system after `f` returns. For example, if we want to update the value of `x` to be the result of `x + y` we could write
 
-    ImperativeAffect(observed=(; x_plus_y = x + y), modified=(; x)) do m, o
+    ImperativeAffect(observed = (; x_plus_y = x + y), modified = (; x)) do m, o
         @set! m.x = o.x_plus_y
     end
 

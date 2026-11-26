@@ -12,8 +12,10 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 
 @variables x(t) y(t)
 @parameters μ α
-eqs = [0 ~ μ * x - x^3 + α * y,
-    0 ~ -y]
+eqs = [
+    0 ~ μ * x - x^3 + α * y,
+    0 ~ -y,
+]
 @mtkcompile nsys = System(eqs, [x, y], [μ, α])
 ```
 
@@ -40,12 +42,14 @@ We can now create our `BifurcationProblem`, which can be provided as input to Bi
 
 ```@example Bif1
 using BifurcationKit
-bprob = BifurcationProblem(nsys,
+bprob = BifurcationProblem(
+    nsys,
     u0_guess,
     p_start,
     bif_par;
     plot_var = plot_var,
-    jac = false)
+    jac = false
+)
 ```
 
 Here, the `jac` argument (by default set to `true`) sets whenever to provide BifurcationKit with a Jacobian or not.
@@ -56,9 +60,11 @@ Let us consider the `BifurcationProblem` from the last section. If we wish to co
 
 ```@example Bif1
 p_span = (-4.0, 6.0)
-opts_br = ContinuationPar(nev = 2,
+opts_br = ContinuationPar(
+    nev = 2,
     p_min = p_span[1],
-    p_max = p_span[2])
+    p_max = p_span[2]
+)
 ```
 
 Here, `p_span` sets the interval over which we wish to compute the diagram.
@@ -73,12 +79,14 @@ Here, the value `2` sets how sub-branches of the diagram that BifurcationKit sho
 
 ```@example Bif1
 using Plots
-plot(bf;
+plot(
+    bf;
     putspecialptlegend = false,
     markersize = 2,
     plotfold = false,
     xguide = "μ",
-    yguide = "x")
+    yguide = "x"
+)
 ```
 
 Here, the system exhibits a pitchfork bifurcation at *μ=0.0*.
@@ -93,8 +101,10 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 
 @variables x(t) y(t)
 @parameters μ
-eqs = [D(x) ~ μ * x - y - x * (x^2 + y^2),
-    D(y) ~ x + μ * y - y * (x^2 + y^2)]
+eqs = [
+    D(x) ~ μ * x - y - x * (x^2 + y^2),
+    D(y) ~ x + μ * y - y * (x^2 + y^2),
+]
 @mtkcompile osys = System(eqs, t)
 
 bif_par = μ
@@ -102,25 +112,28 @@ plot_var = x
 p_start = [μ => 1.0]
 u0_guess = [x => 0.0, y => 0.0]
 
-bprob = BifurcationProblem(osys,
+bprob = BifurcationProblem(
+    osys,
     u0_guess,
     p_start,
     bif_par;
     plot_var = plot_var,
-    jac = false)
+    jac = false
+)
 
 p_span = (-3.0, 3.0)
-opts_br = ContinuationPar(nev = 2,
-    p_max = p_span[2], p_min = p_span[1])
+opts_br = ContinuationPar(nev = 2, p_max = p_span[2], p_min = p_span[1])
 
 bf = bifurcationdiagram(bprob, PALC(), 2, (args...) -> opts_br; bothside = Val(true))
 using Plots
-plot(bf;
+plot(
+    bf;
     putspecialptlegend = false,
     markersize = 2,
     plotfold = false,
     xguide = "μ",
-    yguide = "x")
+    yguide = "x"
+)
 ```
 
 Here, the value of `x` in the steady state does not change, however, at `μ=0` a Hopf bifurcation occur and the steady state turn unstable.
@@ -128,14 +141,15 @@ Here, the value of `x` in the steady state does not change, however, at `μ=0` a
 We compute the branch of periodic orbits which is nearby the Hopf Bifurcation. We thus provide the branch `bf.γ`, the index of the Hopf point we want to branch from: 2 in this case and a method `Collocation(20, 5)` to compute periodic orbits.
 
 ```@example Bif2
-br_po = continuation(bf.γ, 2, opts_br,
-    Collocation(20, 5);)
+br_po = continuation(bf.γ, 2, opts_br, Collocation(20, 5))
 
-plot(bf; putspecialptlegend = false,
+plot(
+    bf; putspecialptlegend = false,
     markersize = 2,
     plotfold = false,
     xguide = "μ",
-    yguide = "x")
+    yguide = "x"
+)
 plot!(br_po, xguide = "μ", yguide = "x", label = "Maximum of periodic orbit")
 ```
 

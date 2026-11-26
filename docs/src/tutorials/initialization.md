@@ -45,8 +45,10 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 
 @variables x(t) y(t)
 @parameters p q
-@mtkcompile sys = System([D(x) ~ p * x + y, y ~ q * x], t; bindings = [y => x, q => 2p],
-                         initial_conditions = [x => 1, p => 1])
+@mtkcompile sys = System(
+    [D(x) ~ p * x + y, y ~ q * x], t; bindings = [y => x, q => 2p],
+    initial_conditions = [x => 1, p => 1]
+)
 ```
 
 ```@repl init
@@ -132,9 +134,11 @@ using OrdinaryDiffEq, Plots
 
 @parameters g
 @variables x(t) y(t) [state_priority = 10] λ(t)
-eqs = [D(D(x)) ~ λ * x
-       D(D(y)) ~ λ * y - g
-       x^2 + y^2 ~ 1]
+eqs = [
+    D(D(x)) ~ λ * x
+    D(D(y)) ~ λ * y - g
+    x^2 + y^2 ~ 1
+]
 @mtkcompile pend = System(eqs, t)
 ```
 
@@ -193,7 +197,8 @@ or choose to satisfy derivative conditions:
 
 ```@example init
 prob = ODEProblem(
-    pend, [x => 1, D(y) => 0, g => 1], (0.0, 1.5); guesses = [λ => 0, y => 1])
+    pend, [x => 1, D(y) => 0, g => 1], (0.0, 1.5); guesses = [λ => 0, y => 1]
+)
 sol = solve(prob, Rodas5P())
 plot(sol, idxs = (x, y))
 ```
@@ -205,8 +210,10 @@ We can also directly give equations to be satisfied at the initial point by usin
 the `initialization_eqs` keyword argument, for example:
 
 ```@example init
-prob = ODEProblem(pend, [x => 1, g => 1], (0.0, 1.5); guesses = [λ => 0, y => 1],
-    initialization_eqs = [y ~ 0])
+prob = ODEProblem(
+    pend, [x => 1, g => 1], (0.0, 1.5); guesses = [λ => 0, y => 1],
+    initialization_eqs = [y ~ 0]
+)
 sol = solve(prob, Rodas5P())
 plot(sol, idxs = (x, y))
 ```
@@ -216,7 +223,8 @@ variables and parameters:
 
 ```@example init
 prob = ODEProblem(
-    pend, [x => 1, D(y) => g, g => 1], (0.0, 3.0); guesses = [λ => 0, y => 1])
+    pend, [x => 1, D(y) => g, g => 1], (0.0, 3.0); guesses = [λ => 0, y => 1]
+)
 sol = solve(prob, Rodas5P())
 plot(sol, idxs = (x, y))
 ```
@@ -268,7 +276,8 @@ direction, we may have an overdetermined system:
 
 ```@example init
 prob = ODEProblem(
-    pend, [x => 1, y => 0.0, D(y) => 0, g => 1], (0.0, 1.5); guesses = [λ => 1])
+    pend, [x => 1, y => 0.0, D(y) => 0, g => 1], (0.0, 1.5); guesses = [λ => 1]
+)
 ```
 
 Can that be solved?
@@ -285,7 +294,8 @@ a `SciMLBase.ReturnCode.InitialFailure`:
 
 ```@example init
 prob = ODEProblem(
-    pend, [x => 1, y => 0.0, D(y) => 2.0, λ => 1, g => 1], (0.0, 1.5); guesses = [λ => 1])
+    pend, [x => 1, y => 0.0, D(y) => 2.0, λ => 1, g => 1], (0.0, 1.5); guesses = [λ => 1]
+)
 sol = solve(prob, Rodas5P())
 ```
 
@@ -319,7 +329,8 @@ y-velocities from a given position.
 
 ```@example init
 prob = ODEProblem(
-    pend, [x => 1, D(y) => 0, g => 1], (0.0, 1.5); guesses = [λ => 0, y => 1, x => 1])
+    pend, [x => 1, D(y) => 0, g => 1], (0.0, 1.5); guesses = [λ => 0, y => 1, x => 1]
+)
 sol1 = solve(prob, Rodas5P())
 ```
 
@@ -520,7 +531,8 @@ does not match the number of unknowns, which we can use to investigate our overd
 
 ```@example init
 isys = ModelingToolkit.generate_initializesystem(
-    pend; op = [x => 1, y => 0.0, D(y) => 2.0, λ => 1], guesses = [λ => 1])
+    pend; op = [x => 1, y => 0.0, D(y) => 2.0, λ => 1], guesses = [λ => 1]
+)
 ```
 
 ```@example init
@@ -549,8 +561,10 @@ constructor which acts just like an `ODEProblem` or `NonlinearProblem` construct
 creates the special initialization system for a given `sys`. This is done as follows:
 
 ```@example init
-iprob = ModelingToolkit.InitializationProblem(pend, 0.0,
-    [x => 1, y => 0.0, D(y) => 2.0, λ => 1, g => 1], guesses = [λ => 1])
+iprob = ModelingToolkit.InitializationProblem(
+    pend, 0.0,
+    [x => 1, y => 0.0, D(y) => 2.0, λ => 1, g => 1], guesses = [λ => 1]
+)
 ```
 
 We can see that because the system is overdetermined we receive a NonlinearLeastSquaresProblem,
@@ -591,8 +605,10 @@ to see the problem is not equation 2 but other equations in the system. Meanwhil
 some of the conditions:
 
 ```@example init
-iprob = ModelingToolkit.InitializationProblem(pend, 0.0,
-    [x => 1, y => 0.0, D(y) => 0.0, λ => 0, g => 1], guesses = [λ => 1])
+iprob = ModelingToolkit.InitializationProblem(
+    pend, 0.0,
+    [x => 1, y => 0.0, D(y) => 0.0, λ => 0, g => 1], guesses = [λ => 1]
+)
 ```
 
 gives a NonlinearLeastSquaresProblem which can be solved:
@@ -608,8 +624,10 @@ sol.resid
 In comparison, if we have a well-conditioned system:
 
 ```@example init
-iprob = ModelingToolkit.InitializationProblem(pend, 0.0,
-    [x => 1, D(x) => 0.0, g => 1], guesses = [λ => 1, y => 0])
+iprob = ModelingToolkit.InitializationProblem(
+    pend, 0.0,
+    [x => 1, D(x) => 0.0, g => 1], guesses = [λ => 1, y => 0]
+)
 ```
 
 notice that we instead obtained a NonlinearProblem. In this case we can use
@@ -633,11 +651,13 @@ Let's take a Lotka-Volterra system:
 
 ```julia
 @variables x(t) y(t) z(t)
-@parameters α=1.5 β=1.0 γ=3.0 δ=1.0
+@parameters α = 1.5 β = 1.0 γ = 3.0 δ = 1.0
 
-eqs = [D(x) ~ α * x - β * x * y
-       D(y) ~ -γ * y + δ * x * y
-       z ~ x + y]
+eqs = [
+    D(x) ~ α * x - β * x * y
+    D(y) ~ -γ * y + δ * x * y
+    z ~ x + y
+]
 
 @named sys = System(eqs, t)
 simpsys = mtkcompile(sys)
@@ -649,7 +669,7 @@ by initializing the derivatives to zero:
 
 ```julia
 prob = ODEProblem(simpsys, [D(x) => 0.0, D(y) => 0.0], tspan, guesses = [x => 1, y => 1])
-sol = solve(prob, Tsit5(), abstol = 1e-16)
+sol = solve(prob, Tsit5(), abstol = 1.0e-16)
 ```
 
 Notice that this is a "numerical zero", not an exact zero, and thus the solution will leave the

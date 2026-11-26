@@ -21,7 +21,7 @@ Consider a projectile shot with some initial velocity in a vertical gravitationa
 using ModelingToolkit
 using ModelingToolkit: t_nounits as t, D_nounits as D
 @variables x(t) y(t)
-@parameters g=9.81 v # gravitational acceleration and horizontal velocity
+@parameters g = 9.81 v # gravitational acceleration and horizontal velocity
 eqs = [D(D(y)) ~ -g, D(x) ~ v]
 initialization_eqs = [D(x) ~ D(y)] # 45° initial angle
 M1 = System(eqs, t; initialization_eqs, name = :M)
@@ -103,8 +103,8 @@ M1s = mtkcompile(M1)
 Of course, we can solve this ODE as it is:
 
 ```@example changeivar
-prob = ODEProblem(M1s, [M1s.a => 1.0, M1s.r.Ω => 5e-5, M1s.m.Ω => 0.3], (0.0, -3.3))
-sol = solve(prob, Tsit5(); reltol = 1e-5)
+prob = ODEProblem(M1s, [M1s.a => 1.0, M1s.r.Ω => 5.0e-5, M1s.m.Ω => 0.3], (0.0, -3.3))
+sol = solve(prob, Tsit5(); reltol = 1.0e-5)
 @assert Symbol(sol.retcode) == :Unstable # surrounding text assumes this was unstable # hide
 plot(sol, idxs = [M1s.a, M1s.r.Ω / M1s.Ω, M1s.m.Ω / M1s.Ω, M1s.Λ.Ω / M1s.Ω])
 ```
@@ -138,7 +138,7 @@ We can now solve and plot the ODE in terms of $b$:
 
 ```@example changeivar
 M3s = mtkcompile(M3; allow_symbolic = true)
-prob = ODEProblem(M3s, [M3s.r.Ω => 5e-5, M3s.m.Ω => 0.3], (0, -15))
+prob = ODEProblem(M3s, [M3s.r.Ω => 5.0e-5, M3s.m.Ω => 0.3], (0, -15))
 sol = solve(prob, Tsit5())
 @assert Symbol(sol.retcode) == :Success # surrounding text assumes the solution was successful # hide
 plot(sol, idxs = [M3s.r.Ω / M3s.Ω, M3s.m.Ω / M3s.Ω, M3s.Λ.Ω / M3s.Ω])

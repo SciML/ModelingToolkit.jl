@@ -356,9 +356,11 @@ end
 const Affect = Union{AffectSystem, ImperativeAffect}
 
 """
-    SymbolicContinuousCallback(eqs::Vector{Equation}, affect = nothing, iv = nothing;
-                               affect_neg = affect, initialize = nothing, finalize = nothing,
-                               rootfind = SciMLBase.LeftRootFind, initialize_save_discretes = true)
+    SymbolicContinuousCallback(
+        eqs::Vector{Equation}, affect = nothing, iv = nothing;
+        affect_neg = affect, initialize = nothing, finalize = nothing,
+        rootfind = SciMLBase.LeftRootFind, initialize_save_discretes = true
+    )
 
 A [`ContinuousCallback`](https://docs.sciml.ai/DiffEqDocs/stable/features/callback_functions/) specified symbolically. Takes a vector of equations `eq`
 as well as the positive-edge `affect` and negative-edge `affect_neg` that apply when *any* of `eq` are satisfied.
@@ -569,8 +571,10 @@ end
 ######## Discrete events #######
 ################################
 """
-    SymbolicDiscreteCallback(conditions::Vector{Equation}, affect = nothing, iv = nothing;
-                             initialize = nothing, finalize = nothing)
+    SymbolicDiscreteCallback(
+        conditions::Vector{Equation}, affect = nothing, iv = nothing;
+        initialize = nothing, finalize = nothing
+    )
 
 A callback that triggers at the first timestep that the conditions are satisfied.
 
@@ -1697,7 +1701,7 @@ Base.@nospecializeinfer function _has_symbolic_events(sys)
 end
 
 """
-    discrete_events(sys::AbstractSystem) :: Vector{SymbolicDiscreteCallback}
+    discrete_events(sys::AbstractSystem)::Vector{SymbolicDiscreteCallback}
 
 Returns a vector of all the `discrete_events` in an abstract system and its component subsystems.
 The `SymbolicDiscreteCallback`s in the returned vector are structs with two fields: `condition` and

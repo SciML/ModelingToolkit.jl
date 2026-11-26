@@ -45,7 +45,7 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 eqs = [
     D(D(x)) ~ σ * (y - x),
     D(y) ~ x * (ρ - z) - y,
-    D(z) ~ x * y - β * z
+    D(z) ~ x * y - β * z,
 ]
 @mtkcompile sys = System(eqs, t)
 
@@ -58,7 +58,7 @@ sim_cond = [
     z => 0.0,
     σ => 28.0,
     ρ => 10.0,
-    β => 8 / 3
+    β => 8 / 3,
 ]
 tend = 100.0
 prob = ODEProblem(sys, sim_cond, tend; jac = true)
@@ -85,7 +85,7 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 eqs = [
     D(x) ~ σ * (y - x),
     D(y) ~ x * (ρ - z) - y,
-    D(z) ~ x * y - β * z
+    D(z) ~ x * y - β * z,
 ]
 @named lorenz1 = System(eqs, t)
 @named lorenz2 = System(eqs, t)
@@ -111,7 +111,7 @@ sim_cond = [
     lorenz2.σ => 10.0,
     lorenz2.ρ => 28.0,
     lorenz2.β => 8 / 3,
-    γ => 2.0
+    γ => 2.0,
 ]
 tend = 100.0
 prob = ODEProblem(connected_lorenz, sim_cond, tend)

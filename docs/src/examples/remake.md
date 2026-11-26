@@ -12,8 +12,10 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 
 @parameters α β γ δ
 @variables x(t) y(t)
-eqs = [D(x) ~ (α - β * y) * x
-       D(y) ~ (δ * x - γ) * y]
+eqs = [
+    D(x) ~ (α - β * y) * x
+    D(y) ~ (δ * x - γ) * y
+]
 @mtkcompile odesys = System(eqs, t)
 ```
 
@@ -24,7 +26,8 @@ parameters.
 using OrdinaryDiffEq
 
 odeprob = ODEProblem(
-    odesys, [x => 1.0, y => 1.0, α => 1.5, β => 1.0, γ => 3.0, δ => 1.0], (0.0, 10.0))
+    odesys, [x => 1.0, y => 1.0, α => 1.5, β => 1.0, γ => 3.0, δ => 1.0], (0.0, 10.0)
+)
 timesteps = 0.0:0.1:10.0
 sol = solve(odeprob, Tsit5(); saveat = timesteps)
 data = Array(sol)
@@ -110,7 +113,8 @@ diffcache = DiffCache(copy(canonicalize(Tunable(), parameter_values(odeprob))[1]
 # parameter object is a tuple, to store differently typed objects together
 optprob = OptimizationProblem(
     optfn, rand(4), (odeprob, timesteps, data, setter, diffcache),
-    lb = 0.1zeros(4), ub = 3ones(4))
+    lb = 0.1zeros(4), ub = 3ones(4)
+)
 sol = solve(optprob, Optim.BFGS())
 ```
 
