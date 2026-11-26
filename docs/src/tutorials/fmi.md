@@ -119,8 +119,10 @@ CoSimulation FMUs are bundled with an integrator. As such, they do not function 
 a callback steps the FMU at periodic intervals in time and obtains the updated state. This state is held
 constant until the next time the callback triggers. The periodic interval must be specified through the
 `communication_step_size` keyword argument. A smaller step size typically leads to less error but is
-more computationally expensive. Co-Simulation communicates at the solve endpoint. An off-grid
-endpoint requires an FMU that declares support for variable communication steps. The
+more computationally expensive. Variable-step Co-Simulation FMUs communicate at the solve
+endpoint. Fixed-step FMUs communicate full steps through the last communication-grid point
+at or before the endpoint; a later endpoint uses the held sample from that grid point,
+including when it differs only by roundoff. The
 `stop_time` keyword sets the FMU experiment limit, which defaults to the solve endpoint and can
 be set to any time at or after the solve endpoint.
 

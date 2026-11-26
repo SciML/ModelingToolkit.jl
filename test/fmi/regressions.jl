@@ -1,6 +1,7 @@
 using Test, ModelingToolkit, FMI, FMIZoo, OrdinaryDiffEq, SciMLBase
 using ModelingToolkit: t_nounits as t, D_nounits as D
 import ModelingToolkit as MTK
+import ModelingToolkitBase as MTKBase
 import FiniteDiff, ForwardDiff
 
 const FIXTURE_FMUS = joinpath(@__DIR__, "fmus")
@@ -239,7 +240,8 @@ end
             @test sum(last, requests; init = 0.0) ≈ finish - start
             if !variable
                 @test requests == [(0.0, 0.01), (0.01, 0.01)]
-                @test_throws ArgumentError solve(remake(prob; tspan = (0.0, 0.025)), Tsit5())
+                offgrid = solve(remake(prob; tspan = (0.0, 0.025)), Tsit5())
+                @test SciMLBase.successful_retcode(offgrid)
             end
         end
     end
@@ -314,6 +316,79 @@ end
     end
 end
 
+
+@testset "Fixed-step Co-Simulation endpoint grid" begin
+    function instrumented_adder(finish)
+        fmu = loadFMU(joinpath(FIXTURE_FMUS, "SimpleAdder.fmu"); type = :CS)
+        fmu.modelDescription.coSimulation.canHandleVariableCommunicationStepSize = false
+        requests = Tuple{Float64, Float64}[]
+        original = fmu.cDoStep
+        function do_step(instance, point, h, no_reset)
+            push!(requests, (point, h))
+            return ccall(original, Cuint, (Ptr{Cvoid}, Cdouble, Cdouble, Cint), instance, point, h, no_reset)
+        end
+        hook = @cfunction($do_step, Cuint, (Ptr{Cvoid}, Cdouble, Cdouble, Cint))
+        fmu.cDoStep = Base.unsafe_convert(Ptr{Cvoid}, hook)
+        return fmu, requests, hook
+    end
+    @testset "endpoint $finish" for finish in (0.02, nextfloat(0.02), 0.025)
+        fmu, requests, hook = instrumented_adder(finish)
+        GC.@preserve hook begin
+            sys = adder_system(fmu, :CS; stop_time = 0.05)
+            sol = solve(ODEProblem(sys, [sys.adder.c => 0.0], (0.0, finish)), Tsit5())
+            @test SciMLBase.successful_retcode(sol)
+            @test requests == [(0.0, 0.01), (0.01, 0.01)]
+            @test sol[sys.adder.c][end] ≈ 0.08
+        end
+    end
+end
+
+@testset "Coupled Co-Simulation FMUs publish before sampling" begin
+    function coupled_solution(order)
+        fmus = [loadFMU(joinpath(FIXTURE_FMUS, "SimpleAdder.fmu"); type = :CS) for _ in 1:2]
+        @named adder1 = MTK.FMIComponent(Val(2); fmu = fmus[1], type = :CS, communication_step_size = 0.01)
+        @named adder2 = MTK.FMIComponent(Val(2); fmu = fmus[2], type = :CS, communication_step_size = 0.01)
+        systems = order == :forward ? [adder1, adder2] : [adder2, adder1]
+        @mtkcompile sys = System(
+            [adder1.a ~ adder2.c, adder2.a ~ adder1.c, adder1.b ~ 2.0, adder2.b ~ 2.0],
+            t; systems
+        )
+        prob = ODEProblem(sys, [sys.adder1.c => 0.0, sys.adder2.c => 0.0], (0.0, 0.02))
+        return sys, solve(prob, Tsit5())
+    end
+    for order in (:forward, :reverse)
+        sys, sol = coupled_solution(order)
+        @test SciMLBase.successful_retcode(sol)
+        @test sol[sys.adder1.c][end] ≈ 0.0603
+        @test sol[sys.adder2.c][end] ≈ 0.0603
+        @test sol(0.01; idxs = sys.adder1.a) ≈ 0.03
+        @test sol(0.01; idxs = sys.adder2.a) ≈ 0.03
+    end
+end
+
+@testset "Model Exchange snapshots use the saved parameter values" begin
+    fmu = loadFMU(joinpath(FIXTURE_FMUS, "SimpleAdder.fmu"); type = :ME)
+    only(filter(v -> v.name == "a", fmu.modelDescription.modelVariables)).variability = FMI.fmi2VariabilityDiscrete
+    @named adder = MTK.FMIComponent(Val(2); fmu, type = :ME)
+    @discretes host_a(t) = 1.0
+    set_host_a(modified, observed, ctx, integrator) = (; host_a = 5.0)
+    host_event = MTKBase.SymbolicDiscreteCallback(
+        [0.02], MTKBase.ImperativeAffect(set_host_a; modified = (; host_a));
+        reinitializealg = SciMLBase.NoInit()
+    )
+    @mtkcompile sys = System(
+        [adder.a ~ host_a, adder.b ~ 0.0], t; systems = [adder], discrete_events = [host_event]
+    )
+    prob = ODEProblem(
+        sys, [sys.adder.c => 0.0, sys.adder.value => 0.0], (0.0, 0.04)
+    )
+    sol = solve(prob, Tsit5(); dt = 0.01, adaptive = false, saveat = [0.015, 0.025])
+    @test SciMLBase.successful_retcode(sol)
+    @test sol(0.015; idxs = sys.host_a) == 1.0
+    @test sol(0.015; idxs = sys.adder.out) == 1.0
+    @test sol(0.025; idxs = sys.host_a) == 5.0
+    @test sol(0.025; idxs = sys.adder.out) == 5.0
+end
 
 @testset "VanDerPol finite-difference Jacobian" begin
     fmu = loadFMU("VanDerPol", "ModelicaReferenceFMUs", "0.0.39", "3.0"; type = :ME)

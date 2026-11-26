@@ -2303,6 +2303,31 @@ end
     @test sol.ps[c][end] == 0
 end
 
+@testset "discrete callback phases preserve ordinary ordering" begin
+    log = Symbol[]
+    function record(name)
+        return ModelingToolkitBase.ImperativeAffect(
+            (modified, observed, ctx, integrator) -> (push!(log, name); (;));
+            observed = (;), modified = (;)
+        )
+    end
+    late = ModelingToolkitBase.SymbolicDiscreteCallback(
+        [0.5], record(:late); reinitializealg = SciMLBase.NoInit(), callback_phase = 1
+    )
+    first_event = ModelingToolkitBase.SymbolicDiscreteCallback(
+        [0.5], record(:first); reinitializealg = SciMLBase.NoInit()
+    )
+    second_event = ModelingToolkitBase.SymbolicDiscreteCallback(
+        [0.5], record(:second); reinitializealg = SciMLBase.NoInit()
+    )
+    @mtkcompile ordered_sys = System(
+        D(x) ~ -x, t; discrete_events = [late, first_event, second_event]
+    )
+    sol = solve(ODEProblem(ordered_sys, [x => 1.0], (0.0, 1.0)), Tsit5())
+    @test SciMLBase.successful_retcode(sol)
+    @test log == [:first, :second, :late]
+end
+
 @testset "`reinitializealg` takes part in the hash of an event" begin
     @variables x(t)
     for cb in (

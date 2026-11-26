@@ -10,8 +10,10 @@ the signature
 ```
 
 The function `f` will be called with `observed` and `modified` `NamedTuple`s that are derived from their respective `NamedTuple` definitions.
-An affect that accepts a fifth argument receives `observed_at(u, p, t)`, a callable that
-evaluates the declared observations at another state, parameter set, and time.
+An affect that accepts a fifth argument receives `observed_at`, a callable that
+evaluates the declared observations at another state, parameter set, and time as
+`observed_at(u, p, t)`. For a timeseries solution, `observed_at(sol, i)` evaluates them
+at saved index `i`, including the discrete-parameter values active for that save.
 Each  declaration`NamedTuple` should map an expression to a symbol; for example if we pass `observed=(; x = a + b)` this will alias the result of executing `a+b` in the system as `x`
 so the value of `a + b` will be accessible as `observed.x` in `f`. `modified` currently restricts symbolic expressions to only bare variables, so only tuples of the form
 `(; x = y)` or `(; x)` (which aliases `x` as itself) are allowed.
@@ -221,6 +223,29 @@ function check_assignable(sys, sym)
     end
 end
 
+function solution_index_parameter_values(sol, i)
+    ps = parameter_values(sol)
+    SymbolicIndexingInterface.is_parameter_timeseries(sol) == SymbolicIndexingInterface.Timeseries() || return ps
+    discs = SymbolicIndexingInterface.get_parameter_timeseries_collection(sol)
+    ps = parameter_values(discs)
+    time = sol.t[i]
+    before_event_save = i < length(sol.t) && sol.t[i + 1] == time
+    for ts_idx in eachindex(discs)
+        partition = discs[ts_idx]
+        times = current_time(partition)
+        j = searchsortedlast(times, time)
+        if before_event_save && j >= firstindex(times) && times[j] == time
+            j = searchsortedfirst(times, time)
+        end
+        j >= firstindex(times) ||
+            error("Cannot access discrete parameters at time $time before their initial save $(first(times))")
+        ps = SymbolicIndexingInterface.with_updated_parameter_timeseries_values(
+            sol, ps, ts_idx => state_values(partition, j)
+        )
+    end
+    return ps
+end
+
 """
     FunctionalAffect{UF, CTX, MOF, OF, MN, OST, UPS}
 
@@ -253,7 +278,13 @@ end
     # Read the current values of the modified variables (pre-affect baseline)
     modvals = fa.mod_og_val_fun(integ.u, integ.p, integ.t)
     upd_component_array = NamedTuple{fa.mod_names}(modvals)
-    observed_at(u, p, t) = NamedTuple{fa.obs_sym_tuple}(fa.obs_fun(u, p, t))
+    function observed_at(u, p, t)
+        return NamedTuple{fa.obs_sym_tuple}(fa.obs_fun(u, p, t))
+    end
+    function observed_at(sol::SciMLBase.AbstractTimeseriesSolution, i::Integer)
+        time = sol.t[i]
+        return observed_at(state_values(sol, i), solution_index_parameter_values(sol, i), time)
+    end
     obs_component_array = observed_at(integ.u, integ.p, integ.t)
     args = (upd_component_array, obs_component_array, fa.ctx, integ)
     upd_vals = applicable(fa.user_affect, args...) ? fa.user_affect(args...) :

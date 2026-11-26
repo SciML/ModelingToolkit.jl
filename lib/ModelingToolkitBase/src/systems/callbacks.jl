@@ -593,12 +593,14 @@ struct SymbolicDiscreteCallback <: AbstractCallback
     finalize::Union{Affect, SymbolicAffect, Nothing}
     reinitializealg::SciMLBase.DAEInitializationAlgorithm
     initialize_save_discretes::Bool
+    callback_phase::Int
 end
 
 function SymbolicDiscreteCallback(
         condition::Union{SymbolicT, Number, Vector{<:Number}, SciMLBase.TimeDomain},
         affect = nothing; initialize = nothing, finalize = nothing,
-        reinitializealg = nothing, initialize_save_discretes = true, kwargs...
+        reinitializealg = nothing, initialize_save_discretes = true,
+        callback_phase = 0, kwargs...
     )
     # Manual error check (to prevent events like `[X < 5.0] => [X ~ Pre(X) + 10.0]` from being created).
     (condition isa Vector) && (eltype(condition) <: Num) &&
@@ -630,7 +632,7 @@ function SymbolicDiscreteCallback(
         c, SymbolicAffect(affect; kwargs...),
         SymbolicAffect(initialize; kwargs...),
         SymbolicAffect(finalize; kwargs...), reinitializealg,
-        initialize_save_discretes
+        initialize_save_discretes, callback_phase
     )
 end # Default affect to nothing
 
@@ -652,7 +654,7 @@ function complete(cb::SymbolicDiscreteCallback; kwargs...)
         cb.conditions, make_affect(cb.affect; kwargs...),
         make_affect(cb.initialize; kwargs...),
         make_affect(cb.finalize; kwargs...), cb.reinitializealg,
-        cb.initialize_save_discretes
+        cb.initialize_save_discretes, cb.callback_phase
     )
 end
 
@@ -739,7 +741,8 @@ function namespace_callback(cb::SymbolicDiscreteCallback, s)::SymbolicDiscreteCa
         namespace_conditions(conditions(cb), s),
         namespace_affects(affects(cb), s),
         initialize = namespace_affects(initialize_affects(cb), s),
-        finalize = namespace_affects(finalize_affects(cb), s), reinitializealg = cb.reinitializealg
+        finalize = namespace_affects(finalize_affects(cb), s), reinitializealg = cb.reinitializealg,
+        callback_phase = cb.callback_phase
     )
 end
 
@@ -753,6 +756,7 @@ function Base.hash(cb::AbstractCallback, s::UInt)
     !is_discrete(cb) && (s = hash(cb.rootfind, s))
     s = hash(cb.reinitializealg, s)
     !is_discrete(cb) && (s = hash(cb.zero_crossing_id, s))
+    is_discrete(cb) && (s = hash(cb.callback_phase, s))
     return s
 end
 
@@ -796,6 +800,7 @@ function Base.:(==)(e1::AbstractCallback, e2::AbstractCallback)
     isequal(e1.initialize, e2.initialize) || return false
     isequal(e1.finalize, e2.finalize) || return false
     isequal(e1.reinitializealg, e2.reinitializealg) || return false
+    is_discrete(e1) && !isequal(e1.callback_phase, e2.callback_phase) && return false
     if !is_discrete(e1)
         isequal(e1.affect_neg, e2.affect_neg) || return false
         isequal(e1.rootfind, e2.rootfind) || return false
@@ -1179,10 +1184,11 @@ function generate_discrete_callbacks(
     )
     dbs = discrete_events(sys)
     isempty(dbs) && return nothing
+    order = sortperm(dbs; alg = Base.Sort.DEFAULT_STABLE, by = cb -> cb.callback_phase)
     # Use explicit loop to avoid Generator type inference overhead
     result = Vector{Any}(undef, length(dbs))
-    for (i, db) in enumerate(dbs)
-        result[i] = generate_callback(db, sys; kwargs...)
+    for (i, j) in enumerate(order)
+        result[i] = generate_callback(dbs[j], sys; kwargs...)
     end
     return result
 end
