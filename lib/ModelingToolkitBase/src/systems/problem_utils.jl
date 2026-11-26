@@ -352,6 +352,32 @@ function Base.showerror(io::IO, e::MissingVariablesError)
 end
 
 """
+    $(TYPEDSIGNATURES)
+
+The type of a value filled in for `var` by `missing_guess_value`: the declared type of `var`
+(or its element type, for an array) when that is an integer type such as `Bool` or `Int`,
+and `Float64` otherwise. An abstract integer type yields `Int`.
+"""
+function guess_eltype(var::SymbolicT)
+    T = symtype(var)
+    T <: AbstractArray && (T = eltype(T))
+    T <: Integer || return Float64
+    return isconcretetype(T) ? T : Int
+end
+
+# A random-like value of type `T` from the hash `h`. `h % T` reduces the hash into `T` the
+# way `rand(rng, T)` samples from it.
+hashed_value(::Type{Float64}, h::UInt) = h / 0x1p64
+hashed_value(::Type{T}, h::UInt) where {T <: Integer} = h % T
+
+# The value of `MissingGuessValue.Constant(val)` for `var`, converted to its declared type
+# when that is an integer type
+function missing_constant(var::SymbolicT, val)
+    T = guess_eltype(var)
+    return T === Float64 ? val : convert_or_throw(T, val, var, "`missing_guess_value`")
+end
+
+"""
     MissingGuessValue
 
 A Moshi.jl enum to allow choosing what happens with missing guess values when building a
@@ -365,6 +391,10 @@ numerical problem from a `System`.
 - `MissingGuessValue.HashedRandom`: Missing guesses are set to a
   deterministically determined random-like value based on the hash of the variable name
 - `MissingGuessValue.Error()`: Missing guess values cause an error.
+
+For a variable declared with an integer type, such as `Bool` or `Int`, `Constant` converts
+`val` to that type and throws an error if it cannot, while `Random` and `HashedRandom`
+produce a value of that type.
 
 # Returns
 
@@ -451,26 +481,26 @@ function varmap_to_vars(
         end
         Moshi.Match.@match missing_values begin
             MissingGuessValue.Constant(val) => begin
-                cval = BSImpl.Const{VartypeT}(val)
                 for var in missing_vars
+                    cval = BSImpl.Const{VartypeT}(missing_constant(var, val))
                     write_possibly_indexed_array!(varmap, var, cval, COMMON_NOTHING)
                 end
             end
             MissingGuessValue.Random(rng) => begin
                 for var in missing_vars
                     if Symbolics.isarraysymbolic(var)
-                        varmap[var] = rand(rng, size(var))
+                        varmap[var] = rand(rng, guess_eltype(var), size(var))
                     else
-                        write_possibly_indexed_array!(varmap, var, Symbolics.SConst(rand(rng)), COMMON_NOTHING)
+                        write_possibly_indexed_array!(varmap, var, Symbolics.SConst(rand(rng, guess_eltype(var))), COMMON_NOTHING)
                     end
                 end
             end
             MissingGuessValue.HashedRandom() => begin
                 for var in missing_vars
                     if Symbolics.isarraysymbolic(var)
-                        varmap[var] = [hash(var, hash(i)) for i in SU.stable_eachindex(var)] ./ 0x1p64
+                        varmap[var] = [hashed_value(guess_eltype(var), hash(var, hash(i))) for i in SU.stable_eachindex(var)]
                     else
-                        write_possibly_indexed_array!(varmap, var, Symbolics.SConst(hash(var) / 0x1p64), COMMON_NOTHING)
+                        write_possibly_indexed_array!(varmap, var, Symbolics.SConst(hashed_value(guess_eltype(var), hash(var))), COMMON_NOTHING)
                     end
                 end
             end
@@ -2112,7 +2142,62 @@ function operating_point_preprocess(sys::AbstractSystem, op; name = "operating_p
     end
     op = recursive_unwrap(anydict(op))
     symbols_to_symbolics!(sys, op)
+    convert_to_declared_types!(op; name)
     return op
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Convert each real value in `op` to the declared type of its key, when that type is a
+concrete `Integer` type such as `Bool` or `Int` (or an array of one). A literal such as
+`[x => 0.0, b => false]` promotes `false` to `0.0`, and that value must be converted back
+for a `Bool` variable `b` before it reaches an expression such as `b | c`. Throws an
+`ArgumentError` naming the variable when a value cannot be represented exactly in the
+declared type. Other values, such as complex numbers, are left as is.
+"""
+function convert_to_declared_types!(op::AbstractDict; name = "operating_point")
+    for (k, v) in op
+        k isa SymbolicT || continue
+        newv = convert_to_declared_type(k, v, name)
+        newv === v || (op[k] = newv)
+    end
+    return op
+end
+
+function convert_to_declared_type(k::SymbolicT, @nospecialize(v), name)
+    v isa SymbolicT && return v
+    T = symtype(k)
+    if v isa Real
+        (T <: Integer && isconcretetype(T) && !(v isa T)) || return v
+        return convert_or_throw(T, v, k, name)
+    elseif v isa AbstractArray{<:Real} && T <: AbstractArray
+        E = eltype(T)
+        (E <: Integer && isconcretetype(E) && !(eltype(v) <: E)) || return v
+        return convert_or_throw(E, v, k, name)
+    end
+    return v
+end
+
+# the element type is a dispatch parameter, so the loop over `xs` is compiled for it once
+function convert_or_throw(::Type{T}, xs::AbstractArray, k::SymbolicT, name) where {T}
+    return map(x -> convert_or_throw(T, x, k, name), xs)
+end
+
+function convert_or_throw(::Type{T}, x, k::SymbolicT, name) where {T}
+    try
+        return convert(T, x)
+    catch e
+        e isa InexactError || rethrow()
+        throw(
+            ArgumentError(
+                """
+                The value `$x` given for `$k` in the $name cannot be converted to its \
+                declared type `$T`.
+                """
+            )
+        )
+    end
 end
 
 """
@@ -2389,8 +2474,10 @@ function maybe_build_initialization_problem(
     end
 
     orig_op = copy(op)
+    # The outer problem constructor already warns about these keywords.
+    init_kwargs = (; (k => v for (k, v) in kwargs if !haskey(STRUCTURAL_KWARGS, k))...)
     initializeprob = ModelingToolkitBase.InitializationProblem{iip, specialize}(
-        sys, t, op, opts; guesses, fast_path = true, kwargs...
+        sys, t, op, opts; guesses, fast_path = true, init_kwargs...
     )
     initsys = initializeprob.f.sys::System
     needs_remake = false
@@ -2930,14 +3017,27 @@ function SciMLBase.detect_cycles(sys::AbstractSystem, varmap::Dict{Any, Any}, va
     return !isempty(cycles)
 end
 
+# The `Symbolics.CodegenFunctionOptions` passed to a problem that also apply to the code of
+# its events. The others describe the signature, output or memory of one function.
+const EVENT_CODEGEN_OPTIONS = Tuple(
+    setdiff(
+        fieldnames(Symbolics.CodegenFunctionOptions),
+        (:wrap_code, :iip_config, :outputidxs, :similarto, :skipzeros, :fuse_unalias)
+    )
+)
+
+event_codegen_kwargs(kwargs) = filter(kv -> first(kv) in EVENT_CODEGEN_OPTIONS, kwargs)
+
 function process_kwargs(
-        sys::System; expression = Val{false}, callback = nothing,
+        sys::System, problem_type = nothing; expression = Val{false}, callback = nothing,
         eval_expression = false, eval_module = @__MODULE__,
         _skip_events = false, _skip_tstops = false, tspan = nothing, kwargs...
     )
     # Read before `filter_kwargs`, which removes an `MTKVerbosity` value.
     mtk_verbosity = _problem_verbosity(kwargs)
-    kwargs = filter_kwargs(kwargs)
+    # Read before `filter_kwargs`, which keeps only solver keywords.
+    codegen_kwargs = event_codegen_kwargs(kwargs)
+    kwargs = filter_kwargs(kwargs, problem_type)
     kwargs1 = (;)
 
     if is_time_dependent(sys)
@@ -2945,7 +3045,7 @@ function process_kwargs(
             cbs = if _has_symbolic_events(sys)
                 @invokelatest process_events(
                     sys; callback, eval_expression, eval_module, tspan, mtk_verbosity,
-                    kwargs...
+                    kwargs..., codegen_kwargs...
                 )
             else
                 callback
@@ -2968,8 +3068,27 @@ function process_kwargs(
     return merge(kwargs1, kwargs)
 end
 
-function filter_kwargs(kwargs)
+# Keywords that SciMLBase problems carry but that MTK derives from the system's structure,
+# with how to apply a different value to the returned problem.
+const STRUCTURAL_KWARGS = (
+    differential_vars = (DAEProblem, "`remake(prob; differential_vars = mask)`"),
+    mass_matrix = (ODEProblem, "`remake(prob; f = remake(prob.f; mass_matrix = M))`"),
+)
+
+function filter_kwargs(kwargs, problem_type = nothing)
     kwargs = Dict(kwargs)
+    for (key, (supported_problem, remedy)) in pairs(STRUCTURAL_KWARGS)
+        haskey(kwargs, key) || continue
+        if problem_type === supported_problem
+            @warn LazyString(
+                "Ignoring keyword argument `", key, "`: the system derives it from its structure. ",
+                "Apply a different value to the returned problem with ", remedy, "."
+            )
+        else
+            @warn LazyString("Ignoring unsupported keyword argument `", key, "` for this problem constructor.")
+        end
+        delete!(kwargs, key)
+    end
     for key in keys(kwargs)
         key in SciMLBase.allowedkeywords || delete!(kwargs, key)
     end

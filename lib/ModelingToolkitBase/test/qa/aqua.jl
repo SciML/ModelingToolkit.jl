@@ -62,9 +62,9 @@ const NONPUBLIC_EXPLICIT_IMPORTS = (
 # public spelling. Beyond the Symbolics/SymbolicUtils internals covered above, these are:
 # the SciMLBase callback/keyword defaults every problem constructor has to reproduce, the
 # `Moshi.Data`/`Moshi.Match` macro entry points, the Base internals with no public spelling
-# (`@__doc__`, `@ntuple`, `literal_pow`, `ReshapedArray`, and `setindex` — the
-# non-mutating array update an immutable iterate needs, which Base declares no public
-# spelling for), and the AD hooks
+# (`@__doc__`, `@ntuple`, `literal_pow`, `ReinterpretArray`, `ReshapedArray`, and
+# `setindex` — the non-mutating array update an immutable iterate needs, which Base
+# declares no public spelling for), and the AD hooks
 # (`ForwardDiff.Dual`, `EnzymeCore.EnzymeRules`) the generated code dispatches on.
 const NONPUBLIC_QUALIFIED_ACCESSES = (
     # Symbolics
@@ -115,7 +115,7 @@ const NONPUBLIC_QUALIFIED_ACCESSES = (
     # Base
     Symbol("@__doc__"), :Callable, :Cartesian, :deepcopy_internal, :Experimental,
     :HasEltype, :JLOptions, :literal_pow, Symbol("@nospecializeinfer"), Symbol("@ntuple"),
-    :ReshapedArray, :setindex,
+    :ReinterpretArray, :ReshapedArray, :setindex,
     # Base.Cartesian
     :poplinenum,
     # Base.Experimental
@@ -135,13 +135,14 @@ const NONPUBLIC_QUALIFIED_ACCESSES = (
 # every addition becomes a deliberate decision. Removing an entry is a breaking change.
 const REEXPORTED_API = (
     # Symbolics
-    :approximation_function, :build_function, Symbol("@derivative_rule"),
-    Symbol("@derivatives"), :Differential, :Equation, :expand_derivatives, :factors,
-    :gather_factor, :get_variables, :groebner_basis, :has_inverse, :has_left_inverse,
+    :approximation_function, :build_function, :Curl, Symbol("@derivative_rule"),
+    Symbol("@derivatives"), :Differential, :Divergence, :Equation, :expand_derivatives, :factors,
+    :gather_factor, :get_variables, :Grad, :groebner_basis, :has_inverse, :has_left_inverse,
     :has_right_inverse, :Inequality, :infimum, :Integral, :inverse, :inverse_laplace,
-    :is_derivative, :is_groebner_basis, :laplace, :laplace_solve_ode,
+    :is_derivative, :is_groebner_basis, :laplace, :laplace_solve_ode, :Laplacian,
     :left_continuous_function, :left_inverse, :limit, :majorization_function,
-    :minorization_function, :Num, :parse_expr_to_symbolic, :partial_frac_decomposition,
+    :minorization_function, :NormalDerivative, :Num, :parse_expr_to_symbolic,
+    :partial_frac_decomposition,
     :polynomial_coeffs, Symbol("@register_array_symbolic"), Symbol("@register_derivative"),
     Symbol("@register_discontinuity"), Symbol("@register_inverse"),
     Symbol("@register_symbolic"), :right_continuous_function, :right_inverse, :rootfunction,

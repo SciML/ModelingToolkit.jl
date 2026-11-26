@@ -200,6 +200,14 @@ function MTKParameters(
             end
         end
         if !SU.isconst(val)
+            unspecified, unevaluated = unresolved_array_elements(op, sym)
+            if !isempty(unspecified)
+                msg = "Could not evaluate value of parameter $sym. Missing values for elements $(join(unspecified, ", "))."
+                if !isempty(unevaluated)
+                    msg *= " Missing values for variables in the values of elements $(join(unevaluated, ", "))."
+                end
+                error(msg)
+            end
             error(lazy"Could not evaluate value of parameter $sym. Missing values for variables in expression $val.")
         end
         if ctype <: FnType
@@ -275,9 +283,16 @@ function rebuild_with_caches(p::MTKParameters, cache_templates::BufferTemplate..
     return _rebuild_with_caches(p, npersistent, cache_templates)
 end
 
+# Zeroed because `remake` reads these before any `CacheWriter` runs, and leftover NaNs
+# leak into reverse-mode gradients. Singletons (e.g. a cached `π`) have no `zero`.
+_new_cache_buffer(::Type{T}, n::Int) where {T <: Number} =
+    Base.issingletontype(T) ? Vector{T}(undef, n) : zeros(T, n)
+# Non-numeric buffers stay `undef`, so an early read throws.
+_new_cache_buffer(::Type{T}, n::Int) where {T} = Vector{T}(undef, n)
+
 function _rebuild_with_caches(p::MTKParameters, npersistent::Int, cache_templates)
     buffers = map(cache_templates) do template
-        Vector{template.type}(undef, template.length)
+        _new_cache_buffer(template.type, template.length)
     end
     persistent = ntuple(Base.Fix1(getindex, p.caches), npersistent)
     return @set p.caches = (persistent..., buffers...)
@@ -417,8 +432,24 @@ function SciMLStructures.canonicalize(::SciMLStructures.Tunable, p::MTKParameter
     return arr, repack, true
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Return `buffer` in a form that can be stored in the `tunable` or `initials` portion of
+`MTKParameters`. A `Base.ReinterpretArray`, which is what `PreallocationTools.get_tmp`
+returns for dual numbers, is copied into an `Array`: code that rebuilds the parameter
+object (such as the initialization parameter map) returns `Array`s, and the result has to
+be assignable to an integrator typed on the original parameter object.
+
+Because of this copy, the parameter object returned by `SciMLStructures.replace` does not
+always alias the buffer passed to it. Update values through the returned parameter object
+(for example with a `setp` setter), not by writing to the buffer afterwards.
+"""
+storable_numeric_buffer(buffer) = buffer
+storable_numeric_buffer(buffer::Base.ReinterpretArray) = collect(buffer)
+
 function SciMLStructures.replace(::SciMLStructures.Tunable, p::MTKParameters, newvals)
-    @set! p.tunable = newvals
+    @set! p.tunable = storable_numeric_buffer(newvals)
     return p
 end
 
@@ -438,7 +469,7 @@ function SciMLStructures.canonicalize(::SciMLStructures.Initials, p::MTKParamete
 end
 
 function SciMLStructures.replace(::SciMLStructures.Initials, p::MTKParameters, newvals)
-    @set! p.initials = newvals
+    @set! p.initials = storable_numeric_buffer(newvals)
     return p
 end
 
@@ -1239,6 +1270,31 @@ const MISSING_PARAMETERS_MESSAGE = """
 Some parameters are missing from the variable map.
 Please provide a value or default for the following variables:
 """
+
+"""
+    $(TYPEDSIGNATURES)
+
+Classify the elements of the array parameter `sym` that the operating point `op` leaves
+unresolved, for an array with values for only some elements. Return `(unspecified,
+unevaluated)`: the elements with no value, and the elements whose value still contains
+variables. Both are empty when `sym` is a scalar or `op` has no entry for it.
+"""
+function unresolved_array_elements(op, sym::SymbolicT)
+    unspecified = SymbolicT[]
+    unevaluated = SymbolicT[]
+    SU.is_array_shape(SU.shape(sym)) || return unspecified, unevaluated
+    val = get(op, sym, nothing)
+    val isa SymbolicT && SU.is_array_shape(SU.shape(val)) || return unspecified, unevaluated
+    for i in SU.stable_eachindex(val)
+        el = val[i]
+        if el === COMMON_NOTHING
+            push!(unspecified, sym[i])
+        elseif !SU.isconst(el)
+            push!(unevaluated, sym[i])
+        end
+    end
+    return unspecified, unevaluated
+end
 
 struct MissingParametersError <: Exception
     vars::Any

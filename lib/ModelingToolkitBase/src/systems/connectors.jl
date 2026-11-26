@@ -1128,6 +1128,66 @@ end
 """
     $(TYPEDSIGNATURES)
 
+The record literal equivalent to `x`, built from its own fields: `s` becomes
+`St(s.p, s.h)`, recursing through nested records and array-valued fields.
+"""
+function record_as_literal(x::SymbolicT)
+    return BSImpl.Const{VartypeT}(record_node_value(x, x, record_leaves(x)))
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Replace every record equation of `sys` with one equation per leaf, each inheriting the
+provenance of the equation it was split from.
+
+This runs before structural analysis because equations are canonicalized into the residual
+`rhs - lhs`, and a record cannot be subtracted. Arrays can, so they stay whole until
+`scalarize_tearing_state_eqs!`. With `lower_arguments=true`, record arguments in the
+equations are expressed as literals over their leaves for incidence analysis.
+"""
+function expand_record_equations(
+        sys::AbstractSystem, source_info::EquationSourceInformation;
+        lower_arguments = false,
+    )
+    eqs = equations(sys)
+    if any(is_record_equation, eqs)
+        new_eqs = Equation[]
+        new_source = Vector{Symbol}[]
+        new_is_connection = BitVector()
+        for (i, eq) in enumerate(eqs)
+            expanded = flatten_equation(eq)
+            append!(new_eqs, expanded)
+            src = source_info.eqs_source[i]
+            isconn = source_info.is_connection_equation[i]
+            for _ in eachindex(expanded)
+                push!(new_source, src)
+                push!(new_is_connection, isconn)
+            end
+        end
+        source_info = EquationSourceInformation(
+            new_source, new_is_connection, source_info.init_eqs_source
+        )
+        @set! sys.eqs = new_eqs
+        eqs = new_eqs
+    end
+    if lower_arguments && any(v -> Symbolics.issymstruct(v) || is_symstruct_field(v), unknowns(sys))
+        ir = get_irstructure(sys)
+        records = Set{SymbolicT}()
+        search_record_arguments!(SU.IRStructureSearchBuffer(ir, records), eqs)
+        filter!(!isparameter, records)
+        if !isempty(records)
+            rules = Dict{SymbolicT, SymbolicT}(r => record_as_literal(r) for r in records)
+            @set! sys.eqs = substitute_record_arguments(ir, eqs, rules)
+        end
+    end
+    return sys, source_info
+end
+
+
+"""
+    $(TYPEDSIGNATURES)
+
 Given a hierarchical system with [`connect`](@ref) equations, expand the connection
 equations and return the new system. `tol` is the tolerance for handling the singularities
 in stream connection equations that happen when a flow variable approaches zero.
