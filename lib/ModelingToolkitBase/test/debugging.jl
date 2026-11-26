@@ -236,6 +236,13 @@ end
     @test count("division by very small value", msg) == 1
     @test occursin("(w(t))[1]", msg)
 
+    # an array-valued observed variable used by an unscalarized equation
+    @named wsys = System([D(q) ~ 1 ./ w], t, collect(q), []; observed = [w ~ q .- 1])
+    wsys = complete(wsys)
+    msg = diagnose(wsys, [1.0, 2.0], [1.0, 2.0])
+    @test occursin("division by very small values of w(t) ([1]: 0)", msg)
+    @test isempty(diagnose(wsys, [3.0, 2.0], [3.0, 2.0]))
+
     # the analysis does not grow the system's IR
     ir = ModelingToolkitBase.get_irstructure(osys)
     nir = length(ir)
