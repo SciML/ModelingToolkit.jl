@@ -126,6 +126,8 @@ end
 end
 
 struct UnprintableError <: Exception end
+struct VerboseError <: Exception end
+Base.showerror(io::IO, ::VerboseError) = print(io, "λ", repeat("€", 10^6))
 Base.showerror(::IO, ::UnprintableError) = error("cannot print this error")
 throws_unprintable(x) = x < 0 ? throw(UnprintableError()) : x
 @register_symbolic throws_unprintable(x)
@@ -134,10 +136,10 @@ throws_unprintable(x) = x < 0 ? throw(UnprintableError()) : x
     diagnose = ModelingToolkitBase.SciMLBase.diagnose_symbolic_instability
     @variables y(t) z(t)
 
-    # an unused observed variable that cannot be evaluated at the failing state
+    # an unused observed variable that cannot be evaluated at the last accepted state
     @mtkcompile sys = System([D(x) ~ -x, y ~ sqrt(x)], t)
     msg = diagnose(sys, [-1.0], [-1.0])
-    @test occursin("evaluating sqrt(x(t)) at the failing state threw DomainError", msg)
+    @test occursin("evaluating sqrt(x(t)) at the last accepted state threw DomainError", msg)
     # the solver's result is returned, not the error
     prob = ODEProblem(sys, [x => -1.0], (0.0, 10.0); build_initializeprob = false)
     sol = solve(prob, Tsit5(); maxiters = 1, verbose = DEVerbosity(SciMLLogging.None()))
@@ -157,6 +159,16 @@ throws_unprintable(x) = x < 0 ? throw(UnprintableError()) : x
     # an error whose message cannot be printed
     @mtkcompile usys = System([D(x) ~ -x, y ~ throws_unprintable(x)], t)
     @test occursin("threw UnprintableError", diagnose(usys, [-1.0], [-1.0]))
+    # a long error message is cut
+    text = ModelingToolkitBase.error_text(VerboseError())
+    @test isvalid(text)
+    @test endswith(text, "…")
+    @test ncodeunits(text) <= ModelingToolkitBase.DIAGNOSIS_MAX_EXPRESSION_LENGTH + 4
+
+    # assertions at a complex state
+    @mtkcompile asys = System([D(x) ~ -x], t; assertions = [(x != 0) => "nonzero"])
+    msg = diagnose(asys, [1.0e-12 + 1.0e-12im], [1.0e-12 + 1.0e-12im])
+    @test occursin("Assertion violated", msg)
 end
 
 @testset "Symbolic instability analysis of array equations" begin
@@ -194,6 +206,20 @@ end
     msg = diagnose(xsys, [1.0, 0.0, 1.0], [1.0, 0.0, 1.0])
     @test occursin("division by very small values of q(t) ([2]: 0)", msg)
     @test !occursin("x(t) ≈", msg)
+    # an array unknown with offset axes
+    @variables k(t)[0:1]
+    @named ksys = System([D(k) ~ -k, D(x) ~ 1 / x], t)
+    msg = diagnose(complete(ksys), [1.0, 0.0, 1.0], [1.0, 0.0, 1.0])
+    @test !occursin("x(t) ≈", msg)
+
+    # an array term with more elements than the budget left is not checked, and stops
+    # the analysis
+    ctx = ModelingToolkitBase.SingularityAnalysis(xsys, Dict{ModelingToolkitBase.SymbolicT, ModelingToolkitBase.SymbolicT}(), String[])
+    ctx.budget[] = 1000
+    singular = (b, e) -> e > 0 && abs(b) > 1
+    vals = Any[fill(2.0, 1001), ones(1, 1001)]
+    @test ModelingToolkitBase.failing_elements(singular, string, vals, ctx) === nothing
+    @test ctx.budget[] == 0
 
     # a term lists at most `DIAGNOSIS_MAX_ELEMENTS` of its elements
     n = ModelingToolkitBase.DIAGNOSIS_MAX_ELEMENTS + 3

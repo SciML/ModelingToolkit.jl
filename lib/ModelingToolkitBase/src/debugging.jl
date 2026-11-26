@@ -224,35 +224,31 @@ end
 
 The values of the unknowns `unks` at the state `u`, as a substitution map. An array unknown
 (in a system that is not scalarized) takes as many consecutive entries of `u` as it has
-elements, in column-major order, and its elements are valued too.
+elements, in column-major order, and its elements are valued too. The unknowns after one
+whose shape is not known are left out, since their entries in `u` are not known either.
 """
 function state_substitution_map(unks, u)
-    sizes = map(unknown_size, unks)
-    if any(isnothing, sizes) || sum(prod, sizes; init = 0) != length(u)
-        return Dict{SymbolicT, SymbolicT}(zip(unks, u))
-    end
     subs = Dict{SymbolicT, SymbolicT}()
     k = 0
-    for (x, sz) in zip(unks, sizes)
-        if isempty(sz)
+    for x in unks
+        sh = SU.shape(x)
+        sh isa SU.ShapeVecT || break
+        if isempty(sh)
+            k < length(u) || break
             subs[x] = u[k += 1]
             continue
         end
-        vals = reshape(collect(u[(k + 1):(k + prod(sz))]), sz)
-        subs[x] = vals
-        for I in CartesianIndices(vals)
-            subs[x[Tuple(I)...]] = vals[I]
+        idxs = CartesianIndices(Tuple(sh))
+        k + length(idxs) <= length(u) || break
+        vals = reshape(collect(u[(k + 1):(k + length(idxs))]), size(idxs))
+        for (I, val) in zip(idxs, vals)
+            subs[x[Tuple(I)...]] = val
         end
-        k += length(vals)
+        # the whole array, for the equations that use it; only with 1-based axes
+        all(r -> first(r) == 1, sh) && (subs[x] = vals)
+        k += length(idxs)
     end
     return subs
-end
-
-# The size of the unknown `x` (`()` for a scalar), or `nothing` if it is not known.
-function unknown_size(x)
-    sh = SU.shape(x)
-    sh isa SU.ShapeVecT && all(r -> first(r) == 1, sh) || return nothing
-    return Tuple(length.(sh))
 end
 
 """
@@ -280,21 +276,21 @@ end
 """
     $(TYPEDSIGNATURES)
 
-The value of `expr` at the failing state: a number, an array of numbers, or `nothing` if it
-does not evaluate to either.
+The value of `expr` at the last state the integrator accepted: a number, an array of
+numbers, or `nothing` if it does not evaluate to either.
 
 Evaluating it can throw, e.g. `sqrt` of a negative number, also in an observed equation that
 the dynamics do not use. The analysis must not replace the solver's result with an exception,
 so the error is reported as a finding in `eq` and `nothing` is returned. Only the evaluation
-of the model's own expressions is guarded: interrupts and running out of memory or stack
-are rethrown, and errors in the analysis itself are not caught.
+of the model's own expressions is guarded, and interrupts and running out of memory are
+rethrown; errors in the analysis itself are not caught.
 """
 function value_at_state(expr, ctx::SingularityAnalysis, eq::Equation)
     is_evaluable(expr, ctx) || return nothing
     val = try
         Symbolics.value(ctx.subber(expr))
     catch err
-        err isa Union{InterruptException, OutOfMemoryError, StackOverflowError} && rethrow()
+        err isa Union{InterruptException, OutOfMemoryError} && rethrow()
         evaluation_failed!(eq, expr, err, ctx)
         return nothing
     end
@@ -303,7 +299,7 @@ function value_at_state(expr, ctx::SingularityAnalysis, eq::Equation)
     return nothing
 end
 
-# The value of `expr` at the failing state if it is a real number, otherwise `nothing`.
+# The value of `expr` at the last accepted state if it is a real number, otherwise `nothing`.
 function real_value_at_state(expr, ctx::SingularityAnalysis, eq::Equation)
     val = value_at_state(expr, ctx, eq)
     return val isa Real ? val : nothing
@@ -314,53 +310,66 @@ function evaluation_failed!(eq::Equation, expr, err, ctx::SingularityAnalysis)
     haskey(ctx.failed, eq) && return nothing
     ctx.failed[eq] = nothing
     add_finding!(ctx) do
-        "in equation $(abbreviated(eq)): evaluating $(abbreviated(expr)) at the failing state threw $(error_text(err))"
+        "in equation $(abbreviated(eq)): evaluating $(abbreviated(expr)) at the last accepted state threw $(error_text(err))"
     end
     return nothing
 end
 
-# The error message of `err`, abbreviated and on one line. It is rendered in full first:
-# printing it into the bounded `IO` would throw inside `showerror`, whose error hints catch
-# and log that.
+# The error message of `err`, abbreviated and on one line.
 function error_text(err)
-    text = try
-        sprint(showerror, err)
+    # `showerror` runs the error hints, which catch and log any exception: the output is
+    # cut without throwing
+    io = BoundedIO(IOBuffer(), DIAGNOSIS_MAX_EXPRESSION_LENGTH, false, Ref(false))
+    try
+        showerror(io, err)
     catch err2
         err2 isa InterruptException && rethrow()
         # `showerror` itself failed
-        string(nameof(typeof(err)))
+        return string(nameof(typeof(err)))
     end
-    return replace(abbreviated(text), '\n' => ' ')
+    text = String(take!(io.buf))
+    io.truncated[] && (text = with_ellipsis(text))
+    return replace(text, '\n' => ' ')
 end
 
-# An `IO` that accepts at most `limit` bytes, so that printing stops early instead of
-# expanding a large expression in full.
+# An `IO` that keeps at most `limit` bytes. If `stop`, writing more throws, so that printing
+# stops early instead of expanding a large expression in full; otherwise the rest is dropped.
 struct BoundedIO <: IO
     buf::IOBuffer
     limit::Int
+    stop::Bool
+    truncated::Base.RefValue{Bool}
 end
+BoundedIO(limit::Int) = BoundedIO(IOBuffer(), limit, true, Ref(false))
 struct OutputLimitReached <: Exception end
 function Base.unsafe_write(io::BoundedIO, p::Ptr{UInt8}, n::UInt)
     room = io.limit - position(io.buf)
     unsafe_write(io.buf, p, min(n, UInt(max(room, 0))))
-    n > room && throw(OutputLimitReached())
+    if n > room
+        io.truncated[] = true
+        io.stop && throw(OutputLimitReached())
+    end
     return n
 end
 Base.write(io::BoundedIO, b::UInt8) = unsafe_write(io, Ref(b), UInt(1))
 
+# `text`, cut at `DIAGNOSIS_MAX_EXPRESSION_LENGTH` bytes, with an ellipsis
+function with_ellipsis(text::String)
+    # the limit can fall inside a multi-byte character: drop its incomplete start
+    final = thisind(text, ncodeunits(text))
+    if final > 0 && !isvalid(text[final])
+        text = text[1:prevind(text, final)]
+    end
+    return text * " …"
+end
+
 function abbreviated(x)
-    io = BoundedIO(IOBuffer(), DIAGNOSIS_MAX_EXPRESSION_LENGTH)
+    io = BoundedIO(DIAGNOSIS_MAX_EXPRESSION_LENGTH)
     try
         print(io, x)
     catch err
         err isa OutputLimitReached || rethrow()
-        text = String(take!(io.buf))
-        # the limit can fall inside a multi-byte character: drop its incomplete start
-        final = thisind(text, ncodeunits(text))
-        if final > 0 && !isvalid(text[final])
-            text = text[1:prevind(text, final)]
-        end
-        return text * " …"
+        return with_ellipsis(String(take!(io.buf)))
     end
     return String(take!(io.buf))
 end
@@ -496,17 +505,23 @@ function failing_elements(singular, describe, vals, ctx::SingularityAnalysis; re
         ctx.budget[] -= 1
         return singular_real(vals...) ? describe(vals...) : nothing
     end
-    # the arguments' elements, broadcast to a common shape
+    # the arguments' elements, broadcast to a common shape (lazily)
     elements = try
-        broadcast(tuple, vals...)
+        Broadcast.instantiate(Broadcast.broadcasted(tuple, vals...))
     catch err
         err isa DimensionMismatch || rethrow()
         return nothing
     end
-    ctx.budget[] -= length(elements)
+    idxs = CartesianIndices(axes(elements))
+    if length(idxs) > ctx.budget[]
+        # checking every element would exceed the budget: stop the analysis here
+        ctx.budget[] = 0
+        return nothing
+    end
+    ctx.budget[] -= length(idxs)
     shown = CartesianIndex[]
     nmore = 0
-    for I in CartesianIndices(elements)
+    for I in idxs
         singular_real(elements[I]...) || continue
         if length(shown) < DIAGNOSIS_MAX_ELEMENTS
             push!(shown, I)
@@ -529,7 +544,7 @@ function find_failing_subterms(cond, prev_map, curr_map, diagnosis)
         #compare using previous non-nan values to find violating subclauses, then output current values
         lhs = Symbolics.value(Symbolics.substitute(args[1], prev_map))
         rhs = Symbolics.value(Symbolics.substitute(args[2], prev_map))
-        if lhs isa Number && rhs isa Number
+        if lhs isa Real && rhs isa Real
             # small margin -> violated
             margin = (op === (<) || op === (<=)) ? rhs - lhs : lhs - rhs
             if margin <= 1.0e-6
@@ -560,7 +575,7 @@ function clause_values(c, curr_map)
     parts = String[]
     for v in Symbolics.get_variables(c)
         val = Symbolics.value(Symbolics.substitute(v, curr_map))
-        push!(parts, val isa Number ? "$v = $(@sprintf("%.4g", val))" : "$v = $val")
+        push!(parts, "$v = $(format_value(val))")
     end
     return join(parts, ", ")
 end
