@@ -10,6 +10,8 @@ the signature
 ```
 
 The function `f` will be called with `observed` and `modified` `NamedTuple`s that are derived from their respective `NamedTuple` definitions.
+An affect that accepts a fifth argument receives `observed_at(u, p, t)`, a callable that
+evaluates the declared observations at another state, parameter set, and time.
 Each  declaration`NamedTuple` should map an expression to a symbol; for example if we pass `observed=(; x = a + b)` this will alias the result of executing `a+b` in the system as `x`
 so the value of `a + b` will be accessible as `observed.x` in `f`. `modified` currently restricts symbolic expressions to only bare variables, so only tuples of the form
 `(; x = y)` or `(; x)` (which aliases `x` as itself) are allowed.
@@ -251,12 +253,11 @@ end
     # Read the current values of the modified variables (pre-affect baseline)
     modvals = fa.mod_og_val_fun(integ.u, integ.p, integ.t)
     upd_component_array = NamedTuple{fa.mod_names}(modvals)
-    # Read the observed expressions
-    obs_component_array = NamedTuple{fa.obs_sym_tuple}(
-        fa.obs_fun(integ.u, integ.p, integ.t)
-    )
-    # Call the user-supplied affect function
-    upd_vals = fa.user_affect(upd_component_array, obs_component_array, fa.ctx, integ)
+    observed_at(u, p, t) = NamedTuple{fa.obs_sym_tuple}(fa.obs_fun(u, p, t))
+    obs_component_array = observed_at(integ.u, integ.p, integ.t)
+    args = (upd_component_array, obs_component_array, fa.ctx, integ)
+    upd_vals = applicable(fa.user_affect, args...) ? fa.user_affect(args...) :
+        fa.user_affect(args..., observed_at)
     # Write back any returned values
     if !isnothing(upd_vals)
         _generated_writeback(integ, fa.upd_funs, upd_vals)

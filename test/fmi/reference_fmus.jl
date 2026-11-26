@@ -14,10 +14,13 @@ function reference_fmu(model, version; type)
 end
 
 const STEP = 0.01
+const FMI3_INTERNAL_STEPS = Dict("Dahlquist" => 0.1, "Feedthrough" => 0.1, "Stair" => 0.2)
+
+communication_step(model, version) = version == 3 ? get(FMI3_INTERNAL_STEPS, model, STEP) : STEP
 
 function reference_component(model, version, type; name = :fmu)
     fmu = reference_fmu(model, version; type)
-    kwargs = type == :CS ? (; communication_step_size = STEP) : (;)
+    kwargs = type == :CS ? (; communication_step_size = communication_step(model, version)) : (;)
     return MTK.FMIComponent(Val(version); fmu, type, name, fmu_initial_states = true, kwargs...)
 end
 
@@ -29,7 +32,7 @@ function fmi_values(model, version, type, names, times)
         kwargs = (; recordValues = names, saveat = [time], showProgress = false)
         sol = type == :ME ?
             simulateME(fmu, (0.0, time); solver = Tsit5(), kwargs...) :
-            simulateCS(fmu, (0.0, time); dt = STEP, kwargs...)
+            simulateCS(fmu, (0.0, time); dt = communication_step(model, version), kwargs...)
         @test sol.success
         collect(Float64, sol.values.saveval[end])
     end
@@ -92,13 +95,14 @@ end
     # Stair counts up by one each second, from 1, through time events. It has no states.
     @testset "v$version $type" for version in (2, 3), type in (:ME, :CS)
         @mtkcompile sys = reference_component("Stair", version, type)
-        prob = ODEProblem(sys, Dict(), (0.0, 3.5))
+        offset = version == 3 && type == :CS ? 0.1 : 0.0
+        prob = ODEProblem(sys, Dict(), (0.0, 3.5 + offset))
         sol = solve(prob, Tsit5())
         @test SciMLBase.successful_retcode(sol)
         @test [sol(time; idxs = sys.counter) for time in 0.5:1.0:3.5] == [1, 2, 3, 4]
         # Solving again, and over a shorter span, starts the count afresh.
         @test solve(prob, Tsit5())[sys.counter][end] == 4
-        @test solve(remake(prob; tspan = (0.0, 1.5)), Tsit5())[sys.counter][end] == 2
+        @test solve(remake(prob; tspan = (0.0, 1.5 + offset)), Tsit5())[sys.counter][end] == 2
     end
 end
 
@@ -112,9 +116,14 @@ end
         longer = solve(remake(prob; tspan = (0.0, 2.0)), Tsit5())
         @test SciMLBase.successful_retcode(longer)
         @test longer[sys.x0][end] ≈ only(expected[end]) atol = 1.0e-12
-        between = solve(remake(prob; tspan = (0.0, 1.005)), Tsit5())
-        @test SciMLBase.successful_retcode(between)
-        @test between.t[end] == 1.005
+        off_grid = remake(prob; tspan = (0.0, 1.005))
+        if version == 3
+            @test_throws r"FMI 3.*1\.005.*lastSuccessfulTime" solve(off_grid, Tsit5())
+        else
+            between = solve(off_grid, Tsit5())
+            @test SciMLBase.successful_retcode(between)
+            @test between.t[end] == 1.005
+        end
     end
 end
 

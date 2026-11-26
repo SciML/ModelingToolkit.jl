@@ -8,9 +8,11 @@ ModelingToolkit is able to import FMUs following the [FMI Standard](https://fmi-
 This integration is done through [FMI.jl](https://github.com/ThummeTo/FMI.jl) and requires importing it to
 enable the relevant functionality. Currently Model Exchange (ME) and CoSimulation (CS) FMUs are supported.
 Model Exchange supports time and state events, accepted-step events, and discrete input changes at accepted steps.
-Numeric scalar ports include floating-point, Boolean, enumeration and integer types up to 32 bits.
-Enumerations must be exactly representable as `Float64`. FMI 3 `Int64` and `UInt64` variables are
-omitted with a warning. Array variables are unsupported.
+Numeric scalar ports include floating-point, Boolean, enumeration and integer types.
+Enumerations must be exactly representable as `Float64`. FMI 3 `Int64` and `UInt64` ports and
+parameters support the inclusive ranges `[-2^53, 2^53]` and `[0, 2^53]`, respectively. Supply
+integer values so the range check can inspect the value before floating-point conversion.
+Array variables are unsupported.
 
 !!! danger "Experimental"
 
@@ -25,6 +27,7 @@ First, the required libraries must be imported and the FMU loaded using FMI.jl.
 ```@example fmi
 using ModelingToolkit, FMI, FMIZoo, OrdinaryDiffEq
 using ModelingToolkit: t_nounits as t, D_nounits as D
+using OrdinaryDiffEqNonlinearSolve: BrownFullBasicInit
 
 # This is a spring-pendulum FMU from FMIZoo.jl. It is a v2 FMU
 # and we are importing it in ModelExchange format.
@@ -87,11 +90,14 @@ We can simulate this model like any other ModelingToolkit system.
 ```@repl fmi
 sys = mtkcompile(model)
 prob = ODEProblem(sys, [sys.mass__s => 0.5, sys.mass__v => 0.0], (0.0, 5.0))
-sol = solve(prob, Tsit5())
+sol = solve(prob, Tsit5(); saveat = 0.0:0.1:5.0)
 ```
 
-We can interpolate the solution object to obtain values at arbitrary time points in the solved interval,
-just like a normal solution.
+FMU state variables and continuous outputs from an event-free solve can be evaluated at arbitrary
+times within the solved interval. For a solve with Model Exchange events, the solution records
+other continuous outputs at saved times. Pass `saveat` to `solve` to request values at additional
+times. Use `continuity = :left` or `continuity = :right` to select the value at an event time.
+A query at a time without a snapshot raises an error for those outputs.
 
 ```@repl fmi
 sol(0.0:0.1:1.0; idxs = sys.mass__a)
@@ -117,6 +123,11 @@ more computationally expensive. Co-Simulation communicates at the solve endpoint
 endpoint requires an FMU that declares support for variable communication steps. The
 `stop_time` keyword sets the FMU experiment limit, which defaults to the solve endpoint and can
 be set to any time at or after the solve endpoint.
+
+The FMU holds the inputs sampled at the left communication point for the entire interval.
+States and outputs, including direct-feedthrough outputs, are read at the right communication
+point with that same input. The host then samples inputs for the next interval after any
+coupled reinitialization. FMI 3 Co-Simulation checks that the FMU reached each requested time.
 
 This model alone does not have any differential variables, and calling `mtkcompile` will lead
 to an `System` with no unknowns.
@@ -157,6 +168,17 @@ fmu = loadFMU(
     joinpath(@__DIR__, "..", "..", "..", "test", "fmi", "fmus", "SimpleAdder.fmu");
     type = :ME)
 fmu.modelDescription.modelVariables
+```
+
+For this FMU, `fmu_initial_states = true` uses its built-in initial state `c = 1`.
+
+```@example fmi
+@named initial_adder = ModelingToolkit.FMIComponent(Val(2); fmu, type = :ME, fmu_initial_states = true)
+@mtkcompile initialized = System(
+    [initial_adder.a ~ 1.0, initial_adder.b ~ 2.0], t; systems = [initial_adder])
+initialized_sol = solve(ODEProblem(initialized, [], (0.0, 0.1)), Tsit5())
+@assert initialized_sol[initialized.initial_adder.c][1] == 1.0
+initialized_sol
 ```
 
 This FMU is equivalent to the following model:

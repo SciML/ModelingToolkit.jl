@@ -4,6 +4,7 @@ using DiffEqBase: BrownFullBasicInit
 import ModelingToolkit as MTK
 
 const FMU_DIR = joinpath(@__DIR__, "fmus")
+const STATE_SPACE_FMU_STEP = 1.0e-3 # FIXED_SOLVER_STEP in the FMU's sources/config.h
 
 @testset "Standalone pendulum model" begin
     fmu = loadFMU("SpringPendulum1D", "Dymola", "2022x"; type = :ME)
@@ -250,7 +251,7 @@ end
     @testset "v3, CS" begin
         fmu = loadFMU(joinpath(FMU_DIR, "StateSpace.fmu"); type = :CS)
         @named sspace = MTK.FMIComponent(
-            Val(3); fmu, communication_step_size = 1.0e-6, type = :CS,
+            Val(3); fmu, communication_step_size = STATE_SPACE_FMU_STEP, type = :CS,
             reinitializealg = BrownFullBasicInit(abstol = 1.0e-7)
         )
         @test MTK.isinput(sspace.u)
@@ -367,10 +368,10 @@ end
     @testset "v3, CS" begin
         fmu = loadFMU(joinpath(FMU_DIR, "StateSpace.fmu"); type = :CS)
         @named sspace1 = MTK.FMIComponent(
-            Val(3); fmu, type = :CS, communication_step_size = 1.0e-5
+            Val(3); fmu, type = :CS, communication_step_size = STATE_SPACE_FMU_STEP
         )
         @named sspace2 = MTK.FMIComponent(
-            Val(3); fmu, type = :CS, communication_step_size = 1.0e-5
+            Val(3); fmu, type = :CS, communication_step_size = STATE_SPACE_FMU_STEP
         )
         sys, prob = build_looped_sspace(sspace1, sspace2)
         sol = solve(prob, Rodas5P(autodiff = AutoFiniteDiff()); reltol = 1.0e-8)

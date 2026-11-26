@@ -5,6 +5,21 @@ import FiniteDiff, ForwardDiff
 
 const FIXTURE_FMUS = joinpath(@__DIR__, "fmus")
 
+function feedthrough_step_hook(step)
+    # Feedthrough has no state to advance. Supply a communication clock for arbitrary intervals.
+    function do_step(instance, point, h, no_reset, event, terminate, early, last_time)
+        unsafe_store!(event, UInt8(0))
+        unsafe_store!(terminate, UInt8(0))
+        unsafe_store!(early, UInt8(0))
+        unsafe_store!(last_time, step(point, h))
+        return Cuint(FMI.fmi3StatusOK)
+    end
+    return @cfunction(
+        $do_step, Cuint,
+        (Ptr{Cvoid}, Cdouble, Cdouble, UInt8, Ptr{UInt8}, Ptr{UInt8}, Ptr{UInt8}, Ptr{Cdouble})
+    )
+end
+
 function adder_system(fmu, type; initialization_eq = false, kwargs...)
     step = type == :CS ? (; communication_step_size = 0.01) : (;)
     @named adder = MTK.FMIComponent(Val(2); fmu, type, step..., kwargs...)
@@ -14,6 +29,47 @@ function adder_system(fmu, type; initialization_eq = false, kwargs...)
         initialization_eqs = initialization_eq ? [adder.c ~ 3.0] : []
     )
     return sys
+end
+
+@testset "Co-Simulation holds the left input sample" begin
+    for jump in (0.01, 0.025)
+        fmu = loadFMU(joinpath(FIXTURE_FMUS, "SimpleAdder.fmu"); type = :CS)
+        @named adder = MTK.FMIComponent(Val(2); fmu, type = :CS, communication_step_size = 0.01)
+        @variables z(t) = 0.0
+        @mtkcompile sys = System(
+            [adder.a ~ ifelse(t >= jump, 100.0, 0.0), adder.b ~ 2.0, D(z) ~ 1.0], t;
+            systems = [adder]
+        )
+        sol = solve(ODEProblem(sys, [sys.adder.c => 0.0], (0.0, 0.025)), Tsit5())
+        @test sol.retcode == SciMLBase.ReturnCode.Success
+        @test sol.t[end] == 0.025
+        @test sol[sys.adder.c][end] ≈ 3 * 0.025 + 100 * (0.025 - jump)
+    end
+end
+
+@testset "FMI 3 reports the achieved Co-Simulation time" begin
+    for achieved in (0.0025, 0.005)
+        fmu = loadFMU("Feedthrough", "ModelicaReferenceFMUs", "0.0.39", "3.0"; type = :CS)
+        hook = feedthrough_step_hook((point, h) -> achieved)
+        fmu.cDoStep = Base.unsafe_convert(Ptr{Cvoid}, hook)
+        GC.@preserve hook begin
+            @named ports = MTK.FMIComponent(Val(3); fmu, type = :CS, communication_step_size = 0.01)
+            eqs = [
+                getproperty(ports, name) ~ (name == :Enumeration_input ? 1.0 : 0.0)
+                    for name in (MTK.getname(v) for v in unknowns(ports) if MTK.isinput(v))
+            ]
+            @variables z(t) = 0.0
+            @mtkcompile sys = System([eqs; D(z) ~ 1.0], t; systems = [ports])
+            prob = ODEProblem(sys, [], (0.0, 0.005))
+            if achieved == 0.005
+                sol = solve(prob, Tsit5())
+                @test sol.retcode == SciMLBase.ReturnCode.Success
+                @test sol.t[end] == achieved
+            else
+                @test_throws r"FMI 3.*0\.005.*0\.0025" solve(prob, Tsit5())
+            end
+        end
+    end
 end
 
 @testset "Explicit FMU initialization equations" begin
@@ -63,15 +119,87 @@ end
     end
 end
 
-@testset "FMI 3 unsupported wide integer ports" begin
+@testset "FMI 3 wide integer ports and range diagnostics" begin
     @testset "$type" for type in (:ME, :CS)
         fmu = loadFMU("Feedthrough", "ModelicaReferenceFMUs", "0.0.39", "3.0"; type)
-        step = type == :CS ? (; communication_step_size = 0.01) : (;)
-        ports = @test_logs match_mode = :any (:warn, r"FMI 3 Int64 variables Int64_input") (
-            :warn, r"FMI 3 UInt64 variables UInt64_input",
-        ) MTK.FMIComponent(Val(3); fmu, type, name = :ports, step...)
-        names = Set(MTK.getname.(unknowns(ports)))
-        @test isempty(intersect(names, (:Int64_input, :UInt64_input, :Int64_output, :UInt64_output)))
+        step = type == :CS ? (; communication_step_size = 0.1) : (;)
+        @named ports = MTK.FMIComponent(Val(3); fmu, type, step...)
+        @test MTK.isinput(ports.Int64_input)
+        @test MTK.isinput(ports.UInt64_input)
+        @variables z(t) = 0.0
+        function port_problem(i64, u64)
+            values = Dict{Symbol, Integer}(
+                :Int64_input => i64, :UInt64_input => u64, :Int32_input => typemax(Int32),
+                :UInt32_input => typemax(UInt32), :Enumeration_input => 1
+            )
+            eqs = [
+                getproperty(ports, name) ~ get(values, name, 0)
+                    for name in (MTK.getname(v) for v in unknowns(ports) if MTK.isinput(v))
+            ]
+            @mtkcompile sys = System([eqs; D(z) ~ 1.0], t; systems = [ports])
+            return sys, ODEProblem(sys, [], (0.0, 0.2))
+        end
+        sys, prob = port_problem(-137, UInt64(251))
+        sol = solve(prob, Tsit5())
+        @test sol.retcode == SciMLBase.ReturnCode.Success
+        @test sol[sys.ports.Int64_output][end] == -137
+        @test sol[sys.ports.UInt64_output][end] == 251
+        @test sol[sys.ports.Int32_output][end] == typemax(Int32)
+        @test sol[sys.ports.UInt32_output][end] == typemax(UInt32)
+        @test_throws r"Int64.*Int64_input.*9007199254740993" solve(last(port_problem(9007199254740993, 0)), Tsit5())
+        @test_throws r"UInt64.*UInt64_input.*9007199254740993" solve(last(port_problem(0, UInt64(9007199254740993))), Tsit5())
+    end
+end
+
+@testset "Model Exchange snapshots event-dependent continuous outputs" begin
+    fmu = loadFMU(joinpath(FIXTURE_FMUS, "SimpleAdder.fmu"); type = :ME)
+    completed = Ref(0)
+    original_get = fmu.cGetReal
+    original_enter = fmu.cEnterEventMode
+    output_ref = fmu.modelDescription.stringValueReferences["out2"]
+    offsets = Dict{Ptr{Cvoid}, Float64}()
+    function complete(instance, no_reset, event, terminate)
+        completed[] += 1
+        first_step = completed[] == 1
+        unsafe_store!(event, Cint(first_step))
+        unsafe_store!(terminate, Cint(0))
+        return zero(Cuint)
+    end
+    function enter(instance)
+        offsets[instance] = 100.0
+        return ccall(original_enter, Cuint, (Ptr{Cvoid},), instance)
+    end
+    function get_real(instance, refs, n, values)
+        status = ccall(original_get, Cuint, (Ptr{Cvoid}, Ptr{UInt32}, Csize_t, Ptr{Cdouble}), instance, refs, n, values)
+        for i in 1:Int(n)
+            if unsafe_load(refs, i) == output_ref
+                unsafe_store!(values, unsafe_load(values, i) + get(offsets, instance, 0.0), i)
+            end
+        end
+        return status
+    end
+    complete_hook = @cfunction($complete, Cuint, (Ptr{Cvoid}, Cint, Ptr{Cint}, Ptr{Cint}))
+    enter_hook = @cfunction($enter, Cuint, (Ptr{Cvoid},))
+    get_hook = @cfunction($get_real, Cuint, (Ptr{Cvoid}, Ptr{UInt32}, Csize_t, Ptr{Cdouble}))
+    fmu.cCompletedIntegratorStep = Base.unsafe_convert(Ptr{Cvoid}, complete_hook)
+    fmu.cEnterEventMode = Base.unsafe_convert(Ptr{Cvoid}, enter_hook)
+    fmu.cGetReal = Base.unsafe_convert(Ptr{Cvoid}, get_hook)
+    GC.@preserve complete_hook enter_hook get_hook begin
+        sys = adder_system(fmu, :ME)
+        prob = ODEProblem(sys, [sys.adder.c => 0.0], (0.0, 0.05))
+        sol = solve(prob, Tsit5(); dt = 0.01, adaptive = false, saveat = [0.0, 0.005, 0.025, 0.05])
+        @test sol.retcode == SciMLBase.ReturnCode.Success
+        @test sol(0.005; idxs = sys.adder.out2) ≈ 0.04
+        @test sol(0.01; idxs = sys.adder.out2, continuity = :left) ≈ 0.08
+        @test sol(0.01; idxs = sys.adder.out2, continuity = :right) ≈ 100.08
+        @test sol(0.025; idxs = sys.adder.out2) ≈ 100.2
+        @test sol(0.05; idxs = sys.adder.out2) ≈ 100.4
+        @test_throws r"FMI.*snapshot.*0\.035" sol(0.035; idxs = sys.adder.out2)
+        empty!(offsets)
+        again = solve(remake(prob; u0 = [sys.adder.c => 2.0]), Tsit5(); dt = 0.01, adaptive = false)
+        @test again.retcode == SciMLBase.ReturnCode.Success
+        @test again(0.05; idxs = sys.adder.out2) ≈ 4.4
+        @test sol(0.05; idxs = sys.adder.out2) ≈ 100.4
     end
 end
 
@@ -88,20 +216,11 @@ end
         )
         fmu = loadFMU("Feedthrough", "ModelicaReferenceFMUs", "0.0.39", "3.0"; type = :CS)
         fmu.modelDescription.coSimulation.canHandleVariableCommunicationStepSize = variable
-        original = fmu.cDoStep
         requests = Tuple{Float64, Float64}[]
-        function record_step(instance, point, h, no_reset, event, terminate, early, last_time)
+        hook = feedthrough_step_hook() do point, h
             push!(requests, (point, h))
-            return ccall(
-                original, Cuint,
-                (Ptr{Cvoid}, Cdouble, Cdouble, UInt8, Ptr{UInt8}, Ptr{UInt8}, Ptr{UInt8}, Ptr{Cdouble}),
-                instance, point, h, no_reset, event, terminate, early, last_time
-            )
+            return point + h
         end
-        hook = @cfunction(
-            $record_step, Cuint,
-            (Ptr{Cvoid}, Cdouble, Cdouble, UInt8, Ptr{UInt8}, Ptr{UInt8}, Ptr{UInt8}, Ptr{Cdouble})
-        )
         fmu.cDoStep = Base.unsafe_convert(Ptr{Cvoid}, hook)
         GC.@preserve hook begin
             @named ports = MTK.FMIComponent(
@@ -116,7 +235,7 @@ end
             prob = ODEProblem(sys, [], (start, finish))
             sol = solve(prob, Tsit5())
             @test SciMLBase.successful_retcode(sol)
-            @test sol[sys.ports.Float64_continuous_output][end] ≈ 4 * (finish - start)
+            @test sol[sys.ports.Float64_continuous_output][end] ≈ 4 * (first(last(requests)) - start)
             @test sum(last, requests; init = 0.0) ≈ finish - start
             if !variable
                 @test requests == [(0.0, 0.01), (0.01, 0.01)]

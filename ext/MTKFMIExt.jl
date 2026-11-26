@@ -114,6 +114,8 @@ const FMI3_ACCESSORS = Dict(
     :UInt8 => (FMI.fmi3UInt8, FMI.fmi3SetUInt8, FMI.fmi3GetUInt8!),
     :UInt16 => (FMI.fmi3UInt16, FMI.fmi3SetUInt16, FMI.fmi3GetUInt16!),
     :UInt32 => (FMI.fmi3UInt32, FMI.fmi3SetUInt32, FMI.fmi3GetUInt32!),
+    :Int64 => (FMI.fmi3Int64, FMI.fmi3SetInt64, FMI.fmi3GetInt64!),
+    :UInt64 => (FMI.fmi3UInt64, FMI.fmi3SetUInt64, FMI.fmi3GetUInt64!),
     :Boolean => (FMI.fmi3Boolean, FMI.fmi3SetBoolean, FMI.fmi3GetBoolean!),
     :Enumeration => (FMI.fmi3Int64, FMI.fmi3SetInt64, FMI.fmi3GetInt64!),
 )
@@ -162,6 +164,19 @@ end
 
 to_fmi(::Type{T}, x) where {T <: AbstractFloat} = T(x)
 to_fmi(::Type{T}, x) where {T <: Integer} = round(T, x)
+
+is_wide_integer(kind) = kind in (:Int64, :UInt64)
+
+function checked_fmi_integer(x::Real, kind::String, variable::String)
+    bound = Int64(1) << 53
+    lower = kind == "UInt64" ? 0 : -bound
+    if !(isinteger(x) && lower <= x <= bound)
+        throw(ArgumentError("FMI 3 $kind variable $variable has value $x outside the supported integer range [$lower, $bound]."))
+    end
+    return Float64(x)
+end
+
+@register_symbolic checked_fmi_integer(x::Real, kind::String, variable::String)
 
 """
     $(TYPEDSIGNATURES)
@@ -256,8 +271,15 @@ function get_values!(out, wrapper, refs::TypedValueReferences)
         check_status!(wrapper, version, status, nameof(get!))
         values === out && continue
         for (j, i) in enumerate(positions)
-            value = Float64(values[j])
-            T !== Int64 || value == values[j] || throw(ArgumentError("FMI value $(values[j]) for $(kind) reference $(vrs[j]) cannot be represented exactly as Float64."))
+            native = values[j]
+            bound = Int64(1) << 53
+            if is_wide_integer(kind) && !(-bound <= native <= bound)
+                key = (kind, vrs[j])
+                variable = first(mv.name for mv in wrapper.fmu.modelDescription.modelVariables if fmi_key(wrapper.fmu, mv) == key)
+                checked_fmi_integer(native, string(kind), variable)
+            end
+            value = Float64(native)
+            T !== Int64 || value == native || throw(ArgumentError("FMI value $native for $(kind) reference $(vrs[j]) cannot be represented exactly as Float64."))
             out[i] = value
         end
     end
@@ -272,12 +294,15 @@ provided as a `Val` to the function. Supports Model Exchange and CoSimulation FM
 Continuous states must be `FMI.fmi2Real` or `FMI.fmi3Float64`. FMI 2 Real, Integer,
 Enumeration and Boolean ports and parameters and FMI 3 Float32, Float64, Int8, Int16, Int32,
 UInt8, UInt16, UInt32, Boolean and exactly representable Enumeration values are carried
-as `Float64`. FMI 3 Int64 and UInt64 ports and parameters are omitted with a warning because
-their full ranges cannot be represented as `Float64`. String, binary and clock variables
-are also omitted with a warning.
+as `Float64`. FMI 3 Int64 and UInt64 ports and parameters support integral values in
+`[-2^53, 2^53]` and `[0, 2^53]` respectively. Supply integer values to check this limit
+before any conversion to floating point. String, binary and clock variables are omitted
+with a warning.
 
 Model Exchange supports state, time, accepted-step and discrete input events. Discrete
 outputs are updated at events. An FMU without continuous states gets a placeholder state.
+After a solve with events, continuous outputs other than the FMU's states are available
+at saved times and on both sides of events. Use `saveat` to request additional times.
 Use a finite-difference solver option such as `Rodas5P(autodiff = AutoFiniteDiff())` for
 solvers that need derivatives through a Model Exchange FMU.
 
@@ -294,7 +319,9 @@ states declared with `initial = "calculated"` itself. Hierarchical names such as
   supported by FMI.jl.
 - `communication_step_size`: The periodic interval at which communication with CoSimulation
   FMUs will occur. Required for Co-Simulation. A shorter final interval is only supported
-  if the FMU declares variable communication step sizes.
+  if the FMU declares variable communication step sizes. Each interval uses the input
+  sample from its left endpoint, including when reading direct-feedthrough outputs at
+  the right endpoint.
 - `reinitializealg`: The DAE initialization algorithm to use for the callback managing the
   FMU. For CoSimulation FMUs whose states/outputs are used in algebraic equations of the
   system, this needs to be an algorithm that will solve for the new algebraic variables.
@@ -408,7 +435,13 @@ function MTK.FMIComponent(
         )
     )
     # create a symbolic variable for the input buffer
-    __mtk_internal_x = copy(inputs)
+    function checked_transport(var)
+        key = value_references[var]
+        kind = first(key)
+        is_wide_integer(kind) || return var
+        return SymbolicUtils.unwrap(checked_fmi_integer(Num(var), string(kind), first(model_variables[key]).name))
+    end
+    __mtk_internal_x = map(checked_transport, inputs)
     if isempty(__mtk_internal_x)
         __mtk_internal_x = Float64[]
     end
@@ -456,7 +489,7 @@ function MTK.FMIComponent(
         params, [], parameter_dependencies, defs; parameters = true
     )
     # create a symbolic variable for the parameter buffer
-    __mtk_internal_p = copy(params)
+    __mtk_internal_p = map(checked_transport, params)
     if isempty(__mtk_internal_p)
         __mtk_internal_p = Float64[]
     end
@@ -507,7 +540,7 @@ function MTK.FMIComponent(
 
         # differential and observed equations
         diffeqs = Equation[]
-        for (i, var) in enumerate([dervars; outputs])
+        for (i, var) in enumerate(dervars)
             push!(diffeqs, var ~ call_expr[i])
         end
         for (var, dervar) in zip(derivative_order, dervars)
@@ -542,8 +575,35 @@ function MTK.FMIComponent(
             push!(diffeqs, var ~ call_expr[offset + k])
             push!(states, var)
         end
-        me_observed = (; wrapper, inputs = __mtk_internal_x, params = copy(params))
+        me_observed = (; wrapper, inputs = __mtk_internal_x, params = __mtk_internal_p)
         me_modified = (; (isempty(diffvars) ? (;) : (; states = diffvars))..., discrete_modified...)
+        finalize_observed = (; wrapper)
+        initialize_observed = me_observed
+        initialize_modified = discrete_modified
+        history_modified = (;)
+        if !isempty(outputs)
+            # The epoch distinguishes the two solution states at an event timestamp.
+            @variables __mtk_internal_epoch(t) = 0.0 [irreducible = true]
+            @discretes __mtk_internal_history(t)::MEOutputHistory = MEOutputHistory()
+            @parameters (me_outputs::MEOutputs)(..)[1:length(outputs)] = MEOutputs(length(outputs))
+            push!(states, __mtk_internal_epoch)
+            push!(diffeqs, D(__mtk_internal_epoch) ~ 0)
+            output_expr = me_outputs(
+                wrapper, __mtk_internal_u, __mtk_internal_x, __mtk_internal_p, t,
+                __mtk_internal_epoch, __mtk_internal_history
+            )
+            for (i, var) in enumerate(outputs)
+                push!(diffeqs, var ~ output_expr[i])
+            end
+            me_observed = (;
+                me_observed..., state_values = __mtk_internal_u,
+                event_epoch = __mtk_internal_epoch, history = __mtk_internal_history,
+            )
+            me_modified = (; me_modified..., epoch = __mtk_internal_epoch)
+            initialize_modified = (; initialize_modified..., history = __mtk_internal_history)
+            history_modified = (; history_archive = __mtk_internal_history)
+            finalize_observed = me_observed
+        end
         for (k, var) in enumerate(event_vars)
             # A signed index encodes the crossing direction; zero denotes the time event.
             root = k == length(event_vars) ? 0 : k
@@ -564,17 +624,20 @@ function MTK.FMIComponent(
         @parameters (step_due::MEStepDue)(..) = MEStepDue()
         push!(params, step_due)
         initialize_affect = MTKBase.ImperativeAffect(
-            fmiMEInitialize!; observed = me_observed, modified = discrete_modified
+            fmiMEInitialize!; observed = initialize_observed, modified = initialize_modified
         )
-        finalize_affect = MTKBase.ImperativeAffect(fmiMEFinalize!; observed = (; wrapper))
+        finalize_affect = MTKBase.ImperativeAffect(
+            fmiMEFinalize!; observed = finalize_observed
+        )
         step_affect = MTKBase.ImperativeAffect(
-            fmiMEEvent!; observed = me_observed, modified = me_modified
+            fmiMEEvent!; observed = me_observed, modified = (; me_modified..., history_modified...)
         )
         instance_management_callback = MTKBase.SymbolicDiscreteCallback(
             step_due(wrapper, __mtk_internal_x, t) > 0.5, step_affect; initialize = initialize_affect,
             finalize = finalize_affect, reinitializealg
         )
 
+        isempty(outputs) || push!(params, __mtk_internal_history, me_outputs)
         push!(params, wrapper)
         append!(observed, der_observed)
     elseif type == :CS
@@ -595,7 +658,7 @@ function MTK.FMIComponent(
 
         # use `ImperativeAffect` for instance management here
         cb_observed = (;
-            inputs = __mtk_internal_x, params = copy(params),
+            inputs = __mtk_internal_x, params = __mtk_internal_p,
             t, wrapper, dt = communication_step_size,
         )
         cb_modified = (;)
@@ -612,9 +675,10 @@ function MTK.FMIComponent(
             modified = cb_modified, ctx = _functor
         )
         finalize_affect = MTKBase.ImperativeAffect(fmiFinalize!; observed = (; wrapper))
+        step_observed = (; wrapper, dt = communication_step_size)
         # the callback affect performs the stepping
         step_affect = MTKBase.ImperativeAffect(
-            fmiCSStep!; observed = cb_observed, modified = cb_modified, ctx = _functor
+            fmiCSStep!; observed = step_observed, modified = cb_modified, ctx = _functor
         )
         instance_management_callback = MTKBase.SymbolicDiscreteCallback(
             communication_step_size, step_affect; initialize = initialize_affect,
@@ -627,8 +691,18 @@ function MTK.FMIComponent(
             discrete_events, MTKBase.SymbolicDiscreteCallback(
                 final_step_due(functor, t) > 0.5,
                 MTKBase.ImperativeAffect(
-                    fmiCSStep!; observed = cb_observed, modified = cb_modified, ctx = _functor
+                    fmiCSStep!; observed = step_observed, modified = cb_modified, ctx = _functor
                 ); reinitializealg
+            )
+        )
+        # Sample after the stepping callback has reinitialized the coupled system.
+        @parameters (sample_due::CSSampleDue)(..) = CSSampleDue()
+        push!(params, sample_due)
+        push!(
+            discrete_events, MTKBase.SymbolicDiscreteCallback(
+                sample_due(functor, t) > 0.5,
+                MTKBase.ImperativeAffect(fmiCSSample!; observed = (; inputs = __mtk_internal_x, t), ctx = _functor);
+                reinitializealg = SciMLBase.NoInit()
             )
         )
 
@@ -675,14 +749,11 @@ function fmi_variables_to_mtk_variables!(
         records = model_variables[valRef]
         varnames = [mv.name for mv in records]
         kind = first(valRef)
-        if kind in (:Int64, :UInt64)
-            @warn "FMI 3 $kind variables $(join(varnames, ", ")) are unsupported because the Float64 transport cannot represent all $kind values."
-            continue
-        elseif !haskey(accessor_table(fmu), kind)
+        if !haskey(accessor_table(fmu), kind)
             @warn "FMU variable $(join(varnames, ", ")) is not numeric and is left out of the component."
             continue
         end
-        stateT = Float64
+        stateT = is_wide_integer(kind) ? accessor_table(fmu)[kind][1] : Float64
         snames = Symbol[]
         ders = Int[]
         for name in varnames
@@ -720,10 +791,14 @@ function fmi_variables_to_mtk_variables!(
         append!(allvars, vars)
         if parameters
             defval = FMI.getStartValue(first(records))
-            if defval isa Integer && Float64(defval) != defval
+            if is_wide_integer(kind)
+                defval === nothing || checked_fmi_integer(defval, string(kind), first(varnames))
+                defs[vars[1]] = defval
+            elseif defval isa Integer && Float64(defval) != defval
                 throw(ArgumentError("The start value of FMU parameter $(first(varnames)) cannot be represented exactly as Float64."))
+            else
+                defs[vars[1]] = defval isa Number ? Float64(defval) : defval
             end
-            defs[vars[1]] = defval isa Number ? Float64(defval) : defval
         end
     end
     return
@@ -1245,6 +1320,68 @@ function (::MEStepDue)(wrapper, inputs, time)
     return (needs_completion || discrete_inputs_changed(wrapper, inputs)) ? 1.0 : 0.0
 end
 
+mutable struct MEOutputHistory
+    samples::Dict{Tuple{Float64, Float64}, Vector{Float64}}
+    next_saved::Int
+    active::Bool
+    eventful::Bool
+end
+
+MEOutputHistory() = MEOutputHistory(Dict{Tuple{Float64, Float64}, Vector{Float64}}(), 1, false, false)
+MEOutputHistory(history::MEOutputHistory) = history
+# Each solve installs one archive, shared by its discrete parameter snapshots.
+Base.copy(history::MEOutputHistory) = history
+
+struct MEOutputs
+    count::Int
+end
+
+function (::MEOutputs)(wrapper, states, inputs, params, time, epoch, history)
+    if !history.active && history.eventful
+        return get(history.samples, (epoch, time)) do
+            throw(ArgumentError("FMI Model Exchange has no continuous-output snapshot at time $time. Query a saved point or include this time in saveat."))
+        end
+    end
+    states, inputs, params = as_fmi_vector(states), as_fmi_vector(inputs), as_fmi_vector(params)
+    get_instance_ME!(wrapper, inputs, params, time)
+    sync_me_point!(wrapper, states, inputs, time)
+    return get_values!(wrapper.outputs_buffer, wrapper, wrapper.outputs)
+end
+
+@register_array_symbolic (fn::MEOutputs)(
+    wrapper::Union{FMI2InstanceWrapper, FMI3InstanceWrapper}, states::Vector{<:Real},
+    inputs::Vector{<:Real}, params::Vector{<:Real}, t::Real, epoch::Real, history::MEOutputHistory
+) begin
+    size = (fn.count,)
+    eltype = Float64
+    ndims = 1
+end
+
+function save_me_output!(wrapper, history, time, epoch)
+    snapshot = get_values!(zeros(length(wrapper.outputs_buffer)), wrapper, wrapper.outputs)
+    history.samples[(epoch, time)] = snapshot
+    return
+end
+
+function save_me_point!(wrapper, history, time, epoch, states, inputs)
+    sync_me_point!(wrapper, as_fmi_vector(states), as_fmi_vector(inputs), time)
+    return save_me_output!(wrapper, history, time, epoch)
+end
+
+function save_me_points!(observed_at, o, integrator)
+    sol = SciMLBase.get_sol(integrator)
+    history = o.history
+    for i in history.next_saved:length(sol.t)
+        time = sol.t[i]
+        point = observed_at(sol.u[i], integrator.p, time)
+        if point.event_epoch == o.event_epoch
+            save_me_point!(o.wrapper, history, time, point.event_epoch, point.state_values, point.inputs)
+        end
+    end
+    history.next_saved = length(sol.t) + 1
+    return
+end
+
 """
     $(TYPEDSIGNATURES)
 
@@ -1268,12 +1405,13 @@ Synchronize a Model Exchange FMU with the solver at an accepted step or a locali
 event. Notify the FMU of the completed step if required, then handle any event and
 write back the FMU's state resets and discrete outputs.
 """
-function fmiMEEvent!(m, o, root, integrator)
+function fmiMEEvent!(m, o, root, integrator, observed_at)
     wrapper = o.wrapper
     time = Float64(integrator.t)
     inputs = as_fmi_vector(o.inputs)
     states = haskey(m, :states) ? as_fmi_vector(m.states) : Float64[]
     get_instance_ME!(wrapper, inputs, as_fmi_vector(o.params), time)
+    haskey(o, :history) && save_me_points!(observed_at, o, integrator)
     sync_me_point!(wrapper, states, inputs, time)
 
     step_event = false
@@ -1293,6 +1431,11 @@ function fmiMEEvent!(m, o, root, integrator)
         return (;)
     end
 
+    if haskey(o, :history)
+        o.history.eventful = true
+        haskey(o.history.samples, (o.event_epoch, time)) ||
+            save_me_output!(wrapper, o.history, time, o.event_epoch)
+    end
     enter_event_mode!(wrapper, step_event, root)
     if input_event
         split = wrapper.input_split
@@ -1304,7 +1447,12 @@ function fmiMEEvent!(m, o, root, integrator)
     if changed && haskey(m, :states)
         reset_states = copy(states)
         get_me_states!(wrapper, reset_states)
-        return (; updates..., states = reset_states)
+        updates = (; updates..., states = reset_states)
+    end
+    if haskey(o, :history)
+        epoch = o.event_epoch + 1
+        save_me_output!(wrapper, o.history, time, epoch)
+        updates = (; updates..., epoch)
     end
     return updates
 end
@@ -1407,7 +1555,11 @@ function fmiMEInitialize!(m, o, ctx, integrator)
     wrapper.in_solve = true
     wrapper.last_completed_step = Float64(integrator.t)
     get_instance_ME!(wrapper, as_fmi_vector(o.inputs), as_fmi_vector(o.params), wrapper.last_completed_step)
-    return with_discrete_outputs(m, wrapper)
+    updates = with_discrete_outputs(m, wrapper)
+    haskey(m, :history) || return updates
+    history = MEOutputHistory()
+    history.active = true
+    return (; updates..., history)
 end
 
 """
@@ -1415,8 +1567,19 @@ end
 
 The Model Exchange finalizer: marks the solve as over and frees the instance.
 """
-function fmiMEFinalize!(m, o, ctx, integrator)
+function fmiMEFinalize!(m, o, ctx, integrator, observed_at)
     wrapper = o.wrapper
+    if haskey(o, :history)
+        if o.history.eventful && wrapper.instance !== nothing
+            if SciMLBase.get_sol(integrator).retcode != SciMLBase.ReturnCode.Terminated
+                save_me_points!(observed_at, o, integrator)
+                save_me_point!(wrapper, o.history, integrator.t, o.event_epoch, o.state_values, o.inputs)
+            end
+        else
+            empty!(o.history.samples)
+        end
+        o.history.active = false
+    end
     wrapper.in_solve = false
     reset_instance!(wrapper)
     return (;)
@@ -1553,9 +1716,18 @@ struct CSFunctor
     solve_end::Base.RefValue{Float64}
     t_last::Base.RefValue{Float64}
     stop_time::Float64
+    input_sample::Vector{Float64}
+    sampled_at::Base.RefValue{Float64}
 end
 
-CSFunctor(output_count, stop_time) = CSFunctor(output_count, Ref(NaN), Ref(NaN), stop_time)
+CSFunctor(output_count, stop_time) =
+    CSFunctor(output_count, Ref(NaN), Ref(NaN), stop_time, Float64[], Ref(NaN))
+
+struct CSSampleDue end
+
+function (::CSSampleDue)(ctx, t)
+    return ctx.sampled_at[] < ctx.t_last[] == t ? 1.0 : 0.0
+end
 
 function (fn::CSFunctor)(wrapper, states, inputs, params, t)
     stop_time = isnan(fn.stop_time) ? nothing : fn.stop_time
@@ -1577,8 +1749,21 @@ function fmiCSInitialize!(m, o, ctx, integrator)
     reset_instance!(wrapper)
     experiment_end = initialize_cs_times!(ctx, o, integrator)
     states = haskey(m, :states) ? as_fmi_vector(m.states) : Float64[]
-    get_instance_CS!(wrapper, states, as_fmi_vector(o.inputs), as_fmi_vector(o.params), o.t, experiment_end)
+    sample_cs_inputs!(ctx, o)
+    get_instance_CS!(wrapper, states, ctx.input_sample, as_fmi_vector(o.params), o.t, experiment_end)
     return read_cs_values!(m, wrapper)
+end
+
+function sample_cs_inputs!(ctx, o)
+    resize!(ctx.input_sample, length(o.inputs)) .= o.inputs
+    ctx.sampled_at[] = o.t
+    return
+end
+
+function fmiCSSample!(m, o, ctx, integrator)
+    sample_cs_inputs!(ctx, o)
+    SciMLBase.derivative_discontinuity!(integrator, false)
+    return (;)
 end
 
 function read_cs_values!(m, wrapper)
@@ -1593,22 +1778,27 @@ function fmiCSStep!(m, o, ctx, integrator)
     to > from || return (;)
     wrapper = o.wrapper
     h = variable_communication_step(wrapper) ? to - from : o.dt
-    set_values!(wrapper, wrapper.inputs, o.inputs)
-    do_cs_step!(wrapper, from, h)
+    set_values!(wrapper, wrapper.inputs, ctx.input_sample)
+    achieved = do_cs_step!(wrapper, from, h)
+    if wrapper isa FMI3InstanceWrapper &&
+            !(isfinite(achieved) && abs(achieved - to) <= min(4max(eps(to), eps(achieved)), (to - from) / 4))
+        reset_instance!(wrapper)
+        error("FMI 3 Co-Simulation requested time $to, but the FMU reached $achieved (lastSuccessfulTime).")
+    end
     ctx.t_last[] = to
     return read_cs_values!(m, wrapper)
 end
 
 function do_cs_step!(wrapper::FMI2InstanceWrapper, from, h)
     @statuscheck FMI.fmi2DoStep(wrapper.instance, from, h, FMI.fmi2True)
-    return
+    return from + h
 end
 
 function do_cs_step!(wrapper::FMI3InstanceWrapper, from, h)
     event_encountered = Ref(FMI.fmi3False)
     terminate_simulation = Ref(FMI.fmi3False)
     early_return = Ref(FMI.fmi3False)
-    last_successful_time = Ref(zero(FMI.fmi3Float64))
+    last_successful_time = Ref(FMI.fmi3Float64(NaN))
     @statuscheck FMI.fmi3DoStep!(
         wrapper.instance, from, h, FMI.fmi3True, event_encountered,
         terminate_simulation, early_return, last_successful_time
@@ -1616,7 +1806,7 @@ function do_cs_step!(wrapper::FMI3InstanceWrapper, from, h)
     @assert event_encountered[] == FMI.fmi3False
     @assert terminate_simulation[] == FMI.fmi3False
     @assert early_return[] == FMI.fmi3False
-    return
+    return last_successful_time[]
 end
 
 end
