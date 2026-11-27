@@ -1,4 +1,4 @@
-using ModelingToolkitBase, Test
+using ModelingToolkitBase, Test, SparseArrays
 using ModelingToolkitBase: t_nounits as t, D_nounits as D
 import ModelingToolkitBase as MTKB
 
@@ -195,4 +195,72 @@ end
     @test du == reference
     # an explicit plain Array type is still `vcat`ed
     @test count_helpers(build_rhs(sys, rhss; chunk_size = 1, output_type = Array)[1]) > 1
+end
+
+# The helper calls anywhere in `ex`.
+count_helpers_nested(ex) = ex isa Expr ? count(is_helper_call, ex.args) + sum(count_helpers_nested, ex.args; init = 0) : 0
+
+@testset "sparse Jacobian" begin
+    jac_exprs(; kwargs...) = MTKB.generate_jacobian(sys; sparse = true, expression = Val{true}, kwargs...)
+    oop_ref, iip_ref = jac_exprs(; chunk_size = 0)
+    @test count_helpers_nested(iip_ref) == 0
+    pattern = similar(MTKB.W_sparsity(sys), Float64)
+    Jref = copy(pattern)
+    fill!(nonzeros(Jref), NaN)
+    @test run_expr(iip_ref, Jref, u, p, 0.0) === Jref
+    @test !any(isnan, nonzeros(Jref))
+
+    oop, iip = jac_exprs(; chunk_size = 300)
+    @test count_helpers_nested(iip) > 1
+    J = copy(pattern)
+    fill!(nonzeros(J), NaN)
+    @test run_expr(iip, J, u, p, 0.0) === J
+    @test J == Jref
+    @test rowvals(J) == rowvals(Jref) && J.colptr == Jref.colptr
+    # The out-of-place function is not chunked.
+    @test oop == oop_ref
+    @test run_expr(oop, u, p, 0.0) == Jref
+
+    # A Jacobian of this size is not split automatically.
+    @test jac_exprs()[2] == iip_ref
+
+    # The check of the sparsity pattern of the output stays outside of the helpers.
+    checked = jac_exprs(; chunk_size = 300, checkbounds = true)[2]
+    @test count_helpers_nested(checked) > 1
+    J = copy(pattern)
+    @test run_expr(checked, J, u, p, 0.0) == Jref
+    @test_throws AssertionError run_expr(checked, sparse(ones(n, n)), u, p, 0.0)
+    @test_throws AssertionError run_expr(jac_exprs(; chunk_size = 0, checkbounds = true)[2], sparse(ones(n, n)), u, p, 0.0)
+
+    # Optimization rules of the caller are given the sparse matrix, so nothing is split.
+    @test count_helpers_nested(jac_exprs(; chunk_size = 300, optimize = Any[])[2]) == 0
+
+    # A system without an independent variable.
+    @variables y[1:n]
+    @parameters c
+    nlsys = mtkcompile(System([0 ~ c * y[i]^2 + y[mod1(i + 1, n)] - y[mod1(i + 7, n)] * y[i] for i in 1:n]; name = :nl))
+    nlp = MTKB.MTKParameters(nlsys, [c => 0.3])
+    nlref = MTKB.generate_jacobian(nlsys; sparse = true, expression = Val{true}, chunk_size = 0)
+    nlchunked = MTKB.generate_jacobian(nlsys; sparse = true, expression = Val{true}, chunk_size = 300)
+    @test count_helpers_nested(nlchunked[2]) > 1 && count_helpers_nested(nlref[2]) == 0
+    Jnl = run_expr(nlref[1], u, nlp)
+    Jnl2 = copy(Jnl)
+    fill!(nonzeros(Jnl2), NaN)
+    @test run_expr(nlchunked[2], Jnl2, u, nlp) === Jnl2
+    @test Jnl2 == Jnl
+
+    # Asked for the in-place function only, a chunked build does not generate the other one.
+    only_iip = build_rhs(
+        sys, rhss; chunk_size = 300,
+        codegen_function_options = MTKB.GeneratedFunctionOptions(; expression = Val{true}).codegen |>
+            c -> MTKB.setproperties(c, (; iip_config = (false, true)))
+    )
+    @test only_iip[1] === nothing && expect_chunked(only_iip[2])
+    out = zeros(n)
+    run_expr(only_iip[2], out, u, p, 0.0)
+    @test out == reference
+
+    # A dense Jacobian is generated as before.
+    dense(; kwargs...) = MTKB.generate_jacobian(sys; expression = Val{true}, kwargs...)
+    @test dense(; chunk_size = 300) == dense(; chunk_size = 0)
 end

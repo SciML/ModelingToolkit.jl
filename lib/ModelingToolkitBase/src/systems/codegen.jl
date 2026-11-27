@@ -544,6 +544,11 @@ Generate the jacobian function for the equations of a [`System`](@ref).
 
 $GENERATE_X_KWARGS
 - `simplify`, `sparse`: Forwarded to [`calculate_jacobian`](@ref).
+- `chunk_size`: If `sparse`, how the in-place function is split into helper functions that
+  each fill a slice of the stored values. The default, `-1`, splits very large Jacobians
+  automatically. `0` never splits. A positive value is the number of symbolic statements
+  to aim for in each helper. A split function requires that the Jacobian it writes to does
+  not share memory with any of its other arguments.
 - `checkbounds`: Whether to check correctness of indices at runtime if `sparse`.
   Also forwarded to `build_function_wrapper`.
 
@@ -551,7 +556,7 @@ All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 """
 function generate_jacobian(
         sys::System, opts::GeneratedFunctionOptions;
-        simplify::Bool = false, sparse::Bool = false
+        simplify::Bool = false, sparse::Bool = false, chunk_size::Integer = -1
     )
     (; eval_expression, eval_module, compiler_options) = opts
     expression = expression_val(opts)
@@ -564,27 +569,86 @@ function generate_jacobian(
     jac = calculate_jacobian(sys; simplify, sparse, dvs)
     p = reorder_parameters(sys)
     t = get_iv(sys)
-    if t !== nothing && sparse && opts.codegen.checkbounds
-        wrap_code = assert_jac_length_header(sys) # checking sparse J indices at runtime is expensive for large systems
-    else
-        wrap_code = (identity, identity)
-    end
     args = (dvs, p...)
     nargs = 2
     if is_time_dependent(sys)
         args = (args..., t)
         nargs = 3
     end
-    res = build_function_wrapper(
-        sys, jac, collect(Any, args), BuildFunctionWrapperOptions(;
-            u_arg = 1,
-            codegen_function_options = setproperties(opts.codegen, (; wrap_code))
+    res = nothing
+    if jac isa SparseMatrixCSC
+        res = chunked_sparse_jacobian(sys, jac, collect(Any, args), opts, chunk_size)
+    end
+    if res === nothing
+        if t !== nothing && sparse && opts.codegen.checkbounds
+            wrap_code = assert_jac_length_header(sys) # checking sparse J indices at runtime is expensive for large systems
+        else
+            wrap_code = (identity, identity)
+        end
+        res = build_function_wrapper(
+            sys, jac, collect(Any, args), BuildFunctionWrapperOptions(;
+                u_arg = 1,
+                codegen_function_options = setproperties(opts.codegen, (; wrap_code))
+            )
         )
-    )
+    end
     return maybe_compile_function(
         expression, wrap_gfw, (2, nargs, is_split(sys)), res;
         compiler_options, eval_expression, eval_module
     )
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+The out-of-place and in-place functions of the sparse Jacobian `jac`, with the in-place one
+chunked, or `nothing` if it is not to be chunked (see the `chunk_size` option of
+[`BuildFunctionWrapperOptions`](@ref)).
+
+Chunking splits a vector of expressions, so what is generated in chunks is the function
+that fills the stored values of the Jacobian, in the order they are stored. The in-place
+function of the Jacobian calls it on the stored values of its output. The out-of-place
+function is the ordinary one: it is only compiled if it is called.
+"""
+function chunked_sparse_jacobian(
+        sys::System, jac::SparseMatrixCSC, args::Vector{Any},
+        opts::GeneratedFunctionOptions, chunk_size::Integer
+    )
+    chunk_size == 0 && return nothing
+    # Optimization rules given by the caller are written for the sparse matrix.
+    opts.codegen.optimize === nothing || return nothing
+    vals = SymbolicT[unwrap(val) for val in nonzeros(jac)]
+    chunked = build_function_wrapper(
+        sys, vals, copy(args), BuildFunctionWrapperOptions(;
+            u_arg = 1, chunk_size, require_chunking = true,
+            # the out-of-place function is generated from the sparse matrix below
+            codegen_function_options = setproperties(opts.codegen, (; iip_config = (false, true)))
+        )
+    )
+    chunked === nothing && return nothing
+    fill_vals = chunked[2]
+    signature = fill_vals.args[1]
+    all(arg -> arg isa Symbol, signature.args) || return nothing
+    out = signature.args[1]::Symbol
+
+    body = Expr(:block)
+    if get_iv(sys) !== nothing && opts.codegen.checkbounds
+        # checking the indices of a sparse `J` at runtime is expensive for large systems
+        I, J, _ = findnz(W_sparsity(sys))
+        push!(body.args, Expr(:call, assert_jac_length, out, I, J))
+    end
+    call = Expr(:call, fill_vals, Expr(:., out, QuoteNode(:nzval)))
+    append!(call.args, @view signature.args[2:end])
+    push!(body.args, call, out)
+    iip = Expr(:function, signature, body)
+
+    oop = build_function_wrapper(
+        sys, jac, copy(args), BuildFunctionWrapperOptions(;
+            u_arg = 1,
+            codegen_function_options = setproperties(opts.codegen, (; iip_config = (true, false)))
+        )
+    )[1]
+    return oop, iip
 end
 
 function assert_jac_length(arr::SparseMatrixCSC, I::Vector{<:Integer}, J::Vector{<:Integer})
