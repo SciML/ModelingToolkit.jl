@@ -638,8 +638,12 @@ end
     end
 end
 
-@testset "Model Exchange supplied parameter-only affects (registered clock: $registered)" for registered in (false, true)
-    fmu, complete_hook = adder_with_completed_step_event()
+@testset "Model Exchange supplied parameter-only affects (registered clock: $registered, FMI event: $eventful)" for registered in (false, true), eventful in (false, true)
+    fmu, complete_hook = if eventful
+        adder_with_completed_step_event()
+    else
+        loadFMU(joinpath(FIXTURE_FMUS, "SimpleAdder.fmu"); type = :ME), nothing
+    end
     GC.@preserve complete_hook begin
         @named adder = MTK.FMIComponent(Val(2); fmu, type = :ME)
         p = registered ? only(@discretes p(t) = 1.0) : only(@parameters p = 1.0)
@@ -681,7 +685,58 @@ end
         @test sol(0.02; idxs = sys.adder.out, continuity = :right) == 5.0
         @test sol(0.015; idxs = sys.adder.out) == 1.0
         @test sol(0.025; idxs = sys.adder.out) == 5.0
+        @test_throws r"FMI.*snapshot.*0\.035" sol(0.035; idxs = sys.adder.out)
     end
+end
+
+@testset "Model Exchange native input changes alongside a registered clock" begin
+    fmu = loadFMU(joinpath(FIXTURE_FMUS, "SimpleAdder.fmu"); type = :ME)
+    @named adder = MTK.FMIComponent(Val(2); fmu, type = :ME)
+    @parameters p = 1.0
+    @discretes q(t) = 10.0
+    @variables x(t) = 1.0 [irreducible = true]
+    clock = MTKBase.SymbolicDiscreteCallback(
+        [0.03], MTKBase.ImperativeAffect((m, o, ctx, integ) -> (; q = 20.0); modified = (; q));
+        reinitializealg = SciMLBase.NoInit()
+    )
+    @mtkcompile sys = System(
+        [adder.a ~ p * x, adder.b ~ q, D(x) ~ 0.0], t; systems = [adder], discrete_events = [clock]
+    )
+    set_p! = MTKBase.setp(sys, p)
+    read_live = MTKBase.getu(sys, (p, q, sys.adder.out))
+    live = NTuple{3, Float64}[]
+    change = DiscreteCallback(
+        (u, t, integ) -> t == 0.02, integ -> set_p!(integ, 3.0); save_positions = (true, true)
+    )
+    readback = DiscreteCallback(
+        (u, t, integ) -> t == 0.04, integ -> push!(live, Tuple(read_live(integ)));
+        save_positions = (false, false)
+    )
+    prob = ODEProblem(
+        sys, [sys.adder.c => 0.0, sys.adder.value => 0.0], (0.0, 0.05);
+        callback = CallbackSet(change, readback)
+    )
+    sol = solve(prob, Tsit5(); dt = 0.01, adaptive = false, tstops = [0.02, 0.04], saveat = [0.015, 0.025, 0.035])
+    @test SciMLBase.successful_retcode(sol)
+    indices = findall(==(0.02), sol.t)
+    @test sol[sys.adder.out][first(indices)] == 11.0
+    @test sol[sys.adder.out][last(indices)] == 13.0
+    @test sol(0.02; idxs = sys.adder.out, continuity = :left) == 11.0
+    @test sol(0.02; idxs = sys.adder.out, continuity = :right) == 13.0
+    @test sol(0.015; idxs = sys.adder.out) == 11.0
+    @test sol(0.025; idxs = sys.adder.out) == 13.0
+    @test sol(0.035; idxs = sys.adder.out) == 23.0
+    @test live == [(3.0, 20.0, 23.0)]
+end
+
+@testset "Model Exchange dense output with unchanged inputs" begin
+    fmu = loadFMU(joinpath(FIXTURE_FMUS, "SimpleAdder.fmu"); type = :ME)
+    sys = adder_system(fmu, :ME)
+    prob = ODEProblem(sys, [sys.adder.c => 0.0, sys.adder.value => 0.0], (0.0, 0.04))
+    sol = solve(prob, Tsit5(); dt = 0.01, adaptive = false)
+    @test SciMLBase.successful_retcode(sol)
+    @test 0.025 ∉ sol.t
+    @test sol(0.025; idxs = sys.adder.out) == 3.0
 end
 
 @testset "VanDerPol finite-difference Jacobian" begin

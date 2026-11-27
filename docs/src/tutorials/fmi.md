@@ -93,13 +93,14 @@ prob = ODEProblem(sys, [sys.mass__s => 0.5, sys.mass__v => 0.0], (0.0, 5.0))
 sol = solve(prob, Tsit5(); saveat = 0.0:0.1:5.0)
 ```
 
-FMU state variables and continuous outputs from an event-free solve can be evaluated at arbitrary
-times within the solved interval. For a solve with Model Exchange events, the solution records
-other continuous outputs at saved times. Pass `saveat` to `solve` to request values at additional
-times. Use `continuity = :left` or `continuity = :right` to select the value at an event time.
-A callback supplied through the `ODEProblem` keyword records the FMI inputs on each
-saved side of its affect, including changes to ordinary parameters.
-A query at a time without a snapshot raises an error for those outputs.
+FMU state variables support interpolation within the solved interval. When the FMU stays out of
+Event Mode during integration and no supplied solver callback affect runs, continuous outputs can
+also be evaluated at arbitrary times. A Model Exchange event or an affect from an `ODEProblem`
+`callback` activates replay of continuous-output snapshots. The solution records both saved sides
+of the affect, including input changes from ordinary parameters, even when the FMU stays out of
+Event Mode. Use `continuity = :left` or `continuity = :right` to select the value at an event time.
+A continuous-output query without a snapshot raises an error because the historical FMI state or
+inputs may be unavailable. Pass `saveat` to `solve` to record outputs at additional times.
 
 ```@repl fmi
 sol(0.0:0.1:1.0; idxs = sys.mass__a)

@@ -60,7 +60,8 @@ end
 
 @testset "Documented callback adaptation hook" begin
     @test ModelingToolkit.adapt_supplied_callback === ModelingToolkitBase.adapt_supplied_callback
-    @test Base.Docs.doc(ModelingToolkit.adapt_supplied_callback) !== nothing
+    owner = ModelingToolkitBase
+    @test haskey(Base.Docs.meta(owner), Base.Docs.Binding(owner, :adapt_supplied_callback))
 end
 
 # The exact set of externally-owned bindings ModelingToolkit deliberately exposes as part

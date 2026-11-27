@@ -223,12 +223,19 @@ function check_assignable(sys, sym)
     end
 end
 
-function solution_index_parameter_values(sol, i, partitions = nothing, ps = nothing)
+function solution_index_parameter_values(sol, i, partitions = nothing; live_parameters = nothing)
     if SymbolicIndexingInterface.is_parameter_timeseries(sol) != SymbolicIndexingInterface.Timeseries()
-        return isnothing(ps) ? parameter_values(sol) : ps
+        return isnothing(live_parameters) ? parameter_values(sol) : live_parameters
     end
     discs = SymbolicIndexingInterface.get_parameter_timeseries_collection(sol)
-    ps = isnothing(ps) ? parameter_values(discs) : ps
+    ps = parameter_values(discs)
+    if live_parameters !== nothing
+        live = SciMLBase.unwrap_parameters(live_parameters)
+        cached = SciMLBase.unwrap_parameters(ps)
+        ps = MTKParameters(
+            live.tunable, live.initials, cached.discrete, live.constant, live.nonnumeric, cached.caches
+        )
+    end
     time = sol.t[i]
     positions = saved_parameter_positions(sol, i)
     initial_values = initial_discrete_values(sol)
@@ -300,10 +307,11 @@ end
     function observed_at(u, p, t)
         return NamedTuple{fa.obs_sym_tuple}(fa.obs_fun(u, p, t))
     end
-    function observed_at(sol::SciMLBase.AbstractTimeseriesSolution, i::Integer, ps = nothing)
+    function observed_at(sol::SciMLBase.AbstractTimeseriesSolution, i::Integer; live_parameters = nothing)
         time = sol.t[i]
         return observed_at(
-            state_values(sol, i), solution_index_parameter_values(sol, i, fa.obs_partitions, ps), time
+            state_values(sol, i),
+            solution_index_parameter_values(sol, i, fa.obs_partitions; live_parameters), time
         )
     end
     return observed_at

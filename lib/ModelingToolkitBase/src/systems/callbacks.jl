@@ -1740,8 +1740,11 @@ Extension hook invoked when a problem supplies a solver callback and its system 
 untimed symbolic discrete `ImperativeAffect`. Dispatch on the imperative affect's function
 `affect` to adapt the supplied callback before it is merged with the system callbacks.
 `observe(u, p, t)` reads live observations, and `observe(sol, i)` reads them at a saved
-solution index. `setters` contains the compiled setters by name. The default returns the
-supplied callback unchanged.
+solution index. Use `observe(sol, i; live_parameters = integrator.p)` to read ordinary
+parameters from the integrator while replaying the registered discrete parameters at that
+index. Replay does not overwrite the integrator's discrete parameter values.
+`setters` contains the compiled setters by name. The default returns the supplied callback
+unchanged.
 """
 adapt_supplied_callback(callback, affect, observe, setters) = callback
 

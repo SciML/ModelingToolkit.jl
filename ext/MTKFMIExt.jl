@@ -1,8 +1,7 @@
 module MTKFMIExt
 
 using ModelingToolkit
-using SymbolicIndexingInterface: NotSymbolic, get_parameter_timeseries_collection,
-    parameter_values, symbolic_type
+using SymbolicIndexingInterface: NotSymbolic, symbolic_type
 using ModelingToolkitBase: t_nounits, D_nounits
 using DocStringExtensions: TYPEDEF, TYPEDFIELDS, TYPEDSIGNATURES
 import ModelingToolkit as MTK
@@ -302,8 +301,9 @@ with a warning.
 
 Model Exchange supports state, time, accepted-step and discrete input events. Discrete
 outputs are updated at events. An FMU without continuous states gets a placeholder state.
-After a solve with events, continuous outputs other than the FMU's states are available
-at saved times and on both sides of events. Use `saveat` to request additional times.
+After a solve with FMI events or supplied solver callback affects, continuous outputs
+other than the FMU's states are replayed at saved times, including saved sides of events.
+Use `saveat` to request additional times.
 Use a finite-difference solver option such as `Rodas5P(autodiff = AutoFiniteDiff())` for
 solvers that need derivatives through a Model Exchange FMU.
 
@@ -1368,6 +1368,7 @@ mutable struct MEOutputHistory
     next_saved::Int
     active::Bool
     eventful::Bool
+    native_affect_ran::Bool
     last_time::Float64
     last_states::Vector{Float64}
     last_inputs::Vector{Float64}
@@ -1378,12 +1379,14 @@ end
 function MEOutputHistory()
     return MEOutputHistory(
         Dict{NTuple{3, Float64}, MEOutputSample}(), Dict{NTuple{3, Float64}, Vector{MEOutputSample}}(),
-        1, false, false, NaN, Float64[], Float64[], false, nothing
+        1, false, false, false, NaN, Float64[], Float64[], false, nothing
     )
 end
 MEOutputHistory(history::MEOutputHistory) = history
 # Each solve installs one archive, shared by its discrete parameter snapshots.
 Base.copy(history::MEOutputHistory) = history
+
+has_me_output_history(history::MEOutputHistory) = history.eventful || history.native_affect_ran
 
 struct MEPhaseDue end
 
@@ -1403,7 +1406,7 @@ struct MEOutputs
 end
 
 function (::MEOutputs)(wrapper, states, inputs, params, time, epoch, phase, history)
-    if !history.active && history.eventful
+    if !history.active && has_me_output_history(history)
         key = (epoch, time, phase)
         sample = get(history.samples, key) do
             throw(ArgumentError("FMI Model Exchange has no continuous-output snapshot at time $time. Query a saved point or include this time in saveat."))
@@ -1465,23 +1468,12 @@ end
 
 me_key(point, time) = (Float64(point.event_epoch), Float64(time), Float64(point.observation_phase))
 
-function me_replay_parameters(sol, p)
-    saved = get_parameter_timeseries_collection(sol)
-    saved === nothing && return p
-    live = SciMLBase.unwrap_parameters(p)
-    cached = SciMLBase.unwrap_parameters(parameter_values(saved))
-    # Replay registered clocks into the solution's buffer without writing to live parameters.
-    return MTKBase.MTKParameters(
-        live.tunable, live.initials, cached.discrete, live.constant, live.nonnumeric, cached.caches
-    )
-end
-
 function save_me_points!(observed_at, o, integrator, before = nothing)
     sol = SciMLBase.get_sol(integrator)
     history = o.history
     history.next_saved > length(sol.t) && return false
     after = history.native_boundary
-    ps = isnothing(after) ? nothing : me_replay_parameters(sol, integrator.p)
+    live_parameters = isnothing(after) ? nothing : integrator.p
     for i in history.next_saved:length(sol.t)
         time = Float64(sol.t[i])
         boundary = nothing
@@ -1496,10 +1488,10 @@ function save_me_points!(observed_at, o, integrator, before = nothing)
                 boundary = after
                 live_point
             else
-                observed_at(sol, i, ps)
+                observed_at(sol, i; live_parameters)
             end
         else
-            observed_at(sol, i, ps)
+            observed_at(sol, i; live_parameters)
         end
         if point.event_epoch == o.event_epoch
             states = as_fmi_vector(point.state_values)
@@ -1547,6 +1539,7 @@ function (f::MENativeAffect)(integrator, args...)
     end
     result = f.affect!(integrator, args...)
     post = observed_at(integrator.u, integrator.p, integrator.t)
+    post.history.native_affect_ran = true
     post.history.native_boundary =
         MENativeBoundary(me_key(post, integrator.t), copy(as_fmi_vector(post.inputs)), f.set_phase!)
     return result
@@ -1810,13 +1803,13 @@ The Model Exchange finalizer: marks the solve as over and frees the instance.
 function fmiMEFinalize!(m, o, ctx, integrator, observed_at)
     wrapper = o.wrapper
     if haskey(o, :history)
-        if o.history.eventful && wrapper.instance !== nothing
+        if has_me_output_history(o.history) && wrapper.instance !== nothing
             if SciMLBase.get_sol(integrator).retcode != SciMLBase.ReturnCode.Terminated
                 save_me_points!(observed_at, o, integrator)
                 sol = SciMLBase.get_sol(integrator)
                 point = if !isempty(sol.t) && sol.t[end] == integrator.t
-                    ps = isnothing(o.history.native_boundary) ? nothing : me_replay_parameters(sol, integrator.p)
-                    observed_at(sol, lastindex(sol.t), ps)
+                    live_parameters = isnothing(o.history.native_boundary) ? nothing : integrator.p
+                    observed_at(sol, lastindex(sol.t); live_parameters)
                 else
                     o
                 end
