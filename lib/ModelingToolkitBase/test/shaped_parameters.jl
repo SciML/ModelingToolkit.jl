@@ -356,3 +356,18 @@ end
     )
     @test complete(dense) isa System
 end
+
+@testset "dense shaped parameters cannot be bound to values of unknown shape" begin
+    A = shaped_parameter(:A, Matrix{Float64}, 2, 2)
+    @parameters B::Matrix{Float64}
+    @variables x(t)
+    for rhs in (B, 2 * B)
+        @test_throws "unknown shape" System(
+            [D(x) ~ A[2, 2]], t, [x], [A, B]; bindings = [A => rhs], name = :bad
+        )
+    end
+    @named sys = System([D(x) ~ A[2, 2]], t, [x], [A, B])
+    @test_throws "unknown shape" complete(set_defaults(sys, [A => B]))
+    @test_throws "unknown shape" complete(set_defaults(sys, [A => 2 * B]))
+    @test complete(sys) isa System
+end

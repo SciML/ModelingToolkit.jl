@@ -401,6 +401,16 @@ shaped parameters are also indexed with their declared 1-based ranges, so the ax
 function check_binding_shape(p::SymbolicT, val::SymbolicT)
     psh = SU.shape(p)
     vsh = SU.shape(val)
+    # The declared axes of a shaped parameter cannot be checked against an unknown shape, and the
+    # bound parameter is not in the runtime buffer, so the binding is rejected.
+    if is_shaped_parameter(p) && !(vsh isa SU.ShapeVecT)
+        throw(
+            ArgumentError(
+                "binding for $p has a value of unknown shape, but $p is declared with " *
+                    "shape $(Tuple(psh)); bind it to a value or expression of known shape."
+            )
+        )
+    end
     (psh isa SU.ShapeVecT && vsh isa SU.ShapeVecT && !(symtype(p) <: FnType)) || return nothing
     if length(psh) != length(vsh) ||
             any(i -> length(psh[i]) != length(vsh[i]), eachindex(psh))
