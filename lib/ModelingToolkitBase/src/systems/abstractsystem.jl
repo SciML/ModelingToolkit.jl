@@ -714,6 +714,14 @@ function complete(
         # reduce the potential for outdated information
         @set! sys.parameter_bindings_graph = nothing
     end
+    if check_shaped
+        # `set_defaults` adds bindings after the `System` constructor has validated them.
+        for (p, val) in get_bindings(sys)
+            is_shaped_parameter(p) || continue
+            check_shaped_binding(p, val)
+            val === COMMON_MISSING || check_binding_shape(p, val)
+        end
+    end
     if !split && check_shaped && any(is_shaped_parameter, parameters(sys))
         throw(
             ArgumentError(

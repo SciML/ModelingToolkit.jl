@@ -375,6 +375,52 @@ end
 """
     $TYPEDSIGNATURES
 
+Reject bindings of `shaped_parameter`s that cannot be supported. A dense `Array` keeps its
+shape when substituted; any other `shaped_parameter` value does not, so it is rejected
+whatever its value. Parameters declared without `shaped_parameter` are not restricted.
+"""
+function check_shaped_binding(p::SymbolicT, val::SymbolicT)
+    is_shaped_parameter(p) && !(symtype(p) <: Array) || return nothing
+    throw(
+        ArgumentError(
+            "binding for $p: bindings of shaped opaque parameters are not supported " *
+                "because the declared shape is lost when the value is substituted into " *
+                "an operator application; supply the value through the problem `op` map instead."
+        )
+    )
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Known sizes of a binding must match those of its parameter; later symbolic substitution
+errors do not name the parameter. For a callable parameter the shape is that of the return
+value, while the binding is the function itself, so the sizes are not comparable. Dense
+shaped parameters are also indexed with their declared 1-based ranges, so the axes must match.
+"""
+function check_binding_shape(p::SymbolicT, val::SymbolicT)
+    psh = SU.shape(p)
+    vsh = SU.shape(val)
+    (psh isa SU.ShapeVecT && vsh isa SU.ShapeVecT && !(symtype(p) <: FnType)) || return nothing
+    if length(psh) != length(vsh) ||
+            any(i -> length(psh[i]) != length(vsh[i]), eachindex(psh))
+        psz = Tuple(map(length, psh))
+        vsz = Tuple(map(length, vsh))
+        throw(ArgumentError("binding for $p has size $vsz, but $p has size $psz"))
+    end
+    if is_shaped_parameter(p) && psh != vsh
+        throw(
+            DimensionMismatch(
+                "binding for $p has axes $(Tuple(vsh)), but $p is declared with axes $(Tuple(psh))."
+            )
+        )
+    end
+    return nothing
+end
+
+"""
+    $TYPEDSIGNATURES
+
 Check if `bindings` are valid, given a list of parameters `atomic_ps`. Assumes no values in
 `atomic_ps` are discretes.
 """
@@ -383,18 +429,7 @@ function check_bindings(atomic_ps::AtomicArraySet{Dict{SymbolicT, Nothing}}, bin
     for p in atomic_ps
         val = get(bindings, p, COMMON_NOTHING)
         val === COMMON_NOTHING && continue
-        # A dense `Array` keeps its shape when substituted; any other `shaped_parameter`
-        # value does not, so it is rejected whatever its value. Parameters declared
-        # without `shaped_parameter` are left to the size check below.
-        if is_shaped_parameter(p) && !(symtype(p) <: Array)
-            throw(
-                ArgumentError(
-                    "binding for $p: bindings of shaped opaque parameters are not supported " *
-                        "because the declared shape is lost when the value is substituted into " *
-                        "an operator application; supply the value through the problem `op` map instead."
-                )
-            )
-        end
+        check_shaped_binding(p, val)
         if val === COMMON_MISSING
             if !is_variable_floatingpoint(p)
                 throw(
@@ -408,23 +443,7 @@ function check_bindings(atomic_ps::AtomicArraySet{Dict{SymbolicT, Nothing}}, bin
                 )
             end
         else
-            # Known sizes must match; later symbolic substitution errors do not name the
-            # parameter. For a callable parameter the shape is that of the return value,
-            # while the binding is the function itself, so the sizes are not comparable.
-            psh = SU.shape(p)
-            vsh = SU.shape(val)
-            if psh isa SU.ShapeVecT && vsh isa SU.ShapeVecT && !(symtype(p) <: FnType)
-                if length(psh) != length(vsh) ||
-                        any(i -> length(psh[i]) != length(vsh[i]), eachindex(psh))
-                    psz = Tuple(map(length, psh))
-                    vsz = Tuple(map(length, vsh))
-                    throw(
-                        ArgumentError(
-                            "binding for $p has size $vsz, but $p has size $psz"
-                        )
-                    )
-                end
-            end
+            check_binding_shape(p, val)
         end
         empty!(varsbuf)
         SU.search_variables!(varsbuf, val; is_atomic = check_bindings_is_atomic)

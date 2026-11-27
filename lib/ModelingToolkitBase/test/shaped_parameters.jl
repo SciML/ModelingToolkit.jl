@@ -311,3 +311,48 @@ end
         @test getp(csys, Mop)(remade) === good
     end
 end
+
+@testset "bindings of dense shaped parameters are validated by axes" begin
+    A = shaped_parameter(:A, Matrix{Float64}, 2, 2)
+    @variables x(t)
+    raw = [1.0 2.0; 3.0 4.0]
+    offset = OffsetArrays.OffsetArray(raw, 0:1, 0:1)
+    based = OffsetArrays.OffsetArray(raw, 1:2, 1:2)
+    function rhs(binding)
+        @named sys = System([D(x) ~ A[1, 1]], t, [x], [A]; bindings = [A => binding])
+        prob = ODEProblem(complete(sys), Dict(x => 0.0), (0.0, 1.0))
+        du = zeros(1)
+        prob.f(du, [0.0], prob.p, 0.0)
+        return du[1]
+    end
+    @test rhs(raw) == 1.0
+    @test rhs(based) == 1.0
+    @test_throws DimensionMismatch rhs(offset)
+    @test_throws DimensionMismatch System(
+        [D(x) ~ A[1, 1]], t, [x], [A]; bindings = [A => offset], name = :bad
+    )
+    # values supplied as initial conditions or defaults are validated when the buffer is built
+    @named sys = System([D(x) ~ A[1, 1]], t, [x], [A]; initial_conditions = [A => offset])
+    @test_throws DimensionMismatch ODEProblem(complete(sys), Dict(x => 0.0), (0.0, 1.0))
+    @named plain = System([D(x) ~ A[1, 1]], t, [x], [A])
+    @test_throws DimensionMismatch ODEProblem(
+        complete(set_defaults(plain, [A => offset])), Dict(x => 0.0), (0.0, 1.0)
+    )
+end
+
+@testset "completion enforces the binding restrictions on set_defaults bindings" begin
+    @variables x(t)
+    Sbig = shaped_parameter(:Sbig, SparseMatrixCSC{Float64, Int}, 2, 2)
+    Ssmall = shaped_parameter(:Ssmall, SparseMatrixCSC{Float64, Int}, 1, 1)
+    @named sys = System([D(x) ~ Sbig[2, 2]], t, [x], [Sbig, Ssmall])
+    @test_throws r"bindings of shaped opaque parameters are not supported" complete(
+        set_defaults(sys, [Sbig => Ssmall])
+    )
+    Abig = shaped_parameter(:Abig, Matrix{Float64}, 2, 2)
+    Asmall = shaped_parameter(:Asmall, Matrix{Float64}, 1, 1)
+    @named dense = System([D(x) ~ Abig[2, 2]], t, [x], [Abig, Asmall])
+    @test_throws "has size (1, 1), but Abig has size (2, 2)" complete(
+        set_defaults(dense, [Abig => Asmall])
+    )
+    @test complete(dense) isa System
+end
