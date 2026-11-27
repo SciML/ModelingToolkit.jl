@@ -584,6 +584,25 @@ end
     return _buffer_setindex!(Base.tail(bufs), val, i - 1, j, k, validate_size)
 end
 
+@inline _buffer_eltype(bufs::Tuple{}, i::Int) = throw(BoundsError(bufs, i))
+@inline function _buffer_eltype(bufs::Tuple, i::Int)
+    return i === 1 ? eltype(first(bufs)) : _buffer_eltype(Base.tail(bufs), i - 1)
+end
+
+# The buffer a `remake_buffer` result is built from is widened to hold the new values, so the
+# declared type of a whole shaped parameter is read from the old buffer.
+function validate_shaped_replacement(oldbuf::MTKParameters, idx::ParameterIndex, val)
+    idx.shape === nothing && return nothing
+    bufs = idx.portion === NONNUMERIC_PORTION ? oldbuf.nonnumeric : oldbuf.constant
+    stype = _buffer_eltype(bufs, first(idx.idx))
+    val isa stype || throw(
+        ArgumentError(
+            "value of type $(typeof(val)) cannot replace a parameter declared with the type $stype."
+        )
+    )
+    return nothing
+end
+
 function _ducktyped_parameter_values(p, pind::ParameterIndex)
     @unpack portion, idx = pind
     if portion isa SciMLStructures.Tunable
@@ -719,12 +738,31 @@ end
 
 function validate_opaque_shape(p, stype, val)
     has_declared_opaque_shape(p) || return nothing
-    return validate_declared_shape(SU.shape(p), val)
+    validate_declared_shape(SU.shape(p), val)
+    return validate_declared_type(p, stype, val)
+end
+
+# A whole replacement value of a shaped parameter must have the declared type, since the buffer
+# stores it as is. Construction converts values to the declared type first.
+function validate_declared_type(param, stype, val)
+    is_shaped_parameter(param) && !(val isa stype) && throw(
+        ArgumentError(
+            "value for $param is of type $(typeof(val)), but $param is declared with the type $stype."
+        )
+    )
+    return nothing
 end
 
 # Indices addressing an element carry no declared shape and are not checked.
-function validate_indexed_shape(idx::ParameterIndex, val)
-    idx.shape === nothing || validate_declared_shape(idx.shape, val)
+function validate_indexed_shape(ic::IndexCache, idx::ParameterIndex, val)
+    idx.shape === nothing && return nothing
+    validate_declared_shape(idx.shape, val)
+    stype = get_buffer_template(ic, idx).type
+    val isa stype || throw(
+        ArgumentError(
+            "value of type $(typeof(val)) cannot replace a parameter declared with the type $stype."
+        )
+    )
     return nothing
 end
 
@@ -823,7 +861,7 @@ function __remake_buffer(indp, oldbuf::MTKParameters, idxs, vals; validate = tru
         if validate
             if sym === nothing
                 validate_parameter_type(ic, idx, val)
-                validate_indexed_shape(idx, val)
+                validate_indexed_shape(ic, idx, val)
             else
                 validate_parameter_type(ic, sym, idx, val)
             end
@@ -1067,12 +1105,14 @@ end
         push!(
             expr.args, :(
                 for (idx, val) in zip(idxs, vals)
+                    $validate_shaped_replacement(oldbuf, idx, val)
                     $setindex!(newbuf, val, idx)
                 end
             )
         )
     else
         for i in 1:fieldcount(idxs)
+            push!(expr.args, :($validate_shaped_replacement(oldbuf, idxs[$i], vals[$i])))
             push!(expr.args, :($setindex!(newbuf, vals[$i], idxs[$i])))
         end
     end

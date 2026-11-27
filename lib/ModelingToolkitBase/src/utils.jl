@@ -390,9 +390,10 @@ function check_shaped_binding(p::SymbolicT, val::SymbolicT)
     )
 end
 
-# Whether a parameter in `val` is itself bound, directly or through further bindings, to a
-# value of unknown shape. Bound parameters are not in the runtime buffer, so nothing else checks it.
-function binds_to_unknown_shape(val::SymbolicT, bindings, seen = Set{SymbolicT}())
+# A parameter in `val` that is itself bound, directly or through further bindings, to a value of
+# unknown shape or to one whose axes differ from the declared 1-based ranges of that parameter,
+# or `nothing`. Bound parameters are not in the runtime buffer, so nothing else checks them.
+function unverifiable_binding(val::SymbolicT, bindings, seen = Set{SymbolicT}())
     vars = Set{SymbolicT}()
     SU.search_variables!(vars, val; is_atomic = check_bindings_is_atomic)
     for v in vars
@@ -400,10 +401,16 @@ function binds_to_unknown_shape(val::SymbolicT, bindings, seen = Set{SymbolicT}(
         push!(seen, v)
         bound = get(bindings, v, COMMON_NOTHING)
         (bound === COMMON_NOTHING || bound === COMMON_MISSING) && continue
-        SU.shape(bound) isa SU.ShapeVecT || return true
-        binds_to_unknown_shape(bound, bindings, seen) && return true
+        bsh = SU.shape(bound)
+        bsh isa SU.ShapeVecT || return v
+        vsh = SU.shape(v)
+        if vsh isa SU.ShapeVecT && !isempty(vsh) && all(isone ∘ first, vsh) && vsh != bsh
+            return v
+        end
+        found = unverifiable_binding(bound, bindings, seen)
+        found === nothing || return found
     end
-    return false
+    return nothing
 end
 
 """
@@ -427,11 +434,13 @@ function check_binding_shape(p::SymbolicT, val::SymbolicT, bindings)
             )
         )
     end
-    if is_shaped_parameter(p) && binds_to_unknown_shape(val, bindings)
+    unverifiable = is_shaped_parameter(p) ? unverifiable_binding(val, bindings) : nothing
+    if unverifiable !== nothing
         throw(
             ArgumentError(
-                "binding for $p depends through other bindings on a value of unknown shape, " *
-                    "so the declared shape of $p cannot be checked."
+                "binding for $p depends on the binding of $unverifiable, whose value has unknown shape " *
+                    "or axes that differ from those declared for $unverifiable, so the declared shape " *
+                    "of $p cannot be checked."
             )
         )
     end

@@ -391,11 +391,42 @@ end
     @named sys = System([D(x) ~ A[2, 2]], t, [x], [A, B, C]; bindings = [B => C])
     @test_throws "unknown shape" complete(set_defaults(sys, [A => B]))
     @test_throws "unknown shape" complete(set_defaults(sys, [A => 2 * B]))
+    offset = OffsetArrays.OffsetArray([1.0 2.0; 3.0 4.0], 0:1, 0:1)
+    @test_throws "axes that differ" System(
+        [D(x) ~ A[1, 1]], t, [x], [A, B]; bindings = [A => B, B => offset], name = :offsetchain
+    )
+    @named offsetbound = System([D(x) ~ A[1, 1]], t, [x], [A, B]; bindings = [B => offset])
+    @test_throws "axes that differ" complete(set_defaults(offsetbound, [A => B]))
     @named known = System([D(x) ~ A[2, 2]], t, [x], [A, B, C])
     @test complete(set_defaults(known, [A => B])) isa System
     # a cycle of bindings terminates
     cyclic = Dict{ModelingToolkitBase.SymbolicT, ModelingToolkitBase.SymbolicT}(
         unwrap(A) => unwrap(B), unwrap(B) => unwrap(A)
     )
-    @test !ModelingToolkitBase.binds_to_unknown_shape(unwrap(A), cyclic)
+    @test ModelingToolkitBase.unverifiable_binding(unwrap(A), cyclic) === nothing
+end
+
+@testset "whole replacements of a shaped parameter must have the declared array type" begin
+    K = shaped_parameter(:K, SparseMatrixCSC{Float64, Int}, 2, 2)
+    @variables x(t)
+    @named sys = System([D(x) ~ K[2, 2]], t, [x], [K])
+    csys = complete(sys)
+    prob = ODEProblem(csys, Dict(x => 0.0, K => spzeros(2, 2)), (0.0, 1.0))
+    ps = prob.p
+    idx = parameter_index(csys, K)
+    dense = ones(2, 2)
+    @test_throws ArgumentError remake_buffer(csys, ps, [K], [dense])
+    @test_throws ArgumentError remake_buffer(csys, ps, [K], Any[dense])
+    @test_throws ArgumentError remake_buffer(csys, ps, [idx], [dense])
+    @test_throws ArgumentError remake_buffer(csys, ps, [idx], Any[dense])
+    @test_throws ArgumentError remake(prob; p = [K => dense])
+    # in-place updates convert to the buffer's element type, so the declared type is kept
+    setp(csys, K)(ps, dense)
+    @test getp(csys, K)(ps) isa SparseMatrixCSC
+    ps[idx] = 2 .* dense
+    @test getp(csys, K)(ps) isa SparseMatrixCSC
+    @test getp(csys, K)(ps) == 2 .* dense
+    replacement = sparse(1:2, 1:2, fill(2.0, 2), 2, 2)
+    @test getp(csys, K)(remake_buffer(csys, ps, [K], [replacement])) == replacement
+    @test getp(csys, K)(remake_buffer(csys, ps, [idx], Any[replacement])) == replacement
 end
