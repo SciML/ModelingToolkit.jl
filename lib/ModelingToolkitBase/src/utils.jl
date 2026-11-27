@@ -204,6 +204,12 @@ one scalar equation per element.
 """
 is_array_equation(eq::Equation) = SU.is_array_shape(SU.shape(eq.lhs))
 
+function is_zero_lhs(eq::Equation)
+    _iszero(eq.lhs) && return true
+    lhs = unwrap_const(eq.lhs)
+    return lhs isa FillArrays.Zeros || (lhs isa FillArrays.Fill{<:Number} && all(iszero, lhs))
+end
+
 """
     $(TYPEDSIGNATURES)
 
@@ -226,8 +232,8 @@ function scalarize_array_equations(eqs::Vector{Equation})
 end
 
 function check_lhs(eq::Equation, ::Type{Differential}, dvs::Set)
-    v = unwrap(eq.lhs)
-    _iszero(v) && return
+    is_zero_lhs(eq) && return
+    v = eq.lhs
     if iscall(v)
         op = operation(v)
         if op isa Differential && isone(op.order)

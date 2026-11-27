@@ -42,10 +42,11 @@ function SciMLBase.ImplicitDiscreteFunction{iip, spec}(
         f = SciMLBase.wrapfun_iip(f, (u0, u0, u0, p, t))
     end
 
-    if length(dvs) == length(equations(sys))
+    nrows = count_equation_rows(equations(sys))
+    if length(dvs) == nrows
         resid_prototype = nothing
     else
-        resid_prototype = calculate_resid_prototype(length(equations(sys)), u0, p)
+        resid_prototype = calculate_resid_prototype(nrows, u0, p)
     end
 
     observedfun = ObservedFunctionCache(sys, codegen_opts)

@@ -2971,13 +2971,13 @@ end
     $(TYPEDSIGNATURES)
 
 Whether `constructor` accepts a system containing array equations (equations whose sides
-are array-valued). Residual-style codegen lowers each array equation to one scalar row
-per element through `array_residual_maker`; constructors whose generated function does
-not assemble residuals this way must keep returning `false`, so that the system is
-required to be scalarized by `mtkcompile` first.
+are array-valued). The generated function must produce one scalar output row per element
+of each array equation.
 """
 accepts_array_equations(::Type{<:SciMLBase.ODEFunction}) = true
 accepts_array_equations(::Type{<:SciMLBase.DAEFunction}) = true
+accepts_array_equations(::Type{<:SciMLBase.DDEFunction}) = true
+accepts_array_equations(::Type{<:SciMLBase.ImplicitDiscreteFunction}) = true
 accepts_array_equations(::Type{<:SciMLBase.NonlinearFunction}) = true
 accepts_array_equations(::Any) = false
 

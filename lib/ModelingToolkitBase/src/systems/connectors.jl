@@ -876,7 +876,26 @@ function _generate_connection_set!(
     return sys
 end
 
-function _flow_equations_from_idxs!(sys::AbstractSystem, eqs::Vector{Equation}, cset::Vector{ConnectionVertex}, len::Int)
+function _flow_equations_from_idxs!(sys::AbstractSystem, eqs::Vector{Equation}, cset::Vector{ConnectionVertex}, representative::SymbolicT)
+    len = length(representative)::Int
+    iszero(len) && return
+    sh = SU.shape(representative)::SU.ShapeVecT
+    # `array_residual_maker` reads a vector residual from index 1.
+    offset_vector = length(sh) == 1 && first(only(sh)) != 1
+    if SU.is_array_shape(sh) && !offset_vector && all(cset) do cvert
+            v = variable_from_vertex(sys, cvert)::SymbolicT
+            isequal(SU.shape(v), sh)
+        end
+        terms = map(cset) do cvert
+            v = Symbolics.wrap(variable_from_vertex(sys, cvert)::SymbolicT)
+            cvert.isouter ? .-v : v
+        end
+        rhs = reduce((a, b) -> a .+ b, terms)
+        # A generic fill supports broadcasting symbolic constructors during scalarization.
+        lhs = FillArrays.Fill(0, axes(representative))
+        push!(eqs, lhs ~ rhs)
+        return
+    end
     add_buffer = SymbolicT[]
     # each variable can have different axes, but they all have the same size
     for sz_i in 1:len
@@ -919,8 +938,7 @@ end
 
 Push the connection equation `lhs ~ rhs` onto `eqs`, expanding it into one equation per
 leaf if the connected variable is a symbolic struct. A record has no arithmetic, so the
-whole-record equation would fail to canonicalize into residual form downstream. This is
-the same reason the `Flow` branch below emits scalar equations rather than array ones.
+whole-record equation would fail to canonicalize into residual form downstream.
 """
 function push_connection_equation!(eqs::Vector{Equation}, lhs::SymbolicT, rhs::SymbolicT)
     if Symbolics.issymstruct(lhs)
@@ -994,11 +1012,7 @@ function generate_connection_equations_and_stream_connections(
         elseif vtype === Stream
             push!(stream_connections, cset)
         elseif vtype === Flow
-            # arrays have to be broadcasted to be added/subtracted/negated which leads
-            # to bad-looking equations. Just generate scalar equations instead since
-            # mtkcompile will scalarize anyway.
-            representative = variable_from_vertex(sys, cset[1])::SymbolicT
-            _flow_equations_from_idxs!(sys, eqs, cset, length(representative)::Int)
+            _flow_equations_from_idxs!(sys, eqs, cset, var)
         else # Equality
             vars = SymbolicT[]
             for cvar in cset

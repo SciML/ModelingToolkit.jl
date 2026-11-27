@@ -307,10 +307,10 @@ function generate_rhs(
         if override_discrete || is_discrete_system(sys)
             # ImplicitDiscrete case
             D = Shift(t, 1)
-            rhss = map(eqs) do eq
+            rhss = map(scalarize_array_equations(eqs)) do eq
                 # Algebraic equations get shifted forward 1, to match with differential
                 # equations
-                _iszero(eq.lhs) ? distribute_shift(D(eq.rhs)) : (eq.rhs - eq.lhs)
+                is_zero_lhs(eq) ? distribute_shift(D(eq.rhs)) : (eq.rhs - eq.lhs)
             end
             # Handle observables in algebraic equations, since they are shifted
             shifted_obs = Equation[distribute_shift(D(eq)) for eq in obs]
@@ -327,7 +327,7 @@ function generate_rhs(
         else
             D = Differential(t)
             ddvs = map(D, dvs)
-            rhss = SymbolicT[_iszero(eq.lhs) ? eq.rhs : eq.rhs - eq.lhs for eq in eqs]
+            rhss = SymbolicT[is_zero_lhs(eq) ? eq.rhs : eq.rhs - eq.lhs for eq in eqs]
             extra_expressions = SymbolicT[unwrap(eq.rhs) for eq in obs]
             assertion_expr === nothing || push!(extra_expressions, assertion_expr)
             reserved_symbols = Iterators.flatten((dvs, parameters(sys; initial_parameters = true), (eq.lhs for eq in obs)))
@@ -338,7 +338,7 @@ function generate_rhs(
             assemble_residuals = true
         end
     elseif !is_time_dependent(sys)
-        rhss = SymbolicT[_iszero(eq.lhs) ? eq.rhs : eq.rhs - eq.lhs for eq in eqs]
+        rhss = SymbolicT[is_zero_lhs(eq) ? eq.rhs : eq.rhs - eq.lhs for eq in eqs]
         assemble_residuals = true
     else
         if !override_discrete && !is_discrete_system(sys)
@@ -856,7 +856,7 @@ function calculate_massmatrix(sys::System; simplify = false)
                 M[i, variable_index(sys, st)] = 1
             end
         else
-            _iszero(eq.lhs) ||
+            is_zero_lhs(eq) ||
                 error("Only semi-explicit constant mass matrices are currently supported. Faulty equation: $eq.")
             i += equation_row_count(eq)
         end
