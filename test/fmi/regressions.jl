@@ -25,6 +25,18 @@ function feedthrough_step_hook(step; stop_time = nothing)
     )
 end
 
+function feedthrough_init_hook(fmu, limit)
+    original_enter = fmu.cEnterInitializationMode
+    function enter_init(instance, tolerance_defined, tolerance, t0, stop_defined, stop)
+        limit[] = iszero(stop_defined) ? Inf : stop
+        return ccall(
+            original_enter, Cuint, (Ptr{Cvoid}, UInt8, Cdouble, Cdouble, UInt8, Cdouble),
+            instance, tolerance_defined, tolerance, t0, stop_defined, stop
+        )
+    end
+    return @cfunction($enter_init, Cuint, (Ptr{Cvoid}, UInt8, Cdouble, Cdouble, UInt8, Cdouble))
+end
+
 function adder_system(fmu, type; initialization_eq = false, kwargs...)
     step = type == :CS ? (; communication_step_size = 0.01) : (;)
     @named adder = MTK.FMIComponent(Val(2); fmu, type, step..., kwargs...)
@@ -251,6 +263,45 @@ end
     end
 end
 
+@testset "Variable communication rounding at the experiment limit" begin
+    start, finish = 0.001, 0.01
+    @test start + (finish - start) > finish
+    @testset "stop_time = $stop_time" for stop_time in (nothing, finish)
+        fmu = loadFMU("Feedthrough", "ModelicaReferenceFMUs", "0.0.39", "3.0"; type = :CS)
+        fmu.modelDescription.coSimulation.canHandleVariableCommunicationStepSize = true
+        limit, short = Ref(Inf), Ref(false)
+        requests = Tuple{Float64, Float64}[]
+        init_hook = feedthrough_init_hook(fmu, limit)
+        step_hook = feedthrough_step_hook(; stop_time = limit) do point, h
+            push!(requests, (point, h))
+            return short[] ? point + h / 2 : point + h
+        end
+        fmu.cEnterInitializationMode = Base.unsafe_convert(Ptr{Cvoid}, init_hook)
+        fmu.cDoStep = Base.unsafe_convert(Ptr{Cvoid}, step_hook)
+        GC.@preserve init_hook step_hook begin
+            @named ports = MTK.FMIComponent(
+                Val(3); fmu, type = :CS, communication_step_size = 0.01, stop_time
+            )
+            eqs = [
+                getproperty(ports, name) ~ (name == :Enumeration_input ? 1.0 : 0.0)
+                    for name in (MTK.getname(v) for v in unknowns(ports) if MTK.isinput(v))
+            ]
+            @mtkcompile sys = System(eqs, t; systems = [ports])
+            prob = ODEProblem(sys, [], (start, finish))
+            sol = solve(prob, Tsit5())
+            @test SciMLBase.successful_retcode(sol)
+            @test sol.t[end] == finish
+            @test limit[] == finish
+            @test length(requests) == 1
+            point, h = only(requests)
+            @test point == start && h > 0
+            @test prevfloat(finish) <= point + h <= limit[]
+            short[] = true
+            @test_throws r"FMI 3.*lastSuccessfulTime" solve(prob, Tsit5())
+        end
+    end
+end
+
 @testset "Model Exchange accepted-step event iteration" begin
     @testset "$cause" for cause in (:step, :input, :terminate)
         fmu = loadFMU(joinpath(FIXTURE_FMUS, "SimpleAdder.fmu"); type = :ME)
@@ -405,15 +456,7 @@ end
         coarse_requests = Tuple{Float64, Float64}[]
         coarse_short = Ref(false)
         coarse_limit = Ref(Inf)
-        original_enter = fmu3_coarse.cEnterInitializationMode
-        function enter_init(instance, tolerance_defined, tolerance, t0, stop_defined, stop)
-            coarse_limit[] = iszero(stop_defined) ? Inf : stop
-            return ccall(
-                original_enter, Cuint, (Ptr{Cvoid}, UInt8, Cdouble, Cdouble, UInt8, Cdouble),
-                instance, tolerance_defined, tolerance, t0, stop_defined, stop
-            )
-        end
-        init_hook = @cfunction($enter_init, Cuint, (Ptr{Cvoid}, UInt8, Cdouble, Cdouble, UInt8, Cdouble))
+        init_hook = feedthrough_init_hook(fmu3_coarse, coarse_limit)
         coarse_hook = feedthrough_step_hook(; stop_time = coarse_limit) do point, step_h
             push!(coarse_requests, (point, step_h))
             return coarse_short[] ? point + 0.5 * step_h : point + step_h
@@ -522,7 +565,7 @@ end
     end
 end
 
-@testset "Model Exchange coincident host affects inside one FMI epoch ($second_phase)" for second_phase in (0, typemax(Int), :native)
+function adder_with_completed_step_event()
     fmu = loadFMU(joinpath(FIXTURE_FMUS, "SimpleAdder.fmu"); type = :ME)
     completed = Ref(0)
     original_complete = fmu.cCompletedIntegratorStep
@@ -537,6 +580,11 @@ end
     end
     complete_hook = @cfunction($complete_step, Cuint, (Ptr{Cvoid}, Cint, Ptr{Cint}, Ptr{Cint}))
     fmu.cCompletedIntegratorStep = Base.unsafe_convert(Ptr{Cvoid}, complete_hook)
+    return fmu, complete_hook
+end
+
+@testset "Model Exchange coincident host affects inside one FMI epoch ($second_phase)" for second_phase in (0, typemax(Int), :native)
+    fmu, complete_hook = adder_with_completed_step_event()
     GC.@preserve complete_hook begin
         @named adder = MTK.FMIComponent(Val(2); fmu, type = :ME)
         @discretes host_a(t) = 1.0
@@ -587,6 +635,52 @@ end
         @test sol(0.015; idxs = sys.adder.out) == 1.0
         @test sol(0.025; idxs = sys.adder.out) == 5.0
         @test_throws r"FMI.*snapshot.*0\.035" sol(0.035; idxs = sys.adder.out)
+    end
+end
+
+@testset "Model Exchange supplied parameter-only affects (registered clock: $registered)" for registered in (false, true)
+    fmu, complete_hook = adder_with_completed_step_event()
+    GC.@preserve complete_hook begin
+        @named adder = MTK.FMIComponent(Val(2); fmu, type = :ME)
+        p = registered ? only(@discretes p(t) = 1.0) : only(@parameters p = 1.0)
+        @variables x(t) = 1.0 [irreducible = true]
+        events = registered ? [
+                MTKBase.SymbolicDiscreteCallback(
+                    [0.05], MTKBase.ImperativeAffect((m, o, ctx, integ) -> (; p = m.p); modified = (; p))
+                ),
+            ] : []
+        @mtkcompile sys = System(
+            [adder.a ~ p * x, adder.b ~ 0.0, D(x) ~ 0.0], t; systems = [adder], discrete_events = events
+        )
+        set_p! = MTKBase.setp(sys, p)
+        get_live = MTKBase.getu(sys, (p, sys.adder.a, sys.adder.out))
+        live = NTuple{3, Float64}[]
+        condition(u, t, integ) = t == 0.02
+        partitions = registered ? (MTKBase.timeseries_parameter_index(sys, p).timeseries_idx,) : ()
+        callbacks = map((3.0, 5.0)) do value
+            function affect!(integ)
+                set_p!(integ, value)
+                push!(live, Tuple(get_live(integ)))
+                return nothing
+            end
+            return DiscreteCallback(
+                condition, affect!; save_positions = (true, true), saved_clock_partitions = partitions
+            )
+        end
+        prob = ODEProblem(
+            sys, [sys.adder.c => 0.0, sys.adder.value => 0.0], (0.0, 0.04);
+            callback = CallbackSet(callbacks...)
+        )
+        sol = solve(prob, Tsit5(); dt = 0.01, adaptive = false, tstops = [0.02], saveat = [0.015, 0.025])
+        @test SciMLBase.successful_retcode(sol)
+        @test live == [(3, 3, 3), (5, 5, 5)]
+        @test all(==(1.0), sol[sys.x])
+        indices = findall(==(0.02), sol.t)
+        @test sol[sys.adder.out][indices] == [1.0, 3.0, 3.0, 5.0, 5.0, 5.0]
+        @test sol(0.02; idxs = sys.adder.out, continuity = :left) == 1.0
+        @test sol(0.02; idxs = sys.adder.out, continuity = :right) == 5.0
+        @test sol(0.015; idxs = sys.adder.out) == 1.0
+        @test sol(0.025; idxs = sys.adder.out) == 5.0
     end
 end
 

@@ -223,11 +223,12 @@ function check_assignable(sys, sym)
     end
 end
 
-function solution_index_parameter_values(sol, i, partitions = nothing)
-    ps = parameter_values(sol)
-    SymbolicIndexingInterface.is_parameter_timeseries(sol) == SymbolicIndexingInterface.Timeseries() || return ps
+function solution_index_parameter_values(sol, i, partitions = nothing, ps = nothing)
+    if SymbolicIndexingInterface.is_parameter_timeseries(sol) != SymbolicIndexingInterface.Timeseries()
+        return isnothing(ps) ? parameter_values(sol) : ps
+    end
     discs = SymbolicIndexingInterface.get_parameter_timeseries_collection(sol)
-    ps = parameter_values(discs)
+    ps = isnothing(ps) ? parameter_values(discs) : ps
     time = sol.t[i]
     positions = saved_parameter_positions(sol, i)
     initial_values = initial_discrete_values(sol)
@@ -295,20 +296,25 @@ struct FunctionalAffect{UF, CTX, MOF, OF, MN, OST, UPS}
     obs_partitions::Vector{Int}
 end
 
+@inline function affect_observations(fa::FunctionalAffect)
+    function observed_at(u, p, t)
+        return NamedTuple{fa.obs_sym_tuple}(fa.obs_fun(u, p, t))
+    end
+    function observed_at(sol::SciMLBase.AbstractTimeseriesSolution, i::Integer, ps = nothing)
+        time = sol.t[i]
+        return observed_at(
+            state_values(sol, i), solution_index_parameter_values(sol, i, fa.obs_partitions, ps), time
+        )
+    end
+    return observed_at
+end
+
 @inline function (fa::FunctionalAffect)(integ)
     capture_pre_affect_discrete_values!(integ)
     # Read the current values of the modified variables (pre-affect baseline)
     modvals = fa.mod_og_val_fun(integ.u, integ.p, integ.t)
     upd_component_array = NamedTuple{fa.mod_names}(modvals)
-    function observed_at(u, p, t)
-        return NamedTuple{fa.obs_sym_tuple}(fa.obs_fun(u, p, t))
-    end
-    function observed_at(sol::SciMLBase.AbstractTimeseriesSolution, i::Integer)
-        time = sol.t[i]
-        return observed_at(
-            state_values(sol, i), solution_index_parameter_values(sol, i, fa.obs_partitions), time
-        )
-    end
+    observed_at = affect_observations(fa)
     obs_component_array = observed_at(integ.u, integ.p, integ.t)
     args = (upd_component_array, obs_component_array, fa.ctx, integ)
     upd_vals = applicable(fa.user_affect, args...) ? fa.user_affect(args...) :

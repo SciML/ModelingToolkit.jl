@@ -1727,6 +1727,24 @@ merge_cb(::Nothing, x) = merge_cb(x, nothing)
 merge_cb(x, ::Nothing) = x
 merge_cb(x, y) = CallbackSet(x, y)
 
+adapt_supplied_callback(callback, affect) = callback
+adapt_supplied_callback(callback, affect::PhaseAdvancingAffect) =
+    adapt_supplied_callback(callback, affect.affect!)
+adapt_supplied_callback(callback, affect::FunctionalAffect) =
+    adapt_supplied_callback(callback, affect.user_affect, affect_observations(affect), affect.upd_funs)
+
+"""
+    adapt_supplied_callback(callback, affect, observe, setters)
+
+Extension hook invoked when a problem supplies a solver callback and its system has an
+untimed symbolic discrete `ImperativeAffect`. Dispatch on the imperative affect's function
+`affect` to adapt the supplied callback before it is merged with the system callbacks.
+`observe(u, p, t)` reads live observations, and `observe(sol, i)` reads them at a saved
+solution index. `setters` contains the compiled setters by name. The default returns the
+supplied callback unchanged.
+"""
+adapt_supplied_callback(callback, affect, observe, setters) = callback
+
 """
     process_events(sys; callback, tspan, kwargs...) -> Union{Nothing, AbstractCallback, CallbackSet}
 
@@ -1750,6 +1768,11 @@ Returns `nothing` if `sys` has no events and `callback` is `nothing`.
 function process_events(sys; callback = nothing, tspan = nothing, kwargs...)
     contin_cbs = generate_continuous_callbacks(sys; kwargs...)
     discrete_cbs = generate_discrete_callbacks(sys; tspan, kwargs...)
+    if callback !== nothing && discrete_cbs !== nothing
+        for compiled in discrete_cbs
+            callback = adapt_supplied_callback(callback, compiled.affect!)
+        end
+    end
     cb = merge_cb(contin_cbs, callback)
     return (discrete_cbs === nothing) ? cb : CallbackSet(cb, discrete_cbs...)
 end

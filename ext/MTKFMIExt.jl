@@ -1,7 +1,8 @@
 module MTKFMIExt
 
 using ModelingToolkit
-using SymbolicIndexingInterface: NotSymbolic, symbolic_type
+using SymbolicIndexingInterface: NotSymbolic, get_parameter_timeseries_collection,
+    parameter_values, symbolic_type
 using ModelingToolkitBase: t_nounits, D_nounits
 using DocStringExtensions: TYPEDEF, TYPEDFIELDS, TYPEDSIGNATURES
 import ModelingToolkit as MTK
@@ -1355,6 +1356,12 @@ end
 matches_observation(sample::MEOutputSample, states, inputs) =
     isequal(sample.states, states) && isequal(sample.inputs, inputs)
 
+struct MENativeBoundary{S}
+    key::NTuple{3, Float64}
+    inputs::Vector{Float64}
+    set_phase!::S
+end
+
 mutable struct MEOutputHistory
     samples::Dict{NTuple{3, Float64}, MEOutputSample}
     coincident_samples::Dict{NTuple{3, Float64}, Vector{MEOutputSample}}
@@ -1365,12 +1372,13 @@ mutable struct MEOutputHistory
     last_states::Vector{Float64}
     last_inputs::Vector{Float64}
     phase_dirty::Bool
+    native_boundary::Union{Nothing, MENativeBoundary}
 end
 
 function MEOutputHistory()
     return MEOutputHistory(
         Dict{NTuple{3, Float64}, MEOutputSample}(), Dict{NTuple{3, Float64}, Vector{MEOutputSample}}(),
-        1, false, false, NaN, Float64[], Float64[], false
+        1, false, false, NaN, Float64[], Float64[], false, nothing
     )
 end
 MEOutputHistory(history::MEOutputHistory) = history
@@ -1400,6 +1408,7 @@ function (::MEOutputs)(wrapper, states, inputs, params, time, epoch, phase, hist
         sample = get(history.samples, key) do
             throw(ArgumentError("FMI Model Exchange has no continuous-output snapshot at time $time. Query a saved point or include this time in saveat."))
         end
+        phase < 0 && return sample.outputs
         coincident = get(history.coincident_samples, key, nothing)
         if coincident !== nothing && !matches_observation(sample, states, inputs)
             for point in coincident
@@ -1435,9 +1444,11 @@ function save_me_output!(wrapper, history, time, epoch, phase, states, inputs; s
     key = (Float64(epoch), Float64(time), Float64(phase))
     sample = get(history.samples, key, nothing)
     if sample !== nothing
-        matches_observation(sample, states, inputs) && return
+        matches_observation(sample, states, inputs) && return sample
         coincident = get!(() -> MEOutputSample[], history.coincident_samples, key)
-        any(point -> matches_observation(point, states, inputs), coincident) && return
+        for point in coincident
+            matches_observation(point, states, inputs) && return point
+        end
     end
 
     states, inputs = as_fmi_vector(states), as_fmi_vector(inputs)
@@ -1449,33 +1460,131 @@ function save_me_output!(wrapper, history, time, epoch, phase, states, inputs; s
     else
         push!(coincident, snapshot)
     end
-    return
+    return snapshot
 end
 
-function save_me_points!(observed_at, o, integrator)
+me_key(point, time) = (Float64(point.event_epoch), Float64(time), Float64(point.observation_phase))
+
+function me_replay_parameters(sol, p)
+    saved = get_parameter_timeseries_collection(sol)
+    saved === nothing && return p
+    live = SciMLBase.unwrap_parameters(p)
+    cached = SciMLBase.unwrap_parameters(parameter_values(saved))
+    # Replay registered clocks into the solution's buffer without writing to live parameters.
+    return MTKBase.MTKParameters(
+        live.tunable, live.initials, cached.discrete, live.constant, live.nonnumeric, cached.caches
+    )
+end
+
+function save_me_points!(observed_at, o, integrator, before = nothing)
     sol = SciMLBase.get_sol(integrator)
     history = o.history
+    history.next_saved > length(sol.t) && return false
+    after = history.native_boundary
+    ps = isnothing(after) ? nothing : me_replay_parameters(sol, integrator.p)
     for i in history.next_saved:length(sol.t)
         time = Float64(sol.t[i])
-        point = observed_at(sol, i)
+        boundary = nothing
+        point = if (before !== nothing && time == before.key[2]) ||
+                (after !== nothing && time == after.key[2])
+            live_point = observed_at(sol.u[i], integrator.p, sol.t[i])
+            key = me_key(live_point, time)
+            if before !== nothing && key == before.key
+                boundary = before
+                live_point
+            elseif after !== nothing && key == after.key
+                boundary = after
+                live_point
+            else
+                observed_at(sol, i, ps)
+            end
+        else
+            observed_at(sol, i, ps)
+        end
         if point.event_epoch == o.event_epoch
             states = as_fmi_vector(point.state_values)
-            inputs = as_fmi_vector(point.inputs)
-            key = (Float64(point.event_epoch), time, Float64(point.observation_phase))
+            key = me_key(point, time)
+            inputs = if boundary !== nothing && point.observation_phase != o.observation_phase
+                boundary.inputs
+            else
+                as_fmi_vector(point.inputs)
+            end
             if !haskey(history.samples, key)
                 update_history_observation!(history, time, states, inputs)
             elseif history.last_time == time &&
                     (!isequal(states, history.last_states) || !isequal(inputs, history.last_inputs))
                 history.phase_dirty = true
             end
-            save_me_output!(
+            sample = save_me_output!(
                 o.wrapper, history, time, point.event_epoch, point.observation_phase, states, inputs;
                 synchronize = true
             )
+            if boundary !== nothing
+                # A negative phase identifies an archived solver save slot.
+                boundary.set_phase!(sol.u[i], -i)
+                history.samples[(key[1], time, -Float64(i))] = sample
+            end
         end
     end
     history.next_saved = length(sol.t) + 1
-    return
+    return true
+end
+
+struct MENativeAffect{F, O, S}
+    affect!::F
+    observed_at::O
+    set_phase!::S
+end
+
+function (f::MENativeAffect)(integrator, args...)
+    observed_at = f.observed_at
+    o = observed_at(integrator.u, integrator.p, integrator.t)
+    o.history.active || return f.affect!(integrator, args...)
+    before = MENativeBoundary(me_key(o, integrator.t), copy(as_fmi_vector(o.inputs)), f.set_phase!)
+    if save_me_points!(observed_at, o, integrator, before)
+        # Saving older points can leave the FMU at a different time.
+        sync_me_point!(o.wrapper, as_fmi_vector(o.state_values), before.inputs, integrator.t)
+    end
+    result = f.affect!(integrator, args...)
+    post = observed_at(integrator.u, integrator.p, integrator.t)
+    post.history.native_boundary =
+        MENativeBoundary(me_key(post, integrator.t), copy(as_fmi_vector(post.inputs)), f.set_phase!)
+    return result
+end
+
+wrap_me_affect(affect!, observed_at, set_phase!) =
+    isnothing(affect!) ? nothing : MENativeAffect(affect!, observed_at, set_phase!)
+
+adapt_me_callback(cb, observed_at, set_phase!) = cb
+function adapt_me_callback(cb::SciMLBase.CallbackSet, observed_at, set_phase!)
+    return SciMLBase.CallbackSet(
+        map(cb -> adapt_me_callback(cb, observed_at, set_phase!), cb.continuous_callbacks),
+        map(cb -> adapt_me_callback(cb, observed_at, set_phase!), cb.discrete_callbacks)
+    )
+end
+function adapt_me_callback(cb::SciMLBase.DiscreteCallback, observed_at, set_phase!)
+    return SciMLBase.DiscreteCallback(
+        cb.condition, wrap_me_affect(cb.affect!, observed_at, set_phase!);
+        cb.initialize, cb.finalize, cb.save_positions, cb.initializealg,
+        cb.saved_clock_partitions, cb.initialize_save_discretes
+    )
+end
+function adapt_me_callback(cb::SciMLBase.ContinuousCallback, observed_at, set_phase!)
+    return SciMLBase.ContinuousCallback(
+        cb.condition, wrap_me_affect(cb.affect!, observed_at, set_phase!),
+        wrap_me_affect(cb.affect_neg!, observed_at, set_phase!);
+        cb.initialize, cb.finalize, cb.idxs, cb.rootfind, cb.interp_points,
+        cb.save_positions, cb.dtrelax, cb.abstol, cb.reltol, cb.repeat_nudge,
+        cb.initializealg, cb.saved_clock_partitions, cb.maybe_discontinuity, cb.initialize_save_discretes
+    )
+end
+function adapt_me_callback(cb::SciMLBase.VectorContinuousCallback, observed_at, set_phase!)
+    return SciMLBase.VectorContinuousCallback(
+        cb.condition, wrap_me_affect(cb.affect!, observed_at, set_phase!), cb.len;
+        cb.initialize, cb.finalize, cb.idxs, cb.rootfind, cb.interp_points,
+        cb.save_positions, cb.dtrelax, cb.abstol, cb.reltol, cb.repeat_nudge,
+        cb.initializealg, cb.saved_clock_partitions, cb.maybe_discontinuity, cb.initialize_save_discretes
+    )
 end
 
 """
@@ -1577,6 +1686,11 @@ function fmiMEPhaseSync!(m, o, ctx, integrator, observed_at)
     o.history.phase_dirty = false
     SciMLBase.derivative_discontinuity!(integrator, false)
     return (; phase)
+end
+
+function MTKBase.adapt_supplied_callback(callback, ::typeof(fmiMEEvent!), observe, setters)
+    haskey(setters, :phase) || return callback
+    return adapt_me_callback(callback, observe, setters.phase)
 end
 
 function with_discrete_outputs(m, wrapper)
@@ -1685,7 +1799,7 @@ function fmiMEInitialize!(m, o, ctx, integrator)
         history, wrapper.last_completed_step,
         as_fmi_vector(o.state_values), as_fmi_vector(o.inputs)
     )
-    return (; updates..., history)
+    return (; updates..., history, phase = max(0.0, m.phase))
 end
 
 """
@@ -1701,19 +1815,23 @@ function fmiMEFinalize!(m, o, ctx, integrator, observed_at)
                 save_me_points!(observed_at, o, integrator)
                 sol = SciMLBase.get_sol(integrator)
                 point = if !isempty(sol.t) && sol.t[end] == integrator.t
-                    observed_at(sol, lastindex(sol.t))
+                    ps = isnothing(o.history.native_boundary) ? nothing : me_replay_parameters(sol, integrator.p)
+                    observed_at(sol, lastindex(sol.t), ps)
                 else
                     o
                 end
-                save_me_output!(
-                    wrapper, o.history, integrator.t, point.event_epoch, point.observation_phase,
-                    point.state_values, point.inputs; synchronize = true
-                )
+                if point.observation_phase >= 0
+                    save_me_output!(
+                        wrapper, o.history, integrator.t, point.event_epoch, point.observation_phase,
+                        point.state_values, point.inputs; synchronize = true
+                    )
+                end
             end
         else
             empty!(o.history.samples)
             empty!(o.history.coincident_samples)
         end
+        o.history.native_boundary = nothing
         o.history.active = false
     end
     wrapper.in_solve = false
@@ -1947,7 +2065,8 @@ function fmiCSStep!(m, o, ctx, integrator)
     stop = Float64(integrator.t)
     stop > from || return (;)
     wrapper = o.wrapper
-    if variable_communication_step(wrapper)
+    variable_step = variable_communication_step(wrapper)
+    if variable_step
         to = stop
         h = to - from
     else
@@ -1957,9 +2076,19 @@ function fmiCSStep!(m, o, ctx, integrator)
         h = ctx.dt
     end
     requested = from + h
-    if requested > ctx.experiment_end[]
+    experiment_end = ctx.experiment_end[]
+    if variable_step && to <= experiment_end < requested
+        h = prevfloat(h)
+        requested = from + h
+    end
+    if requested > experiment_end
         reset_instance!(wrapper)
-        throw(ArgumentError("FMI Co-Simulation step to $requested exceeds the FMU experiment stop_time of $(ctx.experiment_end[])."))
+        throw(ArgumentError("FMI Co-Simulation step to $requested exceeds the FMU experiment stop_time of $experiment_end."))
+    end
+    grid_tol = 4 * max(eps(to), eps(requested), eps(from), isnan(ctx.grid_start[]) ? 0.0 : eps(ctx.grid_start[]))
+    if abs(requested - to) > grid_tol
+        reset_instance!(wrapper)
+        error("FMI Co-Simulation step endpoint $requested diverged from scheduled grid time $to.")
     end
     set_values!(wrapper, wrapper.inputs, ctx.input_sample)
     achieved = do_cs_step!(wrapper, from, h)
@@ -1967,11 +2096,6 @@ function fmiCSStep!(m, o, ctx, integrator)
             !(isfinite(achieved) && abs(achieved - requested) <= min(4max(eps(requested), eps(achieved)), h / 4))
         reset_instance!(wrapper)
         error("FMI 3 Co-Simulation requested time $requested, but the FMU reached $achieved (lastSuccessfulTime).")
-    end
-    grid_tol = 4 * max(eps(to), eps(requested), eps(from), isnan(ctx.grid_start[]) ? 0.0 : eps(ctx.grid_start[]))
-    if abs(requested - to) > grid_tol
-        reset_instance!(wrapper)
-        error("FMI Co-Simulation step endpoint $requested diverged from scheduled grid time $to.")
     end
     ctx.t_last[] = to
     isnan(ctx.grid_start[]) || (ctx.step_index[] += 1)

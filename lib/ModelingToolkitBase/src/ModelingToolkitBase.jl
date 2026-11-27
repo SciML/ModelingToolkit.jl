@@ -520,6 +520,7 @@ const set_scalar_metadata = setmetadata
 @public AbstractSystem, CheckAll, CheckNone, CheckComponents, CheckUnits
 @public t, D, t_nounits, D_nounits
 @public SymbolicContinuousCallback, SymbolicDiscreteCallback, ImperativeAffect
+@public adapt_supplied_callback
 @public VariableType, MTKVariableTypeCtx, VariableBounds, VariableConnectType
 @public VariableDescription, VariableInput, VariableIrreducible, VariableMisc
 @public VariableOutput, VariableStatePriority, VariableUnit, collect_scoped_vars!

@@ -216,6 +216,7 @@ section of the documentation. User-defined functions can be used via `Imperative
 
 ```@docs
 ModelingToolkit.ImperativeAffect
+ModelingToolkitBase.adapt_supplied_callback
 ```
 
 ## Jump processes

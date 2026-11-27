@@ -97,6 +97,8 @@ FMU state variables and continuous outputs from an event-free solve can be evalu
 times within the solved interval. For a solve with Model Exchange events, the solution records
 other continuous outputs at saved times. Pass `saveat` to `solve` to request values at additional
 times. Use `continuity = :left` or `continuity = :right` to select the value at an event time.
+A callback supplied through the `ODEProblem` keyword records the FMI inputs on each
+saved side of its affect, including changes to ordinary parameters.
 A query at a time without a snapshot raises an error for those outputs.
 
 ```@repl fmi
@@ -127,9 +129,11 @@ including when it differs only by roundoff. The
 and, for fixed-step FMUs, also covers the last native request if adding the configured step
 size to the preceding communication point rounds past that endpoint. An explicit
 `stop_time` is a hard limit. It must cover the solve endpoint for variable-step FMUs or
-the last native request for fixed-step FMUs. A fixed-step solve can continue past that
-limit on the held sample. If a scheduled fixed step would exceed an explicit limit,
-initialization reports the minimum usable `stop_time`.
+the last native request for fixed-step FMUs. If rounding the final variable communication
+interval would cross the limit, the native step is rounded down within floating-point
+tolerance and the host still reports the scheduled endpoint. A fixed-step solve can
+continue past the limit on the held sample. If a scheduled fixed step would exceed an
+explicit limit, initialization reports the minimum usable `stop_time`.
 
 The FMU holds the inputs sampled at the left communication point for the entire interval.
 States and outputs, including direct-feedthrough outputs, are read at the right communication
