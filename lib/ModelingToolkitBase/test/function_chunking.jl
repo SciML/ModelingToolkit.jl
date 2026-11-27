@@ -249,6 +249,17 @@ count_helpers_nested(ex) = ex isa Expr ? count(is_helper_call, ex.args) + sum(co
     @test run_expr(nlchunked[2], Jnl2, u, nlp) === Jnl2
     @test Jnl2 == Jnl
 
+    # Asked for the in-place function only, a chunked build does not generate the other one.
+    only_iip = build_rhs(
+        sys, rhss; chunk_size = 300,
+        codegen_function_options = MTKB.GeneratedFunctionOptions(; expression = Val{true}).codegen |>
+            c -> MTKB.setproperties(c, (; iip_config = (false, true)))
+    )
+    @test only_iip[1] === nothing && expect_chunked(only_iip[2])
+    out = zeros(n)
+    run_expr(only_iip[2], out, u, p, 0.0)
+    @test out == reference
+
     # A dense Jacobian is generated as before.
     dense(; kwargs...) = MTKB.generate_jacobian(sys; expression = Val{true}, kwargs...)
     @test dense(; chunk_size = 300) == dense(; chunk_size = 0)

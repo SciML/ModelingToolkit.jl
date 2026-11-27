@@ -545,10 +545,10 @@ Generate the jacobian function for the equations of a [`System`](@ref).
 $GENERATE_X_KWARGS
 - `simplify`, `sparse`: Forwarded to [`calculate_jacobian`](@ref).
 - `chunk_size`: If `sparse`, how the in-place function is split into helper functions that
-  each fill a slice of the stored values, as the `chunk_size` option of
-  [`BuildFunctionWrapperOptions`](@ref). The default, `-1`, splits very large Jacobians
-  automatically. `0` never splits. A split function requires that the Jacobian it writes
-  to does not share memory with any of its other arguments.
+  each fill a slice of the stored values. The default, `-1`, splits very large Jacobians
+  automatically. `0` never splits. A positive value is the number of symbolic statements
+  to aim for in each helper. A split function requires that the Jacobian it writes to does
+  not share memory with any of its other arguments.
 - `checkbounds`: Whether to check correctness of indices at runtime if `sparse`.
   Also forwarded to `build_function_wrapper`.
 
@@ -621,7 +621,8 @@ function chunked_sparse_jacobian(
     chunked = build_function_wrapper(
         sys, vals, copy(args), BuildFunctionWrapperOptions(;
             u_arg = 1, chunk_size, require_chunking = true,
-            codegen_function_options = opts.codegen
+            # the out-of-place function is generated from the sparse matrix below
+            codegen_function_options = setproperties(opts.codegen, (; iip_config = (false, true)))
         )
     )
     chunked === nothing && return nothing

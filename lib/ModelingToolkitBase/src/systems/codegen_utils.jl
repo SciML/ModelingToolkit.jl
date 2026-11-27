@@ -961,7 +961,8 @@ end
 # ordinary whole-function one, since its container is decided by the runtime arguments and
 # `vcat` of the slices would not preserve it (it is only compiled if called).
 function _build_chunked(sys, expr, args, opts::BuildFunctionWrapperOptions, chunk_ranges)
-    vcat_oop = opts.output_type !== nothing || opts.codegen.similarto !== nothing
+    want_oop = opts.codegen.iip_config[1]
+    vcat_oop = want_oop && (opts.output_type !== nothing || opts.codegen.similarto !== nothing)
     helper_iip_config = (vcat_oop, true)
     oop_helpers = Expr[]
     iip_helpers = Expr[]
@@ -980,7 +981,10 @@ function _build_chunked(sys, expr, args, opts::BuildFunctionWrapperOptions, chun
     end
     iip = _call_chunks(iip_helpers, true)
     iip === nothing && return nothing
-    if vcat_oop
+    if !want_oop
+        # only the in-place function was asked for
+        return nothing, iip
+    elseif vcat_oop
         oop = _call_chunks(oop_helpers, false)
     else
         whole_opts = setproperties(
@@ -1082,7 +1086,7 @@ Base.@nospecializeinfer function build_function_wrapper(
     # A very large function is split into helpers that each fill a slice of the output, decided
     # here from the reachable statements, before any of the work below is done on the whole
     # function. The chunked in-place function requires that `out` does not alias any input.
-    if chunk_size != 0 && opts.codegen.iip_config == (true, true) && !wrap_delays &&
+    if chunk_size != 0 && opts.codegen.iip_config[2] && !wrap_delays &&
             !create_bindings && isempty(compress_args) && isempty(extra_assignments) &&
             pref === nothing &&
             all(==(identity), opts.codegen.wrap_code) && opts.codegen.outputidxs === nothing &&
