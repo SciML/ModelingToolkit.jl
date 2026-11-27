@@ -118,6 +118,15 @@ once — calling `mtkcompile` on an already-compiled system throws
 - `print_underconstrained_variables = nothing`: (deprecated) Use the
   `underconstrained_variables` toggle of `verbose` instead. When explicitly passed, it
   overrides that toggle.
+- `preserve_array_equations = false`: Whether array differential equations
+  `D(x[slice]) ~ rhs` that structural simplification did not need to break apart (no
+  element was differentiated by index reduction, removed, or solved for another variable)
+  are kept as single array equations in the compiled system instead of one equation per
+  element. The unknowns remain the scalar elements of `x`. Array equations that index
+  reduction or tearing must scalarize are still scalarized, and array differential
+  equations that cannot be tracked as a block (for example `2 .* D(x) ~ rhs`) are
+  scalarized with a warning. Pass `preserve_array_equations = :strict` to instead throw
+  an error naming the equation, the transformation that broke it apart and the element.
 
 Remaining keyword arguments are forwarded to the internal compilation passes.
 

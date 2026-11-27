@@ -9,6 +9,9 @@ end
 @safetestset "Tearing" begin
     include("tearing.jl")
 end
+@safetestset "Array equations" begin
+    include("array_equations.jl")
+end
 @safetestset "Stationary linear tearing" begin
     include("stationary_linear_tearing.jl")
 end
