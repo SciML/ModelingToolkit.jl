@@ -2421,7 +2421,13 @@ SymbolicIndexingInterface.finalize_parameters_hook!(s::AffectStandIn, sym) = pus
     end
 
     # a stripped affect is `isbits` and runs on a plain value provider
-    hooked = only(ODEProblem(sys, [], (0.0, 1.0)).kwargs[:callback].discrete_callbacks).affect!.affect!
+    captured = Any[]
+    function capture_periodic(aff, ev, sys; role)
+        ev isa SymbolicDiscreteCallback && role === :affect && push!(captured, aff)
+        return aff
+    end
+    ODEProblem(sys, [], (0.0, 1.0); affect_transform = capture_periodic)
+    hooked = only(captured)
     @test hooked isa ModelingToolkitBase.FunctionalAffect
     @test !isbits(hooked)
     stripped = ModelingToolkitBase.without_parameter_hooks(hooked)
@@ -2532,8 +2538,13 @@ end
         [D(x) ~ -x + v + 0.01 * (g + h), D(v) ~ -v], t, [x, v], [g, h];
         discrete_events = [SymbolicDiscreteCallback(0.1, both; discrete_parameters = [g, h])]
     )
-    gprob = ODEProblem(gsys, [], (0.0, 1.0))
-    hooked = only(gprob.kwargs[:callback].discrete_callbacks).affect!.affect!
+    captured = Any[]
+    function capture_discrete(aff, ev, sys; role)
+        ev isa SymbolicDiscreteCallback && role === :affect && push!(captured, aff)
+        return aff
+    end
+    gprob = ODEProblem(gsys, [], (0.0, 1.0); affect_transform = capture_discrete)
+    hooked = only(captured)
     stripped = ModelingToolkitBase.without_parameter_hooks(hooked)
     @test isbits(stripped)
     parts = ModelingToolkitBase.functional_affect_parts(hooked)
