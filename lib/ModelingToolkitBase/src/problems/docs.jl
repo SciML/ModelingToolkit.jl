@@ -345,14 +345,18 @@ const ADTYPE_PROBLEM_KWARGS = """
 
 const INPUTFN_KWARGS = """
 - `inputs`: The variables in the input vector. The system must have been simplified using
-  `mtkcompile` with these variables passed as `inputs`.
+  `mtkcompile` with these variables passed as `inputs`. An array input is replaced by its
+  elements in column-major order, so the input vector `u` passed to `f`, `jac`, `tgrad`
+  and `controljac`, and the columns of `controljac`, follow that flat order.
 - `disturbance_inputs`: The disturbance input variables. The system must have been
   simplified using `mtkcompile` with these variables passed as `disturbance_inputs`.
 """
 
 const CONTROLJAC_KWARGS = """
 - `controljac`: Whether to symbolically compute and generate code for the jacobian of
-  the ODE with respect to the inputs.
+  the ODE with respect to the inputs. Like `f`, it is called as `controljac(x, u, p, t)`
+  or `controljac(J, x, u, p, t)`. With `sparse = true`, `J` must be a copy of
+  `controljac_prototype`.
 """
 
 const PARAMJAC_KWARGS = """

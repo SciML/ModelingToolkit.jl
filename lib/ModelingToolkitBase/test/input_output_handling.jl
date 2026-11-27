@@ -430,38 +430,151 @@ end
 end
 
 @testset "ODEInputFunction jac/tgrad/controljac (#5382)" begin
-    @variables x(t) = 1.0 u(t) [input = true]
-    @parameters a = 2.0
-    # `t * u` makes both tgrad and controljac depend on the input and on time
-    sys = mtkcompile(System([D(x) ~ -a * x + t * u], t; name = :sys); inputs = [u])
-    p = ModelingToolkitBase.get_p(sys, Dict(u => 0.0))
-    xv, uv, tv = [1.5], [5.0], 0.7
+    InputFn = ModelingToolkitBase.SciMLBase.ODEInputFunction
+    idx(sys, v) = findfirst(
+        s -> isequal(Symbolics.unwrap(s), Symbolics.unwrap(v)), unknowns(sys)
+    )
 
-    # Hand-computed: f = -a*x + t*u, df/dx = -a, df/du = t, df/dt = u (u held fixed)
-    for iip in (false, true)
-        f = ModelingToolkitBase.SciMLBase.ODEInputFunction{iip}(
-            sys; jac = true, tgrad = true, controljac = true
+    @testset "scalar input" begin
+        @variables x(t) = 1.0 u(t) [input = true]
+        @parameters a = 2.0
+        # `t * u` makes both tgrad and controljac depend on the input and on time
+        sys = mtkcompile(System([D(x) ~ -a * x + t * u], t; name = :sys); inputs = [u])
+        p = ModelingToolkitBase.get_p(sys, Dict(u => 0.0))
+        xv, uv, tv = [1.5], [5.0], 0.7
+
+        # f = -a*x + t*u, df/dx = -a, df/du = t, df/dt = u (u held fixed)
+        for iip in (false, true)
+            f = InputFn{iip}(sys; jac = true, tgrad = true, controljac = true)
+            if iip
+                J = zeros(1, 1); f.jac(J, xv, uv, p, tv)
+                @test J ≈ [-2.0;;]
+                dT = zeros(1); f.tgrad(dT, xv, uv, p, tv)
+                @test dT ≈ [5.0]
+                Ju = zeros(1, 1); f.controljac(Ju, xv, uv, p, tv)
+                @test Ju ≈ [0.7;;]
+            else
+                @test f.jac(xv, uv, p, tv) ≈ [-2.0;;]
+                @test f.tgrad(xv, uv, p, tv) ≈ [5.0]
+                @test f.controljac(xv, uv, p, tv) ≈ [0.7;;]
+            end
+        end
+
+        fs = InputFn(sys; jac = true, controljac = true, sparse = true, u0 = [1.0])
+        @test fs.jac(xv, uv, p, tv) ≈ [-2.0;;]
+        @test fs.controljac(xv, uv, p, tv) ≈ [0.7;;]
+    end
+
+    @testset "sparse jac keeps the prototype pattern with disturbances" begin
+        @variables x(t) = 1.0 y(t) = 1.0 u(t) [input = true] d(t)
+        sys = mtkcompile(
+            System([D(x) ~ d * x + 2y + u, D(y) ~ 3x + d * y], t; name = :sys);
+            inputs = [u], disturbance_inputs = [d]
         )
-        if iip
-            J = zeros(1, 1); f.jac(J, xv, uv, p, tv)
-            @test J ≈ [-2.0;;]
-            dT = zeros(1); f.tgrad(dT, xv, uv, p, tv)
-            @test dT ≈ [5.0]
-            Ju = zeros(1, 1); f.controljac(Ju, xv, uv, p, tv)
-            @test Ju ≈ [0.7;;]
-        else
-            @test f.jac(xv, uv, p, tv) ≈ [-2.0;;]
-            @test f.tgrad(xv, uv, p, tv) ≈ [5.0]
-            @test f.controljac(xv, uv, p, tv) ≈ [0.7;;]
+        p = ModelingToolkitBase.get_p(sys, Dict(u => 0.0, d => 0.0))
+        ix, iy = idx(sys, x), idx(sys, y)
+        xv = zeros(2); xv[ix] = 4.0; xv[iy] = 3.0
+        uv, tv = [5.0], 0.0
+        # d is zero: f = [2y + u, 3x], df/d(x, y) = [0 2; 3 0]
+        rhs = zeros(2); rhs[ix] = 11.0; rhs[iy] = 12.0
+        Jexp = zeros(2, 2); Jexp[ix, iy] = 2.0; Jexp[iy, ix] = 3.0
+
+        f = InputFn(
+            sys; inputs = [u], disturbance_inputs = [d], jac = true, sparse = true,
+            u0 = zeros(2), checkbounds = true
+        )
+        @test f(xv, uv, p, tv) ≈ rhs
+        J = copy(f.jac_prototype)
+        fill!(J.nzval, -91.0)
+        f.jac(J, xv, uv, p, tv)
+        @test J ≈ Jexp
+        Jo = f.jac(xv, uv, p, tv)
+        @test Jo ≈ Jexp
+        @test Jo.colptr == f.jac_prototype.colptr
+        @test Jo.rowval == f.jac_prototype.rowval
+    end
+
+    @testset "tgrad keeps callable parameters and zeroes disturbances" begin
+        @variables x(t) = 1.0 u(t) [input = true]
+        @parameters (afn::Function)(..)
+        sys = mtkcompile(System([D(x) ~ -x + t * afn(u)], t; name = :sys); inputs = [u])
+        p = ModelingToolkitBase.get_p(sys, Dict(u => 0.0, afn => (z -> 3z + 1)))
+        # a(z) = 3z + 1: f(2, 4, 0.5) = -2 + 0.5*13 = 4.5, df/dt = a(4) = 13
+        for iip in (false, true)
+            f = InputFn{iip}(sys; tgrad = true)
+            if iip
+                out = zeros(1); f(out, [2.0], [4.0], p, 0.5)
+                @test out ≈ [4.5]
+                dT = zeros(1); f.tgrad(dT, [2.0], [4.0], p, 0.5)
+                @test dT ≈ [13.0]
+            else
+                @test f([2.0], [4.0], p, 0.5) ≈ [4.5]
+                @test f.tgrad([2.0], [4.0], p, 0.5) ≈ [13.0]
+            end
+        end
+
+        @variables y(t) = 1.0 v(t) [input = true] d(t)
+        sys2 = mtkcompile(
+            System([D(y) ~ -y + t * v + t * d], t; name = :sys2);
+            inputs = [v], disturbance_inputs = [d]
+        )
+        p2 = ModelingToolkitBase.get_p(sys2, Dict(v => 0.0, d => 0.0))
+        # d is zero: f(1, 2, 0.5) = -1 + 0.5*2 = 0, df/dt = v = 2
+        for iip in (false, true)
+            f = InputFn{iip}(sys2; inputs = [v], disturbance_inputs = [d], tgrad = true)
+            if iip
+                out = zeros(1); f(out, [1.0], [2.0], p2, 0.5)
+                @test out ≈ [0.0] atol = 1.0e-12
+                dT = zeros(1); f.tgrad(dT, [1.0], [2.0], p2, 0.5)
+                @test dT ≈ [2.0]
+            else
+                @test f([1.0], [2.0], p2, 0.5) ≈ [0.0] atol = 1.0e-12
+                @test f.tgrad([1.0], [2.0], p2, 0.5) ≈ [2.0]
+            end
         end
     end
 
-    # sparse
-    fs = ModelingToolkitBase.SciMLBase.ODEInputFunction(
-        sys; jac = true, controljac = true, sparse = true, u0 = [1.0]
-    )
-    @test fs.jac(xv, uv, p, tv) ≈ [-2.0;;]
-    @test fs.controljac(xv, uv, p, tv) ≈ [0.7;;]
+    @testset "sparse controljac prototype matches the callback" begin
+        @variables x(t) = 1.0 y(t) = 1.0 u(t) [input = true] v(t) [input = true]
+        sys = mtkcompile(
+            System([D(x) ~ -x + 2u + v, D(y) ~ -y + 3v], t; name = :sys);
+            inputs = [u, v]
+        )
+        p = ModelingToolkitBase.get_p(sys, Dict(u => 0.0, v => 0.0))
+        ix, iy = idx(sys, x), idx(sys, y)
+        xv = [1.0, 1.0]
+
+        # all inputs: df/d(u, v) = [2 1; 0 3]
+        f = InputFn(sys; inputs = [u, v], controljac = true, sparse = true, u0 = zeros(2))
+        Jexp = zeros(2, 2); Jexp[ix, 1] = 2.0; Jexp[ix, 2] = 1.0; Jexp[iy, 2] = 3.0
+        Ju = copy(f.controljac_prototype)
+        @test Ju isa ModelingToolkitBase.SparseArrays.SparseMatrixCSC
+        @test size(Ju) == (2, 2)
+        f.controljac(Ju, xv, [5.0, 7.0], p, 0.0)
+        @test Ju ≈ Jexp
+
+        # a subset of the inputs: df/du = [2; 0]
+        f1 = InputFn(sys; inputs = [u], controljac = true, sparse = true, u0 = zeros(2))
+        Jexp1 = zeros(2, 1); Jexp1[ix, 1] = 2.0
+        Ju1 = copy(f1.controljac_prototype)
+        @test Ju1 isa ModelingToolkitBase.SparseArrays.SparseMatrixCSC
+        @test size(Ju1) == (2, 1)
+        f1.controljac(Ju1, xv, [5.0], p, 0.0)
+        @test Ju1 ≈ Jexp1
+    end
+
+    @testset "whole-array input" begin
+        @variables x(t) = 3.0 u(t)[1:2] [input = true]
+        @parameters a = 2.0
+        sys = mtkcompile(
+            System([D(x) ~ x * (a + u[1]) + 2t * u[2]], t; name = :sys); inputs = [u]
+        )
+        p = ModelingToolkitBase.get_p(sys, Dict(u => [0.0, 0.0]))
+        # f(3, [5, 7], 0.5) = 3*(2 + 5) + 2*0.5*7 = 28, df/du = [x  2t] = [3 1]
+        f = InputFn(sys; inputs = [u], controljac = true)
+        @test f([3.0], [5.0, 7.0], p, 0.5) ≈ [28.0]
+        @test f.controljac([3.0], [5.0, 7.0], p, 0.5) ≈ [3.0 1.0]
+    end
 end
 
 using ModelingToolkitStandardLibrary.Blocks
