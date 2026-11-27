@@ -123,8 +123,10 @@ more computationally expensive. Variable-step Co-Simulation FMUs communicate at 
 endpoint. Fixed-step FMUs communicate full steps through the last communication-grid point
 at or before the endpoint; a later endpoint uses the held sample from that grid point,
 including when it differs only by roundoff. The
-`stop_time` keyword sets the FMU experiment limit, which defaults to the solve endpoint and can
-be set to any time at or after the solve endpoint.
+`stop_time` keyword sets the FMU experiment limit, which defaults to the solve endpoint.
+Variable-step FMUs require the limit to cover the solve endpoint. Fixed-step FMUs only
+require it to cover the last scheduled communication point, so a limit at that point is
+valid even when the solve continues on the held sample.
 
 The FMU holds the inputs sampled at the left communication point for the entire interval.
 States and outputs, including direct-feedthrough outputs, are read at the right communication

@@ -341,6 +341,31 @@ end
             @test sol[sys.adder.c][end] ≈ 0.08
         end
     end
+    @testset "off-grid endpoint with experiment stop at the last communication" begin
+        fmu, requests, hook = instrumented_adder(0.025)
+        GC.@preserve hook begin
+            sys = adder_system(fmu, :CS; stop_time = 0.02)
+            sol = solve(ODEProblem(sys, [sys.adder.c => 0.0], (0.0, 0.025)), Tsit5())
+            @test SciMLBase.successful_retcode(sol)
+            @test sol.t[end] == 0.025
+            @test requests == [(0.0, 0.01), (0.01, 0.01)]
+            @test sol[sys.adder.c][end] ≈ 0.08
+        end
+    end
+    @testset "large nonzero start" begin
+        start = 1.0e8
+        finish = start + 2 * 0.01
+        fmu, requests, hook = instrumented_adder(finish)
+        GC.@preserve hook begin
+            sys = adder_system(fmu, :CS; stop_time = start + 0.05)
+            sol = solve(ODEProblem(sys, [sys.adder.c => 0.0], (start, finish)), Tsit5())
+            @test SciMLBase.successful_retcode(sol)
+            @test length(requests) == 2
+            @test first.(requests) == [start, start + 0.01]
+            @test sum(last, requests) ≈ finish - start
+            @test sol[sys.adder.c][end] ≈ 4 * (finish - start) atol = 8eps(start)
+        end
+    end
 end
 
 @testset "Coupled Co-Simulation FMUs publish before sampling" begin
@@ -369,25 +394,44 @@ end
 @testset "Model Exchange snapshots use the saved parameter values" begin
     fmu = loadFMU(joinpath(FIXTURE_FMUS, "SimpleAdder.fmu"); type = :ME)
     only(filter(v -> v.name == "a", fmu.modelDescription.modelVariables)).variability = FMI.fmi2VariabilityDiscrete
-    @named adder = MTK.FMIComponent(Val(2); fmu, type = :ME)
-    @discretes host_a(t) = 1.0
-    set_host_a(modified, observed, ctx, integrator) = (; host_a = 5.0)
-    host_event = MTKBase.SymbolicDiscreteCallback(
-        [0.02], MTKBase.ImperativeAffect(set_host_a; modified = (; host_a));
-        reinitializealg = SciMLBase.NoInit()
-    )
-    @mtkcompile sys = System(
-        [adder.a ~ host_a, adder.b ~ 0.0], t; systems = [adder], discrete_events = [host_event]
-    )
-    prob = ODEProblem(
-        sys, [sys.adder.c => 0.0, sys.adder.value => 0.0], (0.0, 0.04)
-    )
-    sol = solve(prob, Tsit5(); dt = 0.01, adaptive = false, saveat = [0.015, 0.025])
-    @test SciMLBase.successful_retcode(sol)
-    @test sol(0.015; idxs = sys.host_a) == 1.0
-    @test sol(0.015; idxs = sys.adder.out) == 1.0
-    @test sol(0.025; idxs = sys.host_a) == 5.0
-    @test sol(0.025; idxs = sys.adder.out) == 5.0
+    completed = Ref(0)
+    original_complete = fmu.cCompletedIntegratorStep
+    function complete_step(instance, no_reset, event, terminate)
+        completed[] += 1
+        status = ccall(
+            original_complete, Cuint,
+            (Ptr{Cvoid}, Cint, Ptr{Cint}, Ptr{Cint}), instance, no_reset, event, terminate
+        )
+        unsafe_store!(event, Cint(completed[] == 2))
+        return status
+    end
+    complete_hook = @cfunction($complete_step, Cuint, (Ptr{Cvoid}, Cint, Ptr{Cint}, Ptr{Cint}))
+    fmu.cCompletedIntegratorStep = Base.unsafe_convert(Ptr{Cvoid}, complete_hook)
+    GC.@preserve complete_hook begin
+        @named adder = MTK.FMIComponent(Val(2); fmu, type = :ME)
+        @discretes host_a(t) = 1.0
+        set_host_a(modified, observed, ctx, integrator) = (; host_a = 5.0)
+        host_event = MTKBase.SymbolicDiscreteCallback(
+            [0.02], MTKBase.ImperativeAffect(set_host_a; modified = (; host_a));
+            reinitializealg = SciMLBase.NoInit()
+        )
+        @mtkcompile sys = System(
+            [adder.a ~ host_a, adder.b ~ 0.0], t; systems = [adder], discrete_events = [host_event]
+        )
+        prob = ODEProblem(
+            sys, [sys.adder.c => 0.0, sys.adder.value => 0.0], (0.0, 0.04)
+        )
+        sol = solve(prob, Tsit5(); dt = 0.01, adaptive = false, saveat = [0.015, 0.025])
+        @test SciMLBase.successful_retcode(sol)
+        event_indices = findall(==(0.02), sol.t)
+        @test sol[sys.adder.out][first(event_indices)] == 1.0
+        @test sol(0.02; idxs = sys.adder.out, continuity = :left) == 1.0
+        @test sol(0.02; idxs = sys.adder.out, continuity = :right) == 5.0
+        @test sol(0.015; idxs = sys.host_a) == 1.0
+        @test sol(0.015; idxs = sys.adder.out) == 1.0
+        @test sol(0.025; idxs = sys.host_a) == 5.0
+        @test sol(0.025; idxs = sys.adder.out) == 5.0
+    end
 end
 
 @testset "VanDerPol finite-difference Jacobian" begin

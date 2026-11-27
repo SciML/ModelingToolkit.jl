@@ -2328,6 +2328,49 @@ end
     @test log == [:first, :second, :late]
 end
 
+@testset "saved-index observations preserve coincident affect phases" begin
+    @variables phase_x(t) = 1.0 [irreducible = true]
+    @discretes phase_p(t) = 1.0
+    function set_phase(modified, observed, ctx, integrator)
+        return (; phase_x = ctx, phase_p = ctx)
+    end
+    first_event = SymbolicDiscreteCallback(
+        [0.02], ModelingToolkitBase.ImperativeAffect(
+            set_phase; modified = (; phase_x, phase_p), ctx = 2.0
+        ); reinitializealg = SciMLBase.NoInit()
+    )
+    second_event = SymbolicDiscreteCallback(
+        [0.02], ModelingToolkitBase.ImperativeAffect(
+            set_phase; modified = (; phase_x, phase_p), ctx = 3.0
+        ); reinitializealg = SciMLBase.NoInit()
+    )
+    pairs = Tuple{Float64, Float64}[]
+    function read_phases(modified, observed, ctx, integrator, observed_at)
+        sol = SciMLBase.get_sol(integrator)
+        empty!(pairs)
+        for i in eachindex(sol.t)
+            sol.t[i] == 0.02 || continue
+            point = observed_at(sol, i)
+            push!(pairs, (point.phase_x, point.phase_p))
+        end
+        return (;)
+    end
+    read_event = SymbolicDiscreteCallback(
+        [0.03], ModelingToolkitBase.ImperativeAffect(
+            read_phases; observed = (; phase_x, phase_p)
+        ); reinitializealg = SciMLBase.NoInit()
+    )
+    @mtkcompile sys = System(
+        [D(phase_x) ~ 0.0], t, [phase_x], [phase_p];
+        discrete_events = [first_event, second_event, read_event]
+    )
+    sol = solve(ODEProblem(sys, [], (0.0, 0.04)), Tsit5(); dt = 0.01, adaptive = false)
+    @test SciMLBase.successful_retcode(sol)
+    event_indices = findall(==(0.02), sol.t)
+    @test sol[phase_x][event_indices] == [1.0, 2.0, 2.0, 3.0]
+    @test pairs == [(1.0, 1.0), (2.0, 2.0), (2.0, 2.0), (3.0, 3.0)]
+end
+
 @testset "`reinitializealg` takes part in the hash of an event" begin
     @variables x(t)
     for cb in (

@@ -326,11 +326,13 @@ states declared with `initial = "calculated"` itself. Hierarchical names such as
   FMU. For CoSimulation FMUs whose states/outputs are used in algebraic equations of the
   system, this needs to be an algorithm that will solve for the new algebraic variables.
   For example, `OrdinaryDiffEqCore.BrownFullBasicInit()`.
-- `stop_time`: The FMU experiment limit. It defaults to `tspan[2]` for each solve and must
-  be at or after that endpoint. Variable-step Co-Simulation FMUs communicate at the solve
-  endpoint. Fixed-step FMUs communicate full steps through the last grid point at or before
-  the endpoint; an endpoint after that grid point uses the held sample without another
-  FMU step, including roundoff-sized offsets after the final grid point.
+- `stop_time`: The FMU experiment limit. It defaults to `tspan[2]` for each solve.
+  Variable-step Co-Simulation FMUs communicate at the solve endpoint, so the limit must
+  be at or after that endpoint. Fixed-step FMUs communicate full steps through the last
+  grid point at or before the endpoint; an endpoint after that grid point uses the held
+  sample without another FMU step, including roundoff-sized offsets after the final grid
+  point. For fixed-step communication the limit only needs to cover that last scheduled
+  communication point.
 - `fmu_initial_states`: If `true`, the FMU's computed initial states are used as default
   equations for states without a problem-map value. Leave this off when supplying
   initialization equations that determine those states, since both sets of equations
@@ -644,7 +646,7 @@ function MTK.FMIComponent(
         push!(params, wrapper)
         append!(observed, der_observed)
     elseif type == :CS
-        _functor = CSFunctor(length(output_value_references), something(stop_time, NaN))
+        _functor = CSFunctor(length(output_value_references), something(stop_time, NaN), communication_step_size)
         @parameters (functor::CSFunctor)(..)[1:length(__mtk_internal_o)] = _functor
         # for co-simulation, we need to ensure the output buffer is solved for
         # during initialization
@@ -1361,6 +1363,7 @@ end
 end
 
 function save_me_output!(wrapper, history, time, epoch)
+    haskey(history.samples, (epoch, time)) && return
     snapshot = get_values!(zeros(length(wrapper.outputs_buffer)), wrapper, wrapper.outputs)
     history.samples[(epoch, time)] = snapshot
     return
@@ -1692,34 +1695,43 @@ function (::CSFinalStepDue)(functor, t)
     if isnan(functor.grid_start[])
         return t > functor.t_last[] ? 1.0 : 0.0
     end
-    return functor.step_index[] < functor.final_step_index[] ? 1.0 : 0.0
+    functor.step_index[] < functor.final_step_index[] || return 0.0
+    final_time = fixed_grid_time(functor.grid_start[], functor.dt, functor.final_step_index[])
+    return final_time == t ? 1.0 : 0.0
 end
 
 variable_communication_step(wrapper) =
     wrapper.fmu.modelDescription.coSimulation.canHandleVariableCommunicationStepSize === true
 
+fixed_grid_time(start, dt, step) = start + dt * step
+
 function fixed_grid_steps(start, finish, dt)
     duration = finish - start
     duration < 0 &&
         throw(ArgumentError("The solve endpoint must be after the start time for a fixed-step Co-Simulation FMU."))
-    ratio = duration / dt
-    nearest = round(Int, ratio)
-    if abs(ratio - nearest) <= 8eps(Float64) * max(1, abs(ratio))
-        return nearest
+    steps = max(0, floor(Int, duration / dt))
+    while steps > 0 && fixed_grid_time(start, dt, steps) > finish
+        steps -= 1
     end
-    return floor(Int, ratio)
+    while fixed_grid_time(start, dt, steps + 1) <= finish
+        steps += 1
+    end
+    return steps
 end
 
 function initialize_cs_times!(ctx, o, integrator)
     start, finish = integrator.sol.prob.tspan
     experiment_end = isnan(ctx.stop_time) ? finish : ctx.stop_time
-    experiment_end >= finish || throw(ArgumentError("The FMU experiment stop_time must be at or after the solve endpoint."))
     if variable_communication_step(o.wrapper)
+        experiment_end >= finish || throw(ArgumentError("The FMU experiment stop_time must be at or after the solve endpoint."))
         ctx.grid_start[] = NaN
         ctx.final_step_index[] = typemax(Int)
     else
         ctx.grid_start[] = Float64(start)
         ctx.final_step_index[] = fixed_grid_steps(start, finish, o.dt)
+        last_step = ctx.final_step_index[] == 0 ? Float64(start) :
+            fixed_grid_time(ctx.grid_start[], o.dt, ctx.final_step_index[])
+        experiment_end >= last_step || throw(ArgumentError("The FMU experiment stop_time must be at or after the last fixed-step communication time."))
     end
     ctx.step_index[] = 0
     ctx.solve_end[] = finish
@@ -1743,10 +1755,11 @@ struct CSFunctor
     grid_start::Base.RefValue{Float64}
     step_index::Base.RefValue{Int}
     final_step_index::Base.RefValue{Int}
+    dt::Float64
 end
 
-CSFunctor(output_count, stop_time) =
-    CSFunctor(output_count, Ref(NaN), Ref(NaN), stop_time, Float64[], Ref(NaN), Ref(NaN), Ref(0), Ref(0))
+CSFunctor(output_count, stop_time, dt) =
+    CSFunctor(output_count, Ref(NaN), Ref(NaN), stop_time, Float64[], Ref(NaN), Ref(NaN), Ref(0), Ref(0), dt)
 
 struct CSSampleDue end
 
@@ -1807,9 +1820,9 @@ function fmiCSStep!(m, o, ctx, integrator)
         h = to - from
     else
         ctx.step_index[] < ctx.final_step_index[] || return (;)
-        to = ctx.grid_start[] + (ctx.step_index[] + 1) * o.dt
+        to = fixed_grid_time(ctx.grid_start[], o.dt, ctx.step_index[] + 1)
         to <= stop || return (;)
-        h = o.dt
+        h = to - from
     end
     set_values!(wrapper, wrapper.inputs, ctx.input_sample)
     achieved = do_cs_step!(wrapper, from, h)

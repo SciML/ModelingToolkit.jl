@@ -1095,6 +1095,81 @@ end
 # Required for DiffEqArray constructor to work during interpolation
 Base.size(::NestedGetIndex) = ()
 
+const SAVE_PARAMETER_POSITIONS = Dict{UInt, Tuple{WeakRef, Dict{Int, Vector{Int}}}}()
+const SAVE_PARAMETER_POSITIONS_LOCK = ReentrantLock()
+
+function parameter_timeseries_collection_or_nothing(sol)
+    SymbolicIndexingInterface.is_parameter_timeseries(sol) == SymbolicIndexingInterface.Timeseries() || return nothing
+    return SymbolicIndexingInterface.get_parameter_timeseries_collection(sol)
+end
+
+function current_parameter_positions(sol)
+    discs = parameter_timeseries_collection_or_nothing(sol)
+    discs === nothing && return nothing
+    return [length(state_values(discs[i])) for i in eachindex(discs)]
+end
+
+function parameter_positions_key(sol)
+    discs = parameter_timeseries_collection_or_nothing(sol)
+    discs === nothing && return nothing
+    return discs[1]
+end
+
+function saved_parameter_positions(sol, i)
+    key = parameter_positions_key(sol)
+    key === nothing && return nothing
+    return lock(SAVE_PARAMETER_POSITIONS_LOCK) do
+        entry = get(SAVE_PARAMETER_POSITIONS, objectid(key), nothing)
+        entry === nothing && return nothing
+        ref, records = entry
+        ref.value === key || return nothing
+        return get(records, i, nothing)
+    end
+end
+
+function record_discrete_save_positions!(sol, time, timeseries_idx, skip_duplicates)
+    positions = current_parameter_positions(sol)
+    positions === nothing && return
+    times = sol.t
+    times isa Vector || return
+    state_index = findlast(==(time), times)
+    state_index === nothing && return
+    discs = parameter_timeseries_collection_or_nothing(sol)
+    key = discs[1]
+    partition_times = current_time(discs[timeseries_idx])
+    advances = !(skip_duplicates && !isempty(partition_times) && isequal(time, last(partition_times)))
+    pre_positions = copy(positions)
+    post_positions = copy(positions)
+    advances && (post_positions[timeseries_idx] += 1)
+    lock(SAVE_PARAMETER_POSITIONS_LOCK) do
+        entry = get(SAVE_PARAMETER_POSITIONS, objectid(key), nothing)
+        records = if entry !== nothing && entry[1].value === key
+            entry[2]
+        else
+            SAVE_PARAMETER_POSITIONS[objectid(key)] = (WeakRef(key), Dict{Int, Vector{Int}}())
+            SAVE_PARAMETER_POSITIONS[objectid(key)][2]
+        end
+        j = state_index - 1
+        while j in eachindex(times) && times[j] == time && !haskey(records, j)
+            records[j] = copy(pre_positions)
+            j -= 1
+        end
+        records[state_index] = post_positions
+    end
+    return
+end
+
+function SciMLBase.save_discretes!(
+        sol::SciMLBase.AbstractODESolution, time, vals::NestedGetIndex, timeseries_idx;
+        skip_duplicates = false
+    )
+    record_discrete_save_positions!(sol, time, timeseries_idx, skip_duplicates)
+    return invoke(
+        SciMLBase.save_discretes!, Tuple{SciMLBase.AbstractODESolution, Any, Any, Any},
+        sol, time, vals, timeseries_idx; skip_duplicates
+    )
+end
+
 function SymbolicIndexingInterface.with_updated_parameter_timeseries_values(
         ::AbstractSystem, ps::MTKParameters,
         args::Pair{<:Any, <:NestedGetIndex}...

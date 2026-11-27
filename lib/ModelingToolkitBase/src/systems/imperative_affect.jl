@@ -229,13 +229,22 @@ function solution_index_parameter_values(sol, i)
     discs = SymbolicIndexingInterface.get_parameter_timeseries_collection(sol)
     ps = parameter_values(discs)
     time = sol.t[i]
+    positions = saved_parameter_positions(sol, i)
     before_event_save = i < length(sol.t) && sol.t[i + 1] == time
     for ts_idx in eachindex(discs)
         partition = discs[ts_idx]
         times = current_time(partition)
-        j = searchsortedlast(times, time)
-        if before_event_save && j >= firstindex(times) && times[j] == time
-            j = searchsortedfirst(times, time)
+        if positions === nothing
+            j = searchsortedlast(times, time)
+            if before_event_save && j >= firstindex(times) && times[j] == time
+                j = searchsortedfirst(times, time)
+            end
+        else
+            j = positions[ts_idx]
+            if j < firstindex(times) && !isempty(times) && first(times) == time &&
+                    length(state_values(partition)) >= firstindex(times)
+                j = searchsortedfirst(times, time)
+            end
         end
         j >= firstindex(times) ||
             error("Cannot access discrete parameters at time $time before their initial save $(first(times))")
@@ -406,7 +415,6 @@ function compile_functional_affect(
     )
 
     upd_funs = NamedTuple{mod_names}((setu.((sys,), first.(mod_pairs))...,))
-
     return FunctionalAffect(
         func(affect), context(affect), reset_jumps,
         mod_og_val_fun, obs_fun, mod_names, obs_sym_tuple, upd_funs
