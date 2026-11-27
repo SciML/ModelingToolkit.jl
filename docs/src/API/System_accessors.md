@@ -142,6 +142,10 @@ ModelingToolkit.has_bcs
 ModelingToolkit.get_bcs
 ModelingToolkit.has_domain
 ModelingToolkit.get_domain
+ModelingToolkit.has_analytic
+ModelingToolkit.get_analytic
+ModelingToolkit.has_analytic_func
+ModelingToolkit.get_analytic_func
 ModelingToolkit.has_var_to_name
 ModelingToolkit.get_var_to_name
 ModelingToolkit.has_gui_metadata

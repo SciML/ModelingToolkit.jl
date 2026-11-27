@@ -43,6 +43,31 @@ dt = 0:0.1:1
         analytic_function([2], disct, discx) for disct in dt, discx in dx
 )
 
+@testset "PDESystem analytic accessors" begin
+    using ModelingToolkitBase: get_analytic, has_analytic, get_analytic_func,
+        has_analytic_func
+    @test has_analytic(pdesys)
+    @test has_analytic_func(pdesys)
+    @test isequal(get_analytic(pdesys), getfield(pdesys, :analytic))
+    @test get_analytic_func(pdesys) === getfield(pdesys, :analytic_func)
+    @test get_analytic_func(pdesys) isa Dict
+
+    @named no_analytic = PDESystem(eq, bcs, domains, [t, x], [u], [h])
+    @test get_analytic(no_analytic) === nothing
+    @test get_analytic_func(no_analytic) === nothing
+
+    @variables y(t)
+    @named odesys = System([Dt(y) ~ -y], t)
+    @test !has_analytic(odesys)
+    @test !has_analytic_func(odesys)
+
+    @static if VERSION >= v"1.11"
+        for name in (:get_analytic, :has_analytic, :get_analytic_func, :has_analytic_func)
+            @test Base.ispublic(ModelingToolkitBase, name)
+        end
+    end
+end
+
 # Test sys.x accessor pattern for PDESystem
 using ModelingToolkitBase: renamespace, does_namespacing
 

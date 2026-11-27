@@ -63,14 +63,17 @@ struct PDESystem <: AbstractSystem
     """
     A vector of explicit symbolic expressions for the analytic solutions of each
     dependent variable. e.g. `analytic = [u(t, x) ~ a*sin(c*t) * cos(k*x)]`.
+    Use [`get_analytic`](@ref) to access it.
     """
     analytic::Any
     """
-    A vector of functions for the analytic solutions of each dependent
-    variable. Will be generated from `analytic` if not provided. Should have the same
-    argument signature as the variable, and a `ps` argument as the last argument,
-    which takes an indexable of parameter values in the order you specified them in `ps`.
+    Functions for the analytic solutions of each dependent variable, given as
+    `variable => function` pairs and stored as a `Dict`. Will be generated from `analytic`
+    if not provided. Each function takes a `ps` argument first, an indexable of parameter
+    values in the order you specified them in `ps`, followed by the arguments of the
+    variable.
     e.g. `analytic_func = [u(t, x) => (ps, t, x) -> ps[1]*sin(ps[2]*t) * cos(ps[3]*x)]`.
+    Use [`get_analytic_func`](@ref) to access it.
     """
     analytic_func::Any
     """
