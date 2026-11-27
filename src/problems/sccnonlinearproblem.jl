@@ -597,7 +597,8 @@ function SciMLBase.SCCNonlinearProblem{iip, specialize}(
         if calculate_A_b(sys; throw = false) !== nothing
             linprob = LinearProblem{iip}(
                 sys, op; eval_expression, eval_module,
-                u0_constructor, check_compatibility, kwargs...
+            u0_constructor, check_compatibility, is_initializeprob = true, kwargs...
+
             )
             # Required for filling missing parameter values when this is an initialization
             # problem
