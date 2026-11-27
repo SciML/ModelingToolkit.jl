@@ -95,14 +95,14 @@ end
     @test e.rootfind == SciMLBase.LeftRootFind
 
     # with explicit edge affects
-    e = SymbolicContinuousCallback(eqs[], affect, affect_neg = affect_neg)
+    e = SymbolicContinuousCallback(eqs[], affect; affect_neg)
     @test e isa SymbolicContinuousCallback
     @test isequal(equations(e), eqs)
     @test e.rootfind == SciMLBase.LeftRootFind
 
     # with different root finding ops
     e = SymbolicContinuousCallback(
-        eqs[], affect, affect_neg = affect_neg, rootfind = SciMLBase.LeftRootFind
+        eqs[], affect; affect_neg, rootfind = SciMLBase.LeftRootFind
     )
     @test e isa SymbolicContinuousCallback
     @test isequal(equations(e), eqs)
@@ -228,7 +228,7 @@ end
     @named sys = System(eqs, t, continuous_events = [x ~ 1])
     cevt1 = getfield(sys, :continuous_events)[]
     @test getfield(sys, :continuous_events)[] ==
-        SymbolicContinuousCallback(Equation[x ~ 1], nothing; zero_crossing_id = cevt1.zero_crossing_id)
+        SymbolicContinuousCallback(Equation[x ~ 1], nothing; cevt1.zero_crossing_id)
     @test isequal(equations(getfield(sys, :continuous_events))[], x ~ 1)
     fsys = flatten(sys)
     @test isequal(equations(getfield(fsys, :continuous_events))[], x ~ 1)
@@ -236,11 +236,11 @@ end
     @named sys2 = System([D(x) ~ 1], t, continuous_events = [x ~ 2], systems = [sys])
     cevt2 = getfield(sys2, :continuous_events)[]
     @test getfield(sys2, :continuous_events)[] ==
-        SymbolicContinuousCallback(Equation[x ~ 2], nothing; zero_crossing_id = cevt2.zero_crossing_id)
+        SymbolicContinuousCallback(Equation[x ~ 2], nothing; cevt2.zero_crossing_id)
     @test all(
         ModelingToolkitBase.continuous_events(sys2) .== [
-            SymbolicContinuousCallback(Equation[x ~ 2], nothing; zero_crossing_id = cevt2.zero_crossing_id),
-            SymbolicContinuousCallback(Equation[sys.x ~ 1], nothing; zero_crossing_id = cevt1.zero_crossing_id),
+            SymbolicContinuousCallback(Equation[x ~ 2], nothing; cevt2.zero_crossing_id),
+            SymbolicContinuousCallback(Equation[sys.x ~ 1], nothing; cevt1.zero_crossing_id),
         ]
     )
 
@@ -504,7 +504,7 @@ end
             kwargs...
         )
         prob = probtype(complete(sys), [u0; p], tspan; kwargs...)
-        sol = solve(prob, solver(); tstops = tstops, abstol = 1.0e-10, reltol = 1.0e-10)
+        sol = solve(prob, solver(); tstops, abstol = 1.0e-10, reltol = 1.0e-10)
         @test isapprox(sol(1.0000000001)[1] - sol(0.999999999)[1], 1.0; rtol = 1.0e-6)
         paramtotest === nothing || (@test sol.ps[paramtotest] == [0.0, 1.0])
         @test isapprox(sol(4.0)[1], 2 * exp(-2.0); rtol = 1.0e-6)
@@ -629,7 +629,7 @@ end
         )
         jsys = complete(jsys)
         jprob = JumpProblem(jsys, [u0; p], tspan; aggregator = Direct(), kwargs...)
-        sol = solve(jprob, SSAStepper(); tstops = tstops, rng)
+        sol = solve(jprob, SSAStepper(); tstops, rng)
         @test SciMLBase.successful_retcode(sol)
         @test (sol(1.000000000001)[1] - sol(0.99999999999)[1]) == 1
         paramtotest === nothing || (@test sol.ps[paramtotest] == [0.0, 1.0])
@@ -1404,7 +1404,7 @@ end
             return m
         end
         return System(
-            eqs, t, vars, params; name = name,
+            eqs, t, vars, params; name,
             continuous_events = [[x ~ max_time] => reset]
         )
     end
@@ -1423,7 +1423,7 @@ end
                 ]
             )
         )
-        return System(eqs, t, vars, params; name = name) # note no event
+        return System(eqs, t, vars, params; name) # note no event
     end
 
     @named wd1 = weird1(0.021)
@@ -1600,7 +1600,7 @@ end
             return m
         end
         return System(
-            eqs, t, vars, []; name = name,
+            eqs, t, vars, []; name,
             continuous_events = [[x ~ max_time] => reset]
         )
     end
@@ -2147,7 +2147,7 @@ end
     # Symmetric: positive crossing with affect = nothing
     neg_hits[] = 0
     cb2 = SymbolicContinuousCallback(
-        [x ~ 0], nothing; affect_neg = affect_neg,
+        [x ~ 0], nothing; affect_neg,
         reinitializealg = DiffEqBase.BrownFullBasicInit()
     )
     @named sys2 = System(eqs, t, [x, y], [k]; continuous_events = [cb2])

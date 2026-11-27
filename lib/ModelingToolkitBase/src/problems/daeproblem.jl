@@ -95,9 +95,9 @@ function SciMLBase.DAEFunction{iip, spec}(
     jac_prototype = if sparse
         uElType = u0 === nothing ? Float64 : eltype(u0)
         if jac
-            J1 = calculate_jacobian(sys, sparse = sparse)
+            J1 = calculate_jacobian(sys; sparse)
             derivatives = Differential(get_iv(sys)).(flat_unknowns(sys))
-            J2 = calculate_jacobian(sys; sparse = sparse, dvs = derivatives)
+            J2 = calculate_jacobian(sys; sparse, dvs = derivatives)
             similar(J1 + J2, uElType)
         else
             similar(jacobian_dae_sparsity(sys), uElType)
@@ -107,11 +107,11 @@ function SciMLBase.DAEFunction{iip, spec}(
     end
 
     kwargs = (;
-        sys = sys,
+        sys,
         jac = _jac,
-        jac_prototype = jac_prototype,
+        jac_prototype,
         observed = observedfun,
-        analytic = analytic,
+        analytic,
         initialization_data,
         nlstep_data = dae_nlstep,
     )

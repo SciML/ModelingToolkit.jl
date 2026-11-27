@@ -559,7 +559,7 @@ noiseeqs = [0.1 * x]
     @named de = SDESystem(eqs, noiseeqs, tt, [x], [α, β], observed = [weight ~ x * 10])
     de = complete(de)
     prob = SDEProblem(de, [u0map; parammap], (0.0, 1.0))
-    sol = solve(prob, EM(), dt = dt)
+    sol = solve(prob, EM(); dt)
     @test observed(de) == [weight ~ x * 10]
     @test sol[weight] == 10 * sol[x]
 
@@ -616,10 +616,10 @@ end
     ensemble_prob = EnsembleProblem(
         prob;
         output_func = (sol, ctx) -> (g(sol.u[end]), false),
-        prob_func = prob_func
+        prob_func
     )
 
-    sim = solve(ensemble_prob, EM(), dt = dt, trajectories = numtraj)
+    sim = solve(ensemble_prob, EM(); dt, trajectories = numtraj)
     μ = mean(sim)
     σ = std(sim) / sqrt(numtraj)
 
@@ -636,10 +636,10 @@ end
                 sol[demod.weight][end],
             false,
         ),
-        prob_func = prob_func
+        prob_func
     )
 
-    simmod = solve(ensemble_probmod, EM(), dt = dt, trajectories = numtraj)
+    simmod = solve(ensemble_probmod, EM(); dt, trajectories = numtraj)
     μmod = mean(simmod)
     σmod = std(simmod) / sqrt(numtraj)
 

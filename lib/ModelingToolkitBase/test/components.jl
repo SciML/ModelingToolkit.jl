@@ -105,15 +105,15 @@ end
         @parameters R = R C = C
         @named p = Pin()
         @named n = Pin()
-        @named resistor = Resistor(R = R) # test parent scope default of @named
-        @named capacitor = Capacitor(C = C)
+        @named resistor = Resistor(; R) # test parent scope default of @named
+        @named capacitor = Capacitor(; C)
         eqs = [
             connect(p, resistor.p);
             connect(resistor.n, capacitor.p);
             connect(capacitor.n, n)
         ]
         @named sys = System(eqs, t, [], [R, C])
-        compose(sys, [p, n, resistor, capacitor]; name = name)
+        compose(sys, [p, n, resistor, capacitor]; name)
     end
 
     @named ground = Ground()
@@ -210,26 +210,26 @@ function Load(; name)
     R = 1
     @named p = Pin()
     @named n = Pin()
-    @named resistor = Resistor(R = R)
+    @named resistor = Resistor(; R)
     eqs = [
         connect(p, resistor.p);
         connect(resistor.n, n)
     ]
     @named sys = System(eqs, t)
-    return compose(sys, [p, n, resistor]; name = name)
+    return compose(sys, [p, n, resistor]; name)
 end
 
 function Circuit(; name)
     R = 1
     @named ground = Ground()
     @named load = Load()
-    @named resistor = Resistor(R = R)
+    @named resistor = Resistor(; R)
     eqs = [
         connect(load.p, ground.g);
         connect(resistor.p, ground.g)
     ]
     @named sys = System(eqs, t)
-    return compose(sys, [ground, resistor, load]; name = name)
+    return compose(sys, [ground, resistor, load]; name)
 end
 
 @named foo = Circuit()
@@ -239,8 +239,8 @@ end
 if @isdefined(ModelingToolkit)
     @testset "BLT ordering" begin
         function parallel_rc_model(i; name, shape, source, ground, R, C)
-            resistor = Resistor(name = Symbol(:resistor, i), R = R, T_dep = true)
-            capacitor = Capacitor(name = Symbol(:capacitor, i), C = C)
+            resistor = Resistor(name = Symbol(:resistor, i); R, T_dep = true)
+            capacitor = Capacitor(name = Symbol(:capacitor, i); C)
             heat_capacitor = HeatCapacitor(name = Symbol(:heat_capacitor, i))
 
             rc_eqs = [
@@ -290,7 +290,7 @@ end
         eqs = [
             v ~ i * R,
         ]
-        extend(System(eqs, t, [], [R]; name = name), oneport)
+        extend(System(eqs, t, [], [R]; name), oneport)
     end
     capacitor = Capacitor(; name = :c1, C = 1.0)
     resistor = FixedResistor(; name = :r1)
@@ -318,7 +318,7 @@ end
     @connector function Pin1(; name)
         @independent_variables t
         sts = @variables v(t) = 1.0 i(t) = 1.0
-        System(Equation[], t, sts, []; name = name)
+        System(Equation[], t, sts, []; name)
     end
     @test string(Base.doc(Pin1)) == "Hey there, Pin1!\n"
 
@@ -328,7 +328,7 @@ end
     @component function Pin2(; name)
         @independent_variables t
         sts = @variables v(t) = 1.0 i(t) = 1.0
-        System(Equation[], t, sts, []; name = name)
+        System(Equation[], t, sts, []; name)
     end
     @test string(Base.doc(Pin2)) == "Hey there, Pin2!\n"
 end

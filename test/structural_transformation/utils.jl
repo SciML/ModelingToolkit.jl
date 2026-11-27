@@ -216,7 +216,7 @@ end
                     D(y) ~ -k * x(t - τ) + jcn,
                     delx ~ x(t - τ),
                 ]
-                return System(eqs, t; name = name)
+                return System(eqs, t; name)
             end
 
             systems = @named begin

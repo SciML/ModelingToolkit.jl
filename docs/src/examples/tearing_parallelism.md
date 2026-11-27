@@ -16,13 +16,13 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 # Basic electric components
 @connector function Pin(; name)
     @variables v(t) = 1.0 i(t) = 1.0 [connect = Flow]
-    System(Equation[], t, [v, i], [], name = name)
+    System(Equation[], t, [v, i], []; name)
 end
 
 function Ground(; name)
     @named g = Pin()
     eqs = [g.v ~ 0]
-    return compose(System(eqs, t, [], [], name = name), g)
+    return compose(System(eqs, t, [], []; name), g)
 end
 
 function ConstantVoltage(; name, V = 1.0)
@@ -34,12 +34,12 @@ function ConstantVoltage(; name, V = 1.0)
         V ~ p.v - n.v
         0 ~ p.i + n.i
     ]
-    return compose(System(eqs, t, [], [V], name = name), p, n)
+    return compose(System(eqs, t, [], [V]; name), p, n)
 end
 
 @connector function HeatPort(; name)
     @variables T(t) = 293.15 Q_flow(t) = 0.0 [connect = Flow]
-    System(Equation[], t, [T, Q_flow], [], name = name)
+    System(Equation[], t, [T, Q_flow], []; name)
 end
 
 function HeatingResistor(; name, R = 1.0, TAmbient = 293.15, alpha = 1.0)
@@ -91,8 +91,8 @@ function Capacitor(; name, C = 1.0)
 end
 
 function parallel_rc_model(i; name, source, ground, R, C)
-    resistor = HeatingResistor(name = Symbol(:resistor, i), R = R)
-    capacitor = Capacitor(name = Symbol(:capacitor, i), C = C)
+    resistor = HeatingResistor(; name = Symbol(:resistor, i), R)
+    capacitor = Capacitor(; name = Symbol(:capacitor, i), C)
     heat_capacitor = HeatCapacitor(name = Symbol(:heat_capacitor, i))
 
     rc_eqs = [
@@ -117,13 +117,13 @@ we can connect a bunch of RC components as follows:
 
 ```@example tearing
 V = 2.0
-@named source = ConstantVoltage(V = V)
+@named source = ConstantVoltage(; V)
 @named ground = Ground()
 N = 50
 Rs = 10 .^ range(0, stop = -4, length = N)
 Cs = 10 .^ range(-3, stop = 0, length = N)
 rc_systems = map(1:N) do i
-    parallel_rc_model(i; name = :rc, source = source, ground = ground, R = Rs[i], C = Cs[i])
+    parallel_rc_model(i; name = :rc, source, ground, R = Rs[i], C = Cs[i])
 end;
 @variables E(t) = 0.0
 eqs = [

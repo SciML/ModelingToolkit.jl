@@ -628,7 +628,7 @@ function isolate_subsystem(
         map!(clock_subber, eqs, eqs)
         syss = copy(get_systems(cur))
         map!(s -> _recursively_clock_subsystems(s, _get_next_clock_substitutions(clock_subs, nameof(s))), syss, syss)
-        return ConstructionBase.setproperties(cur; eqs = eqs, systems = syss)
+        return ConstructionBase.setproperties(cur; eqs, systems = syss)
     end
 
     function _reconstruct!(cur, parent_path, clock_subs)

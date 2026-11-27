@@ -54,14 +54,14 @@ System(eqs, t, name = :sys, checks = false)
         v(t) = 1.0, [unit = u"V"],
         i(t) = 1.0, [unit = u"A", connect = Flow]
     )
-    System(Equation[], t, sts, []; name = name)
+    System(Equation[], t, sts, []; name)
 end
 @connector function OtherPin(; name)
     sts = @variables(
         v(t) = 1.0, [unit = u"mV"],
         i(t) = 1.0, [unit = u"mA", connect = Flow]
     )
-    System(Equation[], t, sts, []; name = name)
+    System(Equation[], t, sts, []; name)
 end
 @connector function LongPin(; name)
     sts = @variables(
@@ -69,7 +69,7 @@ end
         i(t) = 1.0, [unit = u"A", connect = Flow],
         x(t) = 1.0
     )
-    System(Equation[], t, sts, []; name = name)
+    System(Equation[], t, sts, []; name)
 end
 @named p1 = Pin()
 @named p2 = Pin()

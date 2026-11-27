@@ -2921,7 +2921,7 @@ function __process_SciMLProblem(
     end
 
     if is_split(sys)
-        p = MTKParameters(sys, op; floatT = floatT, p_constructor, fast_path = true)
+        p = MTKParameters(sys, op; floatT, p_constructor, fast_path = true)
     else
         p = p_constructor(varmap_to_vars(op, ps; tofloat, container_type = u0Type))
     end
@@ -2954,9 +2954,9 @@ function __process_SciMLProblem(
     end
 
     f = constructor(
-        sys; u0 = u0, p = p, t = t,
-        eval_expression = eval_expression,
-        eval_module = eval_module,
+        sys; u0, p, t,
+        eval_expression,
+        eval_module,
         compiler_options,
         kwargs...
     )
@@ -3338,7 +3338,7 @@ function build_scimlfn_expr(T, args::NamedTuple; kwargs...)
     kwexpr = Expr(:parameters)
     # don't include initialization data in the generated expression
     filter = !isequal(:initialization_data)
-    namedtuple_to_assignments!(let_args, kwargs; filter = filter)
+    namedtuple_to_assignments!(let_args, kwargs; filter)
     namedtuple_to_assignments!(kwexpr, kwargs; head = :kw, filter)
     let_body = Expr(:call, T, kwexpr, keys(args)...)
     return Expr(:let, let_args, let_body)

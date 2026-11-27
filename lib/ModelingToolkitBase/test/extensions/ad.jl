@@ -215,7 +215,7 @@ end
     _, pullback = ChainRulesCore.rrule(
         MTKParameters, p.tunable, p.initials, p.discrete, p.constant, p.nonnumeric, p.caches
     )
-    dt = Tangent{typeof(p)}(; tunable = ones(length(p.tunable)), initials = ones(length(p.initials)), caches = p.caches)
+    dt = Tangent{typeof(p)}(; tunable = ones(length(p.tunable)), initials = ones(length(p.initials)), p.caches)
     grads = pullback(dt)
     @test grads[2] == ones(length(p.tunable))
     @test grads[3] == ones(length(p.initials))

@@ -8,8 +8,8 @@ import ModelingToolkitStandardLibrary.Blocks as Bl
         V = 1.0
     end
     systems = @named begin
-        resistor = El.Resistor(R = R)
-        capacitor = El.Capacitor(C = C)
+        resistor = El.Resistor(; R)
+        capacitor = El.Capacitor(; C)
         shape = Bl.Constant(k = V)
         source = El.Voltage()
         ground = El.Ground()

@@ -1263,7 +1263,7 @@ function flatten(sys::System, noeqs = false)
         noeqs ? Equation[] : equations(sys), get_iv(sys), unknowns(sys),
         parameters(sys; initial_parameters = true), brownians(sys);
         poissonians = poissonians(sys),
-        jumps = jumps(sys), constraints = constraints(sys), costs = costs,
+        jumps = jumps(sys), constraints = constraints(sys), costs,
         consolidate = default_consolidate, observed = observed(sys),
         bindings = bindings(sys), initial_conditions = initial_conditions(sys),
         guesses = guesses(sys),

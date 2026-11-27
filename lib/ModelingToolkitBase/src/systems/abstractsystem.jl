@@ -1128,7 +1128,7 @@ function Base.getproperty(
     if has_parent(sys) && (parent = get_parent(sys); parent !== nothing)
         return getproperty(parent, name; namespace)
     end
-    return wrap(getvar(sys, name; namespace = namespace))
+    return wrap(getvar(sys, name; namespace))
 end
 function getvar(sys::AbstractSystem, name::Symbol; namespace = does_namespacing(sys))
     systems = get_systems(sys)
@@ -2523,9 +2523,9 @@ end
 function (ofc::ObservedFunctionCache)(obsvar, args...)
     obs = get!(ofc.dict, value(obsvar)) do
         SymbolicIndexingInterface.observed(
-            ofc.sys, obsvar; eval_expression = ofc.eval_expression,
-            eval_module = ofc.eval_module, checkbounds = ofc.checkbounds,
-            optimize = ofc.optimize
+            ofc.sys, obsvar; ofc.eval_expression,
+            ofc.eval_module, ofc.checkbounds,
+            ofc.optimize
         )
     end
     if ofc.steady_state
@@ -3334,7 +3334,7 @@ Print a tree of a system's hierarchy of subsystems.
 - `bold`: Whether to print the name of the system in **bold** font.
 """
 function hierarchy(sys::AbstractSystem; describe = false, bold = describe, kwargs...)
-    return print_tree(sys; printnode_kw = (describe = describe, bold = bold), kwargs...)
+    return print_tree(sys; printnode_kw = (; describe, bold), kwargs...)
 end
 
 function Base.IteratorEltype(::Type{<:TreeIterator{ModelingToolkitBase.AbstractSystem}})
@@ -3451,18 +3451,18 @@ function extend(
     end
     syss = union(get_systems(basesys), get_systems(sys))
     args = length(ivs) == 0 ? (eqs, nothing, sts, ps, brs) : (eqs, ivs[1], sts, ps, brs)
-    kwargs = (
+    kwargs = (;
         observed = obs, continuous_events = cevs,
         discrete_events = devs, bindings = binds, initial_conditions = ics, systems = syss,
         metadata = meta, state_priorities = sps, irreducibles = ircs,
-        name = name, description = description, gui_metadata = gui_metadata,
+        name, description, gui_metadata,
         poissonians = pois, jumps = jmps,
     )
 
     # collect fields specific to some system types
     ieqs = union(get_initialization_eqs(basesys), get_initialization_eqs(sys))
     guesses = merge(get_guesses(basesys), get_guesses(sys)) # prefer `sys`
-    kwargs = merge(kwargs, (initialization_eqs = ieqs, guesses = guesses))
+    kwargs = merge(kwargs, (; initialization_eqs = ieqs, guesses))
 
     if has_assertions(basesys)
         kwargs = merge(
@@ -3559,7 +3559,7 @@ end
 Syntactic sugar for adding all systems in `syss` as the subsystems of `first(syss)`.
 """
 function compose(syss...; name = nameof(first(syss)))
-    return compose(first(syss), collect(syss[2:end]); name = name)
+    return compose(first(syss), collect(syss[2:end]); name)
 end
 
 """

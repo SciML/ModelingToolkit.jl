@@ -63,8 +63,8 @@ ps = poles(G)
 @test minimum(abs, complex(0, 1.3777260367206716) .- ps) < 1.0e-10
 
 lin_fun, ssys = ModelingToolkit.linearization_function(
-    model, lin_inputs, lin_outputs, allow_symbolic = true, op = op,
-    zero_dummy_der = false, guesses = guesses,
+    model, lin_inputs, lin_outputs; allow_symbolic = true, op,
+    zero_dummy_der = false, guesses,
     reassemble_alg = MTKTearing.DefaultReassembleAlgorithm(; inline_linear_sccs = false)
 );
 lsys, = ModelingToolkit.linearize(ssys, lin_fun; op, allow_input_derivatives = true);

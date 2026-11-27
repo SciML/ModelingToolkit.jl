@@ -56,21 +56,21 @@ function ImperativeAffect(
         observed::NamedTuple = NamedTuple{()}(()), ctx = nothing, skip_checks = false
     )
     return ImperativeAffect(
-        f, observed = observed, modified = modified, ctx = ctx, skip_checks = skip_checks
+        f; observed, modified, ctx, skip_checks
     )
 end
 function ImperativeAffect(
         f, modified::NamedTuple, observed::NamedTuple; ctx = nothing, skip_checks = false
     )
     return ImperativeAffect(
-        f, observed = observed, modified = modified, ctx = ctx, skip_checks = skip_checks
+        f; observed, modified, ctx, skip_checks
     )
 end
 function ImperativeAffect(
         f, modified::NamedTuple, observed::NamedTuple, ctx; skip_checks = false
     )
     return ImperativeAffect(
-        f, observed = observed, modified = modified, ctx = ctx, skip_checks = skip_checks
+        f; observed, modified, ctx, skip_checks
     )
 end
 function ImperativeAffect(; f, kwargs...)

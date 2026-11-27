@@ -208,11 +208,11 @@ function Translational_Mass(; name, m = 1.0)
         D(v) ~ a
         m * a ~ 0.0
     ]
-    return System(eqs, t, sts, ps; name = name)
+    return System(eqs, t, sts, ps; name)
 end
 
 m = 1.0
-@named mass = Translational_Mass(m = m)
+@named mass = Translational_Mass(; m)
 
 ms_eqs = Equation[]
 

@@ -40,7 +40,7 @@ end
 
 ensemble = EnsembleProblem(
     base_prob;
-    prob_func = prob_func,
+    prob_func,
     safetycopy = false,
 )
 

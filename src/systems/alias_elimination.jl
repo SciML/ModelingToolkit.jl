@@ -710,7 +710,7 @@ function eliminate_zero_variables!(state::TearingState, mm::CLIL.SparseMatrixCLI
     sys = ConstructionBase.setproperties(
         sys;
         analytically_integrated = merge(analytically_integrated(sys), analytic_integ),
-        ps = [get_ps(sys); new_ps], bindings = ROSymmapT(new_binds), eqs = eqs,
+        ps = [get_ps(sys); new_ps], bindings = ROSymmapT(new_binds), eqs,
         guesses = _guesses
     )
     state.sys = sys

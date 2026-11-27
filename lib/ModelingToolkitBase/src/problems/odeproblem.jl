@@ -139,7 +139,7 @@ function SciMLBase.ODEFunction{iip, spec}(
 
     args = (; f)
     kwargs = (;
-        sys = sys,
+        sys,
         jac = _jac,
         tgrad = _tgrad,
         paramjac = _paramjac,
@@ -147,7 +147,7 @@ function SciMLBase.ODEFunction{iip, spec}(
         jac_prototype = W_prototype,
         observed = observedfun,
         sparsity = sparsity ? _W_sparsity : nothing,
-        analytic = analytic,
+        analytic,
         initialization_data,
         nlstep_data = ode_nlstep,
     )

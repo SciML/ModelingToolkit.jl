@@ -40,7 +40,7 @@ function SymbolicAffect(
 end
 function SymbolicAffect(affect::SymbolicAffect; kwargs...)
     return SymbolicAffect(
-        affect.affect; discrete_parameters = affect.discrete_parameters, kwargs...
+        affect.affect; affect.discrete_parameters, kwargs...
     )
 end
 SymbolicAffect(affect; kwargs...) = make_affect(affect; kwargs...)
@@ -130,7 +130,7 @@ function AffectSystem(spec::SymbolicAffect; iv = nothing, alg_eqs = Equation[], 
         depwarn_alg_eqs()
         affect = [affect; alg_eqs]
     end
-    return AffectSystem(affect; iv, discrete_parameters = spec.discrete_parameters, kwargs...)
+    return AffectSystem(affect; iv, spec.discrete_parameters, kwargs...)
 end
 
 function AffectSystem(
@@ -725,12 +725,12 @@ namespace_affects(af::Nothing, s) = nothing
 function namespace_callback(cb::SymbolicContinuousCallback, s)::SymbolicContinuousCallback
     return SymbolicContinuousCallback(
         namespace_equation.(equations(cb), (s,)),
-        namespace_affects(affects(cb), s),
+        namespace_affects(affects(cb), s);
         affect_neg = namespace_affects(affect_negs(cb), s),
         initialize = namespace_affects(initialize_affects(cb), s),
         finalize = namespace_affects(finalize_affects(cb), s),
-        rootfind = cb.rootfind, reinitializealg = cb.reinitializealg,
-        zero_crossing_id = cb.zero_crossing_id
+        cb.rootfind, cb.reinitializealg,
+        cb.zero_crossing_id
     )
 end
 
@@ -741,9 +741,9 @@ end
 function namespace_callback(cb::SymbolicDiscreteCallback, s)::SymbolicDiscreteCallback
     return SymbolicDiscreteCallback(
         namespace_conditions(conditions(cb), s),
-        namespace_affects(affects(cb), s),
+        namespace_affects(affects(cb), s);
         initialize = namespace_affects(initialize_affects(cb), s),
-        finalize = namespace_affects(finalize_affects(cb), s), reinitializealg = cb.reinitializealg
+        finalize = namespace_affects(finalize_affects(cb), s), cb.reinitializealg
     )
 end
 
@@ -1236,7 +1236,7 @@ function generate_callback(cbs::Vector{SymbolicContinuousCallback}, sys; kwargs.
         return VectorContinuousCallback(
             trigger, affect, affect_neg, length(eqs); initialize, finalize,
             rootfind = cbs[1].rootfind, initializealg = cbs[1].reinitializealg,
-            saved_clock_partitions = compiled.saved_clock_partitions,
+            compiled.saved_clock_partitions,
             initialize_save_discretes = cbs[1].initialize_save_discretes
         )
     else
@@ -1247,7 +1247,7 @@ function generate_callback(cbs::Vector{SymbolicContinuousCallback}, sys; kwargs.
         return VectorContinuousCallback(
             trigger, affect, length(eqs); initialize, finalize,
             rootfind = cbs[1].rootfind, initializealg = cbs[1].reinitializealg,
-            saved_clock_partitions = compiled.saved_clock_partitions,
+            compiled.saved_clock_partitions,
             initialize_save_discretes = cbs[1].initialize_save_discretes
         )
     end
@@ -1349,12 +1349,12 @@ function generate_callback(cb, sys; tspan = nothing, kwargs...)
             return PresetTimeCallback(
                 trigger, affect; initialize,
                 finalize, initializealg = cb.reinitializealg, saved_clock_partitions,
-                initialize_save_discretes = cb.initialize_save_discretes
+                cb.initialize_save_discretes
             )
         elseif is_timed && trigger isa SciMLBase.TimeDomain
             trigger_at_init = iszero((tspan[1] - trigger.phase) % trigger.dt)
             return PeriodicCallback(
-                affect, trigger.dt; phase = trigger.phase, initial_affect = trigger_at_init,
+                affect, trigger.dt; trigger.phase, initial_affect = trigger_at_init,
                 initialize, finalize,
                 initializealg = cb.reinitializealg, saved_clock_partitions,
                 initialize_save_discretes = trigger_at_init
@@ -1362,20 +1362,20 @@ function generate_callback(cb, sys; tspan = nothing, kwargs...)
         elseif is_timed
             return PeriodicCallback(
                 affect, trigger; initialize, finalize, initializealg = cb.reinitializealg,
-                saved_clock_partitions, initialize_save_discretes = cb.initialize_save_discretes
+                saved_clock_partitions, cb.initialize_save_discretes
             )
         else
             return DiscreteCallback(
                 trigger, affect; initialize,
                 finalize, initializealg = cb.reinitializealg, saved_clock_partitions,
-                initialize_save_discretes = cb.initialize_save_discretes
+                cb.initialize_save_discretes
             )
         end
     else
         return ContinuousCallback(
             trigger, affect, affect_neg; initialize, finalize,
-            rootfind = cb.rootfind, initializealg = cb.reinitializealg, saved_clock_partitions,
-            initialize_save_discretes = cb.initialize_save_discretes
+            cb.rootfind, initializealg = cb.reinitializealg, saved_clock_partitions,
+            cb.initialize_save_discretes
         )
     end
 end

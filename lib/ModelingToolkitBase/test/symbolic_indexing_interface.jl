@@ -194,7 +194,7 @@ end
     analytic = [u(t, x) ~ -h * x * (x - 1) * sin(x) * exp(-2 * h * t)]
     analytic_function = (ps, t, x) -> -ps[1] * x * (x - 1) * sin(x) * exp(-2 * ps[1] * t)
 
-    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u], [h], analytic = analytic)
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u], [h]; analytic)
 
     @test isequal(pdesys.ps, [h])
     @test isequal(parameter_symbols(pdesys), [h])

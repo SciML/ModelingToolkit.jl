@@ -33,9 +33,9 @@ function SciMLBase.IntervalNonlinearFunction(sys::System, opts::SciMLFunctionOpt
 
     args = (; f)
     kwargs = (;
-        sys = sys,
+        sys,
         observed = observedfun,
-        analytic = analytic,
+        analytic,
         initialization_data,
     )
 

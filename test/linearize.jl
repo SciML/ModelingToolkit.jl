@@ -89,7 +89,7 @@ function plant(; name)
         D(x) ~ -x + u
         y ~ x
     ]
-    return System(eqs, t; name = name)
+    return System(eqs, t; name)
 end
 
 function filt_(; name)
@@ -100,7 +100,7 @@ function filt_(; name)
         D(x) ~ -2 * x + u
         y ~ x
     ]
-    return System(eqs, t, name = name)
+    return System(eqs, t; name)
 end
 
 function controller(kp; name)
@@ -109,7 +109,7 @@ function controller(kp; name)
     eqs = [
         u ~ kp * (r - y),
     ]
-    return System(eqs, t; name = name)
+    return System(eqs, t; name)
 end
 
 @named f = filt_()
@@ -213,7 +213,7 @@ function saturation(; y_max, y_min = y_max > 0 ? -y_max : -Inf, name)
         # The equation below is equivalent to y ~ clamp(u, y_min, y_max)
         y ~ ie(u > y_max, y_max, ie((y_min < u) & (u < y_max), u, y_min)),
     ]
-    return System(eqs, t, name = name)
+    return System(eqs, t; name)
 end
 @named sat = saturation(; y_max = 1)
 # inside the linear region, the function is identity

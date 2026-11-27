@@ -125,7 +125,7 @@ function oscillator(; name, k = 1.0, τ = 0.01)
         D(y) ~ -k * x(t - τ) + jcn,
         delx ~ x(t - τ),
     ]
-    return System(eqs, t; name = name)
+    return System(eqs, t; name)
 end
 
 systems = @named begin
@@ -186,7 +186,7 @@ if @isdefined(ModelingToolkit)
                 lag_opening ~ opening(t - τ)
                 snap_opening ~ clamp(Ksnap * lag_opening - 1 / Ksnap, 0, 1)
             ]
-            return System(eqs, t; name = name)
+            return System(eqs, t; name)
         end
 
         @component function veccy(; name)
@@ -194,7 +194,7 @@ if @isdefined(ModelingToolkit)
             @variables begin
                 x(t)[1:3] = zeros(3)
             end
-            return System([D(x) ~ dx], t; name = name)
+            return System([D(x) ~ dx], t; name)
         end
 
         @mtkcompile ssys = System(

@@ -116,7 +116,7 @@ eqs1 = [
     0 ~ x + y - z - u,
 ]
 
-lorenz = name -> System(eqs1, [x, y, z, u, F], [σ, ρ, β, h], name = name)
+lorenz = name -> System(eqs1, [x, y, z, u, F], [σ, ρ, β, h]; name)
 lorenz1 = lorenz(:lorenz1)
 @test_throws ArgumentError NonlinearProblem(complete(lorenz1), zeros(4))
 lorenz2 = lorenz(:lorenz2)

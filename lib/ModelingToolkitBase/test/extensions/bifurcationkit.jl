@@ -24,7 +24,7 @@ if @isdefined(ModelingToolkit)
         u0_guess,
         p_start,
         bif_par;
-        plot_var = plot_var,
+        plot_var,
         jac = false
     )
 
@@ -132,7 +132,7 @@ if @isdefined(ModelingToolkit)
     p_start = [μ => 1.0]
     u0_guess = [x => 1.0, y => 0.1, z => 0.1]
     plot_var = x
-    bprob = BifurcationProblem(nsys, u0_guess, p_start, bif_par; plot_var = plot_var)
+    bprob = BifurcationProblem(nsys, u0_guess, p_start, bif_par; plot_var)
 
     # Computes bifurcation diagram.
     p_span = (-4.3, 12.0)

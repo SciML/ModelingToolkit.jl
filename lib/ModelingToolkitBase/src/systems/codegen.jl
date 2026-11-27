@@ -620,7 +620,7 @@ function generate_tgrad(
     wrap_gfw = wrap_gfw_val(opts)
     dvs = flat_unknowns(sys)
     ps = parameters(sys; initial_parameters = true)
-    tgrad = calculate_tgrad(sys, simplify = simplify)
+    tgrad = calculate_tgrad(sys; simplify)
     p = reorder_parameters(sys, ps)
     res = build_function_wrapper(
         sys, tgrad,
@@ -744,11 +744,11 @@ function generate_dae_jacobian(
     wrap_gfw = wrap_gfw_val(opts)
     dvs = flat_unknowns(sys)
     ps = parameters(sys; initial_parameters = true)
-    jac_u = calculate_jacobian(sys; simplify = simplify, sparse = sparse)
+    jac_u = calculate_jacobian(sys; simplify, sparse)
     t = get_iv(sys)
     derivatives = Differential(t).(flat_unknowns(sys))
     jac_du = calculate_jacobian(
-        sys; simplify = simplify, sparse = sparse,
+        sys; simplify, sparse,
         dvs = derivatives
     )
     dvs = flat_unknowns(sys)
@@ -1706,9 +1706,9 @@ function calculate_control_jacobian(
     ctrls = default_codegen_inputs(sys)
 
     if sparse
-        jac = sparsejacobian(rhs, ctrls, simplify = simplify)
+        jac = sparsejacobian(rhs, ctrls; simplify)
     else
-        jac = jacobian(rhs, ctrls, simplify = simplify)
+        jac = jacobian(rhs, ctrls; simplify)
     end
 
     return jac
@@ -1735,7 +1735,7 @@ function generate_control_jacobian(
     wrap_gfw = wrap_gfw_val(opts)
     dvs = flat_unknowns(sys)
     ps = parameters(sys; initial_parameters = true)
-    jac = calculate_control_jacobian(sys; simplify = simplify, sparse = sparse)
+    jac = calculate_control_jacobian(sys; simplify, sparse)
     p = reorder_parameters(sys, ps)
     res = build_function_wrapper(sys, jac, [Any[dvs]; p; Any[get_iv(sys)]], BuildFunctionWrapperOptions(; u_arg = 1, codegen_function_options = opts.codegen))
     return maybe_compile_function(
@@ -1934,7 +1934,7 @@ function assemble_vrj(
     outputvars = (value(affect.lhs) for affect in vrj.affect!)
     outputidxs = [unknowntoid[var] for var in outputvars]
     affect = generate_affect_function(js, vrj.affect!; eval_expression, eval_module)
-    return VariableRateJump(rate, affect; save_positions = vrj.save_positions)
+    return VariableRateJump(rate, affect; vrj.save_positions)
 end
 
 function assemble_crj(

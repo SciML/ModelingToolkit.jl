@@ -33,7 +33,7 @@ mathengine = MathJax3(
     )
 )
 
-makedocs(
+makedocs(;
     sitename = "ModelingToolkit.jl",
     authors = "Chris Rackauckas",
     modules = [ModelingToolkitBase, ModelingToolkit, ModelingToolkitTearing, StateSelection, MTKFMIExt],
@@ -58,7 +58,7 @@ makedocs(
         # This page gets especially big with all the problem docstrings
         size_threshold_ignore = ["API/problems.md"]
     ),
-    pages = pages
+    pages,
 )
 
 deploydocs(

@@ -14,7 +14,7 @@ function UnderdefinedConstantVoltage(; name, V = 1.0)
         V ~ p.v - n.v,        # Remove equation
         # 0 ~ p.i + n.i
     ]
-    return System(eqs, t, [], [V], systems = [p, n], initial_conditions = Dict(V => val), name = name)
+    return System(eqs, t, [], [V]; systems = [p, n], initial_conditions = Dict(V => val), name)
 end
 
 function OverdefinedConstantVoltage(; name, V = 1.0, I = 1.0)
@@ -30,17 +30,17 @@ function OverdefinedConstantVoltage(; name, V = 1.0, I = 1.0)
         p.i ~ I
     ]
     return System(
-        eqs, t, [], [V, I], systems = [p, n], initial_conditions = Dict(V => val, I => val2),
-        name = name
+        eqs, t, [], [V, I]; systems = [p, n], initial_conditions = Dict(V => val, I => val2),
+        name
     )
 end
 
 R = 1.0
 C = 1.0
 V = 1.0
-@named resistor = Resistor(R = R)
-@named capacitor = Capacitor(C = C)
-@named source = UnderdefinedConstantVoltage(V = V)
+@named resistor = Resistor(; R)
+@named capacitor = Capacitor(; C)
+@named source = UnderdefinedConstantVoltage(; V)
 
 rc_eqs = [
     connect(source.p, resistor.p)
@@ -51,7 +51,7 @@ rc_eqs = [
 @named rc_model = System(rc_eqs, t, systems = [resistor, capacitor, source])
 @test_throws ModelingToolkitBase.ExtraVariablesSystemException mtkcompile(rc_model)
 
-@named source2 = OverdefinedConstantVoltage(V = V, I = V / R)
+@named source2 = OverdefinedConstantVoltage(; V, I = V / R)
 rc_eqs2 = [
     connect(source2.p, resistor.p)
     connect(resistor.n, capacitor.p)

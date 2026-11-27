@@ -338,7 +338,7 @@ prob3 = ODEProblem(sys, [u0; p], tspan, jac = true, sparsity = true)
 for (prob, atol) in [(prob1, 1.0e-12), (prob2, 1.0e-12), (prob3, 1.0e-12)]
     local sol
     sol = solve(prob, Rodas5())
-    @test all(x -> ≈(sum(x), 1.0, atol = atol), sol.u)
+    @test all(x -> ≈(sum(x), 1.0; atol), sol.u)
 end
 
 du0 = [
@@ -475,7 +475,7 @@ function submodel(; name)
     @variables y(t)
     @parameters A[1:5]
     A = collect(A)
-    return System(D(y) ~ sum(A) * y, t; name = name)
+    return System(D(y) ~ sum(A) * y, t; name)
 end
 
 # Build system
@@ -601,7 +601,7 @@ sys = complete(sys)
         D(us[i]) ~ dummy_identity(buffer[i], us[i])
     end
 
-    @named sys = System(eqs, t, us, ps; initial_conditions = defs, preface = preface)
+    @named sys = System(eqs, t, us, ps; initial_conditions = defs, preface)
     sys = complete(sys)
     # don't build initializeprob because it will use preface in other functions and
     # affect `c`
@@ -1244,7 +1244,7 @@ end
 
             return System(equations, t, vars, pars; name, systems)
         end
-        return ModelB(; name = name)
+        return ModelB(; name)
     end
     c_a, c_b = 1.234, 5.578
     @named sys = make_model(c_a, c_b)
@@ -1416,8 +1416,8 @@ end
         end
 
         systems = @named begin
-            resistor = Resistor(R = R)
-            capacitor = Capacitor(C = C, v = 0.0)
+            resistor = Resistor(; R)
+            capacitor = Capacitor(; C, v = 0.0)
             source = Voltage()
             constant = Constant(k = V)
             ground = Ground()

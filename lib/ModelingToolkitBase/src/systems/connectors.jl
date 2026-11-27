@@ -1203,7 +1203,7 @@ function expand_connections(sys::AbstractSystem, ::Val{with_source_info} = Val(f
     eqs = with_source_info ? equations(sys, source_visitor) : equations(sys)
     init_source_visitor = SourceInformationVisitor()
     init_eqs = with_source_info ? initialization_equations(sys, init_source_visitor) : nothing
-    stream_eqs, instream_subs = expand_instream(instream_csets, sys; tol = tol, eqs)
+    stream_eqs, instream_subs = expand_instream(instream_csets, sys; tol, eqs)
 
     if with_source_info
         N = length(eqs) + length(ceqs) + length(stream_eqs)
