@@ -6,13 +6,17 @@ import FiniteDiff, ForwardDiff
 
 const FIXTURE_FMUS = joinpath(@__DIR__, "fmus")
 
-function feedthrough_step_hook(step)
+function feedthrough_step_hook(step; stop_time = nothing)
     # Feedthrough has no state to advance. Supply a communication clock for arbitrary intervals.
     function do_step(instance, point, h, no_reset, event, terminate, early, last_time)
         unsafe_store!(event, UInt8(0))
         unsafe_store!(terminate, UInt8(0))
         unsafe_store!(early, UInt8(0))
-        unsafe_store!(last_time, step(point, h))
+        achieved = step(point, h)
+        if stop_time !== nothing && point + h > stop_time[]
+            return Cuint(FMI.fmi3StatusError)
+        end
+        unsafe_store!(last_time, achieved)
         return Cuint(FMI.fmi3StatusOK)
     end
     return @cfunction(
@@ -400,27 +404,49 @@ end
         fmu3_coarse.modelDescription.coSimulation.canHandleVariableCommunicationStepSize = false
         coarse_requests = Tuple{Float64, Float64}[]
         coarse_short = Ref(false)
-        coarse_hook = feedthrough_step_hook() do point, step_h
+        coarse_limit = Ref(Inf)
+        original_enter = fmu3_coarse.cEnterInitializationMode
+        function enter_init(instance, tolerance_defined, tolerance, t0, stop_defined, stop)
+            coarse_limit[] = iszero(stop_defined) ? Inf : stop
+            return ccall(
+                original_enter, Cuint, (Ptr{Cvoid}, UInt8, Cdouble, Cdouble, UInt8, Cdouble),
+                instance, tolerance_defined, tolerance, t0, stop_defined, stop
+            )
+        end
+        init_hook = @cfunction($enter_init, Cuint, (Ptr{Cvoid}, UInt8, Cdouble, Cdouble, UInt8, Cdouble))
+        coarse_hook = feedthrough_step_hook(; stop_time = coarse_limit) do point, step_h
             push!(coarse_requests, (point, step_h))
             return coarse_short[] ? point + 0.5 * step_h : point + step_h
         end
         fmu3_coarse.cDoStep = Base.unsafe_convert(Ptr{Cvoid}, coarse_hook)
-        GC.@preserve coarse_hook begin
-            @named coarse_ports = MTK.FMIComponent(
-                Val(3); fmu = fmu3_coarse, type = :CS,
-                communication_step_size = coarse_h, stop_time = start + 10 * coarse_h
-            )
-            coarse_eqs = [
-                getproperty(coarse_ports, name) ~ (name == :Enumeration_input ? 1.0 : 0.0)
-                    for name in (MTK.getname(v) for v in unknowns(coarse_ports) if MTK.isinput(v))
-            ]
-            @mtkcompile coarse_sys = System(coarse_eqs, t; systems = [coarse_ports])
-            coarse_prob = ODEProblem(coarse_sys, [], (start, coarse_finish))
-            coarse_sol = solve(coarse_prob, Tsit5())
-            @test SciMLBase.successful_retcode(coarse_sol)
-            @test coarse_requests == [(start, coarse_h), (start + coarse_h, coarse_h)]
-            coarse_short[] = true
-            @test_throws r"FMI 3.*lastSuccessfulTime" solve(coarse_prob, Tsit5())
+        fmu3_coarse.cEnterInitializationMode = Base.unsafe_convert(Ptr{Cvoid}, init_hook)
+        native_finish = (start + coarse_h) + coarse_h
+        GC.@preserve coarse_hook init_hook begin
+            @testset "coarse fixed steps (stop_time = $stop_time)" for stop_time in (nothing, coarse_finish)
+                empty!(coarse_requests)
+                @named coarse_ports = MTK.FMIComponent(
+                    Val(3); fmu = fmu3_coarse, type = :CS, communication_step_size = coarse_h, stop_time
+                )
+                coarse_eqs = [
+                    getproperty(coarse_ports, name) ~ (name == :Enumeration_input ? 1.0 : 0.0)
+                        for name in (MTK.getname(v) for v in unknowns(coarse_ports) if MTK.isinput(v))
+                ]
+                @mtkcompile coarse_sys = System(coarse_eqs, t; systems = [coarse_ports])
+                coarse_prob = ODEProblem(coarse_sys, [], (start, coarse_finish))
+                if stop_time === nothing
+                    coarse_sol = solve(coarse_prob, Tsit5())
+                    @test SciMLBase.successful_retcode(coarse_sol)
+                    @test coarse_sol.t[end] == coarse_finish
+                    @test coarse_limit[] == native_finish > coarse_finish
+                    @test coarse_requests == [(start, coarse_h), (start + coarse_h, coarse_h)]
+                    coarse_short[] = true
+                    @test_throws r"FMI 3.*lastSuccessfulTime" solve(coarse_prob, Tsit5())
+                else
+                    coarse_short[] = false
+                    @test_throws "stop_time must be at least $native_finish" solve(coarse_prob, Tsit5())
+                    @test isempty(coarse_requests)
+                end
+            end
         end
     end
 end
@@ -496,7 +522,7 @@ end
     end
 end
 
-@testset "Model Exchange coincident host affects inside one FMI epoch (second_phase = $second_phase)" for second_phase in (0, typemax(Int))
+@testset "Model Exchange coincident host affects inside one FMI epoch ($second_phase)" for second_phase in (0, typemax(Int), :native)
     fmu = loadFMU(joinpath(FIXTURE_FMUS, "SimpleAdder.fmu"); type = :ME)
     completed = Ref(0)
     original_complete = fmu.cCompletedIntegratorStep
@@ -515,6 +541,7 @@ end
         @named adder = MTK.FMIComponent(Val(2); fmu, type = :ME)
         @discretes host_a(t) = 1.0
         @variables host_state(t) = 1.0 [irreducible = true]
+        native = second_phase === :native
         first_host = MTKBase.SymbolicDiscreteCallback(
             [0.02],
             MTKBase.ImperativeAffect(
@@ -530,17 +557,28 @@ end
                 modified = (; host_a, host_state)
             );
             reinitializealg = SciMLBase.NoInit(),
-            callback_phase = second_phase
+            callback_phase = native ? 0 : second_phase
         )
+        host_events = native ? MTKBase.SymbolicDiscreteCallback[] : [first_host, second_host]
         @mtkcompile sys = System(
-            [adder.a ~ host_a, adder.b ~ 0.0, D(host_state) ~ 0.0], t;
-            systems = [adder], discrete_events = [first_host, second_host]
+            [adder.a ~ (native ? host_state : host_a), adder.b ~ 0.0, D(host_state) ~ 0.0], t;
+            systems = [adder], discrete_events = host_events
         )
-        prob = ODEProblem(sys, [sys.adder.c => 0.0, sys.adder.value => 0.0], (0.0, 0.04))
-        sol = solve(prob, Tsit5(); dt = 0.01, adaptive = false, saveat = [0.015, 0.025])
+        callback = if native
+            set_host! = MTKBase.setu(sys, sys.host_state)
+            CallbackSet(
+                DiscreteCallback((u, t, integ) -> t == 0.02, integ -> set_host!(integ, 3.0); save_positions = (true, true)),
+                DiscreteCallback((u, t, integ) -> t == 0.02, integ -> set_host!(integ, 5.0); save_positions = (true, true))
+            )
+        end
+        prob = ODEProblem(sys, [sys.adder.c => 0.0, sys.adder.value => 0.0], (0.0, 0.04); callback)
+        sol = solve(prob, Tsit5(); dt = 0.01, adaptive = false, tstops = [0.02], saveat = [0.015, 0.025])
         @test SciMLBase.successful_retcode(sol)
         event_indices = findall(==(0.02), sol.t)
         @test length(event_indices) >= 4
+        if native
+            @test sol[sys.host_state][event_indices] == [1.0, 3.0, 3.0, 5.0, 5.0, 5.0]
+        end
         @test sol[sys.adder.out] == sol[sys.host_state]
         @test sol[sys.adder.out][event_indices] == sol[sys.host_state][event_indices]
         @test unique(sol[sys.adder.out][event_indices]) == [1.0, 3.0, 5.0]

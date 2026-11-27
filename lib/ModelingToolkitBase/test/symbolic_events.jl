@@ -2499,6 +2499,43 @@ end
     end
 end
 
+@testset "saved-index observations only replay their discrete dependencies ($use_observed)" for use_observed in (false, true)
+    @variables x(t) = 1.0 [irreducible = true]
+    @variables alias_p1(t)
+    @discretes p1(t) = 1.0 p2(t) = 1.0
+    first_clock = SymbolicDiscreteCallback(
+        [0.02], [x ~ 2.0, p1 ~ 2.0]; discrete_parameters = [p1],
+        reinitializealg = SciMLBase.NoInit()
+    )
+    deferred_clock = SymbolicDiscreteCallback(
+        [0.03], [p2 ~ 3.0]; discrete_parameters = [p2],
+        reinitializealg = SciMLBase.NoInit(), initialize_save_discretes = false
+    )
+    pairs = Tuple{Float64, Float64}[]
+    function read_pairs(m, o, ctx, integ, observed_at)
+        sol = SciMLBase.get_sol(integ)
+        for i in findall(==(0.02), sol.t)
+            point = observed_at(sol, i)
+            push!(pairs, (point.x, point.p1))
+        end
+        return (;)
+    end
+    reader = SymbolicDiscreteCallback(
+        [0.04], ModelingToolkitBase.ImperativeAffect(
+            read_pairs; observed = (; x, p1 = use_observed ? alias_p1 : p1)
+        ); reinitializealg = SciMLBase.NoInit()
+    )
+    @mtkcompile sys = System(
+        [D(x) ~ 0.0], t, [x], [p1, p2]; observed = [alias_p1 ~ p1],
+        discrete_events = [first_clock, deferred_clock, reader]
+    )
+    sol = solve(ODEProblem(sys, [], (0.0, 0.05)), Tsit5(); dt = 0.01, adaptive = false)
+    @test SciMLBase.successful_retcode(sol)
+    @test pairs == [(1.0, 1.0), (2.0, 2.0)]
+    p2_partition = timeseries_parameter_index(sys, sys.p2).timeseries_idx
+    @test sol.discretes[p2_partition].t == [0.03]
+end
+
 @testset "`reinitializealg` takes part in the hash of an event" begin
     @variables x(t)
     for cb in (

@@ -223,7 +223,7 @@ function check_assignable(sys, sym)
     end
 end
 
-function solution_index_parameter_values(sol, i)
+function solution_index_parameter_values(sol, i, partitions = nothing)
     ps = parameter_values(sol)
     SymbolicIndexingInterface.is_parameter_timeseries(sol) == SymbolicIndexingInterface.Timeseries() || return ps
     discs = SymbolicIndexingInterface.get_parameter_timeseries_collection(sol)
@@ -232,7 +232,8 @@ function solution_index_parameter_values(sol, i)
     positions = saved_parameter_positions(sol, i)
     initial_values = initial_discrete_values(sol)
     before_event_save = i < length(sol.t) && sol.t[i + 1] == time
-    for ts_idx in eachindex(discs)
+    partition_indices = isnothing(partitions) ? eachindex(discs) : partitions
+    for ts_idx in partition_indices
         partition = discs[ts_idx]
         times = current_time(partition)
         if positions === nothing
@@ -280,6 +281,7 @@ and writes back the returned values. Created by [`compile_functional_affect`](@r
 - `mod_names`: `NTuple{N, Symbol}` naming the modified variables (for `NamedTuple` construction)
 - `obs_sym_tuple`: `NTuple{M, Symbol}` naming the observed values
 - `upd_funs`: `NamedTuple` of setter callables mapping each modified variable name to its setter
+- `obs_partitions`: discrete timeseries partitions needed to read saved observations
 """
 struct FunctionalAffect{UF, CTX, MOF, OF, MN, OST, UPS}
     user_affect::UF
@@ -290,6 +292,7 @@ struct FunctionalAffect{UF, CTX, MOF, OF, MN, OST, UPS}
     mod_names::MN
     obs_sym_tuple::OST
     upd_funs::UPS
+    obs_partitions::Vector{Int}
 end
 
 @inline function (fa::FunctionalAffect)(integ)
@@ -302,7 +305,9 @@ end
     end
     function observed_at(sol::SciMLBase.AbstractTimeseriesSolution, i::Integer)
         time = sol.t[i]
-        return observed_at(state_values(sol, i), solution_index_parameter_values(sol, i), time)
+        return observed_at(
+            state_values(sol, i), solution_index_parameter_values(sol, i, fa.obs_partitions), time
+        )
     end
     obs_component_array = observed_at(integ.u, integ.p, integ.t)
     args = (upd_component_array, obs_component_array, fa.ctx, integ)
@@ -412,10 +417,11 @@ function compile_functional_affect(
         expression = Val{false},
         codegen_function_options = Symbolics.CodegenFunctionOptions(; kwargs...)
     )
-    obs_fun = build_explicit_observed_function(
-        sys, Symbolics.scalarize.(obs_exprs), opts; output_type = Tuple
-    )
+    obs_exprs = Symbolics.scalarize.(obs_exprs)
+    obs_fun = build_explicit_observed_function(sys, obs_exprs, opts; output_type = Tuple)
     obs_sym_tuple = (obs_syms...,)
+    timeseries_idxs = SymbolicIndexingInterface.get_all_timeseries_indexes(sys, obs_exprs)
+    obs_partitions = Int[idx for idx in timeseries_idxs if idx isa Int]
 
     # okay so now to generate the stuff to assign it back into the system
     mod_pairs = mod_exprs .=> mod_syms
@@ -427,7 +433,7 @@ function compile_functional_affect(
     upd_funs = NamedTuple{mod_names}((setu.((sys,), first.(mod_pairs))...,))
     return FunctionalAffect(
         func(affect), context(affect), reset_jumps,
-        mod_og_val_fun, obs_fun, mod_names, obs_sym_tuple, upd_funs
+        mod_og_val_fun, obs_fun, mod_names, obs_sym_tuple, upd_funs, obs_partitions
     )
 end
 
