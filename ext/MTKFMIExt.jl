@@ -120,13 +120,17 @@ with the name `namespace__variable`.
 - `tolerance`: The tolerance to provide to the FMU. Not used for v3 FMUs since it is not
   supported by FMI.jl.
 - `communication_step_size`: The periodic interval at which communication with CoSimulation
-  FMUs will occur. Must be provided for CoSimulation FMU components.
+  FMUs will occur. Required for Co-Simulation. A shorter final interval is supported
+  when the FMU accepts variable communication step sizes. Fixed-step FMUs hold the
+  last sample when the solve endpoint is between communication points.
 - `reinitializealg`: The DAE initialization algorithm to use for the callback managing the
   FMU. For CoSimulation FMUs whose states/outputs are used in algebraic equations of the
   system, this needs to be an algorithm that will solve for the new algebraic variables.
   For example, `OrdinaryDiffEqCore.BrownFullBasicInit()`.
-- `stop_time`: The `stopTime` for the FMU, as defined in the FMI spec. By default, this will
-  be set to `tspan[2]` when the `ODEProblem` is solved. An explicit value will overwrite this.
+- `stop_time`: The Co-Simulation experiment limit. By default it covers the solve
+  endpoint and, for fixed-step FMUs, the last native communication request if it
+  rounds past that endpoint. An explicit limit must cover the solve endpoint for
+  variable-step FMUs and the last native request for fixed-step FMUs.
 - `type`: Either `:ME` or `:CS` depending on whether `fmu` is a Model Exchange or
   CoSimulation FMU respectively.
 - `name`: The name of the system.
@@ -139,8 +143,13 @@ function MTK.FMIComponent(
     if Ver != 2 && Ver != 3
         throw(ArgumentError("FMI Version must be `2` or `3`"))
     end
-    if type == :CS && communication_step_size === nothing
-        throw(ArgumentError("`communication_step_size` must be specified for Co-Simulation FMUs."))
+    if type == :CS
+        if communication_step_size === nothing
+            throw(ArgumentError("`communication_step_size` must be specified for Co-Simulation FMUs."))
+        end
+        if !(communication_step_size isa Real && isfinite(communication_step_size) && communication_step_size > 0)
+            throw(ArgumentError("`communication_step_size` must be positive and finite for Co-Simulation FMUs."))
+        end
     end
     # mapping from MTK variable to value reference
     value_references = Dict()
@@ -271,6 +280,7 @@ function MTK.FMIComponent(
 
     # any additional initialization equations for the system
     initialization_eqs = Equation[]
+    discrete_events = MTKBase.SymbolicDiscreteCallback[]
 
     if type == :ME
         # the wrapper is a callable struct which returns the state derivative and
@@ -298,12 +308,8 @@ function MTK.FMIComponent(
         push!(params, wrapper)
         append!(observed, der_observed)
     elseif type == :CS
-        _functor = if Ver == 2
-            FMI2CSFunctor(state_value_references, output_value_references, Base.Ref{FMI.fmi2Real}(something(stop_time, NaN)))
-        else
-            FMI3CSFunctor(state_value_references, output_value_references, Base.Ref{FMI.fmi3Float64}(something(stop_time, NaN)))
-        end
-        @parameters (functor::(typeof(_functor)))(..)[1:(length(__mtk_internal_u) + length(__mtk_internal_o))] = _functor
+        _functor = CSFunctor(length(output_value_references), something(stop_time, NaN), communication_step_size)
+        @parameters (functor::CSFunctor)(..)[1:length(__mtk_internal_o)] = _functor
         # for co-simulation, we need to ensure the output buffer is solved for
         # during initialization
         for (i, x) in enumerate(collect(__mtk_internal_o))
@@ -319,8 +325,7 @@ function MTK.FMIComponent(
 
         # use `ImperativeAffect` for instance management here
         cb_observed = (;
-            inputs = __mtk_internal_x, params = copy(params),
-            t, wrapper, dt = communication_step_size,
+            inputs = __mtk_internal_x, params = __mtk_internal_p, t, wrapper,
         )
         cb_modified = (;)
         # modify the outputs if present
@@ -345,6 +350,14 @@ function MTK.FMIComponent(
             finalize = finalize_affect, reinitializealg
         )
 
+        @parameters (final_step_due::CSFinalStepDue)(..) = CSFinalStepDue()
+        push!(params, final_step_due)
+        push!(
+            discrete_events, MTKBase.SymbolicDiscreteCallback(
+                final_step_due(functor, t) > 0.5, step_affect; reinitializealg
+            )
+        )
+
         # guarded in case there are no outputs/states and the variable is `[]`.
         symbolic_type(__mtk_internal_o) == NotSymbolic() || push!(params, __mtk_internal_o)
         symbolic_type(__mtk_internal_u) == NotSymbolic() || push!(params, __mtk_internal_u)
@@ -356,7 +369,7 @@ function MTK.FMIComponent(
     bindings = [eq.lhs => eq.rhs for eq in parameter_dependencies]
     return System(
         eqs, t, states, params; bindings, initial_conditions = defs,
-        discrete_events = [instance_management_callback], name, initialization_eqs
+        discrete_events = [instance_management_callback; discrete_events], name, initialization_eqs
     )
 end
 
@@ -883,226 +896,205 @@ end
 """
     $(TYPEDEF)
 
-A callable struct useful for initializing v2 CoSimulation FMUs. When called, updates the
-internal state of the FMU and gets updated values for output variables.
-
-# Fields
-
-$(TYPEDFIELDS)
+The condition of a CoSimulation FMU's last step, as a callable parameter: 1.0 once the solve
+has reached its final time and the FMU has not been stepped there. The periodic callback
+that steps the FMU does not fire at the final time, so without this the solution's last
+values would be one communication step behind (or short of a final time that is not a
+multiple of the step).
 """
-struct FMI2CSFunctor
-    """
-    The value references of state variables in the FMU.
-    """
-    state_value_references::Vector{FMI.fmi2ValueReference}
-    """
-    The value references of output variables in the FMU.
-    """
-    output_value_references::Vector{FMI.fmi2ValueReference}
-    """
-    `tspan[2]`, set during callback initialization
-    """
-    t_end::Base.RefValue{FMI.fmi2Real}
+struct CSFinalStepDue end
+
+function (::CSFinalStepDue)(functor, t)
+    t == functor.solve_end[] || return 0.0
+    if isnan(functor.grid_start[])
+        return t > functor.t_last[] ? 1.0 : 0.0
+    end
+    functor.step_index[] < functor.final_step_index[] || return 0.0
+    final_time = fixed_grid_time(functor.grid_start[], functor.dt, functor.final_step_index[])
+    return final_time == t ? 1.0 : 0.0
 end
 
-function (fn::FMI2CSFunctor)(wrapper::FMI2InstanceWrapper, states, inputs, params, t)
-    states = states isa SubArray ? copy(states) : states
-    inputs = inputs isa SubArray ? copy(inputs) : inputs
-    params = params isa SubArray ? copy(params) : params
-    instance = get_instance_CS!(wrapper, states, inputs, params, t, fn.t_end[])
-    if isempty(fn.output_value_references)
-        return eltype(states)[]
+variable_communication_step(wrapper) =
+    wrapper.fmu.modelDescription.coSimulation.canHandleVariableCommunicationStepSize === true
+
+fixed_grid_time(start, dt, step) = start + dt * step
+
+function fixed_grid_steps(start, finish, dt)
+    duration = finish - start
+    duration < 0 &&
+        throw(ArgumentError("The solve endpoint must be after the start time for a fixed-step Co-Simulation FMU."))
+    steps = max(0, floor(Int, duration / dt))
+    while steps > 0 && fixed_grid_time(start, dt, steps) > finish
+        steps -= 1
+    end
+    while fixed_grid_time(start, dt, steps + 1) <= finish
+        steps += 1
+    end
+    return steps
+end
+
+function initialize_cs_times!(ctx, o, integrator)
+    start, finish = integrator.sol.prob.tspan
+    implicit_limit = isnan(ctx.stop_time)
+    experiment_end = implicit_limit ? finish : ctx.stop_time
+    if variable_communication_step(o.wrapper)
+        experiment_end >= finish || throw(ArgumentError("The FMU experiment stop_time must be at or after the solve endpoint."))
+        ctx.grid_start[] = NaN
+        ctx.final_step_index[] = typemax(Int)
     else
-        return FMI.fmi2GetReal(instance, fn.output_value_references)
+        ctx.grid_start[] = Float64(start)
+        ctx.final_step_index[] = fixed_grid_steps(start, finish, ctx.dt)
+        final_step = ctx.final_step_index[]
+        minimum_end = iszero(final_step) ? ctx.grid_start[] :
+            fixed_grid_time(ctx.grid_start[], ctx.dt, final_step - 1) + ctx.dt
+        if implicit_limit
+            experiment_end = max(experiment_end, minimum_end)
+        elseif experiment_end < minimum_end
+            throw(ArgumentError("The FMU experiment stop_time must be at least $minimum_end to cover the last native fixed step."))
+        end
     end
-end
-
-@register_array_symbolic (fn::FMI2CSFunctor)(
-    wrapper::FMI2InstanceWrapper, states::Vector{<:Real},
-    inputs::Vector{<:Real}, params::Vector{<:Real}, t::Real
-) begin
-    size = (length(states) + length(fn.output_value_references),)
-    eltype = eltype(states)
-    ndims = 1
-end
-
-"""
-    $(TYPEDSIGNATURES)
-
-An affect function designed for use with `ImperativeAffect`. Should be triggered during
-callback initialization. `m` should contain the key `:states` with the value being the
-state vector if the FMU has continuous states. `m` should contain the key `:outputs` with
-the value being the output vector if the FMU has output variables. `o` should contain the
-`:inputs`, `:params`, `:t` and `:wrapper` where the latter contains the `FMI2InstanceWrapper`.
-
-Initializes the FMU. Only for use with CoSimulation FMUs.
-"""
-function fmiCSInitialize!(m, o, ctx::FMI2CSFunctor, integrator)
-    states = isdefined(m, :states) ? m.states : ()
-    inputs = o.inputs
-    params = o.params
-    t = o.t
-    wrapper = o.wrapper
-    if isnan(ctx.t_end[])
-        ctx.t_end[] = integrator.sol.prob.tspan[2]
-    end
-    if wrapper.instance !== nothing
-        reset_instance!(wrapper)
-    end
-
-    instance = get_instance_CS!(wrapper, states, inputs, params, t, ctx.t_end[])
-    if isdefined(m, :states)
-        @statuscheck FMI.fmi2GetReal!(instance, ctx.state_value_references, m.states)
-    end
-    if isdefined(m, :outputs)
-        @statuscheck FMI.fmi2GetReal!(instance, ctx.output_value_references, m.outputs)
-    end
-
-    return m
-end
-
-"""
-    $(TYPEDSIGNATURES)
-
-An affect function designed for use with `ImperativeAffect`. Should be triggered
-periodically to communicte with the CoSimulation FMU. Has the same requirements as
-`fmiCSInitialize!` for `m` and `o`, with the addition that `o` should have a key
-`:dt` with the value being the communication step size.
-"""
-function fmiCSStep!(m, o, ctx::FMI2CSFunctor, integrator)
-    wrapper = o.wrapper
-    states = isdefined(m, :states) ? m.states : ()
-    inputs = o.inputs
-    params = o.params
-    t = o.t
-    dt = o.dt
-
-    instance = get_instance_CS!(wrapper, states, inputs, params, integrator.t, ctx.t_end[])
-    if !isempty(inputs)
-        FMI.fmi2SetReal(
-            instance, wrapper.input_value_references, Csize_t(length(inputs)), inputs
-        )
-    end
-    @statuscheck FMI.fmi2DoStep(instance, integrator.t - dt, dt, FMI.fmi2True)
-
-    if isdefined(m, :states)
-        @statuscheck FMI.fmi2GetReal!(instance, ctx.state_value_references, m.states)
-    end
-    if isdefined(m, :outputs)
-        @statuscheck FMI.fmi2GetReal!(instance, ctx.output_value_references, m.outputs)
-    end
-
-    return m
+    ctx.step_index[] = 0
+    ctx.solve_end[] = finish
+    ctx.t_last[] = o.t
+    ctx.experiment_end[] = experiment_end
+    return experiment_end
 end
 
 """
     $(TYPEDEF)
 
-A callable struct useful for initializing v3 CoSimulation FMUs. When called, updates the
-internal state of the FMU and gets updated values for output variables.
-
-# Fields
-
-$(TYPEDFIELDS)
+Provides Co-Simulation output values to the initialization problem and tracks the
+communication point and experiment limit during a solve.
 """
-struct FMI3CSFunctor
-    """
-    The value references of state variables in the FMU.
-    """
-    state_value_references::Vector{FMI.fmi3ValueReference}
-    """
-    The value references of output variables in the FMU.
-    """
-    output_value_references::Vector{FMI.fmi3ValueReference}
-    """
-    `tspan[2]`, set during callback initialization
-    """
-    t_end::Base.RefValue{FMI.fmi3Float64}
+struct CSFunctor
+    output_count::Int
+    solve_end::Base.RefValue{Float64}
+    experiment_end::Base.RefValue{Float64}
+    t_last::Base.RefValue{Float64}
+    stop_time::Float64
+    grid_start::Base.RefValue{Float64}
+    step_index::Base.RefValue{Int}
+    final_step_index::Base.RefValue{Int}
+    dt::Float64
 end
 
-function (fn::FMI3CSFunctor)(wrapper::FMI3InstanceWrapper, states, inputs, params, t)
-    states = states isa SubArray ? copy(states) : states
-    inputs = inputs isa SubArray ? copy(inputs) : inputs
-    params = params isa SubArray ? copy(params) : params
-    instance = get_instance_CS!(wrapper, states, inputs, params, t, fn.t_end[])
+CSFunctor(output_count, stop_time, dt) =
+    CSFunctor(output_count, Ref(NaN), Ref(NaN), Ref(NaN), stop_time, Ref(NaN), Ref(0), Ref(0), dt)
 
-    if isempty(fn.output_value_references)
-        return eltype(states)[]
-    else
-        return FMI.fmi3GetFloat64(instance, fn.output_value_references)
-    end
+function (fn::CSFunctor)(wrapper, states, inputs, params, t)
+    stop_time = isnan(fn.stop_time) ? nothing : fn.stop_time
+    get_instance_CS!(wrapper, as_fmi_vector(states), as_fmi_vector(inputs), as_fmi_vector(params), t, stop_time)
+    out = zeros(eltype(states), fn.output_count)
+    isempty(out) || get_cs_outputs!(wrapper, out)
+    return out
 end
 
-@register_array_symbolic (fn::FMI3CSFunctor)(
-    wrapper::FMI3InstanceWrapper, states::Vector{<:Real},
+as_fmi_vector(values::Vector{Float64}) = values
+as_fmi_vector(values) = Vector{Float64}(values)
+
+@register_array_symbolic (fn::CSFunctor)(
+    wrapper::Union{FMI2InstanceWrapper, FMI3InstanceWrapper}, states::Vector{<:Real},
     inputs::Vector{<:Real}, params::Vector{<:Real}, t::Real
 ) begin
-    size = (length(states) + length(fn.output_value_references),)
+    size = (fn.output_count,)
     eltype = eltype(states)
     ndims = 1
 end
 
-"""
-    $(TYPEDSIGNATURES)
-"""
-function fmiCSInitialize!(m, o, ctx::FMI3CSFunctor, integrator)
-    states = isdefined(m, :states) ? m.states : ()
-    inputs = o.inputs
-    params = o.params
-    t = o.t
+function fmiCSInitialize!(m, o, ctx, integrator)
     wrapper = o.wrapper
-    if isnan(ctx.t_end[])
-        ctx.t_end[] = integrator.sol.prob.tspan[2]
+    reset_instance!(wrapper)
+    experiment_end = initialize_cs_times!(ctx, o, integrator)
+    states = haskey(m, :states) ? m.states : ()
+    get_instance_CS!(wrapper, states, o.inputs, o.params, o.t, experiment_end)
+    return read_cs_values!(m, wrapper)
+end
+
+function get_cs_outputs!(wrapper::FMI2InstanceWrapper, outputs)
+    return @statuscheck FMI.fmi2GetReal!(wrapper.instance, wrapper.output_value_references, outputs)
+end
+
+function get_cs_outputs!(wrapper::FMI3InstanceWrapper, outputs)
+    return @statuscheck FMI.fmi3GetFloat64!(wrapper.instance, wrapper.output_value_references, outputs)
+end
+
+function get_cs_states!(wrapper::FMI2InstanceWrapper, states)
+    return @statuscheck FMI.fmi2GetReal!(wrapper.instance, wrapper.state_value_references, states)
+end
+
+function get_cs_states!(wrapper::FMI3InstanceWrapper, states)
+    return @statuscheck FMI.fmi3GetFloat64!(wrapper.instance, wrapper.state_value_references, states)
+end
+
+function read_cs_values!(m, wrapper)
+    haskey(m, :states) && get_cs_states!(wrapper, m.states)
+    haskey(m, :outputs) && get_cs_outputs!(wrapper, m.outputs)
+    return m
+end
+
+function fmiCSStep!(m, o, ctx, integrator)
+    from = ctx.t_last[]
+    stop = Float64(integrator.t)
+    stop > from || return (;)
+    wrapper = o.wrapper
+    variable_step = variable_communication_step(wrapper)
+    if variable_step
+        to = stop
+        h = to - from
+    else
+        ctx.step_index[] < ctx.final_step_index[] || return (;)
+        to = fixed_grid_time(ctx.grid_start[], ctx.dt, ctx.step_index[] + 1)
+        to <= stop || return (;)
+        h = ctx.dt
     end
-    if wrapper.instance !== nothing
+    requested = from + h
+    experiment_end = ctx.experiment_end[]
+    if variable_step && to <= experiment_end < requested
+        h = prevfloat(h)
+        requested = from + h
+    end
+    if requested > experiment_end
         reset_instance!(wrapper)
+        throw(ArgumentError("FMI Co-Simulation step to $requested exceeds the FMU experiment stop_time of $experiment_end."))
     end
-    instance = get_instance_CS!(wrapper, states, inputs, params, t, ctx.t_end[])
-    if isdefined(m, :states)
-        @statuscheck FMI.fmi3GetFloat64!(instance, ctx.state_value_references, m.states)
+    if requested != to
+        grid_tol = 4 * max(eps(to), eps(requested), eps(from), variable_step ? 0.0 : eps(ctx.grid_start[]))
+        if abs(requested - to) > grid_tol
+            reset_instance!(wrapper)
+            error("FMI Co-Simulation step endpoint $requested diverged from scheduled grid time $to.")
+        end
     end
-    if isdefined(m, :outputs)
-        @statuscheck FMI.fmi3GetFloat64!(instance, ctx.output_value_references, m.outputs)
+    states = haskey(m, :states) ? m.states : ()
+    get_instance_CS!(wrapper, states, o.inputs, o.params, o.t, experiment_end)
+    achieved = do_cs_step!(wrapper, from, h)
+    if wrapper isa FMI3InstanceWrapper &&
+            !(isfinite(achieved) && abs(achieved - requested) <= min(4max(eps(requested), eps(achieved)), h / 4))
+        reset_instance!(wrapper)
+        error("FMI 3 Co-Simulation requested time $requested, but the FMU reached $achieved (lastSuccessfulTime).")
     end
-
-    return m
+    ctx.t_last[] = to
+    variable_step || (ctx.step_index[] += 1)
+    return read_cs_values!(m, wrapper)
 end
 
-"""
-    $(TYPEDSIGNATURES)
-"""
-function fmiCSStep!(m, o, ctx::FMI3CSFunctor, integrator)
-    wrapper = o.wrapper
-    states = isdefined(m, :states) ? m.states : ()
-    inputs = o.inputs
-    params = o.params
-    t = o.t
-    dt = o.dt
+function do_cs_step!(wrapper::FMI2InstanceWrapper, from, h)
+    @statuscheck FMI.fmi2DoStep(wrapper.instance, from, h, FMI.fmi2True)
+    return from + h
+end
 
-    instance = get_instance_CS!(wrapper, states, inputs, params, integrator.t, ctx.t_end[])
-    if !isempty(inputs)
-        FMI.fmi3SetFloat64(instance, wrapper.input_value_references, inputs)
-    end
-    eventEncountered = Ref(FMI.fmi3False)
-    terminateSimulation = Ref(FMI.fmi3False)
-    earlyReturn = Ref(FMI.fmi3False)
-    lastSuccessfulTime = Ref(zero(FMI.fmi3Float64))
+function do_cs_step!(wrapper::FMI3InstanceWrapper, from, h)
+    event_encountered = Ref(FMI.fmi3False)
+    terminate_simulation = Ref(FMI.fmi3False)
+    early_return = Ref(FMI.fmi3False)
+    last_successful_time = Ref(FMI.fmi3Float64(NaN))
     @statuscheck FMI.fmi3DoStep!(
-        instance, integrator.t - dt, dt, FMI.fmi3True, eventEncountered,
-        terminateSimulation, earlyReturn, lastSuccessfulTime
+        wrapper.instance, from, h, FMI.fmi3True, event_encountered,
+        terminate_simulation, early_return, last_successful_time
     )
-    @assert eventEncountered[] == FMI.fmi3False
-    @assert terminateSimulation[] == FMI.fmi3False
-    @assert earlyReturn[] == FMI.fmi3False
-
-    if isdefined(m, :states)
-        @statuscheck FMI.fmi3GetFloat64!(instance, ctx.state_value_references, m.states)
-    end
-    if isdefined(m, :outputs)
-        @statuscheck FMI.fmi3GetFloat64!(instance, ctx.output_value_references, m.outputs)
-    end
-
-    return m
+    @assert event_encountered[] == FMI.fmi3False
+    @assert terminate_simulation[] == FMI.fmi3False
+    @assert early_return[] == FMI.fmi3False
+    return last_successful_time[]
 end
 
-end # module
+end

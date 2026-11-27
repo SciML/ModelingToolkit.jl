@@ -111,6 +111,20 @@ constant until the next time the callback triggers. The periodic interval must b
 `communication_step_size` keyword argument. A smaller step size typically leads to less error but is
 more computationally expensive.
 
+Variable-step Co-Simulation FMUs communicate at the solve endpoint. Fixed-step FMUs
+communicate full steps through the last communication-grid point at or before the
+endpoint and hold that sample through any remaining interval, including one caused
+by roundoff. The `stop_time` keyword sets the FMU experiment limit. The default covers the solve endpoint
+and, for fixed-step FMUs, also covers the last native request if adding the configured step
+size to the preceding communication point rounds past that endpoint. An explicit
+`stop_time` is a hard limit. It must cover the solve endpoint for variable-step FMUs or
+the last native request for fixed-step FMUs. If rounding the final variable communication
+interval would cross the limit, the native step is rounded down within floating-point
+tolerance and the host still reports the scheduled endpoint. A fixed-step solve can
+continue past the limit on the held sample. If a scheduled fixed step would exceed an
+explicit limit, initialization reports the minimum usable `stop_time`.
+FMI 3 Co-Simulation checks that the FMU reached each requested time.
+
 This model alone does not have any differential variables, and calling `mtkcompile` will lead
 to an `System` with no unknowns.
 
