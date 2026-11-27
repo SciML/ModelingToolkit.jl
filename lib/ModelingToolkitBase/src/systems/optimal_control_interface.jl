@@ -304,36 +304,50 @@ function SciMLBase.ODEInputFunction{iip, specialize}(
     (; u0, p, jac, tgrad, sparse, sparsity, analytic, simplify, initialization_data) = opts
     checkbounds = opts.codegen.codegen.checkbounds
 
-    f, _,
-        _ = generate_control_function(
+    f, _, _, io_sys = generate_control_function(
         sys, inputs, disturbance_inputs; eval_module
     )
     f = f[1]
-
-    # NOTE: the historical calls passed `expression_module = eval_module`, which was never a
-    # recognized keyword (it was silently dropped), so `eval_module` defaulted here. That
-    # behavior is preserved: `codegen_opts` does not set `eval_module` (or `eval_expression`,
-    # which was likewise never passed here) — `opts.codegen` was built without them, so it
-    # already reflects that.
     codegen_opts = opts.codegen
 
+    # `jac`, `tgrad` and `controljac` must take the same `(x, u, p, t)` arguments as `f`,
+    # so they are built from `io_sys` with the caller's `inputs` as the input argument.
+    function build_deriv(exprs; wrap_code = (identity, identity))
+        return generate_input_derivative_function(
+            io_sys, exprs, inputs, disturbance_inputs, codegen_opts.codegen;
+            eval_expression, eval_module, wrap_code
+        )
+    end
+
+    # The input argument keeps the caller's grouping and order, while `tgrad` and the
+    # columns of `controljac` use this scalar basis.
+    input_basis = scalarize_inputs(inputs)
+
     if tgrad
-        _tgrad = generate_tgrad(sys, codegen_opts; simplify)
+        _tgrad = build_deriv(
+            calculate_input_tgrad(io_sys, input_basis, disturbance_inputs; simplify)
+        )
     else
         _tgrad = nothing
     end
 
     if jac
-        _jac = generate_jacobian(sys, codegen_opts; simplify, sparse)
+        wrap_code = sparse && checkbounds ? assert_jac_length_header(io_sys) :
+            (identity, identity)
+        _jac = build_deriv(calculate_jacobian(io_sys; simplify, sparse); wrap_code)
     else
         _jac = nothing
     end
 
-    if controljac
-        _cjac = generate_control_jacobian(sys, codegen_opts; simplify, sparse)
-    else
-        _cjac = nothing
+    # The sparse prototype is taken from the same matrix the callback is generated from,
+    # so the buffer has exactly the shape and pattern the callback writes.
+    cjac = nothing
+    if controljac || sparse
+        rhs = [eq.rhs for eq in full_equations(io_sys)]
+        cjac = sparse ? sparsejacobian(rhs, input_basis; simplify) :
+            jacobian(rhs, input_basis; simplify)
     end
+    _cjac = controljac ? build_deriv(cjac) : nothing
 
     M = calculate_massmatrix(sys)
     _M = concrete_massmatrix(M; sparse, u0)
@@ -346,7 +360,7 @@ function SciMLBase.ODEInputFunction{iip, specialize}(
     W_prototype = calculate_W_prototype(_W_sparsity; u0, sparse)
     if sparse
         uElType = u0 === nothing ? Float64 : eltype(u0)
-        controljac_prototype = similar(calculate_control_jacobian(sys), uElType)
+        controljac_prototype = similar(cjac, uElType)
     else
         controljac_prototype = nothing
     end
@@ -354,9 +368,9 @@ function SciMLBase.ODEInputFunction{iip, specialize}(
     return ODEInputFunction{iip, specialize}(
         f;
         sys = sys,
-        jac = _jac === nothing ? nothing : _jac,
-        controljac = _cjac === nothing ? nothing : _cjac,
-        tgrad = _tgrad === nothing ? nothing : _tgrad,
+        jac = _jac,
+        controljac = _cjac,
+        tgrad = _tgrad,
         mass_matrix = _M,
         jac_prototype = W_prototype,
         controljac_prototype = controljac_prototype,
@@ -365,6 +379,100 @@ function SciMLBase.ODEInputFunction{iip, specialize}(
         analytic = analytic,
         initialization_data
     )
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+The scalar variables that `tgrad` and the columns of `controljac` use as inputs. Each whole
+array in `inputs` is expanded into its elements in column-major order, and indexed scalars
+are kept as given, in the order of `inputs`.
+"""
+function scalarize_inputs(inputs)
+    basis = SymbolicT[]
+    for v in vec(unwrap_vars(inputs))
+        if SU.is_array_shape(SU.shape(v))
+            append!(basis, vec(collect(v)::Array{SymbolicT})::Vector{SymbolicT})
+        else
+            push!(basis, v)
+        end
+    end
+    return basis
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Calculate `∂f/∂t` of the equations of `sys` for `ODEInputFunction`: the unknowns and the
+scalar `inputs` are held fixed, and unknown `disturbance_inputs` are zero, as they are in `f`.
+"""
+function calculate_input_tgrad(sys::System, inputs, disturbance_inputs; simplify = false)
+    check_symbolic_ad_allowed(sys)
+    rhs = [eq.rhs for eq in full_equations(sys)]
+    if disturbance_inputs !== nothing && !isempty(disturbance_inputs)
+        zero_dists = Dict(unwrap_vars(disturbance_inputs) .=> 0)
+        rhs = [substitute(r, zero_dists) for r in rhs]
+    end
+    # Swap each unknown and input for a fresh constant, so that only the explicit `t` is
+    # differentiated. Other calls, such as callable parameters, are left untouched.
+    held = SymbolicT[flat_unknowns(sys); unwrap_vars(inputs)]
+    consts = SymbolicT[
+        SSym(gensym(:held); type = symtype(v), shape = SU.shape(v)) for v in held
+    ]
+    rhs = [substitute(r, Dict(zip(held, consts))) for r in rhs]
+    iv = get_iv(sys)
+    tgrad = [expand_derivatives(Differential(iv)(r), simplify) for r in rhs]
+    return Num.(substitute.(tgrad, Ref(Dict(zip(consts, held)))))
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Build a function of `exprs` with the same arguments as the `f` returned by
+[`generate_control_function`](@ref): `(x, u, p..., t)` out-of-place and
+`(out, x, u, p..., t)` in-place, where `u` holds `inputs` as given (a whole array is one
+grouped entry). Unknown `disturbance_inputs` are set to zero, as they are in `f`.
+"""
+function generate_input_derivative_function(
+        sys::System, exprs, inputs, disturbance_inputs,
+        codegen::Symbolics.CodegenFunctionOptions;
+        eval_expression = false, eval_module = @__MODULE__,
+        wrap_code = (identity, identity)
+    )
+    inputs = vec(unwrap_vars(inputs))
+    dists = disturbance_inputs === nothing ? SymbolicT[] :
+        vec(unwrap_vars(disturbance_inputs))
+    excluded = Set{SymbolicT}([inputs; dists])
+    for v in [inputs; dists]
+        arr, isarr = split_indexed_var(v)
+        isarr && push!(excluded, arr)
+    end
+    ps = setdiff(parameters(sys; initial_parameters = true), excluded)
+    p = reorder_parameters(sys, ps)
+    if !isempty(dists)
+        zero_dists = Dict(dists .=> 0)
+        if exprs isa SparseArrays.SparseMatrixCSC
+            # Substitute into a copy's stored values only. Every stored position is kept,
+            # even when its entry becomes zero, because the in-place callback writes the
+            # stored values in the pattern of the prototype.
+            exprs = copy(exprs)
+            stored = SparseArrays.nonzeros(exprs)
+            stored .= substitute.(stored, Ref(zero_dists))
+        else
+            exprs = map(v -> substitute(v, zero_dists), exprs)
+        end
+    end
+    args = (unknowns(sys), map(value, inputs), p..., get_iv(sys))
+    res = build_function_wrapper(
+        sys, exprs, collect(Any, args), BuildFunctionWrapperOptions(;
+            u_arg = 1, p_start = 3, p_end = length(p) + 2,
+            codegen_function_options = setproperties(codegen, (; wrap_code))
+        )
+    )
+    res = eval_or_rgf.(res; eval_expression, eval_module)
+    return GeneratedFunctionWrapper{
+        (3, length(args) - length(p) + 1, is_split(sys)),
+    }(res...)
 end
 
 # returns the JuMP timespan, the number of steps, and whether it is a free time problem.
