@@ -318,13 +318,14 @@ end
 
 
 @testset "Fixed-step Co-Simulation endpoint grid" begin
-    function instrumented_adder(finish)
+    function instrumented_adder(finish; strict = false)
         fmu = loadFMU(joinpath(FIXTURE_FMUS, "SimpleAdder.fmu"); type = :CS)
         fmu.modelDescription.coSimulation.canHandleVariableCommunicationStepSize = false
         requests = Tuple{Float64, Float64}[]
         original = fmu.cDoStep
         function do_step(instance, point, h, no_reset)
             push!(requests, (point, h))
+            strict && h != 0.01 && return Cuint(FMI.fmi2StatusError)
             return ccall(original, Cuint, (Ptr{Cvoid}, Cdouble, Cdouble, Cint), instance, point, h, no_reset)
         end
         hook = @cfunction($do_step, Cuint, (Ptr{Cvoid}, Cdouble, Cdouble, Cint))
@@ -352,18 +353,46 @@ end
             @test sol[sys.adder.c][end] ≈ 0.08
         end
     end
-    @testset "large nonzero start" begin
+    @testset "strict fixed-step native requests" begin
+        fmu, requests, hook = instrumented_adder(0.035; strict = true)
+        GC.@preserve hook begin
+            sys = adder_system(fmu, :CS; stop_time = 0.05)
+            sol = solve(ODEProblem(sys, [sys.adder.c => 0.0], (0.0, 0.035)), Tsit5())
+            @test SciMLBase.successful_retcode(sol)
+            @test requests == [(0.0, 0.01), (0.01, 0.01), (0.02, 0.01)]
+            @test sol[sys.adder.c][end] ≈ 0.12
+        end
         start = 1.0e8
         finish = start + 2 * 0.01
-        fmu, requests, hook = instrumented_adder(finish)
+        fmu, requests, hook = instrumented_adder(finish; strict = true)
         GC.@preserve hook begin
             sys = adder_system(fmu, :CS; stop_time = start + 0.05)
             sol = solve(ODEProblem(sys, [sys.adder.c => 0.0], (start, finish)), Tsit5())
             @test SciMLBase.successful_retcode(sol)
-            @test length(requests) == 2
-            @test first.(requests) == [start, start + 0.01]
-            @test sum(last, requests) ≈ finish - start
+            @test requests == [(start, 0.01), (start + 0.01, 0.01)]
             @test sol[sys.adder.c][end] ≈ 4 * (finish - start) atol = 8eps(start)
+        end
+        fmu3 = loadFMU("Feedthrough", "ModelicaReferenceFMUs", "0.0.39", "3.0"; type = :CS)
+        fmu3.modelDescription.coSimulation.canHandleVariableCommunicationStepSize = false
+        requests3 = Tuple{Float64, Float64}[]
+        hook3 = feedthrough_step_hook() do point, h
+            push!(requests3, (point, h))
+            return point + h
+        end
+        fmu3.cDoStep = Base.unsafe_convert(Ptr{Cvoid}, hook3)
+        GC.@preserve hook3 begin
+            @named ports = MTK.FMIComponent(
+                Val(3); fmu = fmu3, type = :CS, communication_step_size = 0.01, stop_time = start + 0.05
+            )
+            eqs = [
+                getproperty(ports, name) ~ (name == :Float64_continuous_input ? 4 * (t - start) : name == :Enumeration_input ? 1.0 : 0.0)
+                    for name in (MTK.getname(v) for v in unknowns(ports) if MTK.isinput(v))
+            ]
+            @mtkcompile sys3 = System(eqs, t; systems = [ports])
+            sol3 = solve(ODEProblem(sys3, [], (start, finish)), Tsit5())
+            @test SciMLBase.successful_retcode(sol3)
+            @test requests3 == [(start, 0.01), (start + 0.01, 0.01)]
+            @test sol3[sys3.ports.Float64_continuous_output][end] ≈ 4 * (first(last(requests3)) - start)
         end
     end
 end
@@ -391,10 +420,13 @@ end
     end
 end
 
-@testset "Model Exchange snapshots use the saved parameter values" begin
+@testset "Model Exchange snapshots use the saved parameter values (discrete input = $discrete_input)" for discrete_input in (true, false)
     fmu = loadFMU(joinpath(FIXTURE_FMUS, "SimpleAdder.fmu"); type = :ME)
-    only(filter(v -> v.name == "a", fmu.modelDescription.modelVariables)).variability = FMI.fmi2VariabilityDiscrete
+    if discrete_input
+        only(filter(v -> v.name == "a", fmu.modelDescription.modelVariables)).variability = FMI.fmi2VariabilityDiscrete
+    end
     completed = Ref(0)
+    event_step = discrete_input ? 2 : 1
     original_complete = fmu.cCompletedIntegratorStep
     function complete_step(instance, no_reset, event, terminate)
         completed[] += 1
@@ -402,7 +434,7 @@ end
             original_complete, Cuint,
             (Ptr{Cvoid}, Cint, Ptr{Cint}, Ptr{Cint}), instance, no_reset, event, terminate
         )
-        unsafe_store!(event, Cint(completed[] == 2))
+        unsafe_store!(event, Cint(completed[] == event_step))
         return status
     end
     complete_hook = @cfunction($complete_step, Cuint, (Ptr{Cvoid}, Cint, Ptr{Cint}, Ptr{Cint}))
@@ -425,12 +457,14 @@ end
         @test SciMLBase.successful_retcode(sol)
         event_indices = findall(==(0.02), sol.t)
         @test sol[sys.adder.out][first(event_indices)] == 1.0
+        @test sol[sys.adder.out][last(event_indices)] == 5.0
         @test sol(0.02; idxs = sys.adder.out, continuity = :left) == 1.0
         @test sol(0.02; idxs = sys.adder.out, continuity = :right) == 5.0
         @test sol(0.015; idxs = sys.host_a) == 1.0
         @test sol(0.015; idxs = sys.adder.out) == 1.0
         @test sol(0.025; idxs = sys.host_a) == 5.0
         @test sol(0.025; idxs = sys.adder.out) == 5.0
+        @test_throws r"FMI.*snapshot.*0\.035" sol(0.035; idxs = sys.adder.out)
     end
 end
 

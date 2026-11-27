@@ -1095,12 +1095,32 @@ end
 # Required for DiffEqArray constructor to work during interpolation
 Base.size(::NestedGetIndex) = ()
 
-const SAVE_PARAMETER_POSITIONS = Dict{UInt, Tuple{WeakRef, Dict{Int, Vector{Int}}}}()
-const SAVE_PARAMETER_POSITIONS_LOCK = ReentrantLock()
+struct TrackedDiscreteStorage{T, S}
+    buffers::T
+    positions::Dict{Int, Vector{Int}}
+    initial_values::S
+end
+
+Base.eachindex(c::TrackedDiscreteStorage) = eachindex(c.buffers)
+Base.iterate(c::TrackedDiscreteStorage, args...) = iterate(c.buffers, args...)
+Base.length(c::TrackedDiscreteStorage) = length(c.buffers)
+Base.isempty(c::TrackedDiscreteStorage) = isempty(c.buffers)
+Base.getindex(c::TrackedDiscreteStorage, i) = c.buffers[i]
+Base.firstindex(c::TrackedDiscreteStorage) = firstindex(c.buffers)
+Base.lastindex(c::TrackedDiscreteStorage) = lastindex(c.buffers)
+Base.eltype(::Type{TrackedDiscreteStorage{T, S}}) where {T, S} = eltype(T)
+Base.keys(c::TrackedDiscreteStorage) = keys(c.buffers)
 
 function parameter_timeseries_collection_or_nothing(sol)
     SymbolicIndexingInterface.is_parameter_timeseries(sol) == SymbolicIndexingInterface.Timeseries() || return nothing
     return SymbolicIndexingInterface.get_parameter_timeseries_collection(sol)
+end
+
+function discrete_save_storage(sol)
+    discs = parameter_timeseries_collection_or_nothing(sol)
+    discs === nothing && return nothing
+    storage = parent(discs)
+    return storage isa TrackedDiscreteStorage ? storage : nothing
 end
 
 function current_parameter_positions(sol)
@@ -1109,25 +1129,21 @@ function current_parameter_positions(sol)
     return [length(state_values(discs[i])) for i in eachindex(discs)]
 end
 
-function parameter_positions_key(sol)
-    discs = parameter_timeseries_collection_or_nothing(sol)
-    discs === nothing && return nothing
-    return discs[1]
+function saved_parameter_positions(sol, i)
+    storage = discrete_save_storage(sol)
+    storage === nothing && return nothing
+    return get(storage.positions, i, nothing)
 end
 
-function saved_parameter_positions(sol, i)
-    key = parameter_positions_key(sol)
-    key === nothing && return nothing
-    return lock(SAVE_PARAMETER_POSITIONS_LOCK) do
-        entry = get(SAVE_PARAMETER_POSITIONS, objectid(key), nothing)
-        entry === nothing && return nothing
-        ref, records = entry
-        ref.value === key || return nothing
-        return get(records, i, nothing)
-    end
+function initial_discrete_values(sol)
+    storage = discrete_save_storage(sol)
+    storage === nothing && return nothing
+    return storage.initial_values
 end
 
 function record_discrete_save_positions!(sol, time, timeseries_idx, skip_duplicates)
+    storage = discrete_save_storage(sol)
+    storage === nothing && return
     positions = current_parameter_positions(sol)
     positions === nothing && return
     times = sol.t
@@ -1135,27 +1151,18 @@ function record_discrete_save_positions!(sol, time, timeseries_idx, skip_duplica
     state_index = findlast(==(time), times)
     state_index === nothing && return
     discs = parameter_timeseries_collection_or_nothing(sol)
-    key = discs[1]
     partition_times = current_time(discs[timeseries_idx])
     advances = !(skip_duplicates && !isempty(partition_times) && isequal(time, last(partition_times)))
     pre_positions = copy(positions)
     post_positions = copy(positions)
     advances && (post_positions[timeseries_idx] += 1)
-    lock(SAVE_PARAMETER_POSITIONS_LOCK) do
-        entry = get(SAVE_PARAMETER_POSITIONS, objectid(key), nothing)
-        records = if entry !== nothing && entry[1].value === key
-            entry[2]
-        else
-            SAVE_PARAMETER_POSITIONS[objectid(key)] = (WeakRef(key), Dict{Int, Vector{Int}}())
-            SAVE_PARAMETER_POSITIONS[objectid(key)][2]
-        end
-        j = state_index - 1
-        while j in eachindex(times) && times[j] == time && !haskey(records, j)
-            records[j] = copy(pre_positions)
-            j -= 1
-        end
-        records[state_index] = post_positions
+    records = storage.positions
+    j = state_index - 1
+    while j in eachindex(times) && times[j] == time && !haskey(records, j)
+        records[j] = copy(pre_positions)
+        j -= 1
     end
+    records[state_index] = post_positions
     return
 end
 
@@ -1195,8 +1202,13 @@ function SciMLBase.create_parameter_timeseries_collection(
         us = partition_type[]
         push!(buffers, DiffEqArray(us, ts, (1, 1)))
     end
-
-    return ParameterTimeseriesCollection(Tuple(buffers), copy(ps))
+    initial_values = Tuple(
+        SciMLBase.get_saveable_values(sys, ps, i) for i in 1:num_discretes
+    )
+    storage = TrackedDiscreteStorage(
+        Tuple(buffers), Dict{Int, Vector{Int}}(), initial_values
+    )
+    return ParameterTimeseriesCollection(storage, copy(ps))
 end
 
 function SciMLBase.create_parameter_timeseries_collection(

@@ -2369,6 +2369,80 @@ end
     event_indices = findall(==(0.02), sol.t)
     @test sol[phase_x][event_indices] == [1.0, 2.0, 2.0, 3.0]
     @test pairs == [(1.0, 1.0), (2.0, 2.0), (2.0, 2.0), (3.0, 3.0)]
+
+    @testset "initial-time preset affects" begin
+        for t0 in (0.0, 0.5), save_start in (true, false)
+            init_first = SymbolicDiscreteCallback(
+                [t0], ModelingToolkitBase.ImperativeAffect(
+                    set_phase; modified = (; phase_x, phase_p), ctx = 2.0
+                ); reinitializealg = SciMLBase.NoInit()
+            )
+            init_second = SymbolicDiscreteCallback(
+                [t0], ModelingToolkitBase.ImperativeAffect(
+                    set_phase; modified = (; phase_x, phase_p), ctx = 3.0
+                ); reinitializealg = SciMLBase.NoInit()
+            )
+            init_pairs = Tuple{Float64, Float64}[]
+            function read_init_phases(modified, observed, ctx, integrator, observed_at)
+                sol = SciMLBase.get_sol(integrator)
+                empty!(init_pairs)
+                for i in eachindex(sol.t)
+                    sol.t[i] == t0 || continue
+                    point = observed_at(sol, i)
+                    push!(init_pairs, (point.phase_x, point.phase_p))
+                end
+                return (;)
+            end
+            init_read = SymbolicDiscreteCallback(
+                [t0 + 0.03], ModelingToolkitBase.ImperativeAffect(
+                    read_init_phases; observed = (; phase_x, phase_p)
+                ); reinitializealg = SciMLBase.NoInit()
+            )
+            @mtkcompile init_sys = System(
+                [D(phase_x) ~ 0.0], t, [phase_x], [phase_p];
+                discrete_events = [init_first, init_second, init_read]
+            )
+            init_sol = solve(
+                ODEProblem(init_sys, [], (t0, t0 + 0.04)), Tsit5();
+                dt = 0.01, adaptive = false, save_start
+            )
+            @test SciMLBase.successful_retcode(init_sol)
+            init_indices = findall(==(t0), init_sol.t)
+            expected = save_start ? [(1.0, 1.0), (3.0, 3.0)] : [(3.0, 3.0)]
+            @test init_sol[phase_x][init_indices] == first.(expected)
+            @test init_pairs == expected
+        end
+    end
+
+    @testset "discarded solutions release discrete save-position bookkeeping" begin
+        kept = solve(ODEProblem(sys, [], (0.0, 0.04)), Tsit5(); dt = 0.01, adaptive = false)
+        kept_ref = WeakRef(ModelingToolkitBase.discrete_save_storage(kept).positions)
+        dropped_refs = WeakRef[]
+        @noinline function run_and_drop!(refs, prob)
+            for _ in 1:50
+                s = solve(prob, Tsit5(); dt = 0.01, adaptive = false)
+                push!(refs, WeakRef(ModelingToolkitBase.discrete_save_storage(s).positions))
+                s = nothing
+            end
+            return nothing
+        end
+        run_and_drop!(dropped_refs, ODEProblem(sys, [], (0.0, 0.04)))
+        solve(ODEProblem(sys, [], (0.0, 0.04)), Tsit5(); dt = 0.01, adaptive = false)
+        GC.gc(true)
+        GC.gc(true)
+        @test all(r -> r.value === nothing, dropped_refs)
+        @test kept_ref.value !== nothing
+        kept_indices = findall(==(0.02), kept.t)
+        p_getter = SymbolicIndexingInterface.getp(sys, phase_p)
+        kept_pairs = [
+            (
+                kept[phase_x][i],
+                p_getter(ModelingToolkitBase.solution_index_parameter_values(kept, i)),
+            )
+                for i in kept_indices
+        ]
+        @test kept_pairs == [(1.0, 1.0), (2.0, 2.0), (2.0, 2.0), (3.0, 3.0)]
+    end
 end
 
 @testset "`reinitializealg` takes part in the hash of an event" begin

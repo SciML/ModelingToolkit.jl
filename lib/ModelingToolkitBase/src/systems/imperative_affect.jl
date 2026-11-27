@@ -230,6 +230,7 @@ function solution_index_parameter_values(sol, i)
     ps = parameter_values(discs)
     time = sol.t[i]
     positions = saved_parameter_positions(sol, i)
+    initial_values = initial_discrete_values(sol)
     before_event_save = i < length(sol.t) && sol.t[i + 1] == time
     for ts_idx in eachindex(discs)
         partition = discs[ts_idx]
@@ -239,17 +240,23 @@ function solution_index_parameter_values(sol, i)
             if before_event_save && j >= firstindex(times) && times[j] == time
                 j = searchsortedfirst(times, time)
             end
+            j >= firstindex(times) ||
+                error("Cannot access discrete parameters at time $time before their initial save $(first(times))")
+            val = state_values(partition, j)
         else
             j = positions[ts_idx]
-            if j < firstindex(times) && !isempty(times) && first(times) == time &&
-                    length(state_values(partition)) >= firstindex(times)
-                j = searchsortedfirst(times, time)
+            if j >= firstindex(times)
+                val = state_values(partition, j)
+            elseif initial_values !== nothing && !isempty(times) && first(times) == time
+                val = initial_values[ts_idx]
+            else
+                isempty(times) ?
+                    error("Cannot access discrete parameters at time $time before any save") :
+                    error("Cannot access discrete parameters at time $time before their initial save $(first(times))")
             end
         end
-        j >= firstindex(times) ||
-            error("Cannot access discrete parameters at time $time before their initial save $(first(times))")
         ps = SymbolicIndexingInterface.with_updated_parameter_timeseries_values(
-            sol, ps, ts_idx => state_values(partition, j)
+            sol, ps, ts_idx => val
         )
     end
     return ps
