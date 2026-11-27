@@ -8,13 +8,14 @@ end
 struct Nonnumeric <: SciMLStructures.AbstractPortion end
 const NONNUMERIC_PORTION = Nonnumeric()
 
-struct ParameterIndex{P, I}
+struct ParameterIndex{P, I, S}
     portion::P
     idx::I
     validate_size::Bool
-    # Declared ranges of a whole parameter created by `shaped_parameter`, `nothing` otherwise
-    # and for indices addressing an element.
-    shape::Union{Nothing, Tuple{Vararg{UnitRange{Int}}}}
+    # Declared ranges (a tuple of `UnitRange{Int}`) of a whole parameter created by
+    # `shaped_parameter`, `nothing` otherwise and for indices addressing an element. It is a type
+    # parameter so that a `ParameterIndex` stays `isbits`.
+    shape::S
 end
 
 ParameterIndex(portion, idx, validate_size::Bool) = ParameterIndex(portion, idx, validate_size, nothing)

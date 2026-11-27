@@ -341,7 +341,7 @@ function _linearization_function_compiled(
         # the problem constructor applies and deprecates this keyword
         warn_initialize_determined, codegen_kwargs...
     )
-    initial_idxs_for_unknowns = ParameterIndex{SciMLStructures.Initials, Int}[]
+    initial_idxs_for_unknowns = ParameterIndex{SciMLStructures.Initials, Int, Nothing}[]
     for v in unknowns(sys)
         push!(initial_idxs_for_unknowns, parameter_index(sys, Initial(v))::eltype(initial_idxs_for_unknowns))
     end
@@ -637,7 +637,7 @@ mutable struct LinearizationFunction{
     """
     Index of `Initial(x)` for every `x` in unknowns.
     """
-    const initial_idxs_for_unknowns::Vector{ParameterIndex{SciMLStructures.Initials, Int}}
+    const initial_idxs_for_unknowns::Vector{ParameterIndex{SciMLStructures.Initials, Int, Nothing}}
     """
     Signals disconnected by loop openings that are held at the value of the signal that
     drove them before the connection was broken, because neither the operating point passed

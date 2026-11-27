@@ -467,3 +467,18 @@ Base.convert(::Type{ConvertedOp}, ::SizelessInput) = ConvertedOp(ones(3, 2))
     @test_throws DimensionMismatch (ps[idx] = SizelessInput())
     @test getp(csys, A)(ps) === original
 end
+
+@testset "ParameterIndex stays isbits for shaped and ordinary parameters" begin
+    K = shaped_parameter(:K, SparseMatrixCSC{Float64, Int}, 2, 3)
+    M = shaped_parameter(:M, Matrix{Float64}, 2, 2)
+    @parameters p q[1:2, 1:2]::Float64 [tunable = false]
+    @variables x(t)
+    @named sys = System([D(x) ~ p + M[1, 1] + q[1, 1]], t, [x], [K, M, p, q])
+    csys = complete(sys)
+    for param in (K, M, p, q, M[1, 1], q[1, 1])
+        @test isbits(parameter_index(csys, param))
+    end
+    @test parameter_index(csys, K).shape == (1:2, 1:3)
+    @test parameter_index(csys, M[1, 1]).shape === nothing
+    @test parameter_index(csys, q).shape === nothing
+end
