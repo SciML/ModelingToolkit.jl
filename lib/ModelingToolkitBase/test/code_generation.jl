@@ -2,7 +2,8 @@ using ModelingToolkitBase, OrdinaryDiffEq, SymbolicIndexingInterface
 using SciMLBase
 using SciMLStructures
 using SparseArrays
-using SymbolicUtils: unwrap, iscall, operation
+using SymbolicUtils: unwrap, iscall, operation, populate_ir!, IRStructure
+using SymbolicUtils.Code: OptimizationRule
 using ModelingToolkitBase: t_nounits as t, D_nounits as D
 using Test
 import Symbolics
@@ -456,4 +457,33 @@ end
     sol = solve(prob, Tsit5(); reltol = 1.0e-10, abstol = 1.0e-10)
     @test SciMLBase.successful_retcode(sol)
     @test sol[x[1]][end] ≈ exp(-1) / 2
+end
+
+@testset "Array variables read only by the output of `optimize` rules" begin
+    @variables x(t)[1:4]
+    @mtkcompile sys = System([D(x[i]) ~ sin(x[i]) + 1 for i in 1:4], t)
+    whole = unwrap(sum(x))
+    detector(ir, expr) = expr isa AbstractVector && length(expr) == 4 ? true : nothing
+    function transformer(ir, expr, _)
+        new_ir = IRStructure{SymReal}()
+        new = [whole + 1; expr[2:end]]
+        foreach(e -> populate_ir!(new_ir, e), new)
+        return new_ir, new
+    end
+    prob = ODEProblem(sys, [x => [1.0, 2.0, 3.0, 4.0]], (0.0, 1.0); optimize = [OptimizationRule("sum", detector, transformer, 1)])
+    du = zeros(4)
+    prob.f(du, prob.u0, prob.p, 0.0)
+    @test du[1] == sum(prob.u0) + 1
+    @test prob.f(prob.u0, prob.p, 0.0)[1] == sum(prob.u0) + 1
+
+    @variables a(t) c[1:3]
+    csys = complete(System(Equation[], t, [a], []; name = :caches); split = false)
+    caches = ([unwrap(c[1])], unwrap.([c[2], c[3]]))
+    csum = unwrap(a + sum(c))
+    crule = OptimizationRule("c", (ir, expr) -> true, (ir, expr, _) -> (populate_ir!(ir, csum); (ir, csum)), 1)
+    f = generate_custom_function(csys, a + 1; cachesyms = caches, optimize = [crule], expression = Val(false))
+    @test f([2.0], Float64[], [10.0], [20.0, 30.0], 0.0) == 62.0
+    noop = OptimizationRule("noop", (ir, expr) -> nothing, Returns(nothing), 1)
+    g = generate_custom_function(csys, a + 1; cachesyms = ([unwrap(c[1])], [unwrap(c[2])]), optimize = [noop], checkbounds = true, expression = Val(false))
+    @test g([2.0], Float64[], [10.0], [20.0], 0.0) == 3.0
 end

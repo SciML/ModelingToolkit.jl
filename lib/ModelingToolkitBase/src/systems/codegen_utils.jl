@@ -498,7 +498,7 @@ function array_variable_buffer_idxs_to_assignments(
             end
             for idx in idxs
                 i, j = idx
-                push!(expr.args, Expr(:ref, argument_name(i), j))
+                push!(expr.args, Expr(:ref, argument_name(i + buffer_offset), j))
             end
         end
         expr = Expr(:call, reshape, expr, var_size_expr)
@@ -1116,9 +1116,12 @@ Base.@nospecializeinfer function build_function_wrapper(
     search_buffer = SU.IRStructureSearchBuffer(ir, required_arrvars)
     SU.search_variables!(search_buffer, expr; is_atomic = find_arrvars_is_atomic, recurse = find_arrvars_recurse)
 
+    optimize = resolve_optimize_option(opts.codegen.optimize)
+    bound_arrvars = optimize === nothing || isempty(optimize) ? required_arrvars : nothing
+
     # assignments for reconstructing scalarized array symbolics
     if non_standard_param_layout
-        append!(assignments, array_variable_assignments(args...; filter_vars = required_arrvars, argument_name = u_argument_name))
+        append!(assignments, array_variable_assignments(args...; filter_vars = bound_arrvars, argument_name = u_argument_name))
     else
         # `n_param_buffers` marks the boundary between the `reorder_parameters` buffers and
         # any `cachesyms` the caller appended to the parameter slice (cachesyms are always a
@@ -1144,16 +1147,16 @@ Base.@nospecializeinfer function build_function_wrapper(
             )
             shift = pbuf_end - p_start + 1
             for (arrvar, idxs) in tail
-                merged[arrvar] = [(i + shift, j) for (i, j) in idxs]
+                merged[arrvar] = [iszero(i) ? (i, j) : (i + shift, j) for (i, j) in idxs]
             end
             param_var_to_arridxs = merged
         end
         append!(
             assignments, array_variable_buffer_idxs_to_assignments(
-                param_var_to_arridxs; buffer_offset = p_start - 1, filter_vars = required_arrvars
+                param_var_to_arridxs; buffer_offset = p_start - 1, filter_vars = bound_arrvars
             )
         )
-        other_assigns = array_variable_assignments(args...; ignore_vars = keys(param_var_to_arridxs), filter_vars = required_arrvars, argument_name = u_argument_name, ignore_arg_idxs = p_start:p_end)
+        other_assigns = array_variable_assignments(args...; ignore_vars = keys(param_var_to_arridxs), filter_vars = bound_arrvars, argument_name = u_argument_name, ignore_arg_idxs = p_start:p_end)
         append!(assignments, other_assigns)
     end
 
@@ -1210,7 +1213,6 @@ Base.@nospecializeinfer function build_function_wrapper(
         expr = mkarray(expr, output_type)
     end
 
-    optimize = resolve_optimize_option(opts.codegen.optimize)
     # Write the wrapper-derived code-generation options (the composed `wrap_code`, the
     # `output_type`-derived `similarto`, and the resolved `optimize`) into the nested
     # `CodegenFunctionOptions`. `setproperties` overrides only these fields and preserves the
