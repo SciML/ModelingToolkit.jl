@@ -565,15 +565,20 @@ end
 end
 @inline _buffer_getindex(bufs, i::Int, j, k) = isempty(k) ? bufs[i][j] : bufs[i][j][k...]
 
-@inline function _buffer_setindex!(bufs::Tuple{}, val, i::Int, j, k, validate_size::Bool)
+@inline function _buffer_setindex!(bufs::Tuple{}, val, i::Int, j, k, validate_size::Bool, shape = nothing)
     throw(BoundsError(bufs, i))
 end
-@inline function _buffer_setindex!(bufs::Tuple, val, i::Int, j, k, validate_size::Bool)
+@inline function _buffer_setindex!(bufs::Tuple, val, i::Int, j, k, validate_size::Bool, shape = nothing)
     if i === 1
         buf = first(bufs)
         if isempty(k)
             if validate_size && size(val) !== size(buf[j])
                 throw(InvalidParameterSizeException(size(buf[j]), size(val)))
+            end
+            if shape !== nothing && !(val isa eltype(buf))
+                # the buffer stores the converted value, which is the one that has to fit
+                val = convert(eltype(buf), val)
+                validate_declared_shape(shape, val)
             end
             buf[j] = val
         else
@@ -581,7 +586,7 @@ end
         end
         return nothing
     end
-    return _buffer_setindex!(Base.tail(bufs), val, i - 1, j, k, validate_size)
+    return _buffer_setindex!(Base.tail(bufs), val, i - 1, j, k, validate_size, shape)
 end
 
 @inline _buffer_eltype(bufs::Tuple{}, i::Int) = throw(BoundsError(bufs, i))
@@ -649,11 +654,10 @@ function SymbolicIndexingInterface.set_parameter!(
         if portion isa SciMLStructures.Discrete
             _buffer_setindex!(p.discrete, val, i, j, k, validate_size)
         elseif portion isa SciMLStructures.Constants
-            _buffer_setindex!(p.constant, val, i, j, k, validate_size)
+            _buffer_setindex!(p.constant, val, i, j, k, validate_size, shape)
         elseif portion === NONNUMERIC_PORTION
-            # Nonnumeric elements and caches have no `size`; `validate_size` is only set for
-            # `shaped_parameter`s, which accept values without a `size`.
-            _buffer_setindex!(p.nonnumeric, val, i, j, k, validate_size && applicable(size, val))
+            # Nonnumeric elements and caches have no `size`.
+            _buffer_setindex!(p.nonnumeric, val, i, j, k, false, shape)
         elseif portion isa SciMLStructures.Caches
             _buffer_setindex!(p.caches, val, i, j, k, false)
         else
@@ -710,13 +714,6 @@ function validate_parameter_type(ic::IndexCache, p, idx::ParameterIndex, val)
     return nothing
 end
 
-function has_declared_opaque_shape(p)
-    # A callable's shape is that of its return value, not of the callable.
-    symtype(p) <: Union{Number, FnType} && return false
-    declared = SU.shape(p)
-    return !(declared isa SU.Unknown || isempty(declared))
-end
-
 # Parameters declared with `shaped_parameter` carry a shape that the type does not check.
 # Array values must have exactly the declared axes, since generated code indexes them with the
 # declared (1-based) ranges. Other values are compared by `size` when they define it.
@@ -737,7 +734,7 @@ function validate_declared_shape(declared, val)
 end
 
 function validate_opaque_shape(p, stype, val)
-    has_declared_opaque_shape(p) || return nothing
+    is_shaped_parameter(p) || return nothing
     validate_declared_shape(SU.shape(p), val)
     return validate_declared_type(p, stype, val)
 end

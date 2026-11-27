@@ -625,9 +625,8 @@ function SymbolicIndexingInterface.parameter_index(ic::IndexCache, sym::Symbol)
     return parameter_index(ic, sym)
 end
 function SymbolicIndexingInterface.parameter_index(ic::IndexCache, sym::SymbolicT)
-    validate_size = (Symbolics.isarraysymbolic(sym) && symbolic_has_known_size(sym)) ||
-        has_declared_opaque_shape(sym)
-    shape = has_declared_opaque_shape(sym) ? Tuple(UnitRange{Int}(r) for r in SU.shape(sym)) : nothing
+    validate_size = Symbolics.isarraysymbolic(sym) && symbolic_has_known_size(sym)
+    shape = is_shaped_parameter(sym) ? Tuple(UnitRange{Int}(r) for r in SU.shape(sym)) : nothing
     return if (idx = check_index_map(ic.tunable_idx, sym)) !== nothing
         ParameterIndex(SciMLStructures.Tunable(), idx, validate_size)
     elseif (idx = check_index_map(ic.initials_idx, sym)) !== nothing

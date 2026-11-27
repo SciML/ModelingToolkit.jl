@@ -430,3 +430,40 @@ end
     @test getp(csys, K)(remake_buffer(csys, ps, [K], [replacement])) == replacement
     @test getp(csys, K)(remake_buffer(csys, ps, [idx], Any[replacement])) == replacement
 end
+
+@testset "ordinary non-tunable array parameters accept compatible replacements" begin
+    @parameters A[1:2, 1:2]::Float64 [tunable = false]
+    @variables x(t)
+    @named sys = System([D(x) ~ A[1, 1]], t, [x], [A])
+    csys = complete(sys)
+    ps = MTKParameters(csys, Dict(A => ones(2, 2)))
+    idx = parameter_index(csys, A)
+    replacement = fill(2.0f0, 2, 2)
+    for remade in (
+            remake_buffer(csys, ps, [A], [replacement]),
+            remake_buffer(csys, ps, [idx], [replacement]),
+            remake_buffer(csys, ps, [idx], Any[replacement]),
+        )
+        @test getp(csys, A)(remade) == replacement
+    end
+end
+
+struct ConvertedOp
+    M::Matrix{Float64}
+end
+Base.size(op::ConvertedOp) = size(op.M)
+struct SizelessInput end
+Base.convert(::Type{ConvertedOp}, ::SizelessInput) = ConvertedOp(ones(3, 2))
+
+@testset "in-place updates validate the converted value that is stored" begin
+    A = shaped_parameter(:A, ConvertedOp, 2, 2)
+    @variables u(t)[1:2]
+    @named sys = System([zeros(2) ~ D(u) + u], t, [u], [A])
+    csys = complete(sys)
+    original = ConvertedOp(ones(2, 2))
+    ps = MTKParameters(csys, Dict(A => original))
+    idx = parameter_index(csys, A)
+    @test_throws DimensionMismatch setp(csys, A)(ps, SizelessInput())
+    @test_throws DimensionMismatch (ps[idx] = SizelessInput())
+    @test getp(csys, A)(ps) === original
+end
