@@ -16,7 +16,7 @@
         :missing_scc_schedule, :dynamic_opt_time_grid,
         :imperative_affect_specification, :parameter_not_in_system,
         # analysis
-        :empty_operating_point, :initialization_analysis,
+        :empty_operating_point, :initialization_analysis, :solution_jacobian_analysis,
         :no_unbound_inputs, :analysis_point_causality,
         # system construction
         :independent_variable_not_parameter, :constraint_variable_without_argument,
@@ -46,6 +46,7 @@
             dynamic_opt_time_grid = Silent,
             empty_operating_point = Silent,
             initialization_analysis = Silent,
+            solution_jacobian_analysis = Silent,
             no_unbound_inputs = Silent,
             analysis_point_causality = Silent,
             imperative_affect_specification = Silent,
@@ -77,6 +78,7 @@
             dynamic_opt_time_grid = WarnLevel,
             empty_operating_point = Silent,
             initialization_analysis = InfoLevel,
+            solution_jacobian_analysis = InfoLevel,
             no_unbound_inputs = Silent,
             analysis_point_causality = WarnLevel,
             imperative_affect_specification = WarnLevel,
@@ -108,6 +110,7 @@
             dynamic_opt_time_grid = WarnLevel,
             empty_operating_point = WarnLevel,
             initialization_analysis = InfoLevel,
+            solution_jacobian_analysis = InfoLevel,
             no_unbound_inputs = WarnLevel,
             analysis_point_causality = WarnLevel,
             imperative_affect_specification = WarnLevel,
@@ -139,6 +142,7 @@
             dynamic_opt_time_grid = WarnLevel,
             empty_operating_point = WarnLevel,
             initialization_analysis = InfoLevel,
+            solution_jacobian_analysis = InfoLevel,
             no_unbound_inputs = WarnLevel,
             analysis_point_causality = WarnLevel,
             imperative_affect_specification = WarnLevel,
@@ -170,6 +174,7 @@
             dynamic_opt_time_grid = WarnLevel,
             empty_operating_point = WarnLevel,
             initialization_analysis = InfoLevel,
+            solution_jacobian_analysis = InfoLevel,
             no_unbound_inputs = WarnLevel,
             analysis_point_causality = WarnLevel,
             imperative_affect_specification = WarnLevel,
@@ -197,7 +202,7 @@
             :imperative_affect_specification, :parameter_not_in_system,
         ),
         analysis = (
-            :empty_operating_point, :initialization_analysis,
+            :empty_operating_point, :initialization_analysis, :solution_jacobian_analysis,
             :no_unbound_inputs, :analysis_point_causality,
         ),
         system_construction = (
@@ -215,7 +220,8 @@ end
 A [SciMLLogging.jl](https://github.com/SciML/SciMLLogging.jl) verbosity specifier
 controlling diagnostic output from ModelingToolkit: the [`mtkcompile`](@ref) pipeline,
 problem construction and initialization, and analysis utilities such as
-`linearization_function` and `analyze_initialization_jacobian`.
+`linearization_function`, `analyze_initialization_jacobian` and
+`analyze_solution_jacobian`.
 
 Pass it via the `verbose` keyword. `mtkcompile` and the analysis utilities consume it
 directly. `SciMLBase.*Problem` constructors share the `verbose` keyword with the solver
@@ -281,6 +287,8 @@ Analysis (group `analysis`):
 - `empty_operating_point`: an empty operating point was passed to
   `linearization_function`. `WarnLevel` by default.
 - `initialization_analysis`: the report of `analyze_initialization_jacobian`.
+  `InfoLevel` by default.
+- `solution_jacobian_analysis`: the report of `analyze_solution_jacobian`.
   `InfoLevel` by default.
 - `no_unbound_inputs`: `generate_control_function` found no unbound inputs.
   `WarnLevel` by default.
