@@ -1,6 +1,7 @@
 using ModelingToolkitBase, DelayDiffEq, OrdinaryDiffEq, StaticArrays, Test
 import DiffEqNoiseProcess
-using SymbolicIndexingInterface: is_markovian
+using SymbolicIndexingInterface: current_time, get_history_function, is_markovian,
+    parameter_values, state_values
 using ModelingToolkitBase: t_nounits as t, D_nounits as D
 using Setfield: @set!
 
@@ -64,6 +65,41 @@ sol2_mtk = solve(prob2, alg, reltol = 1.0e-7, abstol = 1.0e-10)
 @test sol2_mtk[[x₀, x₁, x₂(t)]][end] ≈ sol2.u[end]
 @test_nowarn sol2_mtk[[x₀, x₁, x₂(t)]]
 @test_nowarn sol2_mtk[[x₀, x₁, x₂(t - 0.1)]]
+
+@testset "Functional affect readers on a delay system" begin
+    @variables z(..) delayed(t)
+    affect = ModelingToolkitBase.ImperativeAffect(
+        modified = (; z = z(t)), observed = (; delayed)
+    ) do m, o, ctx, integ
+        (; z = m.z + o.delayed)
+    end
+    tick = ModelingToolkitBase.SymbolicDiscreteCallback([0.25], affect)
+    @mtkcompile delayed_sys = System(
+        [D(z(t)) ~ z(t - 1)], t; observed = [delayed ~ z(t - 1)], discrete_events = [tick]
+    )
+    samples = Tuple{Float64, Float64}[]
+    function with_history(affect, event, sys; role)
+        parts = ModelingToolkitBase.functional_affect_parts(affect)
+        return function (integ)
+            args = (state_values(integ), get_history_function(integ), parameter_values(integ), current_time(integ))
+            modified = NamedTuple{parts.modified_names}(parts.modified_values(args...))
+            observed = NamedTuple{parts.observed_names}(parts.observed_values(args...))
+            push!(samples, (modified.z, observed.delayed))
+            update = parts.user_affect(modified, observed, parts.ctx, integ)
+            parts.setters.z(integ, update.z)
+            return
+        end
+    end
+    prob = DDEProblem(
+        delayed_sys, [z(t) => 2.0], (0.0, 0.75);
+        constant_lags = (1.0,), affect_transform = with_history
+    )
+    sol = solve(prob, MethodOfSteps(Tsit5()))
+    @test length(samples) == 1
+    @test first(only(samples)) ≈ 2.5
+    @test last(only(samples)) == 2.0
+    @test sol[z(t)][end] ≈ 5.5
+end
 
 function hayes_modelf(du, u, h, p, t)
     τ, a, b, c, α, β, γ = p

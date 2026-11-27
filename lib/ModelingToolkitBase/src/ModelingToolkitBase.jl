@@ -76,7 +76,7 @@ using SymbolicIndexingInterface: ArraySymbolic, ContinuousTimeseries, NotSymboli
     all_symbols, all_variable_symbols, current_time, getname, getsym, getu, hasname,
     independent_variable_symbols, is_independent_variable, is_markovian, is_parameter,
     is_time_dependent, is_timeseries_parameter, is_variable, parameter_index,
-    parameter_symbols, parameter_values, set_parameter!, setp, setp_oop, setsym, setu,
+    parameter_symbols, parameter_values, set_parameter!, set_state!, setp, setp_oop, setsym, setu,
     state_values, symbolic_container, symbolic_type, timeseries_parameter_index,
     variable_index, variable_symbols
 import LinearAlgebra
@@ -515,6 +515,7 @@ const set_scalar_metadata = setmetadata
 @public apply_to_variables, equations_toplevel, unknowns_toplevel, parameters_toplevel
 @public continuous_events_toplevel, discrete_events_toplevel, assertions, is_alg_equation
 @public is_diff_equation, Equality
+@public FunctionalAffect, without_parameter_hooks, functional_affect_parts, EMPTY_AFFECT
 @public inputs, outputs, bound_inputs, unbound_inputs, bound_outputs
 @public unbound_outputs, is_bound
 @public AbstractSystem, CheckAll, CheckNone, CheckComponents, CheckUnits

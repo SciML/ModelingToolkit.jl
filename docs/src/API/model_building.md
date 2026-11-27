@@ -224,6 +224,58 @@ ModelingToolkit.ImperativeAffect
 ModelingToolkitBase.ZeroCrossing
 ```
 
+### Running affects outside the integrator
+
+Some packages run the affects of a system's events somewhere other than the integrator they
+were compiled for, e.g. inside a GPU kernel that steps many trajectories, while keeping
+ModelingToolkit's event timing. The `affect_transform` keyword of the problem constructors
+is a function `(affect, event, sys; role) -> affect` that is applied to every compiled
+affect before it is put in its callback. `role` is one of `:affect`, `:affect_neg`,
+`:initialize` and `:finalize`, and the transform runs once per role even when an event uses
+the same affect for both edges. It runs only for the slots an event defines; a slot without
+an affect keeps the placeholder its callback uses (e.g. `EMPTY_AFFECT`), which callbacks
+recognize by identity. The problem passes `save_discretes` to `solve`. With a solver that
+supports it, `save_discretes = false` disables saving the discrete parameters that events
+update. JumpProcesses' `SSAStepper` ignores the stored option and rejects it when passed to
+`solve`.
+
+A compiled `ImperativeAffect` is a `FunctionalAffect`. `without_parameter_hooks` removes the
+integrator-only hooks from its setters, after which it reads and writes only through
+`state_values`, `parameter_values` and `current_time` of whatever it is called with
+in systems without delays. The readers returned by `functional_affect_parts` take
+`(u, p, t)` without delays or `(u, history, p, t)` on delay systems.
+
+```julia
+using ModelingToolkit, OrdinaryDiffEq
+using ModelingToolkit: t_nounits as t, D_nounits as D
+
+@variables x(t) = 1.0
+@discretes h(t) = 0.0
+tick = ModelingToolkit.ImperativeAffect(modified = (; h), observed = (; x)) do m, o, c, integ
+    (; h = m.h + 0.1 * o.x)
+end
+@mtkcompile sys = System(
+    [D(x) ~ -x + h], t;
+    discrete_events = [ModelingToolkit.SymbolicDiscreteCallback(0.1, tick; discrete_parameters = [h])]
+)
+
+stripped = []
+function strip_hooks(affect, event, sys; role)
+    affect isa ModelingToolkit.FunctionalAffect || return affect
+    push!(stripped, ModelingToolkit.without_parameter_hooks(affect))
+    return last(stripped)
+end
+prob = ODEProblem(sys, [], (0.0, 1.0); affect_transform = strip_hooks, save_discretes = false)
+isbits(only(stripped)) # true
+```
+
+```@docs
+ModelingToolkit.FunctionalAffect
+ModelingToolkit.without_parameter_hooks
+ModelingToolkit.functional_affect_parts
+ModelingToolkit.EMPTY_AFFECT
+```
+
 ## Jump processes
 
 Systems can contain jumps, which are handled by

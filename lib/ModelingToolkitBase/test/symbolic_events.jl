@@ -2316,3 +2316,325 @@ end
         @test hash(cb) == hash(@set cb.reinitializealg = SciMLBase.NoInit())
     end
 end
+
+# A value provider standing in for the integrator, as a GPU kernel would pass one
+# (field names differ from the integrator's, so only the interface methods can be used)
+struct AffectStandIn{U, P, T}
+    state::U
+    params::P
+    time::T
+    hook_calls::Vector{Any}
+end
+AffectStandIn(u, p, t) = AffectStandIn(u, p, t, Any[])
+SymbolicIndexingInterface.state_values(s::AffectStandIn) = s.state
+SymbolicIndexingInterface.parameter_values(s::AffectStandIn) = s.params
+SymbolicIndexingInterface.current_time(s::AffectStandIn) = s.time
+SymbolicIndexingInterface.finalize_parameters_hook!(s::AffectStandIn, sym) = push!(s.hook_calls, sym)
+
+@testset "`affect_transform` and `save_discretes`" begin
+    @variables x(t) = 1.0
+    @parameters k = 1.0
+    @discretes g(t) = 1.0 h(t) = 0.0
+    up = ModelingToolkitBase.ImperativeAffect(modified = (; g), observed = (; x)) do m, o, c, integ
+        (; g = m.g + o.x)
+    end
+    down = ModelingToolkitBase.ImperativeAffect(modified = (; h)) do m, o, c, integ
+        (; h = m.h + 1)
+    end
+    tick = ModelingToolkitBase.ImperativeAffect(modified = (; h), observed = (; x)) do m, o, c, integ
+        (; h = m.h + 0.1 * o.x)
+    end
+    cont = SymbolicContinuousCallback([x ~ 0.6], up; affect_neg = down, discrete_parameters = [g, h])
+    per = SymbolicDiscreteCallback(0.1, tick; discrete_parameters = [h])
+    @mtkcompile sys = System(
+        [D(x) ~ -k * x + 0.01 * g + 0.01 * h], t, [x], [k, g, h];
+        continuous_events = [cont], discrete_events = [per]
+    )
+    ref = solve(ODEProblem(sys, [], (0.0, 1.0)), Tsit5(); abstol = 1.0e-10, reltol = 1.0e-10)
+
+    # the transform sees every compiled affect, and returning it unchanged changes nothing
+    seen = Tuple{Symbol, Any}[]
+    record(aff, ev, sys; role) = (push!(seen, (role, typeof(ev))); aff)
+    prob = ODEProblem(sys, [], (0.0, 1.0); affect_transform = record)
+    sol = solve(prob, Tsit5(); abstol = 1.0e-10, reltol = 1.0e-10)
+    @test sol.u == ref.u
+    @test sol.ps[g] == ref.ps[g]
+    @test sol.ps[h] == ref.ps[h]
+    # only the slots the events define: neither has `initialize` or `finalize`
+    @test sort(seen; by = string) == sort(
+        [
+            (:affect, SymbolicContinuousCallback), (:affect_neg, SymbolicContinuousCallback),
+            (:affect, SymbolicDiscreteCallback),
+        ]; by = string
+    )
+
+    # affects without their parameter hooks, and no discrete saving
+    strip_hooks(aff, ev, sys; role) = aff isa ModelingToolkitBase.FunctionalAffect ?
+        ModelingToolkitBase.without_parameter_hooks(aff) : aff
+    prob = ODEProblem(
+        sys, [], (0.0, 1.0); affect_transform = strip_hooks, save_discretes = false
+    )
+    sol = solve(prob, Tsit5(); abstol = 1.0e-10, reltol = 1.0e-10)
+    @test sol.u ≈ ref.u
+    @test isempty(sol.ps[g])
+    @test isempty(sol.ps[h])
+
+    # the problem stores `save_discretes` as a solve option and builds the callbacks as usual,
+    # so a value passed to `solve` takes precedence over it
+    prob = ODEProblem(sys, [], (0.0, 1.0); save_discretes = false)
+    @test prob.kwargs[:save_discretes] === false
+    sol = solve(prob, Tsit5(); abstol = 1.0e-10, reltol = 1.0e-10)
+    @test isempty(sol.ps[g])
+    @test isempty(sol.ps[h])
+    sol = solve(prob, Tsit5(); abstol = 1.0e-10, reltol = 1.0e-10, save_discretes = true)
+    @test sol.ps[g] == ref.ps[g]
+    @test sol.ps[h] == ref.ps[h]
+    sol = solve(
+        ODEProblem(sys, [], (0.0, 1.0)), Tsit5();
+        abstol = 1.0e-10, reltol = 1.0e-10, save_discretes = false
+    )
+    @test isempty(sol.ps[g])
+    @test isempty(sol.ps[h])
+
+    # `save_discretes` is forwarded to the solve, so it also applies to callbacks that are
+    # not built from symbolic events, at initialization and after an affect
+    @mtkcompile csys = System(
+        [D(x) ~ -k * x + 0.01 * h], t, [x], [k, h];
+        continuous_events = [SymbolicContinuousCallback([x ~ 0.6], down; discrete_parameters = [h])]
+    )
+    hparts = ODEProblem(csys, [], (0.0, 1.0)).kwargs[:callback].saved_clock_partitions
+    plain = SciMLBase.DiscreteCallback(
+        (u, t, integ) -> t == 0.25, integ -> nothing;
+        saved_clock_partitions = hparts
+    )
+    nh = length(solve(ODEProblem(csys, [], (0.0, 1.0)), Tsit5()).ps[h])
+    cprob = ODEProblem(csys, [], (0.0, 1.0); callback = plain)
+    @test !haskey(cprob.kwargs, :save_discretes)
+    @test length(solve(cprob, Tsit5(); tstops = [0.25]).ps[h]) == nh + 1
+    cprob = ODEProblem(csys, [], (0.0, 1.0); callback = plain, save_discretes = false)
+    @test cprob.kwargs[:save_discretes] === false
+    csol = solve(cprob, Tsit5(); tstops = [0.25])
+    @test SciMLBase.successful_retcode(csol)
+    @test isempty(csol.ps[h])
+    for kw in ((; expression = Val{true}), (; _skip_events = true))
+        @test ModelingToolkitBase.process_kwargs(csys; save_discretes = false, kw...)[:save_discretes] === false
+    end
+
+    # a stripped affect is `isbits` and runs on a plain value provider
+    captured = Any[]
+    function capture_periodic(aff, ev, sys; role)
+        ev isa SymbolicDiscreteCallback && role === :affect && push!(captured, aff)
+        return aff
+    end
+    ODEProblem(sys, [], (0.0, 1.0); affect_transform = capture_periodic)
+    hooked = only(captured)
+    @test hooked isa ModelingToolkitBase.FunctionalAffect
+    @test !isbits(hooked)
+    stripped = ModelingToolkitBase.without_parameter_hooks(hooked)
+    @test isbits(stripped)
+    parts = ModelingToolkitBase.functional_affect_parts(hooked)
+    @test parts.modified_names == (:h,)
+    @test parts.observed_names == (:x,)
+    standin = AffectStandIn([2.0], deepcopy(prob.p), 0.5)
+    hooked(standin)
+    @test getp(sys, h)(standin) ≈ 0.2
+    @test length(standin.hook_calls) == 1
+    empty!(standin.hook_calls)
+    stripped(standin)
+    @test getp(sys, h)(standin) ≈ 0.4
+    parts.setters.h(standin, 0.5)
+    @test getp(sys, h)(standin) == 0.5
+    @test isempty(standin.hook_calls)
+
+    # the vector continuous callback path
+    @variables y(t) = 1.0
+    upy = ModelingToolkitBase.ImperativeAffect(modified = (; g), observed = (; y)) do m, o, c, integ
+        (; g = m.g + o.y)
+    end
+    e1 = SymbolicContinuousCallback([y ~ 0.7], upy; discrete_parameters = [g])
+    e2 = SymbolicContinuousCallback([y ~ 0.4], down; discrete_parameters = [h])
+    @mtkcompile vsys = System([D(y) ~ -y], t, [y], [g, h]; continuous_events = [e1, e2])
+    naffects = Ref(0)
+    count_affects(aff, ev, sys; role) = (role === :affect && (naffects[] += 1); aff)
+    vref = solve(ODEProblem(vsys, [], (0.0, 2.0)), Tsit5())
+    vprob = ODEProblem(vsys, [], (0.0, 2.0); affect_transform = count_affects)
+    @test vprob.kwargs[:callback] isa SciMLBase.VectorContinuousCallback
+    @test naffects[] == 2
+    @test solve(vprob, Tsit5()).u == vref.u
+end
+
+@testset "`affect_transform` runs per slot when `affect_neg` is `affect`" begin
+    # x = cos(t) on (0, 8): x ~ 0.5 is crossed falling at π/3 and 7π/3 and rising at 5π/3;
+    # x ~ -0.5 falling at 2π/3 and rising at 4π/3
+    @variables x(t) = 1.0 v(t) = 0.0
+    @discretes c(t) = 0.0
+    eqs = [D(x) ~ v, D(v) ~ -x]
+    # the default `affect_neg = affect` keeps one object in both slots for an
+    # `ImperativeAffect` (an equational affect is built twice), and with no affect both are
+    # `nothing`
+    bump = ModelingToolkitBase.ImperativeAffect(modified = (; c)) do m, o, ctx, integ
+        (; c = m.c + 1)
+    end
+    # events share a `VectorContinuousCallback` only with the same `reinitializealg`, and an
+    # `ImperativeAffect` defaults to `CheckInit`
+    counted = SymbolicContinuousCallback(
+        [x ~ 0.5], bump; discrete_parameters = [c], reinitializealg = SciMLBase.NoInit()
+    )
+    empty = SymbolicContinuousCallback([x ~ -0.5], nothing)
+    @test counted.affect_neg === counted.affect
+    @test empty.affect_neg === empty.affect
+
+    calls = Dict{Symbol, Int}()
+    function tag(aff, ev, sys; role)
+        role in (:affect, :affect_neg) || return aff
+        return integ -> (calls[role] = get(calls, role, 0) + 1; aff(integ))
+    end
+    # the event without an affect is not transformed: its slots keep `EMPTY_AFFECT`
+    for (events, nrise, nfall) in (([counted], 1, 2), ([empty], 0, 0), ([counted, empty], 1, 2))
+        @mtkcompile sys = System(eqs, t, [x, v], [c]; continuous_events = events)
+        ref = solve(ODEProblem(sys, [], (0.0, 8.0)), Tsit5(); abstol = 1.0e-10, reltol = 1.0e-10)
+        prob = ODEProblem(sys, [], (0.0, 8.0); affect_transform = tag)
+        CB = length(events) == 1 ? SciMLBase.ContinuousCallback : SciMLBase.VectorContinuousCallback
+        @test prob.kwargs[:callback] isa CB
+        empty!(calls)
+        sol = solve(prob, Tsit5(); abstol = 1.0e-10, reltol = 1.0e-10)
+        @test calls == filter(!iszero ∘ last, Dict(:affect => nrise, :affect_neg => nfall))
+        @test sol.u == ref.u
+        @test sol.ps[c][end] == ref.ps[c][end] == (counted in events ? 3 : 0)
+    end
+    cb = ODEProblem(
+        mtkcompile(System(eqs, t, [x, v], [c]; continuous_events = [empty], name = :esys)),
+        [], (0.0, 8.0); affect_transform = tag
+    ).kwargs[:callback]
+    @test cb.affect! === cb.affect_neg! === ModelingToolkitBase.EMPTY_AFFECT
+
+    # a real and an empty event at the same root share a `VectorContinuousCallback`, which
+    # skips the empty one; a transparent transform of every slot it is given changes nothing
+    # (neither event has `initialize`/`finalize`, whose vector placeholder is `nothing`)
+    twin = SymbolicContinuousCallback([x ~ 0.5], nothing; reinitializealg = SciMLBase.NoInit())
+    @mtkcompile tsys = System(eqs, t, [x, v], [c]; continuous_events = [counted, twin])
+    passthrough(aff, ev, sys; role) = (args...) -> aff(args...)
+    edges_only(aff, ev, sys; role) = role in (:affect, :affect_neg) ? passthrough(aff, ev, sys; role) : aff
+    tref = solve(ODEProblem(tsys, [], (0.0, 8.0)), Tsit5(); abstol = 1.0e-10, reltol = 1.0e-10)
+    @test length(tref.ps[c]) == 4
+    for transform in (edges_only, passthrough)
+        tprob = ODEProblem(tsys, [], (0.0, 8.0); affect_transform = transform)
+        @test tprob.kwargs[:callback] isa SciMLBase.VectorContinuousCallback
+        tsol = solve(tprob, Tsit5(); abstol = 1.0e-10, reltol = 1.0e-10)
+        @test tsol.u == tref.u
+        @test tsol.ps[c] == tref.ps[c]
+    end
+end
+
+@testset "`affect_transform`: grouped setters, `JumpProblem`, initialize and finalize" begin
+    @variables x(t) = 1.0 v(t) = 0.0 n(t) = 10.0
+    @parameters k = 0.1
+    @discretes g(t) = 0.0 h(t) = 0.0 c(t) = 0.0
+
+    both = ModelingToolkitBase.ImperativeAffect(modified = (; ghx = [g, h, x], v)) do m, o, ctx, integ
+        (; ghx = [m.ghx[1] + 2, m.ghx[2] + 1, m.ghx[3] + 2], v = m.v + 3)
+    end
+    @mtkcompile gsys = System(
+        [D(x) ~ -x + v + 0.01 * (g + h), D(v) ~ -v], t, [x, v], [g, h];
+        discrete_events = [SymbolicDiscreteCallback(0.1, both; discrete_parameters = [g, h])]
+    )
+    captured = Any[]
+    function capture_discrete(aff, ev, sys; role)
+        ev isa SymbolicDiscreteCallback && role === :affect && push!(captured, aff)
+        return aff
+    end
+    gprob = ODEProblem(gsys, [], (0.0, 1.0); affect_transform = capture_discrete)
+    hooked = only(captured)
+    stripped = ModelingToolkitBase.without_parameter_hooks(hooked)
+    @test isbits(stripped)
+    parts = ModelingToolkitBase.functional_affect_parts(hooked)
+    standin = AffectStandIn(copy(gprob.u0), deepcopy(gprob.p), 0.5)
+    hooked(standin)
+    @test getp(gsys, [g, h])(standin) == [2.0, 1.0]
+    @test getu(gsys, [x, v])(standin) == [3.0, 3.0]
+    @test length(standin.hook_calls) == 2
+    empty!(standin.hook_calls)
+    stripped(standin)
+    @test getp(gsys, [g, h])(standin) == [4.0, 2.0]
+    @test getu(gsys, [x, v])(standin) == [5.0, 6.0]
+    parts.setters.ghx(standin, (1.0, 2.0, 3.0))
+    parts.setters.v(standin, 4.0)
+    @test getp(gsys, [g, h])(standin) == [1.0, 2.0]
+    @test getu(gsys, [x, v])(standin) == [3.0, 4.0]
+    @test isempty(standin.hook_calls)
+
+    # `JumpProblem` compiles its events itself, with and without equations
+    tick = SymbolicDiscreteCallback(0.25, [c ~ Pre(c) + 1]; discrete_parameters = [c])
+    jump = SymbolicMassActionJump(k, [n => 1], [n => -1])
+    for (eqs, unks, alg) in (([D(x) ~ -x], [x, n], Tsit5()), (Equation[], [n], SSAStepper()))
+        @mtkcompile jsys = System(eqs, t, unks, [k, c]; jumps = [jump], discrete_events = [tick])
+        roles = Symbol[]
+        times = Float64[]
+        # The wrapper logs when it runs, so the test fails if the transform's return value
+        # is not the affect that ends up in the callback.
+        function record(aff, ev, sys; role)
+            push!(roles, role)
+            return (integ, args...) -> (push!(times, integ.t); aff(integ, args...))
+        end
+        tspan = (0.0, 0.9)
+        jprob = JumpProblem(jsys, [], tspan; affect_transform = record, save_discretes = false)
+        @test roles == [:affect]
+        @test jprob.prob.kwargs[:save_discretes] === false
+        jref = JumpProblem(jsys, [], tspan)
+        if alg isa SSAStepper
+            jsol = solve(jprob, alg; rng = StableRNG(123))
+            @test SciMLBase.successful_retcode(jsol)
+            @test times == [0.25, 0.5, 0.75]
+            @test jsol.ps[c] == solve(jref, alg; rng = StableRNG(123)).ps[c] == [0.0, 1.0, 2.0, 3.0]
+            for save_discretes in (false, true)
+                @test_throws MethodError solve(jprob, alg; rng = StableRNG(123), save_discretes)
+            end
+        else
+            nref = length(solve(jref, alg).ps[c])
+            @test nref > 1
+            @test isempty(solve(jprob, alg).ps[c])
+            @test times == [0.25, 0.5, 0.75]
+            @test length(solve(jprob, alg; save_discretes = true).ps[c]) == nref
+        end
+    end
+
+    noop = ModelingToolkitBase.ImperativeAffect(modified = (; c)) do m, o, ctx, integ
+        (; c = m.c)
+    end
+    edges = (; initialize = noop, finalize = noop, discrete_parameters = [c])
+    nonedges = (; edges..., reinitializealg = SciMLBase.NoInit())
+    cases = (
+        [SymbolicContinuousCallback([x ~ 0.5], noop; edges...)],
+        [
+            SymbolicContinuousCallback([x ~ 0.5], noop; nonedges...),
+            SymbolicContinuousCallback([x ~ -0.5], noop; nonedges...),
+        ],
+        [SymbolicDiscreteCallback(0.5, noop; edges...)],
+        [SymbolicDiscreteCallback([0.3, 0.6], noop; edges...)],
+        [SymbolicDiscreteCallback(x < 0.5, noop; edges...)],
+    )
+    for events in cases
+        continuous = events[1] isa SymbolicContinuousCallback
+        @mtkcompile esys = System(
+            [D(x) ~ v, D(v) ~ -x], t, [x, v], [c];
+            (continuous ? (; continuous_events = events) : (; discrete_events = events))...
+        )
+        built = Dict{Symbol, Int}()
+        lifecycle_slots = Set{Tuple{Symbol, Any}}()
+        ran = Dict{Tuple{Symbol, Any}, Int}()
+        function wrap(aff, ev, sys; role)
+            built[role] = get(built, role, 0) + 1
+            role in (:initialize, :finalize) || return aff
+            slot = (role, ev)
+            push!(lifecycle_slots, slot)
+            return (args...) -> (ran[slot] = get(ran, slot, 0) + 1; aff(args...))
+        end
+        eprob = ODEProblem(esys, [], (0.0, 2.0); affect_transform = wrap)
+        nev = length(events)
+        @test built[:initialize] == built[:finalize] == built[:affect] == nev
+        @test get(built, :affect_neg, 0) == (continuous ? nev : 0)
+        @test length(lifecycle_slots) == 2 * nev
+        @test SciMLBase.successful_retcode(solve(eprob, Tsit5()))
+        @test ran == Dict(slot => 1 for slot in lifecycle_slots)
+    end
+end

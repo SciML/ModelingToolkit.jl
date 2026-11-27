@@ -76,6 +76,29 @@ an error.
 const TIME_DEPENDENT_PROBLEM_KWARGS = """
 - `callback`: An extra callback or `CallbackSet` to add to the problem, in addition to the
   ones defined symbolically in the system.
+- `affect_transform`: A function `(affect, event, sys; role) -> affect` applied to every
+  compiled affect of the system's symbolic events before it is put in its callback, for
+  packages that run affects somewhere other than the integrator they were compiled for
+  (e.g. a GPU kernel). `affect` is the compiled callable, called with the integrator, and
+  `role` is the slot it fills: one of `:affect`, `:affect_neg`, `:initialize` and
+  `:finalize`. `event` is the `SymbolicContinuousCallback` or `SymbolicDiscreteCallback`.
+  The transform runs once per slot, also when an event uses one affect for both edges, and
+  only for slots the event defines: a slot without an affect keeps the placeholder the
+  callback uses for it (`EMPTY_AFFECT`, `SciMLBase.INITIALIZE_DEFAULT` or `nothing`). The
+  callbacks themselves (event timing, root finding, reinitialization) are built as usual.
+  See also `without_parameter_hooks` and `functional_affect_parts`.
+- `save_discretes`: Whether events save the values of the discrete parameters they update,
+  as the timeseries of `sol.ps[...]`. It is stored on the problem and passed to `solve` as
+  the integrator option of the same name, so a value passed to `solve` takes precedence; the
+  callbacks are built the same way either way. `false` disables the saves the events make,
+  so the timeseries of the discretes are empty, and reading a value that needs one of them
+  at some time (e.g. `sol[z]` or `sol(t; idxs = z)` for an observed `z` that depends on
+  one) throws an error. Building the solution still reads and copies the parameter object
+  once, to set up those timeseries. The option also applies to the callbacks passed with
+  `callback`. It needs a solver that supports it. OrdinaryDiffEq does, though before
+  OrdinaryDiffEqCore 4.19 it still saves the discretes at initialization, as DelayDiffEq
+  does before 6.4.3. JumpProcesses' `SSAStepper` ignores the value stored on the problem,
+  so it saves the discretes anyway, and throws a `MethodError` when it is passed to `solve`.
 """
 
 const PROBLEM_INTERNALS_HEADER = """

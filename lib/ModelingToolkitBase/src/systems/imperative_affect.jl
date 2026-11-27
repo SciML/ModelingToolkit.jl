@@ -220,11 +220,16 @@ function check_assignable(sys, sym)
 end
 
 """
-    FunctionalAffect{UF, CTX, MOF, OF, MN, OST, UPS}
+    FunctionalAffect
 
 Callable struct representing a compiled [`ImperativeAffect`](@ref). On each invocation,
-reads current modified and observed values from the integrator, calls the user function,
-and writes back the returned values. Created by [`compile_functional_affect`](@ref).
+reads current modified and observed values from the integrator (through `state_values`,
+`parameter_values` and `current_time`), calls the user function, and writes back the
+returned values. Created by `compile_functional_affect`.
+
+On a delay system the generated readers also take the history function,
+`(u, history, p, t)`, which this callable does not pass, so calling it there throws a
+`MethodError`. Build the call from [`functional_affect_parts`](@ref) instead.
 
 # Fields
 - `user_affect`: the user-supplied function with signature `f(modified, observed, ctx, integ)`
@@ -232,11 +237,14 @@ and writes back the returned values. Created by [`compile_functional_affect`](@r
 - `reset_jumps`: if `true`, call `reset_aggregated_jumps!` after the affect
 - `mod_og_val_fun`: OOP function that reads the current values of all modified variables
 - `obs_fun`: OOP function that reads the observed expressions
-- `mod_names`: `NTuple{N, Symbol}` naming the modified variables (for `NamedTuple` construction)
-- `obs_sym_tuple`: `NTuple{M, Symbol}` naming the observed values
+- `mod_names`: `Val` of the `NTuple{N, Symbol}` naming the modified variables (for
+  `NamedTuple` construction). A `Val`, so that the struct is `isbits` when its other fields
+  are, as a GPU kernel needs.
+- `obs_sym_tuple`: `Val` of the `NTuple{M, Symbol}` naming the observed values
 - `upd_funs`: `NamedTuple` of setter callables mapping each modified variable name to its setter
+- `hook_free_upd_funs`: setters without parameter hooks, or `nothing` when `upd_funs` is hook-free
 """
-struct FunctionalAffect{UF, CTX, MOF, OF, MN, OST, UPS}
+struct FunctionalAffect{UF, CTX, MOF, OF, MN, OST, UPS, HF}
     user_affect::UF
     ctx::CTX
     reset_jumps::Bool
@@ -245,16 +253,19 @@ struct FunctionalAffect{UF, CTX, MOF, OF, MN, OST, UPS}
     mod_names::MN
     obs_sym_tuple::OST
     upd_funs::UPS
+    hook_free_upd_funs::HF
 end
 
 @inline function (fa::FunctionalAffect)(integ)
+    # Read through the SII getters, so any value provider works, not just an integrator
+    u = state_values(integ)
+    p = parameter_values(integ)
+    t = current_time(integ)
     # Read the current values of the modified variables (pre-affect baseline)
-    modvals = fa.mod_og_val_fun(integ.u, integ.p, integ.t)
-    upd_component_array = NamedTuple{fa.mod_names}(modvals)
+    modvals = fa.mod_og_val_fun(u, p, t)
+    upd_component_array = NamedTuple{unval(fa.mod_names)}(modvals)
     # Read the observed expressions
-    obs_component_array = NamedTuple{fa.obs_sym_tuple}(
-        fa.obs_fun(integ.u, integ.p, integ.t)
-    )
+    obs_component_array = NamedTuple{unval(fa.obs_sym_tuple)}(fa.obs_fun(u, p, t))
     # Call the user-supplied affect function
     upd_vals = fa.user_affect(upd_component_array, obs_component_array, fa.ctx, integ)
     # Write back any returned values
@@ -265,11 +276,102 @@ end
 end
 
 """
+    $(TYPEDSIGNATURES)
+
+The compiled `ImperativeAffect` `fa` with the hooks that the setters of its modified
+parameters carry stripped off. After a write, those hooks call
+`SymbolicIndexingInterface.finalize_parameters_hook!`, which on an integrator marks a
+derivative discontinuity. While the integrator steps, a callback already marks one before it
+runs its affect, so there the hooks change nothing, unless the user's function clears that
+mark (`derivative_discontinuity!(integ, false)`) and then returns parameter updates: the
+hooks mark it again, the hook-free setters leave it cleared. An affect that runs while the
+callback is initialized (a preset time or a periodic event at the initial time) is different: the
+integrator saves a second time at the initial time only when the discontinuity is marked,
+so without the hooks a parameter-only affect there is not followed by that save.
+
+On systems without delays, the hook-free affect uses the value provider's `state_values`,
+`parameter_values` and `current_time`, so it can run on a stand-in for the integrator
+(e.g. inside a GPU kernel), usually together with `save_discretes = false` on the problem.
+
+Two parts of the affect still see the value provider itself:
+- the user's function receives it as its last argument (`integ`), so a stand-in must
+  support whatever that function does with it;
+- with `reset_jumps = true`, the affect calls `reset_aggregated_jumps!` on it, which needs
+  an integrator.
+"""
+function without_parameter_hooks(fa::FunctionalAffect)
+    return FunctionalAffect(
+        fa.user_affect, fa.ctx, fa.reset_jumps, fa.mod_og_val_fun, fa.obs_fun,
+        fa.mod_names, fa.obs_sym_tuple, hook_free_setters(fa), nothing
+    )
+end
+
+hook_free_setters(fa::FunctionalAffect) = something(fa.hook_free_upd_funs, fa.upd_funs)
+
+unval(::Val{x}) where {x} = x
+
+"""
+    $(TYPEDSIGNATURES)
+
+The parts of the compiled `ImperativeAffect` `fa`, as a `NamedTuple`, for packages that
+check whether it can run somewhere other than the integrator it was compiled for:
+
+- `user_affect`, `ctx`: the function passed to `ImperativeAffect` and its context.
+- `modified_names`, `observed_names`: the names in the `NamedTuple`s it is called with.
+- `modified_values`, `observed_values`: generated readers returning tuples of modified
+  variables and observed expressions, respectively. Call each as `(u, p, t)` without
+  delays or `(u, history, p, t)` on delay systems.
+- `setters`: a `NamedTuple` of the setters writing back the values it returns, without the
+  hooks `without_parameter_hooks` strips.
+- `reset_jumps`: whether it resets the jump aggregators of the integrator.
+"""
+function functional_affect_parts(fa::FunctionalAffect)
+    return (;
+        fa.user_affect, fa.ctx, modified_names = unval(fa.mod_names),
+        observed_names = unval(fa.obs_sym_tuple), modified_values = fa.mod_og_val_fun,
+        observed_values = fa.obs_fun, setters = hook_free_setters(fa),
+        fa.reset_jumps,
+    )
+end
+
+function compile_hook_free_setter(sys, sym)
+    symtype = symbolic_type(sym)
+    if symtype != NotSymbolic()
+        if is_variable(sys, sym)
+            index = variable_index(sys, sym)
+            index isa AbstractArray && return group_affect_setters(map(state_affect_setter, Tuple(index)))
+            return state_affect_setter(index)
+        elseif is_parameter(sys, sym)
+            param_index = parameter_index(sys, sym)
+            return (provider, val) -> set_parameter!(provider, val, param_index)
+        elseif symtype == ArraySymbolic()
+            return group_affect_setters(map(s -> compile_hook_free_setter(sys, s), Tuple(collect(sym))))
+        end
+    elseif sym isa Union{AbstractArray, Tuple}
+        return group_affect_setters(map(s -> compile_hook_free_setter(sys, s), Tuple(sym)))
+    end
+    return setu(sys, sym)
+end
+
+state_affect_setter(index) = (provider, val) -> set_state!(provider, val, index)
+
+# A tuple of setters lets a grouped modification remain isbits.
+function group_affect_setters(setters::Tuple)
+    return function (provider, vals)
+        for (setter, val) in zip(setters, vals)
+            setter(provider, val)
+        end
+        return
+    end
+end
+
+"""
     compile_functional_affect(affect::ImperativeAffect, sys; reset_jumps, kwargs...)
 
 Compile an `ImperativeAffect` into a [`FunctionalAffect`](@ref) callable struct. Generates
-OOP observed and modified-value reader functions via `build_explicit_observed_function`, and
-setter callables via `setu`. All captures are encoded as typed struct fields for type stability.
+OOP observed and modified-value reader functions via `build_explicit_observed_function`,
+setters via `setu`, and hook-free setters via the value-provider interface. All captures are
+encoded as typed struct fields for type stability.
 
 # Arguments
 - `affect`: the `ImperativeAffect` specification
@@ -367,17 +469,19 @@ function compile_functional_affect(
     obs_sym_tuple = (obs_syms...,)
 
     # okay so now to generate the stuff to assign it back into the system
-    mod_pairs = mod_exprs .=> mod_syms
     mod_names = (mod_syms...,)
     mod_og_val_fun = build_explicit_observed_function(
-        sys, Symbolics.scalarize.(first.(mod_pairs)), opts; output_type = Tuple
+        sys, Symbolics.scalarize.(mod_exprs), opts; output_type = Tuple
     )
 
-    upd_funs = NamedTuple{mod_names}((setu.((sys,), first.(mod_pairs))...,))
+    upd_funs = NamedTuple{mod_names}(Tuple(setu(sys, sym) for sym in mod_exprs))
+    hook_free_upd_funs = NamedTuple{mod_names}(
+        Tuple(compile_hook_free_setter(sys, sym) for sym in mod_exprs)
+    )
 
     return FunctionalAffect(
         func(affect), context(affect), reset_jumps,
-        mod_og_val_fun, obs_fun, mod_names, obs_sym_tuple, upd_funs
+        mod_og_val_fun, obs_fun, Val(mod_names), Val(obs_sym_tuple), upd_funs, hook_free_upd_funs
     )
 end
 
