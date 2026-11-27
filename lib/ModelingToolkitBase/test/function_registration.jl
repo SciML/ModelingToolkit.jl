@@ -101,7 +101,8 @@ function build_ode()
     eq = Dt(u) ~ do_something_4(x) + (@__MODULE__).do_something_4(x)
     @named sys = System([eq], t, [u], [x])
     sys = complete(sys)
-    return fun = ODEFunction(sys, eval_expression = false)
+    fun = ODEFunction(sys, eval_expression = false)
+    return fun
 end
 function run_test()
     fun = build_ode()

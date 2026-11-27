@@ -29,13 +29,15 @@ mtjump2 = MT.assemble_vrj(js, j₂, unknowntoid)
 rate1(u, p, t) = (0.1 / 1000.0) * u[1] * u[2]
 function affect1!(integrator)
     integrator.u[1] -= 1
-    return integrator.u[2] += 1
+    integrator.u[2] += 1
+    return
 end
 jump1 = ConstantRateJump(rate1, affect1!)
 rate2(u, p, t) = 0.01u[2] + t
 function affect2!(integrator)
     integrator.u[2] -= 1
-    return integrator.u[3] += 1
+    integrator.u[3] += 1
+    return
 end
 jump2 = VariableRateJump(rate2, affect2!)
 
@@ -140,13 +142,15 @@ prob = DiscreteProblem([999, 1, 0], (0.0, 250.0), p)
 r1(u, p, t) = (0.1 / 1000.0) * u[1] * u[2]
 function a1!(integrator)
     integrator.u[1] -= 1
-    return integrator.u[2] += 1
+    integrator.u[2] += 1
+    return
 end
 j1 = ConstantRateJump(r1, a1!)
 r2(u, p, t) = 0.01u[2]
 function a2!(integrator)
     integrator.u[2] -= 1
-    return integrator.u[3] += 1
+    integrator.u[3] += 1
+    return
 end
 j2 = ConstantRateJump(r2, a2!)
 jset = JumpSet((), (j1, j2), nothing, nothing)

@@ -656,7 +656,8 @@ end
 SymbolicIndexingInterface.current_time(f::LinearizationFunction) = current_time(f.prob)
 function SymbolicIndexingInterface.set_state!(f::LinearizationFunction, val, idx)
     f.prob.u0[idx] = val
-    return f.prob.p[f.initial_idxs_for_unknowns[idx]] = val
+    f.prob.p[f.initial_idxs_for_unknowns[idx]] = val
+    return val
 end
 
 function Base.show(io::IO, mime::MIME"text/plain", lf::LinearizationFunction)

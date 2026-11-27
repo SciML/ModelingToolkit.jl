@@ -7,7 +7,8 @@ using ModelingToolkitBase: t_nounits as t, D_nounits as D
 
 function testjac(res, du, u, p, t) #System of equations
     res[1] = du[1] - 1.5 * u[1] + 1.0 * u[1] * u[2]
-    return res[2] = du[2] + 3 * u[2] - u[1] * u[2]
+    res[2] = du[2] + 3 * u[2] - u[1] * u[2]
+    return
 end
 
 function testjac_jac(J, du, u, p, gamma, t) #Explicit Jacobian
