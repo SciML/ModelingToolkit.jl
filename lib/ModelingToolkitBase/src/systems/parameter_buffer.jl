@@ -152,9 +152,11 @@ function MTKParameters(
             disc_buffer[idx.buffer_idx][idx.idx_in_buffer] = val
         elseif haskey(ic.constant_idx, sym)
             i, j = ic.constant_idx[sym]
+            validate_opaque_shape(unwrap(sym), symtype(unwrap(sym)), val)
             const_buffer[i][j] = val
         elseif haskey(ic.nonnumeric_idx, sym)
             i, j = ic.nonnumeric_idx[sym]
+            validate_opaque_shape(unwrap(sym), symtype(unwrap(sym)), val)
             nonnumeric_buffer[i][j] = val
         elseif !isequal(default_toterm(sym), sym)
             done = set_value(default_toterm(sym), val)
@@ -224,6 +226,16 @@ function MTKParameters(
             end
         end
         val = symconvert(ctype, floatT, unwrap_const(val))
+        if is_shaped_parameter(sym) && !(val isa ctype)
+            # a wrong shape is the more specific error
+            validate_opaque_shape(unwrap(sym), ctype, val)
+            throw(
+                ArgumentError(
+                    "value for $sym is converted to $(typeof(val)), but $sym is declared with " *
+                        "the type $ctype; use a value that is converted to the declared type."
+                )
+            )
+        end
         set_value(sym, val)
     end
     tunable_buffer = narrow_buffer_type(tunable_buffer; p_constructor)
@@ -553,15 +565,20 @@ end
 end
 @inline _buffer_getindex(bufs, i::Int, j, k) = isempty(k) ? bufs[i][j] : bufs[i][j][k...]
 
-@inline function _buffer_setindex!(bufs::Tuple{}, val, i::Int, j, k, validate_size::Bool)
+@inline function _buffer_setindex!(bufs::Tuple{}, val, i::Int, j, k, validate_size::Bool, shape = nothing)
     throw(BoundsError(bufs, i))
 end
-@inline function _buffer_setindex!(bufs::Tuple, val, i::Int, j, k, validate_size::Bool)
+@inline function _buffer_setindex!(bufs::Tuple, val, i::Int, j, k, validate_size::Bool, shape = nothing)
     if i === 1
         buf = first(bufs)
         if isempty(k)
             if validate_size && size(val) !== size(buf[j])
                 throw(InvalidParameterSizeException(size(buf[j]), size(val)))
+            end
+            if shape !== nothing && !(val isa eltype(buf))
+                # the buffer stores the converted value, which is the one that has to fit
+                val = convert(eltype(buf), val)
+                validate_declared_shape(shape, val)
             end
             buf[j] = val
         else
@@ -569,7 +586,26 @@ end
         end
         return nothing
     end
-    return _buffer_setindex!(Base.tail(bufs), val, i - 1, j, k, validate_size)
+    return _buffer_setindex!(Base.tail(bufs), val, i - 1, j, k, validate_size, shape)
+end
+
+@inline _buffer_eltype(bufs::Tuple{}, i::Int) = throw(BoundsError(bufs, i))
+@inline function _buffer_eltype(bufs::Tuple, i::Int)
+    return i === 1 ? eltype(first(bufs)) : _buffer_eltype(Base.tail(bufs), i - 1)
+end
+
+# The buffer a `remake_buffer` result is built from is widened to hold the new values, so the
+# declared type of a whole shaped parameter is read from the old buffer.
+function validate_shaped_replacement(oldbuf::MTKParameters, idx::ParameterIndex, val)
+    idx.shape === nothing && return nothing
+    bufs = idx.portion === NONNUMERIC_PORTION ? oldbuf.nonnumeric : oldbuf.constant
+    stype = _buffer_eltype(bufs, first(idx.idx))
+    val isa stype || throw(
+        ArgumentError(
+            "value of type $(typeof(val)) cannot replace a parameter declared with the type $stype."
+        )
+    )
+    return nothing
 end
 
 function _ducktyped_parameter_values(p, pind::ParameterIndex)
@@ -597,7 +633,12 @@ end
 function SymbolicIndexingInterface.set_parameter!(
         p::MTKParameters, val, pidx::ParameterIndex
     )
-    @unpack portion, idx, validate_size = pidx
+    @unpack portion, idx, validate_size, shape = pidx
+    if shape !== nothing
+        # The declared shape is the reference, not the stored value, which may be mutated.
+        validate_declared_shape(shape, val)
+        validate_size = false
+    end
     if portion isa SciMLStructures.Tunable
         if validate_size && size(val) !== size(idx)
             throw(InvalidParameterSizeException(size(idx), size(val)))
@@ -613,10 +654,10 @@ function SymbolicIndexingInterface.set_parameter!(
         if portion isa SciMLStructures.Discrete
             _buffer_setindex!(p.discrete, val, i, j, k, validate_size)
         elseif portion isa SciMLStructures.Constants
-            _buffer_setindex!(p.constant, val, i, j, k, validate_size)
+            _buffer_setindex!(p.constant, val, i, j, k, validate_size, shape)
         elseif portion === NONNUMERIC_PORTION
             # Nonnumeric elements and caches have no `size`.
-            _buffer_setindex!(p.nonnumeric, val, i, j, k, false)
+            _buffer_setindex!(p.nonnumeric, val, i, j, k, false, shape)
         elseif portion isa SciMLStructures.Caches
             _buffer_setindex!(p.caches, val, i, j, k, false)
         else
@@ -668,7 +709,58 @@ function validate_parameter_type(ic::IndexCache, p, idx::ParameterIndex, val)
     else
         SU.Unknown(-1)
     end
-    return validate_parameter_type(ic, stype, sz, p, idx, val)
+    validate_parameter_type(ic, stype, sz, p, idx, val)
+    validate_opaque_shape(p, stype, val)
+    return nothing
+end
+
+# Parameters declared with `shaped_parameter` carry a shape that the type does not check.
+# Array values must have exactly the declared axes, since generated code indexes them with the
+# declared (1-based) ranges. Other values are compared by `size` when they define it.
+function validate_declared_shape(declared, val)
+    applicable(size, val) || return nothing
+    ok = if val isa AbstractArray && all(isone ∘ first, declared)
+        axes(val) == Tuple(declared)
+    else
+        size(val) == Tuple(map(length, declared))
+    end
+    ok || throw(
+        DimensionMismatch(
+            "InvalidParameterSizeException: Expected value with axes $(Tuple(declared)). Received value of size $(size(val))" *
+                (val isa AbstractArray ? " with axes $(axes(val))." : ".")
+        )
+    )
+    return nothing
+end
+
+function validate_opaque_shape(p, stype, val)
+    is_shaped_parameter(p) || return nothing
+    validate_declared_shape(SU.shape(p), val)
+    return validate_declared_type(p, stype, val)
+end
+
+# A whole replacement value of a shaped parameter must have the declared type, since the buffer
+# stores it as is. Construction converts values to the declared type first.
+function validate_declared_type(param, stype, val)
+    is_shaped_parameter(param) && !(val isa stype) && throw(
+        ArgumentError(
+            "value for $param is of type $(typeof(val)), but $param is declared with the type $stype."
+        )
+    )
+    return nothing
+end
+
+# Indices addressing an element carry no declared shape and are not checked.
+function validate_indexed_shape(ic::IndexCache, idx::ParameterIndex, val)
+    idx.shape === nothing && return nothing
+    validate_declared_shape(idx.shape, val)
+    stype = get_buffer_template(ic, idx).type
+    val isa stype || throw(
+        ArgumentError(
+            "value of type $(typeof(val)) cannot replace a parameter declared with the type $stype."
+        )
+    )
+    return nothing
 end
 
 function validate_parameter_type(ic::IndexCache, idx::ParameterIndex, val)
@@ -766,6 +858,7 @@ function __remake_buffer(indp, oldbuf::MTKParameters, idxs, vals; validate = tru
         if validate
             if sym === nothing
                 validate_parameter_type(ic, idx, val)
+                validate_indexed_shape(ic, idx, val)
             else
                 validate_parameter_type(ic, sym, idx, val)
             end
@@ -1009,12 +1102,14 @@ end
         push!(
             expr.args, :(
                 for (idx, val) in zip(idxs, vals)
+                    $validate_shaped_replacement(oldbuf, idx, val)
                     $setindex!(newbuf, val, idx)
                 end
             )
         )
     else
         for i in 1:fieldcount(idxs)
+            push!(expr.args, :($validate_shaped_replacement(oldbuf, idxs[$i], vals[$i])))
             push!(expr.args, :($setindex!(newbuf, vals[$i], idxs[$i])))
         end
     end

@@ -348,6 +348,7 @@ ModelingToolkitBase.toparam
 ModelingToolkitBase.tovar
 ModelingToolkitBase.tobrownian
 ModelingToolkitBase.topoissonian
+ModelingToolkitBase.shaped_parameter
 ```
 
 A poissonian also stores its rate expression as metadata, which can be queried with

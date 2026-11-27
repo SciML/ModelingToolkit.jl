@@ -116,6 +116,66 @@ macro parameters(xs...)
     )
 end
 
+"""
+    $TYPEDEF
+
+Symbolic metadata key marking a parameter created by [`shaped_parameter`](@ref).
+"""
+struct ShapedParameter end
+
+is_shaped_parameter(x) = x isa SymbolicT && getmetadata(x, ShapedParameter, false)::Bool
+
+"""
+    $(TYPEDSIGNATURES)
+
+Create a parameter `name` of the non-`Number` type `T` that is declared to have the array
+shape `dims`, one `Int` or `AbstractUnitRange{Int}` per dimension. `@parameters K::T` leaves the
+shape unknown, so `K * u` takes the shape of `u`, and `@parameters K[1:m, 1:n]::T` builds an
+array of `T`. This is the way to declare a rectangular opaque operator, for example a
+`SparseMatrixCSC` or a user-defined struct used through `@register_array_symbolic`:
+
+```julia
+Kop = shaped_parameter(:Kop, FEMOp, 4, 6)   # maps R^6 -> R^4
+@register_array_symbolic apply_op(op::FEMOp, x::AbstractVector) begin
+    size = (size(op, 1),); eltype = Float64; ndims = 1
+end
+```
+
+`T` must be a concrete type, every dimension must be positive, a range must start at 1, and
+the number of dimensions must match the rank of an array `T`. The parameter is a constant, not
+tunable (`tunable = true` throws). Values are supplied through the problem `op` map. `bindings`
+are rejected unless `T <: Array`, and systems containing a `shaped_parameter` cannot be
+completed with `split = false`, because unsplit parameter vectors cannot check the declared shape.
+"""
+function shaped_parameter(
+        name::Symbol, T::Type, dims::Union{Int, AbstractUnitRange{Int}}...;
+        tunable::Bool = false
+    )
+    isconcretetype(T) || throw(ArgumentError("`shaped_parameter` requires a concrete type, got `$T`."))
+    isempty(dims) && throw(ArgumentError("`shaped_parameter` requires at least one dimension."))
+    T <: Number && throw(
+        ArgumentError("`shaped_parameter` is for array or opaque types, got the scalar type `$T`.")
+    )
+    tunable && throw(
+        ArgumentError(
+            "shaped opaque/array parameters are not tunable; they are stored as constants " *
+                "and updated through the `op` map / `setp`."
+        )
+    )
+    all(d -> d isa Int ? d > 0 : !isempty(d), dims) ||
+        throw(ArgumentError("`shaped_parameter` dimensions must be positive, got $dims."))
+    all(d -> d isa Int || first(d) == 1, dims) ||
+        throw(ArgumentError("`shaped_parameter` does not support offset (non-1-based) axes, got $dims; use sizes or `1:n`."))
+    T <: AbstractArray && ndims(T) != length(dims) && throw(
+        ArgumentError("`shaped_parameter` of the $(ndims(T))-dimensional type `$T` needs $(ndims(T)) dimensions, got $(length(dims)).")
+    )
+    shape = SymbolicUtils.ShapeVecT(map(d -> d isa Int ? (1:d) : UnitRange{Int}(d), dims))
+    sym = SymbolicUtils.Sym{SymReal}(name; type = T, shape)
+    sym = setmetadata(sym, VariableTunable, false)
+    sym = setmetadata(sym, ShapedParameter, true)
+    return wrap(toparam(sym))
+end
+
 function find_types(array)
     by = let set = Dict{Any, Int}(), counter = Ref(0)
         x -> begin

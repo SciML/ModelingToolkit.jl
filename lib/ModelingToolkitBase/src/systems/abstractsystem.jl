@@ -666,7 +666,7 @@ using [`toggle_namespacing`](@ref).
 """
 function complete(
         sys::T; split = true, flatten = true, add_initial_parameters = true,
-        allow_parameter_eqs = false
+        allow_parameter_eqs = false, check_shaped = true
     ) where {T <: AbstractSystem}
     sys = discover_globalscoped(sys)
 
@@ -681,7 +681,7 @@ function complete(
         newsys = remove_bound_parameters_from_ps(newsys)
         check_no_bound_initial_conditions(newsys)
         if has_parent(newsys) && get_parent(sys) === nothing
-            @set! newsys.parent = complete(sys; split = false, flatten = false)::T
+            @set! newsys.parent = complete(sys; split = false, flatten = false, check_shaped = false)::T
         end
         sys = newsys
         allow_parameter_eqs || check_no_parameter_equations(sys)
@@ -713,6 +713,22 @@ function complete(
     else
         # reduce the potential for outdated information
         @set! sys.parameter_bindings_graph = nothing
+    end
+    if check_shaped
+        # `set_defaults` adds bindings after the `System` constructor has validated them.
+        for (p, val) in get_bindings(sys)
+            is_shaped_parameter(p) || continue
+            check_shaped_binding(p, val)
+            val === COMMON_MISSING || check_binding_shape(p, val, get_bindings(sys))
+        end
+    end
+    if !split && check_shaped && any(is_shaped_parameter, parameters(sys))
+        throw(
+            ArgumentError(
+                "systems with `shaped_parameter`s cannot be completed with `split = false`: " *
+                    "unsplit parameter vectors do not validate the declared shape."
+            )
+        )
     end
     if split && has_index_cache(sys)
         # The `IndexCache` constructor uses `is_parameter` and family. If the system already
@@ -766,7 +782,7 @@ function complete(
     if has_initializesystem(sys)
         isys = get_initializesystem(sys)
         if isys isa T
-            @set! sys.initializesystem = complete(isys::T; split)
+            @set! sys.initializesystem = complete(isys::T; split, check_shaped)
         end
     end
     sys = toggle_namespacing(sys, false; safe = true)

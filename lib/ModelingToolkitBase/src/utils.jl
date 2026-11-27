@@ -375,6 +375,95 @@ end
 """
     $TYPEDSIGNATURES
 
+Reject bindings of `shaped_parameter`s that cannot be supported. A dense `Array` keeps its
+shape when substituted; any other `shaped_parameter` value does not, so it is rejected
+whatever its value. Parameters declared without `shaped_parameter` are not restricted.
+"""
+function check_shaped_binding(p::SymbolicT, val::SymbolicT)
+    is_shaped_parameter(p) && !(symtype(p) <: Array) || return nothing
+    throw(
+        ArgumentError(
+            "binding for $p: bindings of shaped opaque parameters are not supported " *
+                "because the declared shape is lost when the value is substituted into " *
+                "an operator application; supply the value through the problem `op` map instead."
+        )
+    )
+end
+
+# A parameter in `val` that is itself bound, directly or through further bindings, to a value of
+# unknown shape or to one whose axes differ from the declared 1-based ranges of that parameter,
+# or `nothing`. Bound parameters are not in the runtime buffer, so nothing else checks them.
+function unverifiable_binding(val::SymbolicT, bindings, seen = Set{SymbolicT}())
+    vars = Set{SymbolicT}()
+    SU.search_variables!(vars, val; is_atomic = check_bindings_is_atomic)
+    for v in vars
+        v in seen && continue
+        push!(seen, v)
+        bound = get(bindings, v, COMMON_NOTHING)
+        (bound === COMMON_NOTHING || bound === COMMON_MISSING) && continue
+        bsh = SU.shape(bound)
+        bsh isa SU.ShapeVecT || return v
+        vsh = SU.shape(v)
+        if vsh isa SU.ShapeVecT && !isempty(vsh) && all(isone ∘ first, vsh) && vsh != bsh
+            return v
+        end
+        found = unverifiable_binding(bound, bindings, seen)
+        found === nothing || return found
+    end
+    return nothing
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Known sizes of a binding must match those of its parameter; later symbolic substitution
+errors do not name the parameter. For a callable parameter the shape is that of the return
+value, while the binding is the function itself, so the sizes are not comparable. Dense
+shaped parameters are also indexed with their declared 1-based ranges, so the axes must match.
+"""
+function check_binding_shape(p::SymbolicT, val::SymbolicT, bindings)
+    psh = SU.shape(p)
+    vsh = SU.shape(val)
+    # The declared axes of a shaped parameter cannot be checked against an unknown shape, and the
+    # bound parameter is not in the runtime buffer, so the binding is rejected.
+    if is_shaped_parameter(p) && !(vsh isa SU.ShapeVecT)
+        throw(
+            ArgumentError(
+                "binding for $p has a value of unknown shape, but $p is declared with " *
+                    "shape $(Tuple(psh)); bind it to a value or expression of known shape."
+            )
+        )
+    end
+    unverifiable = is_shaped_parameter(p) ? unverifiable_binding(val, bindings) : nothing
+    if unverifiable !== nothing
+        throw(
+            ArgumentError(
+                "binding for $p depends on the binding of $unverifiable, whose value has unknown shape " *
+                    "or axes that differ from those declared for $unverifiable, so the declared shape " *
+                    "of $p cannot be checked."
+            )
+        )
+    end
+    (psh isa SU.ShapeVecT && vsh isa SU.ShapeVecT && !(symtype(p) <: FnType)) || return nothing
+    if length(psh) != length(vsh) ||
+            any(i -> length(psh[i]) != length(vsh[i]), eachindex(psh))
+        psz = Tuple(map(length, psh))
+        vsz = Tuple(map(length, vsh))
+        throw(ArgumentError("binding for $p has size $vsz, but $p has size $psz"))
+    end
+    if is_shaped_parameter(p) && psh != vsh
+        throw(
+            DimensionMismatch(
+                "binding for $p has axes $(Tuple(vsh)), but $p is declared with axes $(Tuple(psh))."
+            )
+        )
+    end
+    return nothing
+end
+
+"""
+    $TYPEDSIGNATURES
+
 Check if `bindings` are valid, given a list of parameters `atomic_ps`. Assumes no values in
 `atomic_ps` are discretes.
 """
@@ -383,6 +472,7 @@ function check_bindings(atomic_ps::AtomicArraySet{Dict{SymbolicT, Nothing}}, bin
     for p in atomic_ps
         val = get(bindings, p, COMMON_NOTHING)
         val === COMMON_NOTHING && continue
+        check_shaped_binding(p, val)
         if val === COMMON_MISSING
             if !is_variable_floatingpoint(p)
                 throw(
@@ -396,23 +486,7 @@ function check_bindings(atomic_ps::AtomicArraySet{Dict{SymbolicT, Nothing}}, bin
                 )
             end
         else
-            # Known sizes must match; later symbolic substitution errors do not name the
-            # parameter. For a callable parameter the shape is that of the return value,
-            # while the binding is the function itself, so the sizes are not comparable.
-            psh = SU.shape(p)
-            vsh = SU.shape(val)
-            if psh isa SU.ShapeVecT && vsh isa SU.ShapeVecT && !(symtype(p) <: FnType)
-                if length(psh) != length(vsh) ||
-                        any(i -> length(psh[i]) != length(vsh[i]), eachindex(psh))
-                    psz = Tuple(map(length, psh))
-                    vsz = Tuple(map(length, vsh))
-                    throw(
-                        ArgumentError(
-                            "binding for $p has size $vsz, but $p has size $psz"
-                        )
-                    )
-                end
-            end
+            check_binding_shape(p, val, bindings)
         end
         empty!(varsbuf)
         SU.search_variables!(varsbuf, val; is_atomic = check_bindings_is_atomic)
