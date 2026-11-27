@@ -58,6 +58,11 @@ end
     @test g([1.0], [2.0], p, 3.0) ≈ [7.0]
 end
 
+@testset "Documented callback adaptation hook" begin
+    @test ModelingToolkit.adapt_supplied_callback === ModelingToolkitBase.adapt_supplied_callback
+    @test Base.Docs.doc(ModelingToolkit.adapt_supplied_callback) !== nothing
+end
+
 # The exact set of externally-owned bindings ModelingToolkit deliberately exposes as part
 # of its own public API. ModelingToolkit is a facade: `@reexport using ModelingToolkitBase`
 # pulls up the modelling layer, which in turn `@reexport`s Symbolics (and, through it,
@@ -77,7 +82,8 @@ const REEXPORTED_API = (
     Symbol("@constants"), Symbol("@discretes"), Symbol("@independent_variables"),
     Symbol("@mtkbuild"), Symbol("@mtkcompile"), Symbol("@mtkcomplete"), Symbol("@named"),
     Symbol("@namespace"), Symbol("@nonamespace"), Symbol("@parameters"),
-    Symbol("@poissonians"), :AbstractCollocation, :AbstractSystem, :add_accumulations,
+    Symbol("@poissonians"), :AbstractCollocation, :AbstractSystem, :adapt_supplied_callback,
+    :add_accumulations,
     :alg_equations, :AnalysisPoint, :analytically_integrated, :ap_var, :apply_to_variables,
     :asdigraph,
     :asgraph, :assertions, :AssignmentAffect, :bindings, :Both, :bound_inputs, :bound_outputs,
