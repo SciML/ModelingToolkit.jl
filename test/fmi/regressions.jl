@@ -394,6 +394,34 @@ end
             @test requests3 == [(start, 0.01), (start + 0.01, 0.01)]
             @test sol3[sys3.ports.Float64_continuous_output][end] ≈ 4 * (first(last(requests3)) - start)
         end
+        coarse_h = 3.5 * eps(start)
+        coarse_finish = start + 2 * coarse_h
+        fmu3_coarse = loadFMU("Feedthrough", "ModelicaReferenceFMUs", "0.0.39", "3.0"; type = :CS)
+        fmu3_coarse.modelDescription.coSimulation.canHandleVariableCommunicationStepSize = false
+        coarse_requests = Tuple{Float64, Float64}[]
+        coarse_short = Ref(false)
+        coarse_hook = feedthrough_step_hook() do point, step_h
+            push!(coarse_requests, (point, step_h))
+            return coarse_short[] ? point + 0.5 * step_h : point + step_h
+        end
+        fmu3_coarse.cDoStep = Base.unsafe_convert(Ptr{Cvoid}, coarse_hook)
+        GC.@preserve coarse_hook begin
+            @named coarse_ports = MTK.FMIComponent(
+                Val(3); fmu = fmu3_coarse, type = :CS,
+                communication_step_size = coarse_h, stop_time = start + 10 * coarse_h
+            )
+            coarse_eqs = [
+                getproperty(coarse_ports, name) ~ (name == :Enumeration_input ? 1.0 : 0.0)
+                    for name in (MTK.getname(v) for v in unknowns(coarse_ports) if MTK.isinput(v))
+            ]
+            @mtkcompile coarse_sys = System(coarse_eqs, t; systems = [coarse_ports])
+            coarse_prob = ODEProblem(coarse_sys, [], (start, coarse_finish))
+            coarse_sol = solve(coarse_prob, Tsit5())
+            @test SciMLBase.successful_retcode(coarse_sol)
+            @test coarse_requests == [(start, coarse_h), (start + coarse_h, coarse_h)]
+            coarse_short[] = true
+            @test_throws r"FMI 3.*lastSuccessfulTime" solve(coarse_prob, Tsit5())
+        end
     end
 end
 
@@ -463,6 +491,62 @@ end
         @test sol(0.015; idxs = sys.host_a) == 1.0
         @test sol(0.015; idxs = sys.adder.out) == 1.0
         @test sol(0.025; idxs = sys.host_a) == 5.0
+        @test sol(0.025; idxs = sys.adder.out) == 5.0
+        @test_throws r"FMI.*snapshot.*0\.035" sol(0.035; idxs = sys.adder.out)
+    end
+end
+
+@testset "Model Exchange coincident host affects inside one FMI epoch (second_phase = $second_phase)" for second_phase in (0, typemax(Int))
+    fmu = loadFMU(joinpath(FIXTURE_FMUS, "SimpleAdder.fmu"); type = :ME)
+    completed = Ref(0)
+    original_complete = fmu.cCompletedIntegratorStep
+    function complete_step(instance, no_reset, event, terminate)
+        completed[] += 1
+        status = ccall(
+            original_complete, Cuint,
+            (Ptr{Cvoid}, Cint, Ptr{Cint}, Ptr{Cint}), instance, no_reset, event, terminate
+        )
+        unsafe_store!(event, Cint(completed[] == 1))
+        return status
+    end
+    complete_hook = @cfunction($complete_step, Cuint, (Ptr{Cvoid}, Cint, Ptr{Cint}, Ptr{Cint}))
+    fmu.cCompletedIntegratorStep = Base.unsafe_convert(Ptr{Cvoid}, complete_hook)
+    GC.@preserve complete_hook begin
+        @named adder = MTK.FMIComponent(Val(2); fmu, type = :ME)
+        @discretes host_a(t) = 1.0
+        @variables host_state(t) = 1.0 [irreducible = true]
+        first_host = MTKBase.SymbolicDiscreteCallback(
+            [0.02],
+            MTKBase.ImperativeAffect(
+                (m, o, ctx, integ) -> (; host_a = 3.0, host_state = 3.0);
+                modified = (; host_a, host_state)
+            );
+            reinitializealg = SciMLBase.NoInit()
+        )
+        second_host = MTKBase.SymbolicDiscreteCallback(
+            [0.02],
+            MTKBase.ImperativeAffect(
+                (m, o, ctx, integ) -> (; host_a = 5.0, host_state = 5.0);
+                modified = (; host_a, host_state)
+            );
+            reinitializealg = SciMLBase.NoInit(),
+            callback_phase = second_phase
+        )
+        @mtkcompile sys = System(
+            [adder.a ~ host_a, adder.b ~ 0.0, D(host_state) ~ 0.0], t;
+            systems = [adder], discrete_events = [first_host, second_host]
+        )
+        prob = ODEProblem(sys, [sys.adder.c => 0.0, sys.adder.value => 0.0], (0.0, 0.04))
+        sol = solve(prob, Tsit5(); dt = 0.01, adaptive = false, saveat = [0.015, 0.025])
+        @test SciMLBase.successful_retcode(sol)
+        event_indices = findall(==(0.02), sol.t)
+        @test length(event_indices) >= 4
+        @test sol[sys.adder.out] == sol[sys.host_state]
+        @test sol[sys.adder.out][event_indices] == sol[sys.host_state][event_indices]
+        @test unique(sol[sys.adder.out][event_indices]) == [1.0, 3.0, 5.0]
+        @test sol(0.02; idxs = sys.adder.out, continuity = :left) == 1.0
+        @test sol(0.02; idxs = sys.adder.out, continuity = :right) == 5.0
+        @test sol(0.015; idxs = sys.adder.out) == 1.0
         @test sol(0.025; idxs = sys.adder.out) == 5.0
         @test_throws r"FMI.*snapshot.*0\.035" sol(0.035; idxs = sys.adder.out)
     end

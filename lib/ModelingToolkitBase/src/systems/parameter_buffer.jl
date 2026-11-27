@@ -1095,9 +1095,12 @@ end
 # Required for DiffEqArray constructor to work during interpolation
 Base.size(::NestedGetIndex) = ()
 
+const PRE_INIT_POSITION = -1
+
 struct TrackedDiscreteStorage{T, S}
     buffers::T
     positions::Dict{Int, Vector{Int}}
+    pre_affect_values::Dict{Tuple{Int, Int}, Any}
     initial_values::S
 end
 
@@ -1141,6 +1144,41 @@ function initial_discrete_values(sol)
     return storage.initial_values
 end
 
+function pre_affect_discrete_value(sol, i, ts_idx)
+    storage = discrete_save_storage(sol)
+    storage === nothing && return nothing
+    return get(storage.pre_affect_values, (i, ts_idx), nothing)
+end
+
+function capture_pre_affect_discrete_values!(integ::SciMLBase.DEIntegrator)
+    sol = SciMLBase.get_sol(integ)
+    storage = discrete_save_storage(sol)
+    storage === nothing && return
+    discs = parameter_timeseries_collection_or_nothing(sol)
+    discs === nothing && return
+    times = sol.t
+    times isa Vector || return
+    isempty(times) && return
+    time = current_time(integ)
+    last(times) == time || return
+    ps = parameter_values(integ)
+    for ts_idx in eachindex(discs)
+        isempty(current_time(discs[ts_idx])) || continue
+        val = nothing
+        j = lastindex(times)
+        while j >= firstindex(times) && times[j] == time
+            key = (j, ts_idx)
+            if !haskey(storage.pre_affect_values, key)
+                val === nothing && (val = SciMLBase.get_saveable_values(sol, ps, ts_idx))
+                val === nothing && break
+                storage.pre_affect_values[key] = val
+            end
+            j -= 1
+        end
+    end
+    return
+end
+
 function record_discrete_save_positions!(sol, time, timeseries_idx, skip_duplicates)
     storage = discrete_save_storage(sol)
     storage === nothing && return
@@ -1157,9 +1195,21 @@ function record_discrete_save_positions!(sol, time, timeseries_idx, skip_duplica
     post_positions = copy(positions)
     advances && (post_positions[timeseries_idx] += 1)
     records = storage.positions
+    t0 = hasproperty(sol.prob, :tspan) ? first(sol.prob.tspan) : nothing
     j = state_index - 1
-    while j in eachindex(times) && times[j] == time && !haskey(records, j)
-        records[j] = copy(pre_positions)
+    while j in eachindex(times) && times[j] == time
+        if haskey(records, j)
+            if j == firstindex(times) && isempty(partition_times) && t0 !== nothing &&
+                    isequal(time, t0) && records[j][timeseries_idx] == 0
+                records[j][timeseries_idx] = PRE_INIT_POSITION
+            end
+            break
+        end
+        pos = copy(pre_positions)
+        if pos[timeseries_idx] == 0 && j == firstindex(times) && t0 !== nothing && isequal(time, t0)
+            pos[timeseries_idx] = PRE_INIT_POSITION
+        end
+        records[j] = pos
         j -= 1
     end
     records[state_index] = post_positions
@@ -1206,7 +1256,7 @@ function SciMLBase.create_parameter_timeseries_collection(
         SciMLBase.get_saveable_values(sys, ps, i) for i in 1:num_discretes
     )
     storage = TrackedDiscreteStorage(
-        Tuple(buffers), Dict{Int, Vector{Int}}(), initial_values
+        Tuple(buffers), Dict{Int, Vector{Int}}(), Dict{Tuple{Int, Int}, Any}(), initial_values
     )
     return ParameterTimeseriesCollection(storage, copy(ps))
 end

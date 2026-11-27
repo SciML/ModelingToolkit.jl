@@ -2443,6 +2443,60 @@ end
         ]
         @test kept_pairs == [(1.0, 1.0), (2.0, 2.0), (2.0, 2.0), (3.0, 3.0)]
     end
+
+    @testset "deferred first partition save uses live pre-affect values ($kind)" for kind in (:imperative, :symbolic)
+        @variables def_x(t) = 1.0 [irreducible = true]
+        @discretes def_p(t) = 1.0
+        def_init = SymbolicDiscreteCallback(
+            Float64[], nothing;
+            initialize = ModelingToolkitBase.ImperativeAffect(
+                (m, o, ctx, integ) -> (; def_x = 10.0, def_p = 10.0);
+                modified = (; def_x, def_p)
+            ),
+            reinitializealg = SciMLBase.NoInit(),
+            initialize_save_discretes = false
+        )
+        def_late = if kind == :imperative
+            SymbolicDiscreteCallback(
+                [0.02], ModelingToolkitBase.ImperativeAffect(
+                    (m, o, ctx, integ) -> (; def_x = 11.0, def_p = 11.0);
+                    modified = (; def_x, def_p)
+                );
+                reinitializealg = SciMLBase.NoInit(),
+                initialize_save_discretes = false
+            )
+        else
+            SymbolicDiscreteCallback(
+                [0.02], [def_x ~ 11.0, def_p ~ 11.0];
+                discrete_parameters = [def_p],
+                initialize_save_discretes = false
+            )
+        end
+        def_pairs = Tuple{Float64, Float64}[]
+        function read_deferred_pairs(m, o, ctx, integ, observed_at)
+            sol = SciMLBase.get_sol(integ)
+            empty!(def_pairs)
+            for i in eachindex(sol.t)
+                sol.t[i] == 0.02 || continue
+                pt = observed_at(sol, i)
+                push!(def_pairs, (pt.def_x, pt.def_p))
+            end
+            return (;)
+        end
+        def_read = SymbolicDiscreteCallback(
+            [0.03], ModelingToolkitBase.ImperativeAffect(
+                read_deferred_pairs; observed = (; def_x, def_p)
+            ); reinitializealg = SciMLBase.NoInit()
+        )
+        @mtkcompile def_sys = System(
+            [D(def_x) ~ 0.0], t, [def_x], [def_p];
+            discrete_events = [def_init, def_late, def_read]
+        )
+        def_sol = solve(ODEProblem(def_sys, [], (0.0, 0.04)), Tsit5(); dt = 0.01, adaptive = false)
+        @test SciMLBase.successful_retcode(def_sol)
+        @test def_sol.discretes[1].t == [0.02]
+        @test def_pairs == [(10.0, 10.0), (11.0, 11.0)]
+    end
 end
 
 @testset "`reinitializealg` takes part in the hash of an event" begin

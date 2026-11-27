@@ -590,7 +590,7 @@ function MTK.FMIComponent(
             # The epoch distinguishes FMI Event Mode transitions; phase distinguishes
             # host-only observation changes within one FMI epoch at the same timestamp.
             @variables __mtk_internal_epoch(t) = 0.0 [irreducible = true]
-            @variables __mtk_internal_phase(t) = 0.0 [irreducible = true]
+            @variables __mtk_internal_phase(t) = 0.0 [irreducible = true, misc = :__mtk_affect_phase__]
             @discretes __mtk_internal_history(t)::MEOutputHistory = MEOutputHistory()
             @parameters (me_outputs::MEOutputs)(..)[1:length(outputs)] = MEOutputs(length(outputs))
             push!(states, __mtk_internal_epoch, __mtk_internal_phase)
@@ -609,7 +609,7 @@ function MTK.FMIComponent(
             )
             me_modified = (; me_modified..., epoch = __mtk_internal_epoch, phase = __mtk_internal_phase)
             initialize_observed = (; initialize_observed..., state_values = __mtk_internal_u)
-            initialize_modified = (; initialize_modified..., history = __mtk_internal_history)
+            initialize_modified = (; initialize_modified..., history = __mtk_internal_history, phase = __mtk_internal_phase)
             history_modified = (; history_archive = __mtk_internal_history)
             finalize_observed = me_observed
 
@@ -621,7 +621,10 @@ function MTK.FMIComponent(
             )
             push!(
                 discrete_events, MTKBase.SymbolicDiscreteCallback(
-                    phase_due(__mtk_internal_history, __mtk_internal_u, __mtk_internal_x, t) > 0.5,
+                    phase_due(
+                        __mtk_internal_history, __mtk_internal_u, __mtk_internal_x, t,
+                        __mtk_internal_epoch, __mtk_internal_phase
+                    ) > 0.5,
                     phase_affect; reinitializealg = SciMLBase.NoInit(), callback_phase = typemax(Int)
                 )
             )
@@ -1366,19 +1369,15 @@ Base.copy(history::MEOutputHistory) = history
 
 struct MEPhaseDue end
 
-function (::MEPhaseDue)(history, states, inputs, time)
+function (::MEPhaseDue)(history, states, inputs, time, epoch, phase)
     history.active || return 0.0
-    sol = history.sol_ref.value
-    sol === nothing && return 0.0
-    times = sol.t
-    isempty(times) && return 0.0
-    t = Float64(time)
-    times[end] == t || return 0.0
     history.phase_dirty && return 1.0
-    if history.last_time == t
-        return (!isequal(states, history.last_states) || !isequal(inputs, history.last_inputs)) ? 1.0 : 0.0
-    end
-    return (length(times) >= 2 && times[end - 1] == t) ? 1.0 : 0.0
+    key = (Float64(epoch), Float64(time), Float64(phase))
+    haskey(history.samples, key) || return 0.0
+    return (
+            history.last_time == Float64(time) &&
+            (!isequal(states, history.last_states) || !isequal(inputs, history.last_inputs))
+        ) ? 1.0 : 0.0
 end
 
 struct MEOutputs
@@ -1921,11 +1920,17 @@ function fmiCSStep!(m, o, ctx, integrator)
         h = ctx.dt
     end
     set_values!(wrapper, wrapper.inputs, ctx.input_sample)
+    requested = from + h
     achieved = do_cs_step!(wrapper, from, h)
     if wrapper isa FMI3InstanceWrapper &&
-            !(isfinite(achieved) && abs(achieved - to) <= min(4max(eps(to), eps(achieved)), h / 4))
+            !(isfinite(achieved) && abs(achieved - requested) <= min(4max(eps(requested), eps(achieved)), h / 4))
         reset_instance!(wrapper)
-        error("FMI 3 Co-Simulation requested time $to, but the FMU reached $achieved (lastSuccessfulTime).")
+        error("FMI 3 Co-Simulation requested time $requested, but the FMU reached $achieved (lastSuccessfulTime).")
+    end
+    grid_tol = 4 * max(eps(to), eps(requested), eps(from), isnan(ctx.grid_start[]) ? 0.0 : eps(ctx.grid_start[]))
+    if abs(requested - to) > grid_tol
+        reset_instance!(wrapper)
+        error("FMI Co-Simulation step endpoint $requested diverged from scheduled grid time $to.")
     end
     ctx.t_last[] = to
     isnan(ctx.grid_start[]) || (ctx.step_index[] += 1)

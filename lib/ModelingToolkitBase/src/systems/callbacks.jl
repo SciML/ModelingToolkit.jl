@@ -868,6 +868,7 @@ struct ExplicitAffect{DVS, PS, UF, PF}
 end
 
 function (ea::ExplicitAffect)(integ)
+    capture_pre_affect_discrete_values!(integ)
     isempty(ea.dvs_to_update) || ea.u_up!(integ)
     isempty(ea.ps_to_update) || ea.p_up!(integ)
     return ea.reset_jumps && reset_aggregated_jumps!(integ)
@@ -957,6 +958,7 @@ function affect_tolerance(integ, name::Symbol)
 end
 
 function (ia::ImplicitAffect)(integ)
+    capture_pre_affect_discrete_values!(integ)
     ia.affu_setter!(ia.affprob, ia.affu_getter(integ))
     ia.affp_setter!(ia.affprob, ia.affp_getter(integ))
     # remake only updates tspan; result is a transient local, not stored back to struct
@@ -1286,7 +1288,7 @@ function compile_vector_callback_affects(cbs, sys, ic; kwargs...)
             compile_affect(cb.affect_neg, cb, sys; default = EMPTY_AFFECT, kwargs...)
         push!(affect_negs, affect_neg)
         push!(inits, compile_affect(cb.initialize, cb, sys; default = nothing, kwargs...))
-        push!(finals, compile_affect(cb.finalize, cb, sys; default = nothing, kwargs...))
+        push!(finals, compile_affect(cb.finalize, cb, sys; default = nothing, advance_phase = false, kwargs...))
         if ic !== nothing
             save_idxs = get(ic.callback_to_clocks, cb, Int[])
             for _ in flatten_equations(equations(cb))
@@ -1335,7 +1337,7 @@ function generate_callback(cb, sys; tspan = nothing, kwargs...)
         kwargs...
     )
     final = compile_affect(
-        cb.finalize, cb, sys; default = SciMLBase.FINALIZE_DEFAULT, kwargs...
+        cb.finalize, cb, sys; default = SciMLBase.FINALIZE_DEFAULT, advance_phase = false, kwargs...
     )
 
     initialize = isnothing(cb.initialize) ? init : InitFinalizeWrapper(init)
@@ -1382,6 +1384,58 @@ function generate_callback(cb, sys; tspan = nothing, kwargs...)
     end
 end
 
+const AFFECT_PHASE_MARKER = :__mtk_affect_phase__
+
+struct PhaseAdvancingAffect{F, G, S}
+    affect!::F
+    getters::G
+    setters::S
+end
+
+function (paa::PhaseAdvancingAffect)(integ)
+    res = paa.affect!(integ)
+    for i in eachindex(paa.getters)
+        paa.setters[i](integ, paa.getters[i](integ) + 1)
+    end
+    return res
+end
+
+function _modified_var_set(aff::AffectSystem)
+    vars = Set{SymbolicT}()
+    for v in unknowns(aff)
+        push!(vars, unwrap(v))
+    end
+    for p in discretes(aff)
+        push!(vars, unwrap(p))
+    end
+    return vars
+end
+
+function _modified_var_set(aff::ImperativeAffect)
+    vars = Set{SymbolicT}()
+    for v in modified(aff)
+        if symbolic_type(v) == NotSymbolic() && v isa AbstractArray
+            for elem in v
+                push!(vars, unwrap(elem))
+            end
+        else
+            push!(vars, unwrap(v))
+        end
+    end
+    return vars
+end
+
+function wrap_phase_advancing_affect(compiled, aff, sys)
+    phase_vars = [v for v in unknowns(sys) if getmisc(v) === AFFECT_PHASE_MARKER]
+    isempty(phase_vars) && return compiled
+    mod_vars = _modified_var_set(aff)
+    filter!(v -> !(unwrap(v) in mod_vars), phase_vars)
+    isempty(phase_vars) && return compiled
+    getters = [getu(sys, v) for v in phase_vars]
+    setters = [setu(sys, v) for v in phase_vars]
+    return PhaseAdvancingAffect(compiled, getters, setters)
+end
+
 """
     compile_affect(aff, cb, sys; default, kwargs...)
 
@@ -1393,15 +1447,17 @@ Dispatches on the affect type:
 """
 function compile_affect(
         aff::Union{Nothing, Affect}, cb::AbstractCallback, sys::AbstractSystem;
-        default = nothing, mtk_verbosity::MTKVerbosity = DEFAULT_MTK_VERBOSE, kwargs...
+        default = nothing, mtk_verbosity::MTKVerbosity = DEFAULT_MTK_VERBOSE,
+        advance_phase::Bool = true, kwargs...
     )
-    return if isnothing(aff)
-        default
+    compiled = if isnothing(aff)
+        return default
     elseif aff isa AffectSystem
         compile_equational_affect(aff, sys; kwargs...)
     elseif aff isa ImperativeAffect
         compile_functional_affect(aff, sys; mtk_verbosity, kwargs...)
     end
+    return advance_phase ? wrap_phase_advancing_affect(compiled, aff, sys) : compiled
 end
 
 """

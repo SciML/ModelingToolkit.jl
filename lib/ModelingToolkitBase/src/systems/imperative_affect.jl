@@ -247,7 +247,9 @@ function solution_index_parameter_values(sol, i)
             j = positions[ts_idx]
             if j >= firstindex(times)
                 val = state_values(partition, j)
-            elseif initial_values !== nothing && !isempty(times) && first(times) == time
+            elseif (pre_val = pre_affect_discrete_value(sol, i, ts_idx)) !== nothing
+                val = pre_val
+            elseif j == PRE_INIT_POSITION && initial_values !== nothing && !isempty(times) && first(times) == time
                 val = initial_values[ts_idx]
             else
                 isempty(times) ?
@@ -291,6 +293,7 @@ struct FunctionalAffect{UF, CTX, MOF, OF, MN, OST, UPS}
 end
 
 @inline function (fa::FunctionalAffect)(integ)
+    capture_pre_affect_discrete_values!(integ)
     # Read the current values of the modified variables (pre-affect baseline)
     modvals = fa.mod_og_val_fun(integ.u, integ.p, integ.t)
     upd_component_array = NamedTuple{fa.mod_names}(modvals)
