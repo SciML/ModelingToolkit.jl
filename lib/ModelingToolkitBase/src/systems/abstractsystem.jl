@@ -719,7 +719,7 @@ function complete(
         for (p, val) in get_bindings(sys)
             is_shaped_parameter(p) || continue
             check_shaped_binding(p, val)
-            val === COMMON_MISSING || check_binding_shape(p, val)
+            val === COMMON_MISSING || check_binding_shape(p, val, get_bindings(sys))
         end
     end
     if !split && check_shaped && any(is_shaped_parameter, parameters(sys))

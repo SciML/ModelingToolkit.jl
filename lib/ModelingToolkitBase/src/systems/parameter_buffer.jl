@@ -226,6 +226,16 @@ function MTKParameters(
             end
         end
         val = symconvert(ctype, floatT, unwrap_const(val))
+        if is_shaped_parameter(sym) && !(val isa ctype)
+            # a wrong shape is the more specific error
+            validate_opaque_shape(unwrap(sym), ctype, val)
+            throw(
+                ArgumentError(
+                    "value for $sym is converted to $(typeof(val)), but $sym is declared with " *
+                        "the type $ctype; use a value that is converted to the declared type."
+                )
+            )
+        end
         set_value(sym, val)
     end
     tunable_buffer = narrow_buffer_type(tunable_buffer; p_constructor)

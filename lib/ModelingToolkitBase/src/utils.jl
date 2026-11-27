@@ -390,6 +390,22 @@ function check_shaped_binding(p::SymbolicT, val::SymbolicT)
     )
 end
 
+# Whether a parameter in `val` is itself bound, directly or through further bindings, to a
+# value of unknown shape. Bound parameters are not in the runtime buffer, so nothing else checks it.
+function binds_to_unknown_shape(val::SymbolicT, bindings, seen = Set{SymbolicT}())
+    vars = Set{SymbolicT}()
+    SU.search_variables!(vars, val; is_atomic = check_bindings_is_atomic)
+    for v in vars
+        v in seen && continue
+        push!(seen, v)
+        bound = get(bindings, v, COMMON_NOTHING)
+        (bound === COMMON_NOTHING || bound === COMMON_MISSING) && continue
+        SU.shape(bound) isa SU.ShapeVecT || return true
+        binds_to_unknown_shape(bound, bindings, seen) && return true
+    end
+    return false
+end
+
 """
     $TYPEDSIGNATURES
 
@@ -398,7 +414,7 @@ errors do not name the parameter. For a callable parameter the shape is that of 
 value, while the binding is the function itself, so the sizes are not comparable. Dense
 shaped parameters are also indexed with their declared 1-based ranges, so the axes must match.
 """
-function check_binding_shape(p::SymbolicT, val::SymbolicT)
+function check_binding_shape(p::SymbolicT, val::SymbolicT, bindings)
     psh = SU.shape(p)
     vsh = SU.shape(val)
     # The declared axes of a shaped parameter cannot be checked against an unknown shape, and the
@@ -408,6 +424,14 @@ function check_binding_shape(p::SymbolicT, val::SymbolicT)
             ArgumentError(
                 "binding for $p has a value of unknown shape, but $p is declared with " *
                     "shape $(Tuple(psh)); bind it to a value or expression of known shape."
+            )
+        )
+    end
+    if is_shaped_parameter(p) && binds_to_unknown_shape(val, bindings)
+        throw(
+            ArgumentError(
+                "binding for $p depends through other bindings on a value of unknown shape, " *
+                    "so the declared shape of $p cannot be checked."
             )
         )
     end
@@ -453,7 +477,7 @@ function check_bindings(atomic_ps::AtomicArraySet{Dict{SymbolicT, Nothing}}, bin
                 )
             end
         else
-            check_binding_shape(p, val)
+            check_binding_shape(p, val, bindings)
         end
         empty!(varsbuf)
         SU.search_variables!(varsbuf, val; is_atomic = check_bindings_is_atomic)

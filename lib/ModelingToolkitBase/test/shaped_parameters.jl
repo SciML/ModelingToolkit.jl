@@ -371,3 +371,31 @@ end
     @test_throws "unknown shape" complete(set_defaults(sys, [A => 2 * B]))
     @test complete(sys) isa System
 end
+
+@testset "shaped parameters whose declared array type is not preserved by construction are rejected" begin
+    view_value = view(ones(2, 2), :, :)
+    A = shaped_parameter(:A, typeof(view_value), 2, 2)
+    @variables x(t)
+    @named sys = System([D(x) ~ A[2, 2]], t, [x], [A])
+    csys = complete(sys)
+    @test_throws "is declared with the type" MTKParameters(csys, Dict(A => view_value))
+end
+
+@testset "shaped bindings reaching a value of unknown shape through other bindings are rejected" begin
+    A = shaped_parameter(:A, Matrix{Float64}, 2, 2)
+    @parameters B[1:2, 1:2] C::Matrix{Float64}
+    @variables x(t)
+    @test_throws "unknown shape" System(
+        [D(x) ~ A[2, 2]], t, [x], [A, B, C]; bindings = [A => B, B => C], name = :chain
+    )
+    @named sys = System([D(x) ~ A[2, 2]], t, [x], [A, B, C]; bindings = [B => C])
+    @test_throws "unknown shape" complete(set_defaults(sys, [A => B]))
+    @test_throws "unknown shape" complete(set_defaults(sys, [A => 2 * B]))
+    @named known = System([D(x) ~ A[2, 2]], t, [x], [A, B, C])
+    @test complete(set_defaults(known, [A => B])) isa System
+    # a cycle of bindings terminates
+    cyclic = Dict{ModelingToolkitBase.SymbolicT, ModelingToolkitBase.SymbolicT}(
+        unwrap(A) => unwrap(B), unwrap(B) => unwrap(A)
+    )
+    @test !ModelingToolkitBase.binds_to_unknown_shape(unwrap(A), cyclic)
+end
