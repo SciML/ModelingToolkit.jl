@@ -107,8 +107,8 @@ function SciMLBase.diagnose_symbolic_instability(sys::AbstractSystem, u, uprev)
 
     #check for assertion failures
     unks = unknowns(sys)
-    curr_substitution_map = Dict{SymbolicT, SymbolicT}(zip(unks, u))
-    prev_substitution_map = Dict{SymbolicT, SymbolicT}(zip(unknowns(sys), uprev))
+    curr_substitution_map = state_substitution_map(unks, u)
+    prev_substitution_map = state_substitution_map(unks, uprev)
 
     for (cond, msg) in assertions(sys)
         subclauses = String[]
@@ -120,11 +120,35 @@ function SciMLBase.diagnose_symbolic_instability(sys::AbstractSystem, u, uprev)
     end
 
     #find singularity causes in equations
+    # The equations and the observed equations are walked separately, not as
+    # `full_equations`: substituting the observed equations into the equations is
+    # expensive on large systems, and printing the result expands every shared
+    # subexpression (exponentially in the depth of the observed chain).
     singularities = String[]
-    visited = IdDict{SymbolicT, Nothing}()
-    subber = SymbolicUtils.IRSubstituter{true}(get_irstructure(sys), prev_substitution_map)
-    for eq in full_equations(sys)
-        find_singular_subterms(eq, eq.rhs, subber, singularities, visited)
+    values = copy(prev_substitution_map)
+    add_array_values!(values, unks)
+    ctx = SingularityAnalysis(sys, values, singularities)
+    obs = observed(sys)
+    # value the observed variables that depend only on the unknowns (`obs` is sorted so
+    # that each one only depends on those before it)
+    for eq in obs
+        val = value_at_state(eq.rhs, ctx, eq)
+        val === nothing && continue
+        values[eq.lhs] = val
+        push!(ctx.evaluable_atoms, eq.lhs)
+    end
+    for eqs in (equations(sys), obs), eq in eqs
+        find_singular_subterms(eq, eq.rhs, ctx)
+        ctx.budget[] <= 0 && break
+    end
+    if ctx.unlisted[] > 0
+        push!(singularities, "(and $(ctx.unlisted[]) more of these)")
+    end
+    if ctx.budget[] <= 0
+        push!(
+            singularities,
+            "(analysis stopped after $DIAGNOSIS_MAX_TERMS subexpressions and array elements; the remaining equations were not checked)"
+        )
     end
     if !isempty(singularities)
         push!(diagnosis, "\nSymbolic Analysis of MTK System:")
@@ -134,45 +158,380 @@ function SciMLBase.diagnose_symbolic_instability(sys::AbstractSystem, u, uprev)
     return isempty(diagnosis) ? "" : join(diagnosis, "\n")
 end
 
-function find_singular_subterms(eq, expr, sub_map, diagnosis, visited)
+# The analysis runs whenever an integration fails, so its cost must stay bounded on large
+# systems: it visits each distinct subexpression once, and stops after this many (each
+# element checked in an array term counts as one).
+const DIAGNOSIS_MAX_TERMS = 1_000_000
+# Equations and subexpressions longer than this are abbreviated in the messages.
+const DIAGNOSIS_MAX_EXPRESSION_LENGTH = 200
+# At most this many findings are listed; the rest are only counted.
+const DIAGNOSIS_MAX_FINDINGS = 50
+# A finding in an array term lists at most this many of its elements.
+const DIAGNOSIS_MAX_ELEMENTS = 5
+
+struct SingularityAnalysis{S}
+    # substitutes the state the integrator failed from
+    subber::S
+    diagnosis::Vector{String}
+    visited::IdDict{SymbolicT, Nothing}
+    # what a subexpression may depend on to evaluate to a number: the analysis has no
+    # parameter values, so it can only evaluate subexpressions of the unknowns and time
+    evaluable_atoms::Set{SymbolicT}
+    evaluable::IdDict{SymbolicT, Bool}
+    budget::Base.RefValue{Int}
+    # findings not listed because there were more than `DIAGNOSIS_MAX_FINDINGS`
+    unlisted::Base.RefValue{Int}
+    # equations with an evaluation that threw, which is reported once per equation
+    failed::IdDict{Equation, Nothing}
+end
+
+function SingularityAnalysis(sys::AbstractSystem, substitution_map, diagnosis)
+    # substituting numbers adds their results to the IR: use a copy, so that the system's
+    # IR does not grow with every diagnosis
+    subber = SymbolicUtils.IRSubstituter{true}(copy(get_irstructure(sys)), substitution_map)
+    atoms = Set{SymbolicT}(keys(substitution_map))
+    is_time_dependent(sys) && push!(atoms, get_iv(sys)::SymbolicT)
+    return SingularityAnalysis(
+        subber, diagnosis, IdDict{SymbolicT, Nothing}(), atoms, IdDict{SymbolicT, Bool}(),
+        Ref(DIAGNOSIS_MAX_TERMS), Ref(0), IdDict{Equation, Nothing}()
+    )
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Whether `expr` depends only on the unknowns and time, so that substituting the state gives a
+number. Substituting into anything else (a subexpression with a parameter) only builds a new,
+often much larger, symbolic expression, which on large systems runs out of memory.
+"""
+function is_evaluable(expr, ctx::SingularityAnalysis)
     expr = unwrap(expr)
-    !SymbolicUtils.iscall(expr) && return diagnosis
+    expr isa SymbolicT || return true
+    expr in ctx.evaluable_atoms && return true
+    SymbolicUtils.isconst(expr) && return true
+    # a variable that is not an unknown, e.g. a parameter
+    SymbolicUtils.iscall(expr) || return false
+    op = SymbolicUtils.operation(expr)
+    # `p(t)` (a discrete), `Initial(x)`, `Pre(p)`, ...
+    (op isa SymbolicT || op isa SU.Operator) && return false
+    return get!(ctx.evaluable, expr) do
+        all(arg -> is_evaluable(arg, ctx), SymbolicUtils.arguments(expr))
+    end
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+The values of the unknowns `unks` at the state `u`, as a substitution map. An array unknown
+(in a system that is not scalarized) takes as many consecutive entries of `u` as it has
+elements, in column-major order, and its elements are valued too. The unknowns after one
+whose shape is not known are left out, since their entries in `u` are not known either.
+"""
+function state_substitution_map(unks, u)
+    subs = Dict{SymbolicT, SymbolicT}()
+    k = 0
+    for x in unks
+        sh = SU.shape(x)
+        sh isa SU.ShapeVecT || break
+        if isempty(sh)
+            k < length(u) || break
+            subs[x] = u[k += 1]
+            continue
+        end
+        idxs = CartesianIndices(Tuple(sh))
+        k + length(idxs) <= length(u) || break
+        vals = reshape(collect(u[(k + 1):(k + length(idxs))]), size(idxs))
+        for (I, val) in zip(idxs, vals)
+            subs[x[Tuple(I)...]] = val
+        end
+        # the whole array, for the equations that use it; only with 1-based axes
+        all(r -> first(r) == 1, sh) && (subs[x] = vals)
+        k += length(idxs)
+    end
+    return subs
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Add to `values` the value of each array whose elements are all unknowns, so that the
+unscalarized equations, which use the whole array, can be evaluated.
+"""
+function add_array_values!(values::AbstractDict, unks)
+    seen = Set{SymbolicT}()
+    for u in unks
+        SU.iscall(u) && SU.operation(u) === getindex || continue
+        arr = SU.arguments(u)[1]
+        arr in seen && continue
+        push!(seen, arr)
+        sh = SU.shape(arr)
+        sh isa SU.ShapeVecT && all(r -> first(r) == 1, sh) || continue
+        idxs = CartesianIndices(Tuple(length.(sh)))
+        all(I -> haskey(values, arr[Tuple(I)...]), idxs) || continue
+        values[arr] = map(I -> SU.unwrap_const(values[arr[Tuple(I)...]]), idxs)
+    end
+    return values
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+The value of `expr` at the last state the integrator accepted: a number, an array of
+numbers, or `nothing` if it does not evaluate to either.
+
+Evaluating it can throw, e.g. `sqrt` of a negative number, also in an observed equation that
+the dynamics do not use. The analysis must not replace the solver's result with an exception,
+so the error is reported as a finding in `eq` and `nothing` is returned. Only the evaluation
+of the model's own expressions is guarded, and interrupts and running out of memory are
+rethrown; errors in the analysis itself are not caught.
+"""
+function value_at_state(expr, ctx::SingularityAnalysis, eq::Equation)
+    is_evaluable(expr, ctx) || return nothing
+    val = try
+        Symbolics.value(ctx.subber(expr))
+    catch err
+        err isa Union{InterruptException, OutOfMemoryError} && rethrow()
+        evaluation_failed!(eq, expr, err, ctx)
+        return nothing
+    end
+    val isa Number && return val
+    val isa AbstractArray && all(x -> x isa Number, val) && return val
+    return nothing
+end
+
+# The value of `expr` at the last accepted state if it is a real number, otherwise `nothing`.
+function real_value_at_state(expr, ctx::SingularityAnalysis, eq::Equation)
+    val = value_at_state(expr, ctx, eq)
+    return val isa Real ? val : nothing
+end
+
+function evaluation_failed!(eq::Equation, expr, err, ctx::SingularityAnalysis)
+    # the subexpressions of a failing expression often fail too: report only the first
+    haskey(ctx.failed, eq) && return nothing
+    ctx.failed[eq] = nothing
+    add_finding!(ctx) do
+        "in equation $(abbreviated(eq)): evaluating $(abbreviated(expr)) at the last accepted state threw $(error_text(err))"
+    end
+    return nothing
+end
+
+# The error message of `err`, abbreviated and on one line.
+function error_text(err)
+    # `showerror` runs the error hints, which catch and log any exception: the output is
+    # cut without throwing
+    io = BoundedIO(IOBuffer(), DIAGNOSIS_MAX_EXPRESSION_LENGTH, false, Ref(false))
+    try
+        showerror(io, err)
+    catch err2
+        err2 isa InterruptException && rethrow()
+        # `showerror` itself failed
+        return string(nameof(typeof(err)))
+    end
+    text = String(take!(io.buf))
+    io.truncated[] && (text = with_ellipsis(text))
+    return replace(text, '\n' => ' ')
+end
+
+# An `IO` that keeps at most `limit` bytes. If `stop`, writing more throws, so that printing
+# stops early instead of expanding a large expression in full; otherwise the rest is dropped.
+struct BoundedIO <: IO
+    buf::IOBuffer
+    limit::Int
+    stop::Bool
+    truncated::Base.RefValue{Bool}
+end
+BoundedIO(limit::Int) = BoundedIO(IOBuffer(), limit, true, Ref(false))
+struct OutputLimitReached <: Exception end
+function Base.unsafe_write(io::BoundedIO, p::Ptr{UInt8}, n::UInt)
+    room = io.limit - position(io.buf)
+    unsafe_write(io.buf, p, min(n, UInt(max(room, 0))))
+    if n > room
+        io.truncated[] = true
+        io.stop && throw(OutputLimitReached())
+    end
+    return n
+end
+Base.write(io::BoundedIO, b::UInt8) = unsafe_write(io, Ref(b), UInt(1))
+
+# `text`, cut at `DIAGNOSIS_MAX_EXPRESSION_LENGTH` bytes, with an ellipsis
+function with_ellipsis(text::String)
+    # the limit can fall inside a multi-byte character: drop its incomplete start
+    final = thisind(text, ncodeunits(text))
+    if final > 0 && !isvalid(text[final])
+        text = text[1:prevind(text, final)]
+    end
+    return text * " …"
+end
+
+function abbreviated(x)
+    io = BoundedIO(DIAGNOSIS_MAX_EXPRESSION_LENGTH)
+    try
+        print(io, x)
+    catch err
+        err isa OutputLimitReached || rethrow()
+        return with_ellipsis(String(take!(io.buf)))
+    end
+    return String(take!(io.buf))
+end
+
+# `message()` builds the finding's text, only if it is listed.
+function add_finding!(message, ctx::SingularityAnalysis)
+    if length(ctx.diagnosis) < DIAGNOSIS_MAX_FINDINGS
+        push!(ctx.diagnosis, message())
+    else
+        ctx.unlisted[] += 1
+    end
+    return nothing
+end
+
+function find_singular_subterms(eq, expr, ctx::SingularityAnalysis)
+    expr = unwrap(expr)
+    !SymbolicUtils.iscall(expr) && return ctx.diagnosis
+    haskey(ctx.visited, expr) && return ctx.diagnosis
+    ctx.budget[] <= 0 && return ctx.diagnosis
+    ctx.budget[] -= 1
+    ctx.visited[expr] = nothing
     op = SymbolicUtils.operation(expr)
     args = SymbolicUtils.arguments(expr)
-    haskey(visited, expr) && return diagnosis
-    visited[expr] = nothing
+    diagnosis = ctx.diagnosis
 
     if op === (/) #division, singular if we divide by small thing
-        d = Symbolics.value(sub_map(args[2]))
+        d = value_at_state(args[2], ctx, eq)
         if d isa Number && abs(d) < 1.0e-10
-            push!(diagnosis, "in equation $eq: division by very small value $(args[2]) ≈ $(@sprintf("%.4g", d)) leads to singularity.")
-        end
-    elseif op === log #singular if we log small thing
-        x = Symbolics.value(sub_map(args[1]))
-        if x isa Number && x <= 1.0e-10
-            push!(diagnosis, "in equation $eq: log of $(args[1]) = $(@sprintf("%.4g", x)) near/at singularity (derivative blows up).")
-        end
-    elseif op === sqrt
-        x = Symbolics.value(sub_map(args[1]))
-        if x isa Number && x < 1.0e-10
-            push!(diagnosis, "in equation $eq: sqrt of $(args[1]) = $(@sprintf("%.4g", x)) near/at singularity (derivative blows up).")
-        end
-    elseif op === (^)
-        e = Symbolics.value(sub_map(args[2]))
-        b = Symbolics.value(sub_map(args[1]))
-        if e isa Number && b isa Number #two cases
-            if e < 0 && abs(b) < 1.0e-10
-                push!(diagnosis, "in equation $eq: ($(args[1])) raised to power $e with base ≈ $(@sprintf("%.4g", b)) going to 0; result diverges.")
-            elseif e > 0 && abs(b) > 1
-                push!(diagnosis, "in equation $eq: ($(args[1]) ≈ $(@sprintf("%.4g", b))) raised to power $e - base magnitude is large and being amplified.")
+            add_finding!(ctx) do
+                "in equation $(abbreviated(eq)): division by very small value $(abbreviated(args[2])) ≈ $(format_value(d)) leads to singularity."
             end
         end
+    elseif op === log #singular if we log small thing
+        x = real_value_at_state(args[1], ctx, eq)
+        if x !== nothing && x <= 1.0e-10
+            add_finding!(ctx) do
+                "in equation $(abbreviated(eq)): log of $(abbreviated(args[1])) = $(@sprintf("%.4g", x)) near/at singularity (derivative blows up)."
+            end
+        end
+    elseif op === sqrt
+        x = real_value_at_state(args[1], ctx, eq)
+        if x !== nothing && x < 1.0e-10
+            add_finding!(ctx) do
+                "in equation $(abbreviated(eq)): sqrt of $(abbreviated(args[1])) = $(@sprintf("%.4g", x)) near/at singularity (derivative blows up)."
+            end
+        end
+    elseif op === (^)
+        e = real_value_at_state(args[2], ctx, eq)
+        b = e === nothing ? nothing : real_value_at_state(args[1], ctx, eq)
+        if e !== nothing && b !== nothing #two cases
+            if e < 0 && abs(b) < 1.0e-10
+                add_finding!(ctx) do
+                    "in equation $(abbreviated(eq)): ($(abbreviated(args[1]))) raised to power $e with base ≈ $(@sprintf("%.4g", b)) going to 0; result diverges."
+                end
+            elseif e > 0 && abs(b) > 1
+                add_finding!(ctx) do
+                    "in equation $(abbreviated(eq)): ($(abbreviated(args[1])) ≈ $(@sprintf("%.4g", b))) raised to power $e - base magnitude is large and being amplified."
+                end
+            end
+        end
+    elseif op === broadcast && SU.isconst(args[1])
+        # an unscalarized array equation, e.g. `D(x) ~ 1 ./ x`
+        find_singular_elements(eq, SU.unwrap_const(args[1]), @view(args[2:end]), ctx)
     end
 
     for arg in args
-        find_singular_subterms(eq, arg, sub_map, diagnosis, visited)
+        find_singular_subterms(eq, arg, ctx)
     end
     return diagnosis
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Check the elements of the broadcast of `f` over `fargs`, with the same thresholds as the
+scalar operations in `find_singular_subterms`. The term is one finding, which lists the first
+`DIAGNOSIS_MAX_ELEMENTS` failing elements.
+"""
+function find_singular_elements(eq, f, fargs, ctx::SingularityAnalysis)
+    # division, by the second argument or by the only argument of `inv`; only the
+    # denominator needs a value
+    denominator = f === (/) && length(fargs) == 2 ? fargs[2] :
+        f === inv && length(fargs) == 1 ? fargs[1] : nothing
+    if denominator !== nothing
+        d = value_at_state(denominator, ctx, eq)
+        d === nothing && return nothing
+        elements = failing_elements(d -> abs(d) < 1.0e-10, format_value, Any[d], ctx; real = false)
+        elements === nothing || add_finding!(ctx) do
+            "in equation $(abbreviated(eq)): division by very small values of $(abbreviated(denominator)) ($elements) leads to singularity."
+        end
+        return nothing
+    end
+    vals = Any[]
+    for arg in fargs
+        val = value_at_state(arg, ctx, eq)
+        val === nothing && return nothing
+        push!(vals, val)
+    end
+    if (f === log || f === sqrt) && length(vals) == 1
+        threshold_reached = f === log ? (x -> x <= 1.0e-10) : (x -> x < 1.0e-10)
+        elements = failing_elements(threshold_reached, format_value, vals, ctx)
+        elements === nothing || add_finding!(ctx) do
+            "in equation $(abbreviated(eq)): $f of $(abbreviated(fargs[1])) ($elements) near/at singularity (derivative blows up)."
+        end
+    elseif f === (^) && length(vals) == 2
+        show_element = (b, e) -> "base ≈ $(format_value(b)), power $e"
+        elements = failing_elements((b, e) -> e < 0 && abs(b) < 1.0e-10, show_element, vals, ctx)
+        elements === nothing || add_finding!(ctx) do
+            "in equation $(abbreviated(eq)): ($(abbreviated(fargs[1]))) raised to negative powers with base going to 0 ($elements); result diverges."
+        end
+        elements = failing_elements((b, e) -> e > 0 && abs(b) > 1, show_element, vals, ctx)
+        elements === nothing || add_finding!(ctx) do
+            "in equation $(abbreviated(eq)): ($(abbreviated(fargs[1]))) raised to positive powers with large base magnitude ($elements) - being amplified."
+        end
+    end
+    return nothing
+end
+
+format_value(x::Real) = @sprintf("%.4g", x)
+format_value(x) = string(x)
+
+"""
+    $(TYPEDSIGNATURES)
+
+The elements of the broadcast over `vals` (arrays, or scalars, which broadcast) for which
+`singular` holds, as text such as `"[1]: 0; [3]: 1e-12"` with each element shown by `describe`,
+or `nothing` if there are none. Each element counts against the analysis budget. Unless
+`real = false`, only elements whose values are all real are checked.
+"""
+function failing_elements(singular, describe, vals, ctx::SingularityAnalysis; real = true)
+    singular_real = (xs...) -> all(x -> x isa (real ? Real : Number), xs) && singular(xs...)
+    if !any(v -> v isa AbstractArray, vals)
+        ctx.budget[] -= 1
+        return singular_real(vals...) ? describe(vals...) : nothing
+    end
+    # the arguments' elements, broadcast to a common shape (lazily)
+    elements = try
+        Broadcast.instantiate(Broadcast.broadcasted(tuple, vals...))
+    catch err
+        err isa DimensionMismatch || rethrow()
+        return nothing
+    end
+    idxs = CartesianIndices(axes(elements))
+    if length(idxs) > ctx.budget[]
+        # checking every element would exceed the budget: stop the analysis here
+        ctx.budget[] = 0
+        return nothing
+    end
+    ctx.budget[] -= length(idxs)
+    shown = CartesianIndex[]
+    nmore = 0
+    for I in idxs
+        singular_real(elements[I]...) || continue
+        if length(shown) < DIAGNOSIS_MAX_ELEMENTS
+            push!(shown, I)
+        else
+            nmore += 1
+        end
+    end
+    isempty(shown) && return nothing
+    text = join(("[$(join(Tuple(I), ", "))]: $(describe(elements[I]...))" for I in shown), "; ")
+    return nmore > 0 ? "$text; and $nmore more" : text
 end
 
 function find_failing_subterms(cond, prev_map, curr_map, diagnosis)
@@ -185,7 +544,7 @@ function find_failing_subterms(cond, prev_map, curr_map, diagnosis)
         #compare using previous non-nan values to find violating subclauses, then output current values
         lhs = Symbolics.value(Symbolics.substitute(args[1], prev_map))
         rhs = Symbolics.value(Symbolics.substitute(args[2], prev_map))
-        if lhs isa Number && rhs isa Number
+        if lhs isa Real && rhs isa Real
             # small margin -> violated
             margin = (op === (<) || op === (<=)) ? rhs - lhs : lhs - rhs
             if margin <= 1.0e-6
@@ -216,7 +575,7 @@ function clause_values(c, curr_map)
     parts = String[]
     for v in Symbolics.get_variables(c)
         val = Symbolics.value(Symbolics.substitute(v, curr_map))
-        push!(parts, val isa Number ? "$v = $(@sprintf("%.4g", val))" : "$v = $val")
+        push!(parts, "$v = $(format_value(val))")
     end
     return join(parts, ", ")
 end
