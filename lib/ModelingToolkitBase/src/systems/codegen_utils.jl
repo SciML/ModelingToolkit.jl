@@ -791,6 +791,8 @@ composed `wrap_code`, the resolved `optimize`, and the `output_type`-derived
   A chunked in-place function writes each helper's slice directly into `out`, so enabling this
   requires that `out` does not alias any input (an unchunked function happens to tolerate this
   only incidentally).
+- `require_chunking`: Return `nothing` instead of the functions if `chunk_size` does not lead
+  to a split. For callers that only want to generate `expr` in this form if it is chunked.
 - `codegen_function_options`: A [`Symbolics.CodegenFunctionOptions`](@ref) holding the
   code-generation options forwarded to `codegen_function`. `build_function_wrapper` reads
   `wrap_code` and `optimize` from it and writes the transformed values back (the composed
@@ -817,6 +819,7 @@ struct BuildFunctionWrapperOptions
     extra_assignments::Vector{Assignment}
     n_param_buffers::Union{Nothing, Int}
     chunk_size::Int
+    require_chunking::Bool
     codegen::Symbolics.CodegenFunctionOptions
 end
 
@@ -826,7 +829,7 @@ function BuildFunctionWrapperOptions(;
         histfn = DDE_HISTORY_FUN, histfn_symbolic = histfn,
         create_bindings = false, output_type = nothing, mkarray = nothing,
         wrap_mtkparameters = true, extra_assignments = Assignment[],
-        n_param_buffers = nothing, chunk_size::Integer = 0,
+        n_param_buffers = nothing, chunk_size::Integer = 0, require_chunking::Bool = false,
         codegen_function_options::Symbolics.CodegenFunctionOptions = Symbolics.CodegenFunctionOptions()
     )
     # The constructor only accepts valid `build_function_wrapper` options; there is no
@@ -839,7 +842,7 @@ function BuildFunctionWrapperOptions(;
         p_start, p_end, compress_args, non_standard_param_layout, u_arg, wrap_delays,
         histfn, histfn_symbolic, create_bindings, output_type, mkarray,
         wrap_mtkparameters, extra_assignments, n_param_buffers, chunk_size,
-        codegen_function_options
+        require_chunking, codegen_function_options
     )
 end
 
@@ -958,14 +961,15 @@ end
 # ordinary whole-function one, since its container is decided by the runtime arguments and
 # `vcat` of the slices would not preserve it (it is only compiled if called).
 function _build_chunked(sys, expr, args, opts::BuildFunctionWrapperOptions, chunk_ranges)
-    vcat_oop = opts.output_type !== nothing || opts.codegen.similarto !== nothing
+    want_oop = opts.codegen.iip_config[1]
+    vcat_oop = want_oop && (opts.output_type !== nothing || opts.codegen.similarto !== nothing)
     helper_iip_config = (vcat_oop, true)
     oop_helpers = Expr[]
     iip_helpers = Expr[]
     for range in chunk_ranges
         helper_opts = setproperties(
             opts, (;
-                chunk_size = 0,
+                chunk_size = 0, require_chunking = false,
                 codegen = setproperties(
                     opts.codegen, (; outputidxs = collect(range), iip_config = helper_iip_config)
                 ),
@@ -977,12 +981,15 @@ function _build_chunked(sys, expr, args, opts::BuildFunctionWrapperOptions, chun
     end
     iip = _call_chunks(iip_helpers, true)
     iip === nothing && return nothing
-    if vcat_oop
+    if !want_oop
+        # only the in-place function was asked for
+        return nothing, iip
+    elseif vcat_oop
         oop = _call_chunks(oop_helpers, false)
     else
         whole_opts = setproperties(
             opts, (;
-                chunk_size = 0,
+                chunk_size = 0, require_chunking = false,
                 codegen = setproperties(opts.codegen, (; iip_config = (true, false))),
             )
         )
@@ -1079,7 +1086,7 @@ Base.@nospecializeinfer function build_function_wrapper(
     # A very large function is split into helpers that each fill a slice of the output, decided
     # here from the reachable statements, before any of the work below is done on the whole
     # function. The chunked in-place function requires that `out` does not alias any input.
-    if chunk_size != 0 && opts.codegen.iip_config == (true, true) && !wrap_delays &&
+    if chunk_size != 0 && opts.codegen.iip_config[2] && !wrap_delays &&
             !create_bindings && isempty(compress_args) && isempty(extra_assignments) &&
             pref === nothing &&
             all(==(identity), opts.codegen.wrap_code) && opts.codegen.outputidxs === nothing &&
@@ -1091,6 +1098,7 @@ Base.@nospecializeinfer function build_function_wrapper(
             chunked === nothing || return chunked
         end
     end
+    opts.require_chunking && return nothing
 
     # Subset the `IRStructure` so that optimization passes run on the minimal set of
     # expressions

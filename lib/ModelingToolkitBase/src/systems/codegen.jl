@@ -544,6 +544,14 @@ Generate the jacobian function for the equations of a [`System`](@ref).
 
 $GENERATE_X_KWARGS
 - `simplify`, `sparse`: Forwarded to [`calculate_jacobian`](@ref).
+- `chunk_size`: If `sparse`, how the in-place function is split into helper functions that
+  each fill a slice of the stored values. The default, `-1`, splits very large Jacobians
+  automatically. `0` never splits. A positive value is the number of symbolic statements
+  to aim for in each helper.
+
+The in-place function of a large Jacobian requires that the Jacobian it writes to does not
+share memory with any of its other arguments: it may be split into functions that each
+write some of the entries, or write entries before all of them were computed.
 - `checkbounds`: Whether to check correctness of indices at runtime if `sparse`.
   Also forwarded to `build_function_wrapper`.
 
@@ -551,7 +559,7 @@ All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 """
 function generate_jacobian(
         sys::System, opts::GeneratedFunctionOptions;
-        simplify::Bool = false, sparse::Bool = false
+        simplify::Bool = false, sparse::Bool = false, chunk_size::Integer = -1
     )
     (; eval_expression, eval_module, compiler_options) = opts
     expression = expression_val(opts)
@@ -564,27 +572,265 @@ function generate_jacobian(
     jac = calculate_jacobian(sys; simplify, sparse, dvs)
     p = reorder_parameters(sys)
     t = get_iv(sys)
-    if t !== nothing && sparse && opts.codegen.checkbounds
-        wrap_code = assert_jac_length_header(sys) # checking sparse J indices at runtime is expensive for large systems
-    else
-        wrap_code = (identity, identity)
-    end
     args = (dvs, p...)
     nargs = 2
     if is_time_dependent(sys)
         args = (args..., t)
         nargs = 3
     end
-    res = build_function_wrapper(
-        sys, jac, collect(Any, args), BuildFunctionWrapperOptions(;
-            u_arg = 1,
-            codegen_function_options = setproperties(opts.codegen, (; wrap_code))
+    res = nothing
+    if jac isa SparseMatrixCSC
+        res = chunked_sparse_jacobian(sys, jac, collect(Any, args), opts, chunk_size)
+    end
+    if res === nothing
+        if t !== nothing && sparse && opts.codegen.checkbounds
+            wrap_code = assert_jac_length_header(sys) # checking sparse J indices at runtime is expensive for large systems
+        else
+            wrap_code = (identity, identity)
+        end
+        res = build_function_wrapper(
+            sys, jac, collect(Any, args), BuildFunctionWrapperOptions(;
+                u_arg = 1,
+                codegen_function_options = setproperties(opts.codegen, (; wrap_code))
+            )
         )
-    )
+        iip = arraymaker_jacobian_iip(sys, jac, collect(Any, args), opts, res[2])
+        if iip !== nothing
+            res = (res[1], iip)
+        end
+    end
     return maybe_compile_function(
         expression, wrap_gfw, (2, nargs, is_split(sys)), res;
         compiler_options, eval_expression, eval_module
     )
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+The in-place function of a sparse Jacobian, given `fill_vals`, the in-place function that
+fills a vector with its stored values in the order they are stored. It has the signature
+of `fill_vals`, checks the sparsity pattern of its output if `checkbounds`, calls
+`fill_vals` on the stored values of the output and returns the output. Returns `nothing`
+if the signature of `fill_vals` is not a list of names.
+"""
+function sparse_jacobian_iip(sys::System, fill_vals::Expr, opts::GeneratedFunctionOptions)
+    signature = fill_vals.args[1]
+    all(arg -> arg isa Symbol, signature.args) || return nothing
+    out = signature.args[1]::Symbol
+
+    body = Expr(:block)
+    if get_iv(sys) !== nothing && opts.codegen.checkbounds
+        # checking the indices of a sparse `J` at runtime is expensive for large systems
+        I, J, _ = findnz(W_sparsity(sys))
+        push!(body.args, Expr(:call, assert_jac_length, out, I, J))
+    end
+    call = Expr(:call, fill_vals, Expr(:., out, QuoteNode(:nzval)))
+    append!(call.args, @view signature.args[2:end])
+    push!(body.args, call, out)
+    return Expr(:function, signature, body)
+end
+
+"""
+Fewest entries an in-place Jacobian has to write for it to be generated as an `ArrayMaker`
+by [`arraymaker_jacobian_iip`](@ref). Below this the two forms take the same time to
+compile.
+"""
+const JACOBIAN_ARRAYMAKER_MIN = 1000
+
+"""
+    $(TYPEDEF)
+
+A function that is kept as the expression it was generated as, and only compiled when it
+is called. For a function that generated code refers to but normally does not call.
+
+Two of them are equal, and have the same hash, if their expressions are: the expression
+that one is embedded in must not depend on which object it is, since
+`RuntimeGeneratedFunctions` caches by the hash of the expression.
+"""
+mutable struct LazyGeneratedFunction
+    const expr::Expr
+    const eval_expression::Bool
+    const eval_module::Module
+    const compiler_options::CompilerOptions
+    @atomic f::Any
+end
+
+function LazyGeneratedFunction(expr::Expr, opts::GeneratedFunctionOptions)
+    return LazyGeneratedFunction(
+        expr, opts.eval_expression, opts.eval_module, opts.compiler_options, nothing
+    )
+end
+
+Base.hash(lf::LazyGeneratedFunction, h::UInt) = hash(lf.expr, hash(LazyGeneratedFunction, h))
+Base.:(==)(a::LazyGeneratedFunction, b::LazyGeneratedFunction) = a.expr == b.expr
+
+function (lf::LazyGeneratedFunction)(args...)
+    f = @atomic lf.f
+    if f === nothing
+        (; eval_expression, eval_module, compiler_options) = lf
+        f = eval_or_rgf(lf.expr; eval_expression, eval_module, compiler_options)
+        @atomic lf.f = f
+    end
+    return Base.invokelatest(f, args...)
+end
+
+# Whether the writes of a dense Jacobian generated as an `ArrayMaker` are right for the
+# output `out`: they are not checked, convert to its element type and start with zeros,
+# which an element type with units, for one, does not convert from.
+function jacobian_output_matches(out, sz::NTuple{2, Int})
+    return out isa Array{<:Union{Real, Complex}} && size(out) == sz
+end
+
+# The writes of a sparse Jacobian generated as an `ArrayMaker` are not checked.
+function assert_nzval_length(nzval, nvals::Int)
+    length(nzval) == nvals || throw(
+        DimensionMismatch(
+            lazy"The Jacobian has $nvals stored values, but the matrix it is written to has $(length(nzval))."
+        )
+    )
+    return nothing
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+The in-place function of the Jacobian `jac` generated from an `ArrayMaker` in which every
+entry is a region of one element, or `nothing` if it is not to be generated that way.
+`matrix_iip` is the in-place function generated from the matrix of expressions.
+
+Code generation writes the entries of such an `ArrayMaker` that are constants from tables,
+and the others in batches, as soon as their values are computed
+(`eager_scalar_writes`). For a matrix of expressions it generates a statement per entry
+instead, structural zeros included, after all of the values were computed, which takes
+much longer to compile for a large Jacobian. A dense Jacobian is a region of zeros followed
+by one region per other entry, and a sparse one is the vector of its stored values, which
+are written to the stored values of the output.
+
+Those writes are not checked, convert to the element type of the output, and for a dense
+Jacobian write zeros before the other entries. So for a dense Jacobian the function that
+is returned only does this for an output that is an `Array` of real or complex numbers
+of the size of the Jacobian,
+and calls `matrix_iip` for any other, which is only compiled then. A sparse Jacobian is written to the `nzval` of its
+output either way, so there the function only checks that it has the right length.
+
+Writing the entries as they are computed requires that the Jacobian that is written to
+does not share memory with any of the other arguments.
+
+This needs a version of Symbolics with the `eager_scalar_writes` option. It is not done
+for a Jacobian with fewer than `JACOBIAN_ARRAYMAKER_MIN` entries to write, nor if the
+options ask for something that only the matrix of expressions is generated with: bounds
+checks of the writes, `skipzeros`, `outputidxs`, wrappers of the generated code or
+optimization rules.
+"""
+function arraymaker_jacobian_iip(
+        sys::System, jac::AbstractMatrix, args::Vector{Any},
+        opts::GeneratedFunctionOptions, matrix_iip::Expr
+    )
+    codegen = opts.codegen
+    hasfield(typeof(codegen), :eager_scalar_writes) || return nothing
+    codegen.iip_config == (true, true) || return nothing
+    codegen.optimize === nothing && codegen.outputidxs === nothing && !codegen.skipzeros || return nothing
+    all(==(identity), codegen.wrap_code) || return nothing
+    signature = matrix_iip.args[1]
+    all(arg -> arg isa Symbol, signature.args) || return nothing
+    out = signature.args[1]::Symbol
+
+    regions = Vector{UnitRange{Int}}[]
+    values = SymbolicT[]
+    body = Expr(:block)
+    if jac isa SparseMatrixCSC
+        # The writes are not checked, so with `checkbounds` the pattern of the output has to be.
+        codegen.checkbounds && get_iv(sys) === nothing && return nothing
+        for (k, val) in enumerate(nonzeros(jac))
+            push!(regions, [k:k])
+            push!(values, SU.Const{VartypeT}(SymbolicT[unwrap(val)]))
+        end
+        length(values) >= JACOBIAN_ARRAYMAKER_MIN || return nothing
+        target = Expr(:., out, QuoteNode(:nzval))
+        if codegen.checkbounds
+            # checking the indices of a sparse `J` at runtime is expensive for large systems
+            I, J, _ = findnz(W_sparsity(sys))
+            push!(body.args, Expr(:call, assert_jac_length, out, I, J))
+        end
+        push!(body.args, Expr(:call, assert_nzval_length, target, length(values)))
+    elseif jac isa Matrix
+        codegen.checkbounds && return nothing
+        n, m = size(jac)
+        push!(regions, [1:n, 1:m])
+        push!(values, SU.Fill(SU.ShapeVecT((1:n, 1:m)))(SU.Const{VartypeT}(0)))
+        for j in 1:m, i in 1:n
+            val = unwrap(jac[i, j])
+            SU._iszero(val) && continue
+            push!(regions, [i:i, j:j])
+            push!(values, SU.Const{VartypeT}(reshape(SymbolicT[val], 1, 1)))
+        end
+        length(values) > JACOBIAN_ARRAYMAKER_MIN || return nothing
+        target = out
+    else
+        return nothing
+    end
+    fill_entries = build_function_wrapper(
+        sys, SU.ArrayMaker{VartypeT}(regions, values), copy(args),
+        BuildFunctionWrapperOptions(;
+            u_arg = 1,
+            codegen_function_options = setproperties(codegen, (; eager_scalar_writes = true))
+        )
+    )[2]
+
+    fast = Expr(:call, fill_entries, target)
+    append!(fast.args, @view signature.args[2:end])
+    if jac isa SparseMatrixCSC
+        push!(body.args, fast)
+    else
+        # `matrix_iip` is only lowered and compiled if it is called.
+        slow = Expr(:call, LazyGeneratedFunction(matrix_iip, opts))
+        append!(slow.args, signature.args)
+        matches = Expr(:call, jacobian_output_matches, out, (n, m))
+        push!(body.args, Expr(:if, matches, fast, slow))
+    end
+    push!(body.args, out)
+    return Expr(:function, signature, body)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+The out-of-place and in-place functions of the sparse Jacobian `jac`, with the in-place one
+chunked, or `nothing` if it is not to be chunked (see the `chunk_size` option of
+[`BuildFunctionWrapperOptions`](@ref)).
+
+Chunking splits a vector of expressions, so what is generated in chunks is the function
+that fills the stored values of the Jacobian, in the order they are stored. The in-place
+function of the Jacobian calls it on the stored values of its output. The out-of-place
+function is the ordinary one: it is only compiled if it is called.
+"""
+function chunked_sparse_jacobian(
+        sys::System, jac::SparseMatrixCSC, args::Vector{Any},
+        opts::GeneratedFunctionOptions, chunk_size::Integer
+    )
+    chunk_size == 0 && return nothing
+    # Optimization rules given by the caller are written for the sparse matrix.
+    opts.codegen.optimize === nothing || return nothing
+    vals = SymbolicT[unwrap(val) for val in nonzeros(jac)]
+    chunked = build_function_wrapper(
+        sys, vals, copy(args), BuildFunctionWrapperOptions(;
+            u_arg = 1, chunk_size, require_chunking = true,
+            # the out-of-place function is generated from the sparse matrix below
+            codegen_function_options = setproperties(opts.codegen, (; iip_config = (false, true)))
+        )
+    )
+    chunked === nothing && return nothing
+    iip = sparse_jacobian_iip(sys, chunked[2], opts)
+    iip === nothing && return nothing
+
+    oop = build_function_wrapper(
+        sys, jac, copy(args), BuildFunctionWrapperOptions(;
+            u_arg = 1,
+            codegen_function_options = setproperties(opts.codegen, (; iip_config = (true, false)))
+        )
+    )[1]
+    return oop, iip
 end
 
 function assert_jac_length(arr::SparseMatrixCSC, I::Vector{<:Integer}, J::Vector{<:Integer})

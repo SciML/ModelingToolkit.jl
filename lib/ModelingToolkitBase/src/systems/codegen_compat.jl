@@ -43,7 +43,7 @@ function generate_jacobian(
         sys::System; expression = Val{true}, wrap_gfw = Val{false},
         eval_expression = false, eval_module = @__MODULE__,
         compiler_options::CompilerOptions = CompilerOptions(),
-        simplify = false, sparse = false, kwargs...
+        simplify = false, sparse = false, chunk_size = -1, kwargs...
     )
     return generate_jacobian(
         sys,
@@ -52,7 +52,7 @@ function generate_jacobian(
             compiler_options,
             codegen_function_options = Symbolics.CodegenFunctionOptions(; kwargs...)
         );
-        simplify, sparse
+        simplify, sparse, chunk_size
     )
 end
 
