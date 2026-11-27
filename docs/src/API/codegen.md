@@ -79,3 +79,11 @@ All code generation eventually calls `build_function_wrapper`.
 ```@docs
 ModelingToolkit.build_function_wrapper
 ```
+
+The block structure of the algebraic equations of a compiled system, as used by
+`SCCNonlinearProblem`, is available for generating code that solves them block by block.
+
+```@docs
+ModelingToolkit.scc_decomposition
+ModelingToolkit.SCCDecomposition
+```
