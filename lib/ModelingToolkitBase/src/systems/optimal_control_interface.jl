@@ -304,17 +304,6 @@ function SciMLBase.ODEInputFunction{iip, specialize}(
     (; u0, p, jac, tgrad, sparse, sparsity, analytic, simplify, initialization_data) = opts
     checkbounds = opts.codegen.codegen.checkbounds
 
-    # Use the flat layout `mtkcompile` uses: an array input is replaced by its elements in
-    # column-major order. The input argument of every callback and the columns of
-    # `controljac` follow this order.
-    inputs = collect(SymbolicT, canonicalize_io(unwrap_vars(inputs), "input"))
-    if disturbance_inputs !== nothing
-        disturbance_inputs = collect(
-            SymbolicT,
-            canonicalize_io(unwrap_vars(disturbance_inputs), "disturbance input")
-        )
-    end
-
     f, _, _, io_sys = generate_control_function(
         sys, inputs, disturbance_inputs; eval_module
     )
@@ -322,7 +311,7 @@ function SciMLBase.ODEInputFunction{iip, specialize}(
     codegen_opts = opts.codegen
 
     # `jac`, `tgrad` and `controljac` must take the same `(x, u, p, t)` arguments as `f`,
-    # so they are built from `io_sys` with the inputs as their own argument and compiled.
+    # so they are built from `io_sys` with the caller's `inputs` as the input argument.
     function build_deriv(exprs; wrap_code = (identity, identity))
         return generate_input_derivative_function(
             io_sys, exprs, inputs, disturbance_inputs, codegen_opts.codegen;
@@ -330,9 +319,13 @@ function SciMLBase.ODEInputFunction{iip, specialize}(
         )
     end
 
+    # The input argument keeps the caller's grouping and order, while `tgrad` and the
+    # columns of `controljac` use this scalar basis.
+    input_basis = scalarize_inputs(inputs)
+
     if tgrad
         _tgrad = build_deriv(
-            calculate_input_tgrad(io_sys, inputs, disturbance_inputs; simplify)
+            calculate_input_tgrad(io_sys, input_basis, disturbance_inputs; simplify)
         )
     else
         _tgrad = nothing
@@ -351,8 +344,8 @@ function SciMLBase.ODEInputFunction{iip, specialize}(
     cjac = nothing
     if controljac || sparse
         rhs = [eq.rhs for eq in full_equations(io_sys)]
-        cjac = sparse ? sparsejacobian(rhs, inputs; simplify) :
-            jacobian(rhs, inputs; simplify)
+        cjac = sparse ? sparsejacobian(rhs, input_basis; simplify) :
+            jacobian(rhs, input_basis; simplify)
     end
     _cjac = controljac ? build_deriv(cjac) : nothing
 
@@ -391,8 +384,27 @@ end
 """
     $(TYPEDSIGNATURES)
 
+The scalar variables that `tgrad` and the columns of `controljac` use as inputs. Each whole
+array in `inputs` is expanded into its elements in column-major order, and indexed scalars
+are kept as given, in the order of `inputs`.
+"""
+function scalarize_inputs(inputs)
+    basis = SymbolicT[]
+    for v in vec(unwrap_vars(inputs))
+        if SU.is_array_shape(SU.shape(v))
+            append!(basis, vec(collect(v)::Array{SymbolicT})::Vector{SymbolicT})
+        else
+            push!(basis, v)
+        end
+    end
+    return basis
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
 Calculate `∂f/∂t` of the equations of `sys` for `ODEInputFunction`: the unknowns and the
-`inputs` are held fixed, and unknown `disturbance_inputs` are zero, as they are in `f`.
+scalar `inputs` are held fixed, and unknown `disturbance_inputs` are zero, as they are in `f`.
 """
 function calculate_input_tgrad(sys::System, inputs, disturbance_inputs; simplify = false)
     check_symbolic_ad_allowed(sys)
@@ -418,8 +430,8 @@ end
 
 Build a function of `exprs` with the same arguments as the `f` returned by
 [`generate_control_function`](@ref): `(x, u, p..., t)` out-of-place and
-`(out, x, u, p..., t)` in-place, where `u` holds `inputs`. Unknown
-`disturbance_inputs` are set to zero, as they are in `f`.
+`(out, x, u, p..., t)` in-place, where `u` holds `inputs` as given (a whole array is one
+grouped entry). Unknown `disturbance_inputs` are set to zero, as they are in `f`.
 """
 function generate_input_derivative_function(
         sys::System, exprs, inputs, disturbance_inputs,
@@ -440,13 +452,12 @@ function generate_input_derivative_function(
     if !isempty(dists)
         zero_dists = Dict(dists .=> 0)
         if exprs isa SparseArrays.SparseMatrixCSC
-            # Substitute the stored values only. `map` would drop entries that become zero,
-            # but the in-place callback writes `nzval` in the pattern of the prototype, so
-            # every stored position must be kept.
-            exprs = SparseArrays.SparseMatrixCSC(
-                size(exprs)..., copy(exprs.colptr), copy(exprs.rowval),
-                [substitute(v, zero_dists) for v in exprs.nzval]
-            )
+            # Substitute into a copy's stored values only. Every stored position is kept,
+            # even when its entry becomes zero, because the in-place callback writes the
+            # stored values in the pattern of the prototype.
+            exprs = copy(exprs)
+            stored = SparseArrays.nonzeros(exprs)
+            stored .= substitute.(stored, Ref(zero_dists))
         else
             exprs = map(v -> substitute(v, zero_dists), exprs)
         end

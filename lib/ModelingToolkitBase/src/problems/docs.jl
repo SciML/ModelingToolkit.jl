@@ -345,9 +345,12 @@ const ADTYPE_PROBLEM_KWARGS = """
 
 const INPUTFN_KWARGS = """
 - `inputs`: The variables in the input vector. The system must have been simplified using
-  `mtkcompile` with these variables passed as `inputs`. An array input is replaced by its
-  elements in column-major order, so the input vector `u` passed to `f`, `jac`, `tgrad`
-  and `controljac`, and the columns of `controljac`, follow that flat order.
+  `mtkcompile` with these variables passed as `inputs`. The input argument `u` of `f`,
+  `jac`, `tgrad` and `controljac` has one entry per element of `inputs`, in the order
+  given. A whole array variable is one entry holding the array, and an indexed scalar
+  such as `u[2]` is one scalar entry. The columns of `controljac` are scalar: each whole
+  array is expanded into its elements in column-major order, and indexed scalars keep the
+  order given.
 - `disturbance_inputs`: The disturbance input variables. The system must have been
   simplified using `mtkcompile` with these variables passed as `disturbance_inputs`.
 """
