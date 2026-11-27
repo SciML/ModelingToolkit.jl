@@ -582,7 +582,8 @@ The condition can be one of:
 - Δt::Real              - periodic events with period Δt
 - ts::Vector{Real}      - events trigger at these preset times given by `ts`
 - eqs::Vector{SymbolicT} - events trigger when the condition evaluates to true
-- A `SciMLBase.Clock(dt; phase)` - events trigger with period `dt` and phase `phase`.
+- A `SciMLBase.Clock(dt; phase)` - events trigger at `t0 + phase + k * dt` for integers
+  `k ≥ 0`, where `t0` is the initial time of the simulation.
   Note that this form will ignore the `initialize_save_discretes` keyword argument in the
   interest of correctness. The callback will trigger and save at `tspan[1]` if the clock
   would tick at `tspan[1]`.
@@ -1363,7 +1364,10 @@ function generate_callback(
                 initialize_save_discretes = cb.initialize_save_discretes
             )
         elseif is_timed && trigger isa SciMLBase.TimeDomain
-            trigger_at_init = iszero((tspan[1] - trigger.phase) % trigger.dt)
+            # The clock ticks at `tspan[1] + phase + k * dt` for integers `k ≥ 0`, as
+            # `PeriodicCallback` schedules the ticks, so it ticks at the initial time
+            # exactly when the phase is zero.
+            trigger_at_init = iszero(trigger.phase)
             return PeriodicCallback(
                 affect, trigger.dt; phase = trigger.phase, initial_affect = trigger_at_init,
                 initialize, finalize,
