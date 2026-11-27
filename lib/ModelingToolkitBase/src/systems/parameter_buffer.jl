@@ -599,7 +599,12 @@ end
 function SymbolicIndexingInterface.set_parameter!(
         p::MTKParameters, val, pidx::ParameterIndex
     )
-    @unpack portion, idx, validate_size = pidx
+    @unpack portion, idx, validate_size, shape = pidx
+    if shape !== nothing
+        # The declared shape is the reference, not the stored value, which may be mutated.
+        validate_declared_shape(shape, val)
+        validate_size = false
+    end
     if portion isa SciMLStructures.Tunable
         if validate_size && size(val) !== size(idx)
             throw(InvalidParameterSizeException(size(idx), size(val)))
@@ -684,23 +689,32 @@ function has_declared_opaque_shape(p)
 end
 
 # Parameters declared with `shaped_parameter` carry a shape that the type does not check.
-# Values that do not define `size` are accepted.
-function validate_opaque_shape(p, stype, val)
-    has_declared_opaque_shape(p) || return nothing
-    declared = SU.shape(p)
+# Array values must have exactly the declared axes, since generated code indexes them with the
+# declared (1-based) ranges. Other values are compared by `size` when they define it.
+function validate_declared_shape(declared, val)
     applicable(size, val) || return nothing
-    size(val) == Tuple(map(length, declared)) || throw(InvalidParameterSizeException(p, val))
+    ok = if val isa AbstractArray && all(isone ∘ first, declared)
+        axes(val) == Tuple(declared)
+    else
+        size(val) == Tuple(map(length, declared))
+    end
+    ok || throw(
+        DimensionMismatch(
+            "InvalidParameterSizeException: Expected value with axes $(Tuple(declared)). Received value of size $(size(val))" *
+                (val isa AbstractArray ? " with axes $(axes(val))." : ".")
+        )
+    )
     return nothing
 end
 
-# An index carries no declared shape, only whether the parameter has one, so a new value is
-# compared with the existing one. Values without a `size` are accepted.
-function validate_indexed_shape(oldbuf::MTKParameters, idx::ParameterIndex, val)
-    idx.validate_size && (idx.portion === NONNUMERIC_PORTION || idx.portion isa SciMLStructures.Constants) ||
-        return nothing
-    old = parameter_values(oldbuf, idx)
-    applicable(size, val) && applicable(size, old) && size(val) != size(old) &&
-        throw(InvalidParameterSizeException(size(old), size(val)))
+function validate_opaque_shape(p, stype, val)
+    has_declared_opaque_shape(p) || return nothing
+    return validate_declared_shape(SU.shape(p), val)
+end
+
+# Indices addressing an element carry no declared shape and are not checked.
+function validate_indexed_shape(idx::ParameterIndex, val)
+    idx.shape === nothing || validate_declared_shape(idx.shape, val)
     return nothing
 end
 
@@ -799,7 +813,7 @@ function __remake_buffer(indp, oldbuf::MTKParameters, idxs, vals; validate = tru
         if validate
             if sym === nothing
                 validate_parameter_type(ic, idx, val)
-                validate_indexed_shape(oldbuf, idx, val)
+                validate_indexed_shape(idx, val)
             else
                 validate_parameter_type(ic, sym, idx, val)
             end

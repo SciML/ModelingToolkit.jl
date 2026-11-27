@@ -12,8 +12,12 @@ struct ParameterIndex{P, I}
     portion::P
     idx::I
     validate_size::Bool
+    # Declared ranges of a whole parameter created by `shaped_parameter`, `nothing` otherwise
+    # and for indices addressing an element.
+    shape::Union{Nothing, Tuple{Vararg{UnitRange{Int}}}}
 end
 
+ParameterIndex(portion, idx, validate_size::Bool) = ParameterIndex(portion, idx, validate_size, nothing)
 ParameterIndex(portion, idx) = ParameterIndex(portion, idx, false)
 ParameterIndex(p::ParameterIndex) = ParameterIndex(p.portion, p.idx, false)
 
@@ -623,6 +627,7 @@ end
 function SymbolicIndexingInterface.parameter_index(ic::IndexCache, sym::SymbolicT)
     validate_size = (Symbolics.isarraysymbolic(sym) && symbolic_has_known_size(sym)) ||
         has_declared_opaque_shape(sym)
+    shape = has_declared_opaque_shape(sym) ? Tuple(UnitRange{Int}(r) for r in SU.shape(sym)) : nothing
     return if (idx = check_index_map(ic.tunable_idx, sym)) !== nothing
         ParameterIndex(SciMLStructures.Tunable(), idx, validate_size)
     elseif (idx = check_index_map(ic.initials_idx, sym)) !== nothing
@@ -632,9 +637,9 @@ function SymbolicIndexingInterface.parameter_index(ic::IndexCache, sym::Symbolic
             SciMLStructures.Discrete(), (idx.buffer_idx, idx.idx_in_buffer), validate_size
         )
     elseif (idx = check_index_map(ic.constant_idx, sym)) !== nothing
-        ParameterIndex(SciMLStructures.Constants(), idx, validate_size)
+        ParameterIndex(SciMLStructures.Constants(), idx, validate_size, shape)
     elseif (idx = check_index_map(ic.nonnumeric_idx, sym)) !== nothing
-        ParameterIndex(NONNUMERIC_PORTION, idx, validate_size)
+        ParameterIndex(NONNUMERIC_PORTION, idx, validate_size, shape)
     elseif (idx = check_index_map(ic.caches_idx, sym)) !== nothing
         ParameterIndex(SciMLStructures.Caches(), idx, validate_size)
     elseif iscall(sym) && operation(sym) == getindex

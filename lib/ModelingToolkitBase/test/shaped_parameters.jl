@@ -128,8 +128,11 @@ end
     @test getp(prob, Nop)(prob) == NoSizeOp(1.0)
     @test_throws DimensionMismatch remake(prob; p = [Kop => badrows])
     @test_throws DimensionMismatch remake(prob; p = [Kop => badcols])
-    prob2 = remake(prob; p = [Kop => BlockOp(sprand(4, 6, 0.2))])
-    @test getp(prob2, Kop)(prob2) isa BlockOp
+    replacement = BlockOp(sparse(1:4, 1:4, fill(2.0, 4), 4, 6))
+    prob2 = remake(prob; p = [Kop => replacement])
+    @test getp(prob2, Kop)(prob2).A == replacement.A
+    @test getp(prob, Kop)(prob).A == good.A
+    @test good.A != replacement.A
 
     ps = prob.p
     for bad in (badrows, badcols)
@@ -224,7 +227,10 @@ end
         csys, merge(u0, Dict(K => spzeros(4, 6))), (0.0, 1.0); build_initializeprob = false
     )
     @test_throws DimensionMismatch remake(prob; p = [K => spzeros(5, 6)])
-    @test getp(prob, K)(remake(prob; p = [K => sprand(4, 6, 0.3)])) isa T
+    replacement = sparse(1:4, 1:4, fill(3.0, 4), 4, 6)
+    prob2 = remake(prob; p = [K => replacement])
+    @test getp(prob2, K)(prob2) == replacement
+    @test getp(prob, K)(prob) == spzeros(4, 6)
     @test_throws DimensionMismatch remake_buffer(
         csys, prob.p, [parameter_index(csys, K)], Any[spzeros(5, 6)]
     )
@@ -238,4 +244,70 @@ end
     ps = MTKParameters(csys, Dict(legacy => BlockOp(sprand(2, 3, 0.5)), any_p => ones(2)))
     @test getp(csys, legacy)(ps) isa BlockOp
     @test getp(csys, any_p)(ps) == ones(2)
+end
+
+# OffsetArrays is a dependency of ModelingToolkitBase but not of the test environment.
+const OffsetArrays = Base.loaded_modules[Base.PkgId(Base.UUID("6fe1bfb0-de20-5000-8ca7-80f57d26f881"), "OffsetArrays")]
+const OffsetMat = OffsetArrays.OffsetMatrix{Float64, Matrix{Float64}}
+
+# An operator whose size is that of a field that can be mutated after it is stored.
+mutable struct MutableOp
+    M::Matrix{Float64}
+end
+Base.size(op::MutableOp) = size(op.M)
+
+@testset "shaped array parameters are validated by axes" begin
+    A = shaped_parameter(:A, OffsetMat, 2, 2)
+    @variables x(t)
+    @named sys = System([D(x) ~ A[1, 1]], t, [x], [A])
+    csys = complete(sys)
+    raw = [1.0 2.0; 3.0 4.0]
+    mat = OffsetArrays.OffsetArray(raw, 1:2, 1:2)
+    offset = OffsetArrays.OffsetArray(raw, 0:1, 0:1)
+    @test axes(offset) == (0:1, 0:1)
+    du = zeros(1)
+
+    ps = MTKParameters(csys, Dict(A => mat))
+    prob = ODEProblem(csys, Dict(x => 0.0, A => mat), (0.0, 1.0))
+    prob.f(du, [0.0], prob.p, 0.0)
+    @test du[1] == 1.0
+
+    idx = parameter_index(csys, A)
+    @test_throws DimensionMismatch MTKParameters(csys, Dict(A => offset))
+    @test_throws DimensionMismatch ODEProblem(csys, Dict(x => 0.0, A => offset), (0.0, 1.0))
+    @test_throws DimensionMismatch setp(csys, A)(ps, offset)
+    @test_throws DimensionMismatch (ps[idx] = offset)
+    @test_throws DimensionMismatch remake(prob; p = [A => offset])
+    @test_throws DimensionMismatch remake_buffer(csys, ps, [idx], [offset])
+    @test_throws DimensionMismatch remake_buffer(csys, ps, [idx], Any[offset])
+    @test_throws DimensionMismatch remake_buffer(csys, ps, [A], [offset])
+    @test getp(csys, A)(ps) == mat
+end
+
+@testset "indexed updates are validated against the declared shape, not the stored value" begin
+    Mop = shaped_parameter(:Mop, MutableOp, 2, 2)
+    @variables u(t)[1:2]
+    @named sys = System([zeros(2) ~ D(u) + u], t, [u], [Mop])
+    csys = complete(sys)
+    ps = MTKParameters(csys, Dict(Mop => MutableOp(ones(2, 2))))
+    stored = getp(csys, Mop)(ps)
+    stored.M = zeros(3, 2)
+    idx = parameter_index(csys, Mop)
+    bad = MutableOp(zeros(3, 2))
+    good = MutableOp(fill(2.0, 2, 2))
+
+    @test_throws DimensionMismatch setp(csys, Mop)(ps, bad)
+    @test_throws DimensionMismatch (ps[idx] = bad)
+    @test_throws DimensionMismatch remake_buffer(csys, ps, [idx], [bad])
+    @test_throws DimensionMismatch remake_buffer(csys, ps, [idx], Any[bad])
+
+    setp(csys, Mop)(ps, good)
+    @test getp(csys, Mop)(ps) === good
+    other = MutableOp(fill(3.0, 2, 2))
+    ps[idx] = other
+    @test getp(csys, Mop)(ps) === other
+    for vals in ([good], Any[good])
+        remade = remake_buffer(csys, ps, [idx], vals)
+        @test getp(csys, Mop)(remade) === good
+    end
 end
