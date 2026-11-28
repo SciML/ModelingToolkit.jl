@@ -265,9 +265,12 @@ function __mtkcompile(
         inputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
         outputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
         disturbance_inputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
-        fully_determined = true, verbose::MTKVerbosity = DEFAULT_MTK_VERBOSE,
+        fully_determined = true, reassemble_alg = nothing,
+        verbose::MTKVerbosity = DEFAULT_MTK_VERBOSE,
         kwargs...
     )
+    reassemble_alg === nothing ||
+        throw(ArgumentError("`reassemble_alg` requires the ModelingToolkit compiler."))
     sys = expand_connections(sys)
     sys = discrete_unknowns_to_parameters(sys)
     sys = discover_globalscoped(sys)

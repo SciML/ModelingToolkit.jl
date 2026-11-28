@@ -101,6 +101,22 @@ function inputs_to_parameters!(state::TearingState, inputsyms::OrderedSet{Symbol
 end
 
 """
+    default_reassemble_algorithm(; inline_linear_sccs = false, analytical_linear_scc_limit = 2)
+
+Configure the default reassembly algorithm for the `reassemble_alg` keyword of
+[`mtkcompile`](@ref) and [`generate_control_function`](@ref).
+
+Set `inline_linear_sccs = true` to eliminate linear strongly connected components
+from the algebraic equations. Components with at most `analytical_linear_scc_limit`
+unknowns are solved symbolically. Larger components become inline linear solves.
+"""
+function default_reassemble_algorithm(;
+        inline_linear_sccs::Bool = false, analytical_linear_scc_limit::Int = 2
+    )
+    return MTKTearing.DefaultReassembleAlgorithm(; inline_linear_sccs, analytical_linear_scc_limit)
+end
+
+"""
     mtkcompile!(state::TearingState; kwargs...)
 
 Mutating structural simplification entry point for an existing tearing state.

@@ -485,6 +485,35 @@ end
     @test f[1]([0.5], nothing, MTKParameters(io_sys, []), 0.0) ≈ [1.0]
 end
 
+@testset "generate_control_function with reassemble_alg" begin
+    @variables x(t) = 0.0 y(t) z(t) u(t) [input = true]
+    eqs = [
+        D(x) ~ y - x,
+        0 ~ (u - y) + (x - y) + (z - y),
+        0 ~ (y - z) - 2z,
+    ]
+    @named sys = System(eqs, t)
+
+    if @isdefined(ModelingToolkit)
+        reassemble_alg = ModelingToolkit.default_reassemble_algorithm(;
+            inline_linear_sccs = true, analytical_linear_scc_limit = 1
+        )
+
+        @test isequal(unknowns(mtkcompile(sys; inputs = [u], reassemble_alg)), [x])
+        @test length(unknowns(mtkcompile(sys; inputs = [u]))) == 2
+
+        (; dvs, f) = ModelingToolkitBase.generate_control_function(
+            sys, [u]; reassemble_alg
+        )
+        @test isequal(dvs, [x])
+        @test only(f[1]([1.0], [1.0], [], 0.0)) ≈ -0.25
+    else
+        @test_throws ArgumentError("`reassemble_alg` requires the ModelingToolkit compiler.") ModelingToolkitBase.generate_control_function(
+            sys, [u]; reassemble_alg = :invalid
+        )
+    end
+end
+
 @testset "With callable symbolic" begin
     @variables x(t) = 0 u(t) = 0 [input = true]
     @parameters p(::Real) = (x -> 2x)
