@@ -2,14 +2,18 @@
     ImperativeAffect(f::Function; modified::NamedTuple, observed::NamedTuple, ctx)
 
 `ImperativeAffect` is a helper for writing affect functions that will compute observed values and
-ensure that modified values are correctly written back into the system. The affect function `f` needs to have
-the signature
+ensure that modified values are correctly written back into the system. The usual signature is
 
 ```
     f(modified::NamedTuple, observed::NamedTuple, ctx, integrator)::NamedTuple
 ```
 
 The function `f` will be called with `observed` and `modified` `NamedTuple`s that are derived from their respective `NamedTuple` definitions.
+An affect can instead define `f(modified, observed, ctx, integ, observed_at)` to
+evaluate its observations at another state, parameter set, and time with
+`observed_at(u, p, t)`. For a timeseries solution, `observed_at(sol, i)` evaluates
+them at the saved index `i`, replaying their saved discrete parameter dependencies.
+If both signatures apply, the four-argument call takes precedence.
 Each  declaration`NamedTuple` should map an expression to a symbol; for example if we pass `observed=(; x = a + b)` this will alias the result of executing `a+b` in the system as `x`
 so the value of `a + b` will be accessible as `observed.x` in `f`. `modified` currently restricts symbolic expressions to only bare variables, so only tuples of the form
 `(; x = y)` or `(; x)` (which aliases `x` as itself) are allowed.
@@ -219,6 +223,52 @@ function check_assignable(sys, sym)
     end
 end
 
+function solution_index_parameter_values(sol, i, partitions = nothing)
+    if SymbolicIndexingInterface.is_parameter_timeseries(sol) != SymbolicIndexingInterface.Timeseries()
+        return parameter_values(sol)
+    end
+    discs = SymbolicIndexingInterface.get_parameter_timeseries_collection(sol)
+    ps = parameter_values(discs)
+    partition_indices = isnothing(partitions) ? eachindex(discs) : partitions
+    isempty(partition_indices) && return ps
+    storage = discrete_save_storage(discs)
+    time = sol.t[i]
+    tspan = sol.prob.tspan
+    reverse_time = last(tspan) < first(tspan)
+    for ts_idx in partition_indices
+        partition = discs[ts_idx]
+        times = current_time(partition)
+        j = searchsortedlast(times, time; rev = reverse_time)
+        if j >= firstindex(times) && times[j] == time
+            positions = storage === nothing ? nothing : storage.positions[ts_idx]
+            if positions !== nothing && length(positions) == length(times)
+                while j >= firstindex(times) && times[j] == time && positions[j] > i
+                    j -= 1
+                end
+            elseif i < lastindex(sol.t) && sol.t[i + 1] == time
+                j = searchsortedfirst(times, time; rev = reverse_time)
+            end
+        end
+
+        val = if j >= firstindex(times)
+            state_values(partition, j)
+        elseif storage !== nothing && (pre_val = get(storage.pre_affect_values, (i, ts_idx), nothing)) !== nothing
+            pre_val
+        elseif storage !== nothing && i == firstindex(sol.t) && !isempty(times) &&
+                first(times) == time == first(tspan)
+            storage.initial_values[ts_idx]
+        elseif isempty(times)
+            error("Cannot access discrete parameters at time $time before any save")
+        else
+            error("Cannot access discrete parameters at time $time before their initial save $(first(times))")
+        end
+        ps = SymbolicIndexingInterface.with_updated_parameter_timeseries_values(
+            sol, ps, ts_idx => val
+        )
+    end
+    return ps
+end
+
 """
     FunctionalAffect
 
@@ -232,7 +282,7 @@ On a delay system the generated readers also take the history function,
 `MethodError`. Build the call from [`functional_affect_parts`](@ref) instead.
 
 # Fields
-- `user_affect`: the user-supplied function with signature `f(modified, observed, ctx, integ)`
+- `user_affect`: the user-supplied function passed to `ImperativeAffect`
 - `ctx`: user-supplied context object passed through to `user_affect`
 - `reset_jumps`: if `true`, call `reset_aggregated_jumps!` after the affect
 - `mod_og_val_fun`: OOP function that reads the current values of all modified variables
@@ -243,8 +293,10 @@ On a delay system the generated readers also take the history function,
 - `obs_sym_tuple`: `Val` of the `NTuple{M, Symbol}` naming the observed values
 - `upd_funs`: `NamedTuple` of setter callables mapping each modified variable name to its setter
 - `hook_free_upd_funs`: setters without parameter hooks, or `nothing` when `upd_funs` is hook-free
+- `obs_partitions`: discrete timeseries indexes needed by the observed expressions
+- `mod_partitions`: discrete timeseries indexes written by the affect
 """
-struct FunctionalAffect{UF, CTX, MOF, OF, MN, OST, UPS, HF}
+struct FunctionalAffect{UF, CTX, MOF, OF, MN, OST, UPS, HF, OP, MP}
     user_affect::UF
     ctx::CTX
     reset_jumps::Bool
@@ -254,9 +306,35 @@ struct FunctionalAffect{UF, CTX, MOF, OF, MN, OST, UPS, HF}
     obs_sym_tuple::OST
     upd_funs::UPS
     hook_free_upd_funs::HF
+    obs_partitions::OP
+    mod_partitions::MP
+end
+
+function FunctionalAffect(
+        user_affect, ctx, reset_jumps, mod_og_val_fun, obs_fun, mod_names, obs_sym_tuple,
+        upd_funs, hook_free_upd_funs
+    )
+    return FunctionalAffect(
+        user_affect, ctx, reset_jumps, mod_og_val_fun, obs_fun, mod_names, obs_sym_tuple,
+        upd_funs, hook_free_upd_funs, (), ()
+    )
+end
+
+@inline function affect_observations(fa::FunctionalAffect)
+    function observed_at(u, p, t)
+        return NamedTuple{unval(fa.obs_sym_tuple)}(fa.obs_fun(u, p, t))
+    end
+    function observed_at(sol::SciMLBase.AbstractTimeseriesSolution, i::Integer)
+        p = solution_index_parameter_values(sol, i, fa.obs_partitions)
+        return observed_at(state_values(sol, i), p, sol.t[i])
+    end
+    return observed_at
 end
 
 @inline function (fa::FunctionalAffect)(integ)
+    if integ isa SciMLBase.DEIntegrator
+        capture_pre_affect_discrete_values!(integ, fa.mod_partitions)
+    end
     # Read through the SII getters, so any value provider works, not just an integrator
     u = state_values(integ)
     p = parameter_values(integ)
@@ -265,9 +343,12 @@ end
     modvals = fa.mod_og_val_fun(u, p, t)
     upd_component_array = NamedTuple{unval(fa.mod_names)}(modvals)
     # Read the observed expressions
-    obs_component_array = NamedTuple{unval(fa.obs_sym_tuple)}(fa.obs_fun(u, p, t))
+    observed_at = affect_observations(fa)
+    obs_component_array = observed_at(u, p, t)
     # Call the user-supplied affect function
-    upd_vals = fa.user_affect(upd_component_array, obs_component_array, fa.ctx, integ)
+    args = (upd_component_array, obs_component_array, fa.ctx, integ)
+    upd_vals = applicable(fa.user_affect, args...) ? fa.user_affect(args...) :
+        fa.user_affect(args..., observed_at)
     # Write back any returned values
     if !isnothing(upd_vals)
         _generated_writeback(integ, fa.upd_funs, upd_vals)
@@ -294,7 +375,7 @@ On systems without delays, the hook-free affect uses the value provider's `state
 (e.g. inside a GPU kernel), usually together with `save_discretes = false` on the problem.
 
 Two parts of the affect still see the value provider itself:
-- the user's function receives it as its last argument (`integ`), so a stand-in must
+- the user's function receives it as `integ`, so a stand-in must
   support whatever that function does with it;
 - with `reset_jumps = true`, the affect calls `reset_aggregated_jumps!` on it, which needs
   an integrator.
@@ -302,7 +383,8 @@ Two parts of the affect still see the value provider itself:
 function without_parameter_hooks(fa::FunctionalAffect)
     return FunctionalAffect(
         fa.user_affect, fa.ctx, fa.reset_jumps, fa.mod_og_val_fun, fa.obs_fun,
-        fa.mod_names, fa.obs_sym_tuple, hook_free_setters(fa), nothing
+        fa.mod_names, fa.obs_sym_tuple, hook_free_setters(fa), nothing,
+        fa.obs_partitions, fa.mod_partitions
     )
 end
 
@@ -332,6 +414,11 @@ function functional_affect_parts(fa::FunctionalAffect)
         observed_values = fa.obs_fun, setters = hook_free_setters(fa),
         fa.reset_jumps,
     )
+end
+
+function discrete_timeseries_indexes(sys, exprs)
+    indices = SymbolicIndexingInterface.get_all_timeseries_indexes(sys, exprs)
+    return Tuple(idx for idx in indices if idx isa Int)
 end
 
 function compile_hook_free_setter(sys, sym)
@@ -463,9 +550,9 @@ function compile_functional_affect(
         expression = Val{false},
         codegen_function_options = Symbolics.CodegenFunctionOptions(; kwargs...)
     )
-    obs_fun = build_explicit_observed_function(
-        sys, Symbolics.scalarize.(obs_exprs), opts; output_type = Tuple
-    )
+    obs_exprs = Symbolics.scalarize.(obs_exprs)
+    obs_fun = build_explicit_observed_function(sys, obs_exprs, opts; output_type = Tuple)
+    obs_partitions = discrete_timeseries_indexes(sys, obs_exprs)
     obs_sym_tuple = (obs_syms...,)
 
     # okay so now to generate the stuff to assign it back into the system
@@ -481,7 +568,8 @@ function compile_functional_affect(
 
     return FunctionalAffect(
         func(affect), context(affect), reset_jumps,
-        mod_og_val_fun, obs_fun, Val(mod_names), Val(obs_sym_tuple), upd_funs, hook_free_upd_funs
+        mod_og_val_fun, obs_fun, Val(mod_names), Val(obs_sym_tuple), upd_funs, hook_free_upd_funs,
+        obs_partitions, discrete_timeseries_indexes(sys, mod_exprs)
     )
 end
 

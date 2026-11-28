@@ -1103,6 +1103,81 @@ end
 # Required for DiffEqArray constructor to work during interpolation
 Base.size(::NestedGetIndex) = ()
 
+struct TrackedDiscreteStorage{T, S, V}
+    buffers::T
+    positions::Vector{Vector{Int}}
+    pre_affect_values::Dict{Tuple{Int, Int}, V}
+    initial_values::S
+end
+
+Base.eachindex(c::TrackedDiscreteStorage) = eachindex(c.buffers)
+Base.iterate(c::TrackedDiscreteStorage, args...) = iterate(c.buffers, args...)
+Base.length(c::TrackedDiscreteStorage) = length(c.buffers)
+Base.isempty(c::TrackedDiscreteStorage) = isempty(c.buffers)
+Base.getindex(c::TrackedDiscreteStorage, i) = c.buffers[i]
+Base.firstindex(c::TrackedDiscreteStorage) = firstindex(c.buffers)
+Base.lastindex(c::TrackedDiscreteStorage) = lastindex(c.buffers)
+Base.eltype(::Type{TrackedDiscreteStorage{T, S, V}}) where {T, S, V} = eltype(T)
+Base.keys(c::TrackedDiscreteStorage) = keys(c.buffers)
+
+function discrete_save_storage(discs::ParameterTimeseriesCollection)
+    storage = parent(discs)
+    return storage isa TrackedDiscreteStorage ? storage : nothing
+end
+
+function discrete_save_storage(sol)
+    SymbolicIndexingInterface.is_parameter_timeseries(sol) == SymbolicIndexingInterface.Timeseries() || return nothing
+    return discrete_save_storage(SymbolicIndexingInterface.get_parameter_timeseries_collection(sol))
+end
+
+function capture_pre_affect_discrete_values!(integ::SciMLBase.DEIntegrator, partitions)
+    isempty(partitions) && return
+    sol = SciMLBase.get_sol(integ)
+    storage = discrete_save_storage(sol)
+    storage === nothing && return
+    times = sol.t
+    times isa Vector || return
+    isempty(times) && return
+    time = current_time(integ)
+    last(times) == time || return
+    ps = parameter_values(integ)
+    for ts_idx in partitions
+        isempty(current_time(storage[ts_idx])) || continue
+        val = nothing
+        j = lastindex(times)
+        while j >= firstindex(times) && times[j] == time
+            key = (j, ts_idx)
+            if !haskey(storage.pre_affect_values, key)
+                val === nothing && (val = SciMLBase.get_saveable_values(sol, ps, ts_idx))
+                val === nothing && break
+                storage.pre_affect_values[key] = val
+            end
+            j -= 1
+        end
+    end
+    return
+end
+
+function SciMLBase.save_discretes!(
+        sol::SciMLBase.AbstractODESolution, time, vals::NestedGetIndex, timeseries_idx;
+        skip_duplicates = false
+    )
+    storage = discrete_save_storage(sol)
+    result = invoke(
+        SciMLBase.save_discretes!, Tuple{SciMLBase.AbstractODESolution, Any, Any, Any},
+        sol, time, vals, timeseries_idx; skip_duplicates
+    )
+    if storage !== nothing && sol.t isa Vector
+        positions = storage.positions[timeseries_idx]
+        if length(positions) < length(state_values(storage[timeseries_idx]))
+            # Each discrete save becomes visible at the state save after its affect.
+            i = lastindex(sol.t)
+            push!(positions, i + (isempty(sol.t) || sol.t[i] != time))
+        end
+    end
+    return result
+end
+
 function SymbolicIndexingInterface.with_updated_parameter_timeseries_values(
         ::AbstractSystem, ps::MTKParameters,
         args::Pair{<:Any, <:NestedGetIndex}...
@@ -1129,7 +1204,14 @@ function SciMLBase.create_parameter_timeseries_collection(
         push!(buffers, DiffEqArray(us, ts, (1, 1)))
     end
 
-    return ParameterTimeseriesCollection(Tuple(buffers), copy(ps))
+    initial_values = Tuple(
+        SciMLBase.get_saveable_values(sys, ps, i) for i in 1:num_discretes
+    )
+    storage = TrackedDiscreteStorage(
+        Tuple(buffers), [Int[] for _ in 1:num_discretes],
+        Dict{Tuple{Int, Int}, partition_type}(), initial_values
+    )
+    return ParameterTimeseriesCollection(storage, copy(ps))
 end
 
 function SciMLBase.create_parameter_timeseries_collection(
